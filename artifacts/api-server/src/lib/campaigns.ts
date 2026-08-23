@@ -5,8 +5,8 @@ import {
   campaignsTable,
   db,
   destinationsTable,
+  pool,
   telegramAccountsTable,
-  activityLogsTable,
 } from "@workspace/db";
 import { recordActivity } from "./activity";
 import { forwardTelegramSavedMessage, sendTelegramMessage } from "./telegram";
@@ -17,6 +17,21 @@ import { getSystemSettings } from "./system-settings";
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
+
+async function withOwnerDeliveryLock<T>(ownerUserId: string, action: () => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  const lockKey = `telecampaign:delivery:${ownerUserId}`;
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+    return await action();
+  } finally {
+    try {
+      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
+    } finally {
+      client.release();
+    }
+  }
+}
 
 async function deferForDailyQuota(campaign: typeof campaignsTable.$inferSelect, targetId: string) {
   const [subscription, settings] = await Promise.all([
@@ -29,13 +44,16 @@ async function deferForDailyQuota(campaign: typeof campaignsTable.$inferSelect, 
   const timezone = settings.defaultTimezone.replace(/'/g, "");
   const dayStart = sql`date_trunc('day', now() AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
   const nextDayStart = sql`(date_trunc('day', now() AT TIME ZONE ${timezone}) + interval '1 day') AT TIME ZONE ${timezone}`;
-  const [usage] = await db.select({ value: count() }).from(activityLogsTable).where(and(
-    eq(activityLogsTable.ownerUserId, campaign.ownerUserId),
-    eq(activityLogsTable.event, "campaign.target.sent"),
-    gte(activityLogsTable.createdAt, dayStart),
+  const [usage] = await db.select({ value: count() }).from(campaignTargetsTable)
+    .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+    .where(and(
+      eq(campaignsTable.ownerUserId, campaign.ownerUserId),
+      eq(campaignTargetsTable.status, "sent"),
+      gte(campaignTargetsTable.sentAt, dayStart),
   ));
   if ((usage?.value ?? 0) < subscription.messageDailyLimit) return false;
-  const [nextAttempt] = await db.select({ at: nextDayStart }).from(activityLogsTable).limit(1);
+  const [nextAttempt] = await db.select({ at: nextDayStart }).from(campaignsTable)
+    .where(eq(campaignsTable.id, campaign.id)).limit(1);
   await db.update(campaignTargetsTable).set({
     status: "pending",
     nextAttemptAt: nextAttempt?.at instanceof Date ? nextAttempt.at : new Date(Date.now() + 24 * 60 * 60_000),
@@ -94,7 +112,10 @@ async function finalizeCampaignIfTerminal(campaignId: string) {
   await db.update(campaignsTable).set({
     status: reviewOrFailure.length > 0 ? "completed_with_errors" : "completed",
     updatedAt: new Date(),
-  }).where(eq(campaignsTable.id, campaignId));
+  }).where(and(
+    eq(campaignsTable.id, campaignId),
+    inArray(campaignsTable.status, ["queued", "running"]),
+  ));
 }
 
 async function markTargetForReview(targetId: string, reason: string) {
@@ -201,7 +222,10 @@ export async function processNextCampaignTarget() {
       await db.update(campaignTargetsTable).set({
         status: currentCampaign?.status === "cancelled" ? "cancelled" : "pending",
         updatedAt: new Date(),
-      }).where(eq(campaignTargetsTable.id, job.target.id));
+      }).where(and(
+        eq(campaignTargetsTable.id, job.target.id),
+        eq(campaignTargetsTable.status, "sending"),
+      ));
       return true;
     }
     const subscription = await getSubscription(job.campaign.ownerUserId);
@@ -209,7 +233,10 @@ export async function processNextCampaignTarget() {
       await db.update(campaignTargetsTable).set({
         status: "pending",
         updatedAt: new Date(),
-      }).where(eq(campaignTargetsTable.id, job.target.id));
+      }).where(and(
+        eq(campaignTargetsTable.id, job.target.id),
+        eq(campaignTargetsTable.status, "sending"),
+      ));
       await db.update(campaignsTable).set({
         status: "paused",
         updatedAt: new Date(),
@@ -229,29 +256,34 @@ export async function processNextCampaignTarget() {
         status: "requires_review",
         lastError: "Account delivery lease was lost before sending; manual review is required.",
         updatedAt: new Date(),
-      }).where(eq(campaignTargetsTable.id, job.target.id));
+      }).where(and(
+        eq(campaignTargetsTable.id, job.target.id),
+        eq(campaignTargetsTable.status, "sending"),
+      ));
       return true;
     }
-    if (await deferForDailyQuota(job.campaign, job.target.id)) return true;
-    const messageId = job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
-      ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId)
-      : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content);
-    telegramAcceptedDelivery = true;
-    try {
-      await db.update(campaignTargetsTable).set({
+    const delivery = await withOwnerDeliveryLock(job.campaign.ownerUserId, async () => {
+      if (await deferForDailyQuota(job.campaign, job.target.id)) return { deferred: true as const };
+      const messageId = job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
+        ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
+        : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
+      telegramAcceptedDelivery = true;
+      const [persisted] = await db.update(campaignTargetsTable).set({
         status: "sent",
         sentMessageId: messageId,
         sentAt: new Date(),
         nextAttemptAt: null,
         lastError: null,
         updatedAt: new Date(),
-      }).where(eq(campaignTargetsTable.id, job.target.id));
-    } catch (error) {
-      logger.error({ err: error, targetId: job.target.id }, "Delivery was accepted but could not be persisted; target requires review");
-      await markTargetForReview(
-        job.target.id,
-        "Telegram accepted the message but delivery persistence failed; manual review is required to avoid a duplicate send.",
-      );
+      }).where(and(
+        eq(campaignTargetsTable.id, job.target.id),
+        eq(campaignTargetsTable.status, "sending"),
+      )).returning({ id: campaignTargetsTable.id });
+      return { deferred: false as const, persisted: Boolean(persisted) };
+    });
+    if (delivery.deferred) return true;
+    if (!delivery.persisted) {
+      logger.warn({ targetId: job.target.id }, "Telegram accepted delivery after target state changed; automatic retry is disabled");
       return true;
     }
     try {
@@ -290,7 +322,10 @@ export async function processNextCampaignTarget() {
       nextAttemptAt: canRetry ? retryAt : null,
       lastError: message.slice(0, 500),
       updatedAt: new Date(),
-    }).where(eq(campaignTargetsTable.id, job.target.id));
+    }).where(and(
+      eq(campaignTargetsTable.id, job.target.id),
+      eq(campaignTargetsTable.status, "sending"),
+    ));
     await recordActivity({
       event: hasSupportedFloodWait ? "campaign.target.rate_limited" : "campaign.target.failed",
       message: hasSupportedFloodWait
@@ -307,9 +342,12 @@ export async function processNextCampaignTarget() {
     clearInterval(heartbeat);
     await db.update(telegramAccountsTable).set({ deliveryLeaseUntil: null, deliveryLeaseToken: null, updatedAt: new Date() })
       .where(and(eq(telegramAccountsTable.id, job.destination.accountId), eq(telegramAccountsTable.deliveryLeaseToken, leaseToken)));
+    try {
+      await finalizeCampaignIfTerminal(job.campaign.id);
+    } catch (error) {
+      logger.error({ err: error, campaignId: job.campaign.id }, "Campaign finalization failed");
+    }
   }
-
-  await finalizeCampaignIfTerminal(job.campaign.id);
   return true;
 }
 
