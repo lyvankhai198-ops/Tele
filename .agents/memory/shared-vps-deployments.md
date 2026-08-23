@@ -9,8 +9,20 @@ Keep TeleCampaign isolated from other VPS applications: change only its source d
 
 **How to apply:** Pull and build only the TeleCampaign repository, restart only its dedicated PM2 process, and verify its local health endpoint plus the public HTTPS host afterward.
 
+The current public HTTPS host for TeleCampaign is `https://tele.khaimmo.shop`.
+
+**Why:** This is the user-confirmed public route for the VPS deployment.
+
+**How to apply:** Use this host when verifying the deployed frontend and public API routing; do not substitute a guessed Replit or development URL.
+
 The TeleCampaign Vite production build requires both its runtime port and root base path in the build environment.
 
 **Why:** The Vite config validates these variables even for a static production build; omitting either stops deployment before the API restart.
 
 **How to apply:** Supply the dedicated API port and a root base path when building the frontend on the VPS, then build the API and restart only the TeleCampaign process.
+
+The VPS API environment must include a valid `SESSION_SECRET` before account credentials or other encrypted values can be saved.
+
+**Why:** Missing encryption configuration can leave health and read-only endpoints working while credential-saving requests fail at runtime.
+
+**How to apply:** Verify only the secret's presence in `/etc/telecampaign/api.env`; never print it. Restart only `telecampaign-api` after changing the file.
