@@ -987,20 +987,21 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     roundDelayMinSeconds: parsed.data.roundDelayMinSeconds,
     roundDelayMaxSeconds: parsed.data.roundDelayMaxSeconds,
   }).returning();
-  let nextAt = (scheduledAt ?? now).getTime();
+  let roundStartAt = (scheduledAt ?? now).getTime();
   const targetRows = [];
   for (let round = 0; round < parsed.data.repeatCount; round += 1) {
+    let destinationAt = roundStartAt;
     for (const destination of destinations) {
       targetRows.push({
         campaignId: campaign.id,
         destinationId: destination.id,
         status: "pending",
-        nextAttemptAt: new Date(nextAt),
+        nextAttemptAt: new Date(destinationAt),
       });
-      nextAt += (parsed.data.delayMinSeconds + Math.floor(Math.random() * (parsed.data.delayMaxSeconds - parsed.data.delayMinSeconds + 1))) * 1000;
+      destinationAt += (parsed.data.delayMinSeconds + Math.floor(Math.random() * (parsed.data.delayMaxSeconds - parsed.data.delayMinSeconds + 1))) * 1000;
     }
     if (round < parsed.data.repeatCount - 1) {
-      nextAt += (parsed.data.roundDelayMinSeconds + Math.floor(Math.random() * (parsed.data.roundDelayMaxSeconds - parsed.data.roundDelayMinSeconds + 1))) * 1000;
+      roundStartAt += (parsed.data.roundDelayMinSeconds + Math.floor(Math.random() * (parsed.data.roundDelayMaxSeconds - parsed.data.roundDelayMinSeconds + 1))) * 1000;
     }
   }
   await db.insert(campaignTargetsTable).values(targetRows);
@@ -1080,21 +1081,21 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       return void sendError(res, 409, "Every campaign destination must exist and have verified posting permission");
     }
     const scheduledAt = parsed.data.scheduledAt === undefined ? existing.scheduledAt : parsed.data.scheduledAt;
-    const nextAt = (scheduledAt ?? new Date()).getTime();
+    let roundStartAt = (scheduledAt ?? new Date()).getTime();
     const targetRows = [];
-    let nextTargetAt = nextAt;
     for (let round = 0; round < repeatCount; round += 1) {
+      let destinationAt = roundStartAt;
       for (const destination of destinations) {
         targetRows.push({
           campaignId: existing.id,
           destinationId: destination.id,
           status: "pending" as const,
-          nextAttemptAt: new Date(nextTargetAt),
+          nextAttemptAt: new Date(destinationAt),
         });
-        nextTargetAt += (delayMinSeconds + Math.floor(Math.random() * (delayMaxSeconds - delayMinSeconds + 1))) * 1000;
+        destinationAt += (delayMinSeconds + Math.floor(Math.random() * (delayMaxSeconds - delayMinSeconds + 1))) * 1000;
       }
       if (round < repeatCount - 1) {
-        nextTargetAt += (roundDelayMinSeconds + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1))) * 1000;
+        roundStartAt += (roundDelayMinSeconds + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1))) * 1000;
       }
     }
     const [campaign] = await db.update(campaignsTable).set({
