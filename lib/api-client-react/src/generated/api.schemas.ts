@@ -312,8 +312,6 @@ export interface Campaign {
   timezone: string;
   maxRetries: number;
   repeatCount: number;
-  delayMinSeconds: number;
-  delayMaxSeconds: number;
   roundDelayMinSeconds: number;
   roundDelayMaxSeconds: number;
   createdAt: string;
@@ -348,16 +346,6 @@ export interface CampaignInput {
      * @maximum 300
      */
   repeatCount?: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMinSeconds?: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMaxSeconds?: number;
   /**
      * @minimum 0
      * @maximum 259200
@@ -399,16 +387,6 @@ export interface CampaignUpdateInput {
      * @maximum 300
      */
   repeatCount?: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMinSeconds?: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMaxSeconds?: number;
   /**
      * @minimum 0
      * @maximum 259200
@@ -675,16 +653,6 @@ export interface CampaignDefaults {
      * @maximum 20
      */
   maxRetries: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMinSeconds: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMaxSeconds: number;
   /**
      * @minimum 0
      * @maximum 259200

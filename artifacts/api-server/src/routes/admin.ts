@@ -164,13 +164,10 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const defaults = settings.campaignDefaults;
   const validDefaults = [
     defaults.maxRetries,
-    defaults.delayMinSeconds,
-    defaults.delayMaxSeconds,
     defaults.roundDelayMinSeconds,
     defaults.roundDelayMaxSeconds,
     settings.defaultAccountDailyLimit,
   ].every(Number.isInteger)
-    && defaults.delayMinSeconds <= defaults.delayMaxSeconds
     && defaults.roundDelayMinSeconds <= defaults.roundDelayMaxSeconds;
   try {
     Intl.DateTimeFormat(undefined, { timeZone: settings.defaultTimezone });

@@ -29,8 +29,6 @@ export interface Campaign {
   timezone: string;
   maxRetries: number;
   repeatCount: number;
-  delayMinSeconds: number;
-  delayMaxSeconds: number;
   roundDelayMinSeconds: number;
   roundDelayMaxSeconds: number;
   createdAt: Date;

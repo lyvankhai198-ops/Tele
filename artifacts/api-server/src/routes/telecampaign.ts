@@ -913,14 +913,12 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   const systemSettings = await getSystemSettings();
   const numericValues = [
     parsed.data.repeatCount,
-    parsed.data.delayMinSeconds,
-    parsed.data.delayMaxSeconds,
     parsed.data.roundDelayMinSeconds,
     parsed.data.roundDelayMaxSeconds,
   ];
   if (!numericValues.every(Number.isInteger)) return void sendError(res, 400, "Số lần lặp và khoảng delay phải là số nguyên.");
   if (parsed.data.repeatCount < 1) return void sendError(res, 400, "Số lần lặp phải lớn hơn hoặc bằng 1.");
-  if (parsed.data.delayMinSeconds > parsed.data.delayMaxSeconds || parsed.data.roundDelayMinSeconds > parsed.data.roundDelayMaxSeconds) {
+  if (parsed.data.roundDelayMinSeconds > parsed.data.roundDelayMaxSeconds) {
     return void sendError(res, 400, "Delay tối thiểu không thể lớn hơn delay tối đa.");
   }
   if (parsed.data.mediaUrl) {
@@ -982,23 +980,23 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     status: "queued",
     maxRetries: systemSettings.campaignDefaults.maxRetries,
     repeatCount: parsed.data.repeatCount,
-    delayMinSeconds: parsed.data.delayMinSeconds,
-    delayMaxSeconds: parsed.data.delayMaxSeconds,
+    // Retained legacy columns are fixed at zero. New schedules no longer
+    // offset groups within the same delivery round.
+    delayMinSeconds: 0,
+    delayMaxSeconds: 0,
     roundDelayMinSeconds: parsed.data.roundDelayMinSeconds,
     roundDelayMaxSeconds: parsed.data.roundDelayMaxSeconds,
   }).returning();
   let roundStartAt = (scheduledAt ?? now).getTime();
   const targetRows = [];
   for (let round = 0; round < parsed.data.repeatCount; round += 1) {
-    let destinationAt = roundStartAt;
     for (const destination of destinations) {
       targetRows.push({
         campaignId: campaign.id,
         destinationId: destination.id,
         status: "pending",
-        nextAttemptAt: new Date(destinationAt),
+        nextAttemptAt: new Date(roundStartAt),
       });
-      destinationAt += (parsed.data.delayMinSeconds + Math.floor(Math.random() * (parsed.data.delayMaxSeconds - parsed.data.delayMinSeconds + 1))) * 1000;
     }
     if (round < parsed.data.repeatCount - 1) {
       roundStartAt += (parsed.data.roundDelayMinSeconds + Math.floor(Math.random() * (parsed.data.roundDelayMaxSeconds - parsed.data.roundDelayMinSeconds + 1))) * 1000;
@@ -1028,8 +1026,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   const editing = parsed.data.name !== undefined || parsed.data.telegramAccountId !== undefined
     || parsed.data.templateId !== undefined || parsed.data.destinationIds !== undefined
     || parsed.data.scheduledAt !== undefined || parsed.data.timezone !== undefined
-    || parsed.data.repeatCount !== undefined || parsed.data.delayMinSeconds !== undefined
-    || parsed.data.delayMaxSeconds !== undefined || parsed.data.roundDelayMinSeconds !== undefined
+    || parsed.data.repeatCount !== undefined || parsed.data.roundDelayMinSeconds !== undefined
     || parsed.data.roundDelayMaxSeconds !== undefined;
   if (!editing && !parsed.data.status) return void sendError(res, 400, "No campaign changes were provided");
   if (editing && parsed.data.status !== undefined) {
@@ -1066,17 +1063,15 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       const destinationIds = [...new Set(parsed.data.destinationIds
         ?? existingTargets.map((target) => target.destinationId))];
       const repeatCount = parsed.data.repeatCount ?? lockedCampaign.repeatCount;
-      const delayMinSeconds = parsed.data.delayMinSeconds ?? lockedCampaign.delayMinSeconds;
-      const delayMaxSeconds = parsed.data.delayMaxSeconds ?? lockedCampaign.delayMaxSeconds;
       const roundDelayMinSeconds = parsed.data.roundDelayMinSeconds ?? lockedCampaign.roundDelayMinSeconds;
       const roundDelayMaxSeconds = parsed.data.roundDelayMaxSeconds ?? lockedCampaign.roundDelayMaxSeconds;
       if (!name.trim() || !telegramAccountId || !templateId || !destinationIds.length) {
         return { kind: "error" as const, status: 400, message: "Campaign name, account, template, and at least one destination are required" };
       }
-      if (![repeatCount, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds].every(Number.isInteger)) {
+      if (![repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds].every(Number.isInteger)) {
         return { kind: "error" as const, status: 400, message: "Repeat count and delays must be integers" };
       }
-      if (delayMinSeconds > delayMaxSeconds || roundDelayMinSeconds > roundDelayMaxSeconds) {
+      if (roundDelayMinSeconds > roundDelayMaxSeconds) {
         return { kind: "error" as const, status: 400, message: "Minimum delay cannot exceed maximum delay" };
       }
 
@@ -1130,7 +1125,6 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       ]));
       let remainingDeliveries = [...remainingByDestination.values()].reduce((total, count) => total + count, 0);
       while (remainingDeliveries > 0) {
-        let destinationAt = roundStartAt;
         for (const destination of destinations) {
           const remaining = remainingByDestination.get(destination.id) ?? 0;
           if (remaining === 0) continue;
@@ -1138,9 +1132,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
             campaignId: lockedCampaign.id,
             destinationId: destination.id,
             status: "pending",
-            nextAttemptAt: new Date(destinationAt),
+            nextAttemptAt: new Date(roundStartAt),
           });
-          destinationAt += (delayMinSeconds + Math.floor(Math.random() * (delayMaxSeconds - delayMinSeconds + 1))) * 1000;
           remainingByDestination.set(destination.id, remaining - 1);
           remainingDeliveries -= 1;
         }
@@ -1160,8 +1153,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         scheduledAt,
         timezone: parsed.data.timezone ?? lockedCampaign.timezone,
         repeatCount,
-        delayMinSeconds,
-        delayMaxSeconds,
+        delayMinSeconds: 0,
+        delayMaxSeconds: 0,
         roundDelayMinSeconds,
         roundDelayMaxSeconds,
         updatedAt: new Date(),

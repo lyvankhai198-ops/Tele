@@ -25,7 +25,6 @@ const copy = {
     dailyDefault: "Default account daily limit",
     delivery: "Delivery defaults",
     maxRetries: "Maximum retries",
-    groupDelay: "Delay between messages (seconds)",
     roundDelay: "Delay between rounds (seconds)",
     minimum: "Minimum",
     maximum: "Maximum",
@@ -54,7 +53,6 @@ const copy = {
     dailyDefault: "Giới hạn gửi/ngày mặc định cho tài khoản",
     delivery: "Mặc định gửi tin",
     maxRetries: "Số lần retry tối đa",
-    groupDelay: "Khoảng delay giữa tin nhắn (giây)",
     roundDelay: "Khoảng delay giữa các vòng (giây)",
     minimum: "Tối thiểu",
     maximum: "Tối đa",
@@ -133,13 +131,11 @@ export default function AdminSystemSettingsPage() {
     const numericValues = [
       form.defaultAccountDailyLimit,
       defaults.maxRetries,
-      defaults.delayMinSeconds,
-      defaults.delayMaxSeconds,
       defaults.roundDelayMinSeconds,
       defaults.roundDelayMaxSeconds,
       ...Object.values(form.planLimits).flatMap((limits) => [limits.accountLimit, limits.campaignLimit, limits.messageDailyLimit].filter((value): value is number => value !== null)),
     ];
-    if (!numericValues.every((value) => Number.isInteger(value) && value >= 0) || form.defaultAccountDailyLimit < 1 || defaults.delayMinSeconds > defaults.delayMaxSeconds || defaults.roundDelayMinSeconds > defaults.roundDelayMaxSeconds) {
+    if (!numericValues.every((value) => Number.isInteger(value) && value >= 0) || form.defaultAccountDailyLimit < 1 || defaults.roundDelayMinSeconds > defaults.roundDelayMaxSeconds) {
       setToast({ message: text.invalid, error: true });
       return;
     }
@@ -185,8 +181,6 @@ export default function AdminSystemSettingsPage() {
             <Input label={text.dailyDefault} type="number" min={1} value={String(form.defaultAccountDailyLimit)} onChange={(value) => setForm({ ...form, defaultAccountDailyLimit: Number(value) })} />
             <Input label={text.maxRetries} type="number" min={0} max={20} value={String(form.campaignDefaults.maxRetries)} onChange={(value) => setForm({ ...form, campaignDefaults: { ...form.campaignDefaults, maxRetries: Number(value) } })} />
             <div className="grid grid-cols-2 gap-3">
-              <Input label={`${text.groupDelay} · ${text.minimum}`} type="number" min={0} value={String(form.campaignDefaults.delayMinSeconds)} onChange={(value) => setForm({ ...form, campaignDefaults: { ...form.campaignDefaults, delayMinSeconds: Number(value) } })} />
-              <Input label={`${text.groupDelay} · ${text.maximum}`} type="number" min={0} value={String(form.campaignDefaults.delayMaxSeconds)} onChange={(value) => setForm({ ...form, campaignDefaults: { ...form.campaignDefaults, delayMaxSeconds: Number(value) } })} />
               <Input label={`${text.roundDelay} · ${text.minimum}`} type="number" min={0} value={String(form.campaignDefaults.roundDelayMinSeconds)} onChange={(value) => setForm({ ...form, campaignDefaults: { ...form.campaignDefaults, roundDelayMinSeconds: Number(value) } })} />
               <Input label={`${text.roundDelay} · ${text.maximum}`} type="number" min={0} value={String(form.campaignDefaults.roundDelayMaxSeconds)} onChange={(value) => setForm({ ...form, campaignDefaults: { ...form.campaignDefaults, roundDelayMaxSeconds: Number(value) } })} />
             </div>

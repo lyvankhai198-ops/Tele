@@ -14,16 +14,6 @@ export interface CampaignDefaults {
   maxRetries: number;
   /**
      * @minimum 0
-     * @maximum 120
-     */
-  delayMinSeconds: number;
-  /**
-     * @minimum 0
-     * @maximum 120
-     */
-  delayMaxSeconds: number;
-  /**
-     * @minimum 0
      * @maximum 259200
      */
   roundDelayMinSeconds: number;

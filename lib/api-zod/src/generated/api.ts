@@ -519,8 +519,6 @@ export const ListCampaignsResponseItem = zod.object({
   "timezone": zod.string(),
   "maxRetries": zod.number(),
   "repeatCount": zod.number(),
-  "delayMinSeconds": zod.number(),
-  "delayMaxSeconds": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -550,14 +548,6 @@ export const createCampaignBodyTimezoneDefault = `Asia/Ho_Chi_Minh`;
 export const createCampaignBodyRepeatCountDefault = 1;
 export const createCampaignBodyRepeatCountMax = 300;
 
-export const createCampaignBodyDelayMinSecondsDefault = 5;
-export const createCampaignBodyDelayMinSecondsMin = 0;
-export const createCampaignBodyDelayMinSecondsMax = 120;
-
-export const createCampaignBodyDelayMaxSecondsDefault = 8;
-export const createCampaignBodyDelayMaxSecondsMin = 0;
-export const createCampaignBodyDelayMaxSecondsMax = 120;
-
 export const createCampaignBodyRoundDelayMinSecondsDefault = 1;
 export const createCampaignBodyRoundDelayMinSecondsMin = 0;
 export const createCampaignBodyRoundDelayMinSecondsMax = 259200;
@@ -578,8 +568,6 @@ export const CreateCampaignBody = zod.object({
   "scheduledAt": zod.coerce.date().nullish(),
   "timezone": zod.string().default(createCampaignBodyTimezoneDefault),
   "repeatCount": zod.number().min(1).max(createCampaignBodyRepeatCountMax).default(createCampaignBodyRepeatCountDefault),
-  "delayMinSeconds": zod.number().min(createCampaignBodyDelayMinSecondsMin).max(createCampaignBodyDelayMinSecondsMax).default(createCampaignBodyDelayMinSecondsDefault),
-  "delayMaxSeconds": zod.number().min(createCampaignBodyDelayMaxSecondsMin).max(createCampaignBodyDelayMaxSecondsMax).default(createCampaignBodyDelayMaxSecondsDefault),
   "roundDelayMinSeconds": zod.number().min(createCampaignBodyRoundDelayMinSecondsMin).max(createCampaignBodyRoundDelayMinSecondsMax).default(createCampaignBodyRoundDelayMinSecondsDefault),
   "roundDelayMaxSeconds": zod.number().min(createCampaignBodyRoundDelayMaxSecondsMin).max(createCampaignBodyRoundDelayMaxSecondsMax).default(createCampaignBodyRoundDelayMaxSecondsDefault)
 })
@@ -599,8 +587,6 @@ export const CreateCampaignResponse = zod.object({
   "timezone": zod.string(),
   "maxRetries": zod.number(),
   "repeatCount": zod.number(),
-  "delayMinSeconds": zod.number(),
-  "delayMaxSeconds": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -628,12 +614,6 @@ export const updateCampaignStatusBodyNameMax = 200;
 
 export const updateCampaignStatusBodyRepeatCountMax = 300;
 
-export const updateCampaignStatusBodyDelayMinSecondsMin = 0;
-export const updateCampaignStatusBodyDelayMinSecondsMax = 120;
-
-export const updateCampaignStatusBodyDelayMaxSecondsMin = 0;
-export const updateCampaignStatusBodyDelayMaxSecondsMax = 120;
-
 export const updateCampaignStatusBodyRoundDelayMinSecondsMin = 0;
 export const updateCampaignStatusBodyRoundDelayMinSecondsMax = 259200;
 
@@ -651,8 +631,6 @@ export const UpdateCampaignStatusBody = zod.object({
   "scheduledAt": zod.coerce.date().nullish(),
   "timezone": zod.string().optional(),
   "repeatCount": zod.number().min(1).max(updateCampaignStatusBodyRepeatCountMax).optional(),
-  "delayMinSeconds": zod.number().min(updateCampaignStatusBodyDelayMinSecondsMin).max(updateCampaignStatusBodyDelayMinSecondsMax).optional(),
-  "delayMaxSeconds": zod.number().min(updateCampaignStatusBodyDelayMaxSecondsMin).max(updateCampaignStatusBodyDelayMaxSecondsMax).optional(),
   "roundDelayMinSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMinSecondsMin).max(updateCampaignStatusBodyRoundDelayMinSecondsMax).optional(),
   "roundDelayMaxSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMaxSecondsMin).max(updateCampaignStatusBodyRoundDelayMaxSecondsMax).optional()
 })
@@ -672,8 +650,6 @@ export const UpdateCampaignStatusResponse = zod.object({
   "timezone": zod.string(),
   "maxRetries": zod.number(),
   "repeatCount": zod.number(),
-  "delayMinSeconds": zod.number(),
-  "delayMaxSeconds": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -762,8 +738,6 @@ export const GetDashboardResponse = zod.object({
   "timezone": zod.string(),
   "maxRetries": zod.number(),
   "repeatCount": zod.number(),
-  "delayMinSeconds": zod.number(),
-  "delayMaxSeconds": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
   "createdAt": zod.coerce.date(),
@@ -844,12 +818,6 @@ export const getSystemDefaultsResponseDefaultAccountDailyLimitMax = 100000;
 export const getSystemDefaultsResponseCampaignDefaultsMaxRetriesMin = 0;
 export const getSystemDefaultsResponseCampaignDefaultsMaxRetriesMax = 20;
 
-export const getSystemDefaultsResponseCampaignDefaultsDelayMinSecondsMin = 0;
-export const getSystemDefaultsResponseCampaignDefaultsDelayMinSecondsMax = 120;
-
-export const getSystemDefaultsResponseCampaignDefaultsDelayMaxSecondsMin = 0;
-export const getSystemDefaultsResponseCampaignDefaultsDelayMaxSecondsMax = 120;
-
 export const getSystemDefaultsResponseCampaignDefaultsRoundDelayMinSecondsMin = 0;
 export const getSystemDefaultsResponseCampaignDefaultsRoundDelayMinSecondsMax = 259200;
 
@@ -864,8 +832,6 @@ export const GetSystemDefaultsResponse = zod.object({
   "defaultAccountDailyLimit": zod.number().min(1).max(getSystemDefaultsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(getSystemDefaultsResponseCampaignDefaultsMaxRetriesMin).max(getSystemDefaultsResponseCampaignDefaultsMaxRetriesMax),
-  "delayMinSeconds": zod.number().min(getSystemDefaultsResponseCampaignDefaultsDelayMinSecondsMin).max(getSystemDefaultsResponseCampaignDefaultsDelayMinSecondsMax),
-  "delayMaxSeconds": zod.number().min(getSystemDefaultsResponseCampaignDefaultsDelayMaxSecondsMin).max(getSystemDefaultsResponseCampaignDefaultsDelayMaxSecondsMax),
   "roundDelayMinSeconds": zod.number().min(getSystemDefaultsResponseCampaignDefaultsRoundDelayMinSecondsMin).max(getSystemDefaultsResponseCampaignDefaultsRoundDelayMinSecondsMax),
   "roundDelayMaxSeconds": zod.number().min(getSystemDefaultsResponseCampaignDefaultsRoundDelayMaxSecondsMin).max(getSystemDefaultsResponseCampaignDefaultsRoundDelayMaxSecondsMax)
 }),
@@ -937,12 +903,6 @@ export const getAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 export const getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
 export const getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax = 20;
 
-export const getAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMin = 0;
-export const getAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMax = 120;
-
-export const getAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMin = 0;
-export const getAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMax = 120;
-
 export const getAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMin = 0;
 export const getAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMax = 259200;
 
@@ -974,8 +934,6 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "defaultAccountDailyLimit": zod.number().min(1).max(getAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
-  "delayMinSeconds": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMin).max(getAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMax),
-  "delayMaxSeconds": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMin).max(getAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMax),
   "roundDelayMinSeconds": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMin).max(getAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMax),
   "roundDelayMaxSeconds": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsRoundDelayMaxSecondsMin).max(getAdminSystemSettingsResponseCampaignDefaultsRoundDelayMaxSecondsMax)
 }),
@@ -1008,12 +966,6 @@ export const updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax = 100000;
 export const updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin = 0;
 export const updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMax = 20;
 
-export const updateAdminSystemSettingsBodyCampaignDefaultsDelayMinSecondsMin = 0;
-export const updateAdminSystemSettingsBodyCampaignDefaultsDelayMinSecondsMax = 120;
-
-export const updateAdminSystemSettingsBodyCampaignDefaultsDelayMaxSecondsMin = 0;
-export const updateAdminSystemSettingsBodyCampaignDefaultsDelayMaxSecondsMax = 120;
-
 export const updateAdminSystemSettingsBodyCampaignDefaultsRoundDelayMinSecondsMin = 0;
 export const updateAdminSystemSettingsBodyCampaignDefaultsRoundDelayMinSecondsMax = 259200;
 
@@ -1045,8 +997,6 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMax),
-  "delayMinSeconds": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsDelayMinSecondsMin).max(updateAdminSystemSettingsBodyCampaignDefaultsDelayMinSecondsMax),
-  "delayMaxSeconds": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsDelayMaxSecondsMin).max(updateAdminSystemSettingsBodyCampaignDefaultsDelayMaxSecondsMax),
   "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsRoundDelayMinSecondsMin).max(updateAdminSystemSettingsBodyCampaignDefaultsRoundDelayMinSecondsMax),
   "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsBodyCampaignDefaultsRoundDelayMaxSecondsMax)
 }),
@@ -1077,12 +1027,6 @@ export const updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 1000
 
 export const updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
 export const updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax = 20;
-
-export const updateAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMin = 0;
-export const updateAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMax = 120;
-
-export const updateAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMin = 0;
-export const updateAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMax = 120;
 
 export const updateAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMin = 0;
 export const updateAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMax = 259200;
@@ -1115,8 +1059,6 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
-  "delayMinSeconds": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMin).max(updateAdminSystemSettingsResponseCampaignDefaultsDelayMinSecondsMax),
-  "delayMaxSeconds": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMin).max(updateAdminSystemSettingsResponseCampaignDefaultsDelayMaxSecondsMax),
   "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMin).max(updateAdminSystemSettingsResponseCampaignDefaultsRoundDelayMinSecondsMax),
   "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsResponseCampaignDefaultsRoundDelayMaxSecondsMax)
 }),

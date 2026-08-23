@@ -16,8 +16,6 @@ export type SystemSettings = {
   defaultAccountDailyLimit: number;
   campaignDefaults: {
     maxRetries: number;
-    delayMinSeconds: number;
-    delayMaxSeconds: number;
     roundDelayMinSeconds: number;
     roundDelayMaxSeconds: number;
   };
@@ -44,8 +42,6 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
     maxRetries: 3,
-    delayMinSeconds: 5,
-    delayMaxSeconds: 8,
     roundDelayMinSeconds: 1,
     roundDelayMaxSeconds: 3,
   },
@@ -91,8 +87,6 @@ function parseSettings(value: string | undefined): SystemSettings {
         : DEFAULT_SYSTEM_SETTINGS.defaultAccountDailyLimit,
       campaignDefaults: {
         maxRetries: isFiniteInteger(campaignDefaults.maxRetries, 0, 20) ? campaignDefaults.maxRetries : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.maxRetries,
-        delayMinSeconds: isFiniteInteger(campaignDefaults.delayMinSeconds, 0, 120) ? campaignDefaults.delayMinSeconds : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.delayMinSeconds,
-        delayMaxSeconds: isFiniteInteger(campaignDefaults.delayMaxSeconds, 0, 120) ? campaignDefaults.delayMaxSeconds : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.delayMaxSeconds,
         roundDelayMinSeconds: isFiniteInteger(campaignDefaults.roundDelayMinSeconds, 0, 259200) ? campaignDefaults.roundDelayMinSeconds : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.roundDelayMinSeconds,
         roundDelayMaxSeconds: isFiniteInteger(campaignDefaults.roundDelayMaxSeconds, 0, 259200) ? campaignDefaults.roundDelayMaxSeconds : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.roundDelayMaxSeconds,
       },

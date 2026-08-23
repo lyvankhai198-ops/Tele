@@ -947,7 +947,7 @@ components:
         sourceMessageId: { type: ["string", "null"] }
     Campaign:
       type: object
-      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, destinationIds, errors]
+      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, destinationIds, errors]
       properties:
         id: { type: string }
         name: { type: string }
@@ -963,8 +963,6 @@ components:
         timezone: { type: string }
         maxRetries: { type: number }
         repeatCount: { type: number }
-        delayMinSeconds: { type: number }
-        delayMaxSeconds: { type: number }
         roundDelayMinSeconds: { type: number }
         roundDelayMaxSeconds: { type: number }
         createdAt: { type: string, format: date-time }
@@ -993,8 +991,6 @@ components:
         scheduledAt: { type: ["string", "null"], format: date-time }
         timezone: { type: string, default: Asia/Ho_Chi_Minh }
         repeatCount: { type: number, minimum: 1, maximum: 300, default: 1 }
-        delayMinSeconds: { type: number, minimum: 0, maximum: 120, default: 5 }
-        delayMaxSeconds: { type: number, minimum: 0, maximum: 120, default: 8 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200, default: 1 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200, default: 3 }
     CampaignTargetError:
@@ -1021,8 +1017,6 @@ components:
         scheduledAt: { type: ["string", "null"], format: date-time }
         timezone: { type: string }
         repeatCount: { type: number, minimum: 1, maximum: 300 }
-        delayMinSeconds: { type: number, minimum: 0, maximum: 120 }
-        delayMaxSeconds: { type: number, minimum: 0, maximum: 120 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
     CalendarItem:
@@ -1180,11 +1174,9 @@ components:
         messageDailyLimit: { type: ["number", "null"], minimum: 0 }
     CampaignDefaults:
       type: object
-      required: [maxRetries, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds]
+      required: [maxRetries, roundDelayMinSeconds, roundDelayMaxSeconds]
       properties:
         maxRetries: { type: number, minimum: 0, maximum: 20 }
-        delayMinSeconds: { type: number, minimum: 0, maximum: 120 }
-        delayMaxSeconds: { type: number, minimum: 0, maximum: 120 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
     SystemDefaults:

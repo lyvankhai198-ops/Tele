@@ -68,10 +68,7 @@ const copy = {
     noGroupsHint: "No groups with posting permission.",
     fieldRepeatCount: "Repeat count",
     repeatCountHint: "Max 300 (admin configured).",
-    delayBetweenGroups: "Delay between groups (same round)",
     delayBetweenRounds: "Delay between rounds",
-    delayMinGroupLabel: "Min delay between groups (sec)",
-    delayMaxGroupLabel: "Max delay between groups (sec)",
     delayMinRoundLabel: "Min delay between rounds (sec)",
     delayMaxRoundLabel: "Max delay between rounds (sec)",
     delayMaxHint: (max: number) => `Max ${max.toLocaleString("en-US")} seconds.`,
@@ -93,7 +90,6 @@ const copy = {
     detailStatErrors: "Errors",
     detailRepeat: "Repeat:",
     detailRounds: "rounds",
-    detailDelayGroup: "Group delay:",
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
@@ -146,10 +142,7 @@ const copy = {
     noGroupsHint: "Không có nhóm nào được phép gửi.",
     fieldRepeatCount: "Số lần lặp",
     repeatCountHint: "Tối đa 300 (admin cấu hình).",
-    delayBetweenGroups: "Delay giữa các nhóm (cùng vòng gửi)",
     delayBetweenRounds: "Delay giữa các vòng lặp",
-    delayMinGroupLabel: "Delay min giữa nhóm (giây)",
-    delayMaxGroupLabel: "Delay max giữa nhóm (giây)",
     delayMinRoundLabel: "Delay min giữa mỗi vòng lặp (giây)",
     delayMaxRoundLabel: "Delay max giữa mỗi vòng lặp (giây)",
     delayMaxHint: (max: number) => `Tối đa ${max.toLocaleString("vi-VN")} giây.`,
@@ -171,7 +164,6 @@ const copy = {
     detailStatErrors: "Lỗi",
     detailRepeat: "Lặp:",
     detailRounds: "vòng",
-    detailDelayGroup: "Delay nhóm:",
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
@@ -196,8 +188,6 @@ type CampaignForm = {
   templateId: string;
   destinationIds: string[];
   repeatCount: string;
-  delayMinSeconds: string;
-  delayMaxSeconds: string;
   roundDelayMinSeconds: string;
   roundDelayMaxSeconds: string;
   scheduleDate: string;
@@ -210,8 +200,6 @@ const emptyForm = (): CampaignForm => ({
   templateId: "",
   destinationIds: [],
   repeatCount: "1",
-  delayMinSeconds: "5",
-  delayMaxSeconds: "8",
   roundDelayMinSeconds: "1",
   roundDelayMaxSeconds: "3",
   scheduleDate: "",
@@ -320,8 +308,6 @@ export default function Campaigns() {
     const defaults = systemDefaults.data;
     setForm({
       ...emptyForm(),
-      delayMinSeconds: String(defaults?.campaignDefaults.delayMinSeconds ?? 5),
-      delayMaxSeconds: String(defaults?.campaignDefaults.delayMaxSeconds ?? 8),
       roundDelayMinSeconds: String(defaults?.campaignDefaults.roundDelayMinSeconds ?? 1),
       roundDelayMaxSeconds: String(defaults?.campaignDefaults.roundDelayMaxSeconds ?? 3),
     });
@@ -342,8 +328,6 @@ export default function Campaigns() {
         .filter((destination) => campaign.destinationIds.includes(destination.id) && destination.canPost)
         .map((destination) => destination.id),
       repeatCount: String(campaign.repeatCount),
-      delayMinSeconds: String(campaign.delayMinSeconds),
-      delayMaxSeconds: String(campaign.delayMaxSeconds),
       roundDelayMinSeconds: String(campaign.roundDelayMinSeconds),
       roundDelayMaxSeconds: String(campaign.roundDelayMaxSeconds),
       scheduleDate: schedule ? new Intl.DateTimeFormat("en-CA").format(schedule) : "",
@@ -383,8 +367,6 @@ export default function Campaigns() {
     setFormError(null);
     const values = [
       Number(form.repeatCount),
-      Number(form.delayMinSeconds),
-      Number(form.delayMaxSeconds),
       Number(form.roundDelayMinSeconds),
       Number(form.roundDelayMaxSeconds),
     ];
@@ -396,7 +378,7 @@ export default function Campaigns() {
       setFormError(c.validationNumbers);
       return;
     }
-    if (values[1] > values[2] || values[3] > values[4]) {
+    if (values[1] > values[2]) {
       setFormError(c.validationDelayOrder);
       return;
     }
@@ -421,10 +403,8 @@ export default function Campaigns() {
             scheduledAt,
             timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
             repeatCount: values[0],
-            delayMinSeconds: values[1],
-            delayMaxSeconds: values[2],
-            roundDelayMinSeconds: values[3],
-            roundDelayMaxSeconds: values[4],
+            roundDelayMinSeconds: values[1],
+            roundDelayMaxSeconds: values[2],
           },
         });
         await campaigns.refetch();
@@ -442,10 +422,8 @@ export default function Campaigns() {
           scheduledAt,
           timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
           repeatCount: values[0],
-          delayMinSeconds: values[1],
-          delayMaxSeconds: values[2],
-          roundDelayMinSeconds: values[3],
-          roundDelayMaxSeconds: values[4],
+          roundDelayMinSeconds: values[1],
+          roundDelayMaxSeconds: values[2],
           },
         });
         await campaigns.refetch();
@@ -623,20 +601,6 @@ export default function Campaigns() {
             </label>
 
             <div className="border-t border-[#eef2f6] pt-5">
-              <p className="mb-4 text-[13px] font-medium text-[#64748b]">{c.delayBetweenGroups}</p>
-              <DelayFields
-                form={form}
-                setForm={setForm}
-                firstLabel={c.delayMinGroupLabel}
-                secondLabel={c.delayMaxGroupLabel}
-                firstKey="delayMinSeconds"
-                secondKey="delayMaxSeconds"
-                max={120}
-                maxHint={c.delayMaxHint}
-              />
-            </div>
-
-            <div>
               <p className="mb-4 text-[13px] font-medium text-[#64748b]">{c.delayBetweenRounds}</p>
               <DelayFields
                 form={form}
@@ -678,7 +642,6 @@ export default function Campaigns() {
             </div>
             <div className="rounded-xl bg-[#f8fafc] p-4 text-[#475569]">
               <p><b>{c.detailRepeat}</b> {details.repeatCount} {c.detailRounds}</p>
-              <p className="mt-1"><b>{c.detailDelayGroup}</b> {details.delayMinSeconds}–{details.delayMaxSeconds}s</p>
               <p className="mt-1"><b>{c.detailDelayRound}</b> {details.roundDelayMinSeconds}–{details.roundDelayMaxSeconds}s</p>
               <p className="mt-1"><b>{c.detailSchedule}</b> {formatSchedule(details.scheduledAt, language)}</p>
             </div>
@@ -758,8 +721,8 @@ function DelayFields({
   setForm: (form: CampaignForm) => void;
   firstLabel: string;
   secondLabel: string;
-  firstKey: "delayMinSeconds" | "roundDelayMinSeconds";
-  secondKey: "delayMaxSeconds" | "roundDelayMaxSeconds";
+  firstKey: "roundDelayMinSeconds";
+  secondKey: "roundDelayMaxSeconds";
   max: number;
   maxHint: (max: number) => string;
 }) {
