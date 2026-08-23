@@ -1035,91 +1035,132 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   if (editing && parsed.data.status !== undefined) {
     return void sendError(res, 400, "Update campaign details and status in separate requests");
   }
-  if (editing && existing.status !== "draft") {
-    return void sendError(res, 409, "Only draft campaigns can be edited to prevent duplicate deliveries");
+  if (editing && !["draft", "paused"].includes(existing.status)) {
+    return void sendError(res, 409, "Only draft or paused campaigns can be edited");
   }
 
   if (editing) {
-    const existingTargets = await db.select({
-      destinationId: campaignTargetsTable.destinationId,
-    }).from(campaignTargetsTable)
-      .where(eq(campaignTargetsTable.campaignId, existing.id));
-    const name = parsed.data.name ?? existing.name;
-    const telegramAccountId = parsed.data.telegramAccountId === undefined ? existing.telegramAccountId : parsed.data.telegramAccountId;
-    const templateId = parsed.data.templateId === undefined ? existing.templateId : parsed.data.templateId;
-    const destinationIds = parsed.data.destinationIds
-      ?? [...new Set(existingTargets.map((target) => target.destinationId))];
-    const repeatCount = parsed.data.repeatCount ?? existing.repeatCount;
-    const delayMinSeconds = parsed.data.delayMinSeconds ?? existing.delayMinSeconds;
-    const delayMaxSeconds = parsed.data.delayMaxSeconds ?? existing.delayMaxSeconds;
-    const roundDelayMinSeconds = parsed.data.roundDelayMinSeconds ?? existing.roundDelayMinSeconds;
-    const roundDelayMaxSeconds = parsed.data.roundDelayMaxSeconds ?? existing.roundDelayMaxSeconds;
-    if (!name.trim() || !telegramAccountId || !templateId || !destinationIds.length) {
-      return void sendError(res, 400, "Campaign name, account, template, and at least one destination are required");
-    }
-    if (![repeatCount, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds].every(Number.isInteger)) {
-      return void sendError(res, 400, "Repeat count and delays must be integers");
-    }
-    if (delayMinSeconds > delayMaxSeconds || roundDelayMinSeconds > roundDelayMaxSeconds) {
-      return void sendError(res, 400, "Minimum delay cannot exceed maximum delay");
-    }
-    const account = await ownedTelegramAccount(telegramAccountId, ownerUserId);
-    if (!account) return void sendError(res, 404, "Telegram account not found");
-    const [template] = await db.select().from(messageTemplatesTable).where(and(
-      eq(messageTemplatesTable.id, templateId),
-      eq(messageTemplatesTable.ownerUserId, ownerUserId),
-    ));
-    if (!template) return void sendError(res, 404, "Message template not found");
-    if (template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
-      return void sendError(res, 409, "Forward templates must use the Telegram account that owns the saved message");
-    }
-    const destinations = await db.select().from(destinationsTable).where(and(
-      inArray(destinationsTable.id, destinationIds),
-      eq(destinationsTable.accountId, telegramAccountId),
-    ));
-    if (destinations.length !== destinationIds.length || destinations.some((destination) => !destination.canPost)) {
-      return void sendError(res, 409, "Every campaign destination must exist and have verified posting permission");
-    }
-    const scheduledAt = parsed.data.scheduledAt === undefined ? existing.scheduledAt : parsed.data.scheduledAt;
-    let roundStartAt = (scheduledAt ?? new Date()).getTime();
-    const targetRows = [];
-    for (let round = 0; round < repeatCount; round += 1) {
-      let destinationAt = roundStartAt;
-      for (const destination of destinations) {
-        targetRows.push({
-          campaignId: existing.id,
-          destinationId: destination.id,
-          status: "pending" as const,
-          nextAttemptAt: new Date(destinationAt),
-        });
-        destinationAt += (delayMinSeconds + Math.floor(Math.random() * (delayMaxSeconds - delayMinSeconds + 1))) * 1000;
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${existing.id} FOR UPDATE`);
+      const [lockedCampaign] = await tx.select().from(campaignsTable)
+        .where(and(eq(campaignsTable.id, existing.id), eq(campaignsTable.ownerUserId, ownerUserId)));
+      if (!lockedCampaign) return { kind: "error" as const, status: 404, message: "Campaign not found" };
+      if (!["draft", "paused"].includes(lockedCampaign.status)) {
+        return { kind: "error" as const, status: 409, message: "Only draft or paused campaigns can be edited" };
       }
-      if (round < repeatCount - 1) {
-        roundStartAt += (roundDelayMinSeconds + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1))) * 1000;
+
+      await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${lockedCampaign.id} FOR UPDATE`);
+      const existingTargets = await tx.select({
+        destinationId: campaignTargetsTable.destinationId,
+        status: campaignTargetsTable.status,
+      }).from(campaignTargetsTable)
+        .where(eq(campaignTargetsTable.campaignId, lockedCampaign.id));
+      if (lockedCampaign.status === "paused" && existingTargets.some((target) => target.status === "sending")) {
+        return { kind: "error" as const, status: 409, message: "Please wait for the current delivery to finish before editing this paused campaign" };
       }
-    }
-    const [campaign] = await db.update(campaignsTable).set({
-      name: name.trim(),
-      content: template.content,
-      telegramAccountId,
-      templateId,
-      templateMode: template.mode,
-      templateSourceAccountId: template.sourceAccountId,
-      templateSourceMessageId: template.sourceMessageId,
-      scheduledAt,
-      timezone: parsed.data.timezone ?? existing.timezone,
-      repeatCount,
-      delayMinSeconds,
-      delayMaxSeconds,
-      roundDelayMinSeconds,
-      roundDelayMaxSeconds,
-      updatedAt: new Date(),
-    }).where(eq(campaignsTable.id, existing.id)).returning();
-    await db.delete(campaignTargetsTable).where(and(
-      eq(campaignTargetsTable.campaignId, existing.id),
-      inArray(campaignTargetsTable.status, ["pending", "sending", "failed", "requires_review", "cancelled"]),
-    ));
-    await db.insert(campaignTargetsTable).values(targetRows);
+
+      const name = parsed.data.name ?? lockedCampaign.name;
+      const telegramAccountId = parsed.data.telegramAccountId === undefined ? lockedCampaign.telegramAccountId : parsed.data.telegramAccountId;
+      const templateId = parsed.data.templateId === undefined ? lockedCampaign.templateId : parsed.data.templateId;
+      const destinationIds = [...new Set(parsed.data.destinationIds
+        ?? existingTargets.map((target) => target.destinationId))];
+      const repeatCount = parsed.data.repeatCount ?? lockedCampaign.repeatCount;
+      const delayMinSeconds = parsed.data.delayMinSeconds ?? lockedCampaign.delayMinSeconds;
+      const delayMaxSeconds = parsed.data.delayMaxSeconds ?? lockedCampaign.delayMaxSeconds;
+      const roundDelayMinSeconds = parsed.data.roundDelayMinSeconds ?? lockedCampaign.roundDelayMinSeconds;
+      const roundDelayMaxSeconds = parsed.data.roundDelayMaxSeconds ?? lockedCampaign.roundDelayMaxSeconds;
+      if (!name.trim() || !telegramAccountId || !templateId || !destinationIds.length) {
+        return { kind: "error" as const, status: 400, message: "Campaign name, account, template, and at least one destination are required" };
+      }
+      if (![repeatCount, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds].every(Number.isInteger)) {
+        return { kind: "error" as const, status: 400, message: "Repeat count and delays must be integers" };
+      }
+      if (delayMinSeconds > delayMaxSeconds || roundDelayMinSeconds > roundDelayMaxSeconds) {
+        return { kind: "error" as const, status: 400, message: "Minimum delay cannot exceed maximum delay" };
+      }
+
+      const [account] = await tx.select({ id: telegramAccountsTable.id }).from(telegramAccountsTable).where(and(
+        eq(telegramAccountsTable.id, telegramAccountId),
+        eq(telegramAccountsTable.ownerUserId, ownerUserId),
+        isNull(telegramAccountsTable.deletedAt),
+      ));
+      if (!account) return { kind: "error" as const, status: 404, message: "Telegram account not found" };
+      const [template] = await tx.select().from(messageTemplatesTable).where(and(
+        eq(messageTemplatesTable.id, templateId),
+        eq(messageTemplatesTable.ownerUserId, ownerUserId),
+      ));
+      if (!template) return { kind: "error" as const, status: 404, message: "Message template not found" };
+      if (template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
+        return { kind: "error" as const, status: 409, message: "Forward templates must use the Telegram account that owns the saved message" };
+      }
+      const destinations = await tx.select().from(destinationsTable).where(and(
+        inArray(destinationsTable.id, destinationIds),
+        eq(destinationsTable.accountId, telegramAccountId),
+      ));
+      if (destinations.length !== destinationIds.length || destinations.some((destination) => !destination.canPost)) {
+        return { kind: "error" as const, status: 409, message: "Every campaign destination must exist and have verified posting permission" };
+      }
+
+      const scheduledAt = parsed.data.scheduledAt === undefined ? lockedCampaign.scheduledAt : parsed.data.scheduledAt;
+      let roundStartAt = (scheduledAt ?? new Date()).getTime();
+      const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
+      const sentByDestination = new Map<string, number>();
+      for (const target of existingTargets) {
+        if (target.status === "sent") {
+          sentByDestination.set(target.destinationId, (sentByDestination.get(target.destinationId) ?? 0) + 1);
+        }
+      }
+      const remainingByDestination = new Map(destinations.map((destination) => [
+        destination.id,
+        Math.max(0, repeatCount - (sentByDestination.get(destination.id) ?? 0)),
+      ]));
+      let remainingDeliveries = [...remainingByDestination.values()].reduce((total, count) => total + count, 0);
+      while (remainingDeliveries > 0) {
+        let destinationAt = roundStartAt;
+        for (const destination of destinations) {
+          const remaining = remainingByDestination.get(destination.id) ?? 0;
+          if (remaining === 0) continue;
+          targetRows.push({
+            campaignId: lockedCampaign.id,
+            destinationId: destination.id,
+            status: "pending",
+            nextAttemptAt: new Date(destinationAt),
+          });
+          destinationAt += (delayMinSeconds + Math.floor(Math.random() * (delayMaxSeconds - delayMinSeconds + 1))) * 1000;
+          remainingByDestination.set(destination.id, remaining - 1);
+          remainingDeliveries -= 1;
+        }
+        if (remainingDeliveries > 0) {
+          roundStartAt += (roundDelayMinSeconds + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1))) * 1000;
+        }
+      }
+
+      const [campaign] = await tx.update(campaignsTable).set({
+        name: name.trim(),
+        content: template.content,
+        telegramAccountId,
+        templateId,
+        templateMode: template.mode,
+        templateSourceAccountId: template.sourceAccountId,
+        templateSourceMessageId: template.sourceMessageId,
+        scheduledAt,
+        timezone: parsed.data.timezone ?? lockedCampaign.timezone,
+        repeatCount,
+        delayMinSeconds,
+        delayMaxSeconds,
+        roundDelayMinSeconds,
+        roundDelayMaxSeconds,
+        updatedAt: new Date(),
+      }).where(eq(campaignsTable.id, lockedCampaign.id)).returning();
+      await tx.delete(campaignTargetsTable).where(and(
+        eq(campaignTargetsTable.campaignId, lockedCampaign.id),
+        inArray(campaignTargetsTable.status, ["pending", "failed", "requires_review", "cancelled"]),
+      ));
+      if (targetRows.length > 0) await tx.insert(campaignTargetsTable).values(targetRows);
+      return { kind: "success" as const, campaign };
+    });
+    if (result.kind === "error") return void sendError(res, result.status, result.message);
+    const campaign = result.campaign;
     await recordActivity({
       ownerUserId,
       event: "campaign.updated",
