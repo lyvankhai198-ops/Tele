@@ -919,8 +919,12 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     parsed.data.roundDelayMaxSeconds,
   ];
   if (!numericValues.every(Number.isInteger)) return void sendError(res, 400, "Số lần lặp và khoảng delay phải là số nguyên.");
+  if (parsed.data.repeatCount < 1) return void sendError(res, 400, "Số lần lặp phải lớn hơn hoặc bằng 1.");
   if (parsed.data.delayMinSeconds > parsed.data.delayMaxSeconds || parsed.data.roundDelayMinSeconds > parsed.data.roundDelayMaxSeconds) {
     return void sendError(res, 400, "Delay tối thiểu không thể lớn hơn delay tối đa.");
+  }
+  if (parsed.data.mediaUrl) {
+    return void sendError(res, 400, "Media delivery is not supported yet; remove the attachment before starting this campaign.");
   }
   const campaignAllowance = await getCampaignAllowance(currentUserId(req));
   if (campaignAllowance.campaignLimit !== null && campaignAllowance.used >= campaignAllowance.campaignLimit) {
@@ -933,12 +937,13 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   if (parsed.data.telegramAccountId && !accountIds.includes(parsed.data.telegramAccountId)) {
     return void sendError(res, 404, "Telegram account not found");
   }
+  const destinationIds = [...new Set(parsed.data.destinationIds)];
   const destinations = await db.select().from(destinationsTable)
     .where(and(
-      inArray(destinationsTable.id, parsed.data.destinationIds),
+      inArray(destinationsTable.id, destinationIds),
       inArray(destinationsTable.accountId, parsed.data.telegramAccountId ? [parsed.data.telegramAccountId] : accountIds),
     ));
-  if (destinations.length !== parsed.data.destinationIds.length || destinations.some((destination) => !destination.canPost)) {
+  if (destinations.length !== destinationIds.length || destinations.some((destination) => !destination.canPost)) {
     return void sendError(res, 409, "Every campaign destination must exist and have verified posting permission");
   }
   let content = parsed.data.content.trim();
