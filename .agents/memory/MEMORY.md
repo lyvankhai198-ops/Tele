@@ -3,3 +3,4 @@
 - [OpenAPI numeric validation](openapi-numeric-validation.md) — use `number` plus route-level integer validation; generated `integer` schemas are incompatible with this Zod toolchain.
 - [Telegram proxy transport](telegram-proxy-transport.md) — HTTP/SOCKS5 assignments are stored per account; GramJS needs a socket adapter before they can carry MTProto traffic.
 - [Concurrent delivery quotas](concurrent-delivery-quotas.md) — daily delivery quotas need an atomic reservation before sending when more than one worker can run.
+- [Campaign scheduling semantics](campaign-scheduling-semantics.md) — repeat count means full destination rounds; delays are measured in seconds between scheduled deliveries.
