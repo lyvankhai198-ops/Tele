@@ -574,36 +574,41 @@ router.post("/telegram/accounts", async (req, res): Promise<void> => {
   if (allowance.accountLimit !== null && allowance.used >= allowance.accountLimit) {
     return void sendError(res, 403, `Gói ${allowance.plan.toUpperCase()} chỉ cho phép ${allowance.accountLimit} tài khoản Telegram. Hãy nâng cấp để kết nối thêm.`);
   }
-  const [account] = await db.insert(telegramAccountsTable).values({
-    ownerUserId: currentUserId(req),
-    name: `Telegram ${phone}`,
-    phoneMasked: maskPhone(phone),
-    phoneEncrypted: encryptSecret(phone),
-    apiId: parsed.data.api_id,
-    apiHashEncrypted: encryptSecret(apiHash),
-    dailyLimit: parsed.data.daily_limit,
-    status: "saved",
-  }).returning();
-
-  let loginStart: Awaited<ReturnType<typeof startLoginChallenge>>;
+  let createdAccountId: string | null = null;
   try {
-    loginStart = await startLoginChallenge(account);
+    const [account] = await db.insert(telegramAccountsTable).values({
+      ownerUserId: currentUserId(req),
+      name: `Telegram ${phone}`,
+      phoneMasked: maskPhone(phone),
+      phoneEncrypted: encryptSecret(phone),
+      apiId: parsed.data.api_id,
+      apiHashEncrypted: encryptSecret(apiHash),
+      dailyLimit: parsed.data.daily_limit,
+      status: "saved",
+    }).returning();
+    createdAccountId = account.id;
+
+    const loginStart = await startLoginChallenge(account);
+    await recordActivity({
+      ownerUserId: currentUserId(req),
+      event: "account.login_started",
+      message: "Telegram phone verification started",
+      accountId: account.id,
+      level: "info",
+    });
+    res.status(201).json(CreateTelegramAccountResponse.parse({
+      account: telegramAccountResponse(loginStart.account),
+      challenge: loginStart.challenge,
+    }));
   } catch (error) {
-    req.log.error({ err: error, accountId: account.id }, "Unable to start Telegram login challenge");
-    await db.delete(telegramAccountsTable).where(eq(telegramAccountsTable.id, account.id));
-    return void sendError(res, 502, "Không thể gửi mã xác minh Telegram. Hãy kiểm tra API ID, API Hash và số điện thoại.");
+    req.log.error({ err: error }, "Unable to create Telegram account");
+    if (createdAccountId) {
+      await db.delete(telegramAccountsTable).where(eq(telegramAccountsTable.id, createdAccountId)).catch((cleanupError) => {
+        req.log.error({ err: cleanupError, accountId: createdAccountId }, "Unable to clean up failed Telegram account");
+      });
+    }
+    sendError(res, 500, "Không thể thêm tài khoản Telegram lúc này. Hãy kiểm tra cấu hình máy chủ hoặc thử lại sau.");
   }
-  await recordActivity({
-    ownerUserId: currentUserId(req),
-    event: "account.login_started",
-    message: "Telegram phone verification started",
-    accountId: account.id,
-    level: "info",
-  });
-  res.status(201).json(CreateTelegramAccountResponse.parse({
-    account: telegramAccountResponse(loginStart.account),
-    challenge: loginStart.challenge,
-  }));
 });
 
 router.post("/telegram/accounts/:accountId/login", async (req, res): Promise<void> => {
@@ -1009,18 +1014,127 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   const parsed = UpdateCampaignStatusBody.safeParse(req.body);
   if (!params.success) return void sendError(res, 400, params.error.message);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
+  const ownerUserId = currentUserId(req);
   const [existing] = await db.select().from(campaignsTable)
-    .where(and(eq(campaignsTable.id, params.data.campaignId), eq(campaignsTable.ownerUserId, currentUserId(req))));
+    .where(and(eq(campaignsTable.id, params.data.campaignId), eq(campaignsTable.ownerUserId, ownerUserId)));
   if (!existing) return void sendError(res, 404, "Campaign not found");
-  const [campaign] = await db.update(campaignsTable).set({ status: parsed.data.status, updatedAt: new Date() })
+
+  const editing = parsed.data.name !== undefined || parsed.data.telegramAccountId !== undefined
+    || parsed.data.templateId !== undefined || parsed.data.destinationIds !== undefined
+    || parsed.data.scheduledAt !== undefined || parsed.data.timezone !== undefined
+    || parsed.data.repeatCount !== undefined || parsed.data.delayMinSeconds !== undefined
+    || parsed.data.delayMaxSeconds !== undefined || parsed.data.roundDelayMinSeconds !== undefined
+    || parsed.data.roundDelayMaxSeconds !== undefined;
+  if (!editing && !parsed.data.status) return void sendError(res, 400, "No campaign changes were provided");
+  if (editing && parsed.data.status !== undefined) {
+    return void sendError(res, 400, "Update campaign details and status in separate requests");
+  }
+  if (editing && existing.status !== "draft") {
+    return void sendError(res, 409, "Only draft campaigns can be edited to prevent duplicate deliveries");
+  }
+
+  if (editing) {
+    const existingTargets = await db.select({
+      destinationId: campaignTargetsTable.destinationId,
+    }).from(campaignTargetsTable)
+      .where(eq(campaignTargetsTable.campaignId, existing.id));
+    const name = parsed.data.name ?? existing.name;
+    const telegramAccountId = parsed.data.telegramAccountId === undefined ? existing.telegramAccountId : parsed.data.telegramAccountId;
+    const templateId = parsed.data.templateId === undefined ? existing.templateId : parsed.data.templateId;
+    const destinationIds = parsed.data.destinationIds
+      ?? [...new Set(existingTargets.map((target) => target.destinationId))];
+    const repeatCount = parsed.data.repeatCount ?? existing.repeatCount;
+    const delayMinSeconds = parsed.data.delayMinSeconds ?? existing.delayMinSeconds;
+    const delayMaxSeconds = parsed.data.delayMaxSeconds ?? existing.delayMaxSeconds;
+    const roundDelayMinSeconds = parsed.data.roundDelayMinSeconds ?? existing.roundDelayMinSeconds;
+    const roundDelayMaxSeconds = parsed.data.roundDelayMaxSeconds ?? existing.roundDelayMaxSeconds;
+    if (!name.trim() || !telegramAccountId || !templateId || !destinationIds.length) {
+      return void sendError(res, 400, "Campaign name, account, template, and at least one destination are required");
+    }
+    if (![repeatCount, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds].every(Number.isInteger)) {
+      return void sendError(res, 400, "Repeat count and delays must be integers");
+    }
+    if (delayMinSeconds > delayMaxSeconds || roundDelayMinSeconds > roundDelayMaxSeconds) {
+      return void sendError(res, 400, "Minimum delay cannot exceed maximum delay");
+    }
+    const account = await ownedTelegramAccount(telegramAccountId, ownerUserId);
+    if (!account) return void sendError(res, 404, "Telegram account not found");
+    const [template] = await db.select().from(messageTemplatesTable).where(and(
+      eq(messageTemplatesTable.id, templateId),
+      eq(messageTemplatesTable.ownerUserId, ownerUserId),
+    ));
+    if (!template) return void sendError(res, 404, "Message template not found");
+    if (template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
+      return void sendError(res, 409, "Forward templates must use the Telegram account that owns the saved message");
+    }
+    const destinations = await db.select().from(destinationsTable).where(and(
+      inArray(destinationsTable.id, destinationIds),
+      eq(destinationsTable.accountId, telegramAccountId),
+    ));
+    if (destinations.length !== destinationIds.length || destinations.some((destination) => !destination.canPost)) {
+      return void sendError(res, 409, "Every campaign destination must exist and have verified posting permission");
+    }
+    const scheduledAt = parsed.data.scheduledAt === undefined ? existing.scheduledAt : parsed.data.scheduledAt;
+    const nextAt = (scheduledAt ?? new Date()).getTime();
+    const targetRows = [];
+    let nextTargetAt = nextAt;
+    for (let round = 0; round < repeatCount; round += 1) {
+      for (const destination of destinations) {
+        targetRows.push({
+          campaignId: existing.id,
+          destinationId: destination.id,
+          status: "pending" as const,
+          nextAttemptAt: new Date(nextTargetAt),
+        });
+        nextTargetAt += (delayMinSeconds + Math.floor(Math.random() * (delayMaxSeconds - delayMinSeconds + 1))) * 1000;
+      }
+      if (round < repeatCount - 1) {
+        nextTargetAt += (roundDelayMinSeconds + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1))) * 1000;
+      }
+    }
+    const [campaign] = await db.update(campaignsTable).set({
+      name: name.trim(),
+      content: template.content,
+      telegramAccountId,
+      templateId,
+      templateMode: template.mode,
+      templateSourceAccountId: template.sourceAccountId,
+      templateSourceMessageId: template.sourceMessageId,
+      scheduledAt,
+      timezone: parsed.data.timezone ?? existing.timezone,
+      repeatCount,
+      delayMinSeconds,
+      delayMaxSeconds,
+      roundDelayMinSeconds,
+      roundDelayMaxSeconds,
+      updatedAt: new Date(),
+    }).where(eq(campaignsTable.id, existing.id)).returning();
+    await db.delete(campaignTargetsTable).where(and(
+      eq(campaignTargetsTable.campaignId, existing.id),
+      inArray(campaignTargetsTable.status, ["pending", "sending", "failed", "requires_review", "cancelled"]),
+    ));
+    await db.insert(campaignTargetsTable).values(targetRows);
+    await recordActivity({
+      ownerUserId,
+      event: "campaign.updated",
+      message: `Updated campaign "${campaign.name}"`,
+      level: "success",
+      campaignId: campaign.id,
+    });
+    return void res.json(UpdateCampaignStatusResponse.parse(await campaignSummary(campaign)));
+  }
+
+  const nextStatus = parsed.data.status;
+  if (!nextStatus) return void sendError(res, 400, "No campaign status was provided");
+  const [campaign] = await db.update(campaignsTable).set({ status: nextStatus, updatedAt: new Date() })
     .where(eq(campaignsTable.id, existing.id)).returning();
-  if (parsed.data.status === "cancelled") {
+  if (nextStatus === "cancelled") {
     await db.update(campaignTargetsTable).set({ status: "cancelled", updatedAt: new Date() })
       .where(and(eq(campaignTargetsTable.campaignId, campaign.id), inArray(campaignTargetsTable.status, ["pending", "sending"])));
   }
   await recordActivity({
-    event: `campaign.${parsed.data.status}`,
-    message: `${parsed.data.status[0].toUpperCase()}${parsed.data.status.slice(1)} campaign "${campaign.name}"`,
+    event: `campaign.${nextStatus}`,
+    message: `${nextStatus[0].toUpperCase()}${nextStatus.slice(1)} campaign "${campaign.name}"`,
     ownerUserId: currentUserId(req),
     campaignId: campaign.id,
   });
