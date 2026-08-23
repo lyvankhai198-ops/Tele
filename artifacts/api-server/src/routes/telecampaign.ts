@@ -1053,6 +1053,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       const existingTargets = await tx.select({
         destinationId: campaignTargetsTable.destinationId,
         status: campaignTargetsTable.status,
+        sentAt: campaignTargetsTable.sentAt,
       }).from(campaignTargetsTable)
         .where(eq(campaignTargetsTable.campaignId, lockedCampaign.id));
       if (lockedCampaign.status === "paused" && existingTargets.some((target) => target.status === "sending")) {
@@ -1102,14 +1103,27 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       }
 
       const scheduledAt = parsed.data.scheduledAt === undefined ? lockedCampaign.scheduledAt : parsed.data.scheduledAt;
-      let roundStartAt = (scheduledAt ?? new Date()).getTime();
       const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
       const sentByDestination = new Map<string, number>();
+      let latestSentAt: Date | null = null;
       for (const target of existingTargets) {
         if (target.status === "sent") {
           sentByDestination.set(target.destinationId, (sentByDestination.get(target.destinationId) ?? 0) + 1);
+          if (target.sentAt && (!latestSentAt || target.sentAt.getTime() > latestSentAt.getTime())) {
+            latestSentAt = target.sentAt;
+          }
         }
       }
+      const randomRoundDelay = () => roundDelayMinSeconds
+        + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1));
+      const firstRoundAfterLastSend = latestSentAt
+        ? latestSentAt.getTime() + randomRoundDelay() * 1000
+        : Number.NEGATIVE_INFINITY;
+      let roundStartAt = Math.max(
+        scheduledAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+        Date.now(),
+        firstRoundAfterLastSend,
+      );
       const remainingByDestination = new Map(destinations.map((destination) => [
         destination.id,
         Math.max(0, repeatCount - (sentByDestination.get(destination.id) ?? 0)),
@@ -1131,7 +1145,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
           remainingDeliveries -= 1;
         }
         if (remainingDeliveries > 0) {
-          roundStartAt += (roundDelayMinSeconds + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1))) * 1000;
+          roundStartAt += randomRoundDelay() * 1000;
         }
       }
 
