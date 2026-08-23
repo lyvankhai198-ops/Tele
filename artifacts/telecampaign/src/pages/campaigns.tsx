@@ -4,6 +4,7 @@ import {
   Eye,
   LoaderCircle,
   CirclePause,
+  Pencil,
   Play,
   Plus,
   Search,
@@ -45,6 +46,7 @@ const copy = {
     detailsBtn: "Details",
     pauseBtn: "Pause",
     resumeBtn: "Resume",
+    editBtn: "Edit",
     deleteBtn: "Delete",
     errorsLabel: "Errors",
     emptyFilterTitle: "No campaigns found",
@@ -79,6 +81,7 @@ const copy = {
     validationDelayOrder: "Minimum delay cannot exceed maximum delay.",
     validationSchedule: "Invalid schedule date/time.",
     toastCreated: "Campaign created.",
+    toastUpdated: "Campaign updated.",
     toastPaused: "Campaign paused.",
     toastResumed: "Campaign resumed.",
     toastDeleted: "Campaign deleted.",
@@ -94,6 +97,10 @@ const copy = {
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
+    detailErrorTitle: "Delivery errors",
+    detailErrorEmpty: "No delivery errors recorded.",
+    detailErrorAttempts: "attempts",
+    detailErrorNextRetry: "Next retry:",
     genericError: "Could not complete the operation. Please try again.",
   },
   vi: {
@@ -113,6 +120,7 @@ const copy = {
     detailsBtn: "Chi tiết",
     pauseBtn: "Dừng",
     resumeBtn: "Tiếp tục",
+    editBtn: "Chỉnh sửa",
     deleteBtn: "Xóa",
     errorsLabel: "Lỗi",
     emptyFilterTitle: "Không tìm thấy chiến dịch",
@@ -147,6 +155,7 @@ const copy = {
     validationDelayOrder: "Delay tối thiểu không thể lớn hơn delay tối đa.",
     validationSchedule: "Thời gian lên lịch không hợp lệ.",
     toastCreated: "Đã tạo chiến dịch.",
+    toastUpdated: "Đã cập nhật chiến dịch.",
     toastPaused: "Đã dừng chiến dịch.",
     toastResumed: "Chiến dịch đã tiếp tục.",
     toastDeleted: "Đã xóa chiến dịch.",
@@ -162,6 +171,10 @@ const copy = {
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
+    detailErrorTitle: "Chi tiết lỗi gửi",
+    detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
+    detailErrorAttempts: "lần thử",
+    detailErrorNextRetry: "Lần thử tiếp:",
     genericError: "Không thể hoàn tất thao tác. Vui lòng thử lại.",
   },
 } as const;
@@ -242,6 +255,7 @@ export default function Campaigns() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
   const [form, setForm] = useState<CampaignForm>(emptyForm);
   const [groupSearch, setGroupSearch] = useState("");
@@ -273,6 +287,30 @@ export default function Campaigns() {
       delayMaxSeconds: String(defaults?.campaignDefaults.delayMaxSeconds ?? 8),
       roundDelayMinSeconds: String(defaults?.campaignDefaults.roundDelayMinSeconds ?? 1),
       roundDelayMaxSeconds: String(defaults?.campaignDefaults.roundDelayMaxSeconds ?? 3),
+    });
+    setGroupSearch("");
+    setFormError(null);
+    setEditingCampaign(null);
+    setShowForm(true);
+  }
+
+  function openEdit(campaign: Campaign) {
+    const schedule = campaign.scheduledAt ? new Date(campaign.scheduledAt) : null;
+    setEditingCampaign(campaign);
+    setForm({
+      name: campaign.name,
+      accountId: campaign.telegramAccountId ?? "",
+      templateId: campaign.templateId ?? "",
+      destinationIds: (destinations.data ?? [])
+        .filter((destination) => campaign.destinationIds.includes(destination.id) && destination.canPost)
+        .map((destination) => destination.id),
+      repeatCount: String(campaign.repeatCount),
+      delayMinSeconds: String(campaign.delayMinSeconds),
+      delayMaxSeconds: String(campaign.delayMaxSeconds),
+      roundDelayMinSeconds: String(campaign.roundDelayMinSeconds),
+      roundDelayMaxSeconds: String(campaign.roundDelayMaxSeconds),
+      scheduleDate: schedule ? new Intl.DateTimeFormat("en-CA").format(schedule) : "",
+      scheduleTime: schedule ? schedule.toTimeString().slice(0, 5) : "",
     });
     setGroupSearch("");
     setFormError(null);
@@ -335,8 +373,30 @@ export default function Campaigns() {
       scheduledAt = date.toISOString();
     }
     try {
-      await createCampaign.mutateAsync({
-        data: {
+      if (editingCampaign) {
+        await updateStatus.mutateAsync({
+          campaignId: editingCampaign.id,
+          data: {
+            name: form.name.trim(),
+            telegramAccountId: form.accountId,
+            templateId: form.templateId,
+            destinationIds: form.destinationIds,
+            scheduledAt,
+            timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
+            repeatCount: values[0],
+            delayMinSeconds: values[1],
+            delayMaxSeconds: values[2],
+            roundDelayMinSeconds: values[3],
+            roundDelayMaxSeconds: values[4],
+          },
+        });
+        await campaigns.refetch();
+        setShowForm(false);
+        setEditingCampaign(null);
+        setToast(c.toastUpdated);
+      } else {
+        await createCampaign.mutateAsync({
+          data: {
           name: form.name.trim(),
           content: selectedTemplate?.content ?? "",
           telegramAccountId: form.accountId,
@@ -349,11 +409,12 @@ export default function Campaigns() {
           delayMaxSeconds: values[2],
           roundDelayMinSeconds: values[3],
           roundDelayMaxSeconds: values[4],
-        },
-      });
-      await campaigns.refetch();
-      setShowForm(false);
-      setToast(c.toastCreated);
+          },
+        });
+        await campaigns.refetch();
+        setShowForm(false);
+        setToast(c.toastCreated);
+      }
     } catch (error) {
       setFormError(localizedErrorMessage(error, language, c.genericError));
     }
@@ -440,8 +501,13 @@ export default function Campaigns() {
                         <button onClick={() => setDetails(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] text-[14px] font-extrabold text-[#0f172a] hover:bg-[#f8fafc]"><Eye className="h-[17px] w-[17px]" />{c.detailsBtn}</button>
                         {isActive(campaign.status)
                           ? <button onClick={() => void changeCampaignStatus(campaign, "paused")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f04444] text-[14px] font-extrabold text-white hover:bg-[#dc2626]"><CirclePause className="h-[17px] w-[17px]" />{c.pauseBtn}</button>
-                          : campaign.status === "paused" || campaign.status === "draft"
-                            ? <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
+                          : campaign.status === "draft"
+                             ? <div className="grid grid-cols-2 gap-2">
+                               <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
+                               <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
+                             </div>
+                            : campaign.status === "paused"
+                              ? <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
                             : <span className="h-10" />}
                       </div>
                       <button onClick={() => void remove(campaign)} disabled={updateStatus.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#f99a9d] text-[14px] font-extrabold text-white hover:bg-[#f57c80]"><Trash2 className="h-[17px] w-[17px]" />{c.deleteBtn}</button>
@@ -458,7 +524,7 @@ export default function Campaigns() {
       </div>
 
       {showForm && (
-        <Modal title={c.modalTitle} onClose={() => setShowForm(false)} wide>
+        <Modal title={editingCampaign ? c.editBtn : c.modalTitle} onClose={() => setShowForm(false)} wide>
           <form className="space-y-5" onSubmit={(event) => void submit(event)}>
             <label className="block">
               <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldName}</span>
@@ -555,8 +621,8 @@ export default function Campaigns() {
             {formError && <p className="rounded-xl bg-[#fff1f2] px-3.5 py-3 text-[13px] font-semibold text-[#be123c]">{formError}</p>}
 
             <PrimaryButton type="submit" disabled={createCampaign.isPending} onClick={() => undefined}>
-              {createCampaign.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
-              {c.createCampaignBtn}
+              {(createCampaign.isPending || updateStatus.isPending) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {editingCampaign ? c.editBtn : c.createCampaignBtn}
             </PrimaryButton>
           </form>
         </Modal>
@@ -579,6 +645,23 @@ export default function Campaigns() {
             <p className="whitespace-pre-wrap rounded-xl border border-[#e2e8f0] p-4 font-medium text-[#334155]">
               {details.templateMode === "forward" ? c.detailForwardNote : details.content}
             </p>
+             <div>
+               <h3 className="mb-2 text-[13px] font-extrabold text-[#0f172a]">{c.detailErrorTitle}</h3>
+               {details.errors.length ? (
+                 <div className="space-y-2">
+                   {details.errors.map((error) => (
+                     <div key={`${error.destinationId}-${error.status}`} className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-3 text-[12px] text-[#881337]">
+                       <div className="flex items-start justify-between gap-3">
+                         <strong>{error.destinationTitle}</strong>
+                         <span className="shrink-0 font-bold">{error.attempts} {c.detailErrorAttempts}</span>
+                       </div>
+                       <p className="mt-1 break-words font-medium">{error.lastError ?? c.genericError}</p>
+                       {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
+                     </div>
+                   ))}
+                 </div>
+               ) : <p className="rounded-xl bg-[#f8fafc] p-3 text-[13px] font-medium text-[#64748b]">{c.detailErrorEmpty}</p>}
+             </div>
           </div>
         </Modal>
       )}
