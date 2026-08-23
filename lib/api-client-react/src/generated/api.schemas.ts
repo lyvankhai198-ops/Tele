@@ -280,6 +280,17 @@ export const CampaignTemplateMode = {
   forward: 'forward',
 } as const;
 
+export interface CampaignTargetError {
+  destinationId: string;
+  destinationTitle: string;
+  status: string;
+  attempts: number;
+  /** @nullable */
+  lastError: string | null;
+  /** @nullable */
+  nextAttemptAt: string | null;
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -309,6 +320,8 @@ export interface Campaign {
   targetCount: number;
   sentCount: number;
   failedCount: number;
+  destinationIds: string[];
+  errors: CampaignTargetError[];
 }
 
 export interface CampaignInput {
@@ -357,18 +370,55 @@ export interface CampaignInput {
   roundDelayMaxSeconds?: number;
 }
 
-export type CampaignStatusInputStatus = typeof CampaignStatusInputStatus[keyof typeof CampaignStatusInputStatus];
+export type CampaignUpdateInputStatus = typeof CampaignUpdateInputStatus[keyof typeof CampaignUpdateInputStatus];
 
 
-export const CampaignStatusInputStatus = {
+export const CampaignUpdateInputStatus = {
   draft: 'draft',
   queued: 'queued',
   paused: 'paused',
   cancelled: 'cancelled',
 } as const;
 
-export interface CampaignStatusInput {
-  status: CampaignStatusInputStatus;
+export interface CampaignUpdateInput {
+  status?: CampaignUpdateInputStatus;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name?: string;
+  telegramAccountId?: string;
+  templateId?: string;
+  /** @minItems 1 */
+  destinationIds?: string[];
+  /** @nullable */
+  scheduledAt?: string | null;
+  timezone?: string;
+  /**
+     * @minimum 1
+     * @maximum 300
+     */
+  repeatCount?: number;
+  /**
+     * @minimum 0
+     * @maximum 120
+     */
+  delayMinSeconds?: number;
+  /**
+     * @minimum 0
+     * @maximum 120
+     */
+  delayMaxSeconds?: number;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  roundDelayMinSeconds?: number;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  roundDelayMaxSeconds?: number;
 }
 
 export interface CalendarItem {
