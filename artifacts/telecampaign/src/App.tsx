@@ -37,18 +37,37 @@ const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function AuthShell({ children }: { children: ReactNode }) {
-  const { language, t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   return (
     <main className="min-h-screen bg-[#f3f7fb] px-4 py-8 text-[#16304a] sm:grid sm:place-items-center sm:p-8">
       <section className="mx-auto w-full max-w-[440px]">
-        <div className="mb-7 flex items-center justify-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#1888e8] text-white shadow-[0_10px_30px_rgba(24,136,232,.25)]">
-            <MessageCircle className="h-6 w-6" strokeWidth={2.4} />
-          </span>
-          <span>
-            <span className="block text-lg font-bold tracking-[-0.03em]">Tele Campaign</span>
-            <span className="block text-xs text-[#66809a]">{t('Telegram Campaign Manager')}</span>
-          </span>
+        <div className="relative mb-7 flex items-center justify-center gap-3">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#1888e8] text-white shadow-[0_10px_30px_rgba(24,136,232,.25)]">
+              <MessageCircle className="h-6 w-6" strokeWidth={2.4} />
+            </span>
+            <span>
+              <span className="block text-lg font-bold tracking-[-0.03em]">Tele Campaign</span>
+              <span className="block text-xs text-[#66809a]">{t('Telegram Campaign Manager')}</span>
+            </span>
+          </div>
+          <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-[#dbe6f0] bg-white p-1 shadow-sm" aria-label={language === 'vi' ? 'Chọn ngôn ngữ' : 'Choose language'}>
+            {(['vi', 'en'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setLanguage(option)}
+                aria-pressed={language === option}
+                className={`rounded-md px-2 py-1 text-[10px] font-extrabold tracking-wide transition ${
+                  language === option
+                    ? 'bg-[#1888e8] text-white shadow-sm'
+                    : 'text-[#7190ab] hover:bg-[#eef6fc] hover:text-[#16304a]'
+                }`}
+              >
+                {option.toUpperCase()}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="rounded-3xl border border-[#dbe6f0] bg-white p-6 shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-8">
           {children}
@@ -81,7 +100,7 @@ function Landing() {
   );
 }
 
-function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onChange, autoComplete }: {
+function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onChange, autoComplete, helperText }: {
   icon: typeof UserRound;
   label: string;
   placeholder: string;
@@ -89,6 +108,7 @@ function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onCha
   value: string;
   onChange: (value: string) => void;
   autoComplete: string;
+  helperText?: string;
 }) {
   return (
     <label className="block">
@@ -104,6 +124,7 @@ function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onCha
           autoComplete={autoComplete}
         />
       </span>
+      {helperText && <span className="mt-2 block text-xs leading-5 text-[#7190ab]">{helperText}</span>}
     </label>
   );
 }
@@ -243,6 +264,11 @@ function RegisterPage() {
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
+          helperText={
+            language === 'vi'
+              ? 'Mật khẩu hợp lệ: ít nhất 10 ký tự, gồm cả chữ cái và số.'
+              : 'Valid password: at least 10 characters with both letters and numbers.'
+          }
         />
         <AuthField
           icon={KeyRound}
