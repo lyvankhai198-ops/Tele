@@ -1,0 +1,483 @@
+TIẾP TỤC PHẦN GIAO DIỆN SAU KHI ĐĂNG KÝ/ĐĂNG NHẬP
+
+Sau khi người dùng đăng ký tài khoản bằng email + mật khẩu và đăng nhập thành công, chuyển người dùng vào trang “Bảng điều khiển”.
+
+LƯU Ý QUAN TRỌNG:
+- KHÔNG dùng đăng nhập bằng Google.
+- Tài khoản là tài khoản đăng ký trực tiếp bằng Email + Mật khẩu.
+- Giữ nguyên hệ thống đăng ký/đăng nhập đã làm trước đó.
+- Không tự ý thay đổi logic xác thực hiện tại nếu không cần thiết.
+- Chỉ tiếp tục xây dựng giao diện và chức năng Dashboard theo đúng mô tả dưới đây.
+- Giao diện phải responsive, ưu tiên hiển thị đẹp trên điện thoại giống ảnh mẫu.
+
+==================================================
+1. LAYOUT TỔNG THỂ
+==================================================
+
+Sau khi đăng nhập:
+
+URL/page:
+- /dashboard
+
+Header trên mobile:
+
+Bên trái:
+- Icon menu hamburger.
+
+Ở giữa:
+- Tiêu đề “Bảng điều khiển”.
+
+Bên phải:
+- Nút “Nâng cấp”.
+- Icon đăng xuất.
+
+Header có đường kẻ phân cách phía dưới.
+
+Giao diện nền sáng, sạch, hiện đại.
+Bo góc nhẹ.
+Border màu xám rất nhạt.
+Shadow nhẹ.
+Font hiện đại, dễ đọc.
+
+==================================================
+2. MENU SIDEBAR
+==================================================
+
+Khi bấm icon hamburger thì mở sidebar từ bên trái.
+
+Sidebar giống ảnh mẫu:
+
+Phần đầu:
+- Logo Telegram Campaign.
+- Tên: “Tele Campaign”
+- Phụ đề: “Quản trị Telegram”
+- Nút X để đóng menu.
+
+Các menu:
+
+1. Bảng điều khiển
+   Icon dạng dashboard/grid.
+   Đây là mục đang được chọn.
+   Background xanh nhạt.
+   Chữ xanh đậm.
+
+2. Tài khoản
+   Icon user.
+
+3. Tài khoản Telegram
+   Icon users.
+
+4. Nhóm
+   Icon group.
+
+5. Mẫu tin nhắn
+   Icon message/document.
+
+6. Chiến dịch
+   Icon campaign/megaphone.
+
+7. Proxy
+   Icon proxy/server.
+
+8. Nhật ký
+   Icon list/log.
+
+Cuối sidebar:
+
+Khung “Ngôn ngữ”
+
+Có 2 lựa chọn:
+- 🇻🇳 VI
+- 🇬🇧 EN
+
+VI được chọn mặc định.
+
+Bên dưới:
+“Tele Campaign v2.0”
+
+Sidebar phải hoạt động tốt trên mobile.
+Khi click X hoặc vùng overlay thì đóng sidebar.
+
+==================================================
+3. DASHBOARD
+==================================================
+
+Phần nội dung chính hiển thị:
+
+Tiêu đề:
+“Bảng điều khiển”
+
+Header:
+[☰]  Bảng điều khiển              [Nâng cấp] [Logout]
+
+Không cần làm quá nhiều hiệu ứng.
+Ưu tiên giống giao diện ảnh mẫu.
+
+==================================================
+4. CÁC CARD THỐNG KÊ
+==================================================
+
+Hiển thị 6 card thống kê dạng grid 2 cột trên mobile.
+
+Card 1:
+
+Icon:
+Users
+
+Số:
+3
+
+Tên:
+“Tài khoản Telegram”
+
+Card 2:
+
+Icon:
+Grid/group
+
+Số:
+182
+
+Tên:
+“Nhóm đang hoạt động”
+
+Card 3:
+
+Icon:
+Document
+
+Số:
+15
+
+Tên:
+“Mẫu tin nhắn”
+
+Card 4:
+
+Icon:
+Megaphone
+
+Số:
+22
+
+Tên:
+“Chiến dịch”
+
+Card 5:
+
+Icon:
+Telegram/send
+
+Số:
+53
+
+Tên:
+“Đã gửi hôm nay”
+
+Card 6:
+
+Icon:
+Error/X
+
+Số:
+68
+
+Tên:
+“Thất bại hôm nay”
+
+Các card:
+- nền trắng
+- border mảnh
+- border-radius khoảng 18-20px
+- shadow nhẹ
+- icon nằm trong ô bo tròn màu pastel
+- số liệu lớn, đậm
+- tiêu đề nhỏ hơn, màu xám xanh
+- khoảng cách giữa các card giống ảnh mẫu.
+
+Các số liệu KHÔNG hard-code về lâu dài.
+
+Sau này phải lấy từ database/API thực tế.
+
+==================================================
+5. THÔNG BÁO ADMIN
+==================================================
+
+Bên dưới 6 card tạo một khung:
+
+Tiêu đề:
+“Thông Báo ADMIN”
+
+Icon chuông.
+
+Nội dung hiển thị dạng danh sách update.
+
+Ví dụ dữ liệu mẫu:
+
+Update ngày 8/6/2026 - 11h40:
++ Fix camp bị đứng không chạy
++ fix lỗi đồng bộ tin nhắn đã lưu khi dùng proxy
+
+Update ngày 6/6/2026 - 16h30:
++ Thêm chức năng proxy HTTP/SockS5 để acc clone an toàn và sống trâu hơn
++ Tối ưu ram server để web ổn định hơn
+
+Update ngày 23/5/2026 - 17-18h:
++ Update nâng cấp máy chủ
+
+Update ngày 20/5/2026 - 12h00:
++ Sửa lại số vòng lặp bị giới hạn 100
++ Sửa lại số giây delay tối đa 3 ngày
+
+Thiết kế:
+- background trắng
+- border xanh/tím nhạt
+- border-radius khoảng 20px
+- icon chuông trong ô pastel
+- tiêu đề đậm
+- nội dung dễ đọc
+- các update cách nhau rõ ràng.
+
+Nội dung thông báo phải lấy được từ database/admin sau này, không hard-code.
+
+==================================================
+6. CHIẾN DỊCH GẦN ĐÂY
+==================================================
+
+Bên dưới phần thông báo tạo section:
+
+“Chiến dịch gần đây”
+
+Hiển thị bảng:
+
+Cột:
+- Tên
+- Trạng thái
+
+Dữ liệu demo:
+
+Khải nghiên plus        RUNNING
+Khải Market              RUNNING
+Khải buy sell            RUNNING
+Thanh nghiên plus        RUNNING
+Thanh by sell            RUNNING
+Khải nerv edie           RUNNING
+Thanh Makret             RUNNING
+Khải trung               RUNNING
+
+Trạng thái RUNNING hiển thị dạng badge bo tròn.
+
+Tên chiến dịch màu xanh.
+
+Trên desktop có thể dùng table bình thường.
+
+Trên mobile phải responsive, không làm vỡ màn hình.
+
+==================================================
+7. NHẬT KÝ GẦN ĐÂY
+==================================================
+
+Bên dưới “Chiến dịch gần đây” tạo section:
+
+“Nhật ký gần đây”
+
+Các cột:
+
+- Thời gian
+- Chiến dịch
+- Trạng thái
+
+Ví dụ:
+
+16:00:27    Khải nghiên plus       Thành công
+16:00:26    Khải Market             Thất bại
+16:00:26    Khải buy sell           Thành công
+16:00:21    Thanh nghiên plus       Thất bại
+16:00:21    Thanh by sell           Thành công
+16:00:18    Khải nerv edie           Thành công
+16:00:14    Thanh Makret             Thất bại
+
+Badge:
+- “Thành công” = màu xanh
+- “Thất bại” = màu đỏ
+
+Phải có dữ liệu thật từ hệ thống campaign/log sau này.
+
+Không hard-code dữ liệu khi kết nối backend.
+
+==================================================
+8. NÚT NÂNG CẤP
+==================================================
+
+Trên header có nút:
+
+“Nâng cấp”
+
+Thiết kế:
+- nền xanh đậm
+- chữ trắng
+- bo góc
+- nổi bật nhưng không quá to.
+
+Khi click:
+- chuyển tới trang nâng cấp/gói dịch vụ.
+
+Nếu trang nâng cấp chưa được xây dựng thì tạo route /upgrade và để sẵn giao diện placeholder.
+
+==================================================
+9. ĐĂNG XUẤT
+==================================================
+
+Icon logout ở góc phải header.
+
+Khi click:
+- đăng xuất khỏi session hiện tại.
+- xóa session/token phù hợp.
+- chuyển về trang đăng nhập.
+
+Không được để người dùng quay lại Dashboard bằng nút Back sau khi logout nếu session đã hết hạn.
+
+==================================================
+10. BẢO VỆ DASHBOARD
+==================================================
+
+Dashboard phải là protected route.
+
+Nếu chưa đăng nhập:
+→ tự động chuyển về /login.
+
+Nếu đã đăng nhập:
+→ cho phép truy cập /dashboard.
+
+Nếu token/session hết hạn:
+→ logout và chuyển về /login.
+
+Không để dữ liệu dashboard bị truy cập trực tiếp khi chưa xác thực.
+
+==================================================
+11. DATABASE / BACKEND
+==================================================
+
+Chuẩn bị cấu trúc để Dashboard lấy dữ liệu thật.
+
+Các dữ liệu cần có:
+
+- users
+- telegram_accounts
+- groups
+- message_templates
+- campaigns
+- campaign_logs
+- admin_notifications
+
+Dashboard cần API để lấy:
+
+- tổng số tài khoản Telegram
+- tổng số nhóm đang hoạt động
+- tổng số mẫu tin nhắn
+- tổng số chiến dịch
+- số tin đã gửi hôm nay
+- số tin thất bại hôm nay
+- chiến dịch gần đây
+- nhật ký gần đây
+- thông báo admin
+
+Không hard-code số liệu Dashboard trong code frontend.
+
+==================================================
+12. RESPONSIVE MOBILE
+==================================================
+
+Đây là phần RẤT QUAN TRỌNG.
+
+Giao diện phải ưu tiên mobile giống ảnh mẫu.
+
+Trên iPhone:
+- không bị tràn ngang
+- card hiển thị 2 cột
+- sidebar mở từ trái
+- table không phá layout
+- header không bị che
+- nút Nâng cấp vừa kích thước
+- font rõ ràng
+- khoảng cách hợp lý.
+
+Trên desktop:
+- Dashboard có chiều rộng tối đa hợp lý.
+- Card có thể chuyển thành nhiều cột.
+- Bảng hiển thị đầy đủ.
+
+==================================================
+13. ICON
+==================================================
+
+Dùng thư viện icon chuyên nghiệp như Lucide Icons hoặc thư viện icon hiện tại của project.
+
+KHÔNG dùng emoji làm icon giao diện chính.
+
+Các icon cần có:
+- Menu
+- X
+- Dashboard
+- User
+- Users
+- Message
+- Megaphone
+- Proxy/server
+- List
+- Bell
+- Telegram/send
+- Logout
+- Upgrade
+
+==================================================
+14. QUAN TRỌNG VỀ THIẾT KẾ
+==================================================
+
+Hãy bám sát giao diện trong ảnh mẫu tôi gửi:
+
+- Dashboard trắng/sáng.
+- Chữ xanh đậm/navy.
+- Accent xanh dương.
+- Card bo góc.
+- Border nhẹ.
+- Shadow nhẹ.
+- Khoảng trắng rộng.
+- Không thiết kế quá màu mè.
+- Không thêm gradient quá mạnh.
+- Không thêm animation không cần thiết.
+
+Mục tiêu là giao diện quản trị Telegram chuyên nghiệp, giống SaaS Dashboard hiện đại.
+
+==================================================
+15. KHÔNG ĐƯỢC PHÁ PHẦN ĐÃ LÀM
+==================================================
+
+Trước khi sửa code:
+
+1. Kiểm tra cấu trúc project hiện tại.
+2. Kiểm tra hệ thống đăng ký/đăng nhập đã làm.
+3. Giữ nguyên authentication hiện tại.
+4. Không xóa các route/chức năng đang hoạt động.
+5. Không tạo thêm hệ thống authentication thứ hai.
+6. Chỉ bổ sung Dashboard và kết nối với authentication hiện tại.
+
+Nếu cần thay đổi file quan trọng:
+→ giải thích ngắn gọn file nào sẽ thay đổi và tại sao.
+
+Sau khi hoàn thành:
+- kiểm tra build
+- kiểm tra lỗi console
+- kiểm tra login → dashboard
+- kiểm tra logout → login
+- kiểm tra protected route
+- kiểm tra responsive mobile
+- kiểm tra sidebar
+- kiểm tra tất cả nút/menu.
+
+NẾU CÓ LỖI:
+- tự sửa lỗi.
+- không được tự ý xóa chức năng để né lỗi.
+
+VÀ QUAN TRỌNG:
+Nếu thay đổi mới làm hỏng giao diện hoặc authentication hiện tại, phải ưu tiên khôi phục trạng thái hoạt động trước đó thay vì tiếp tục sửa chồng lên.

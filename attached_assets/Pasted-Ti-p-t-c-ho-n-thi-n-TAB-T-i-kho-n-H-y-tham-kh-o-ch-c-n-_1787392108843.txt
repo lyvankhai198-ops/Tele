@@ -1,0 +1,108 @@
+Tiếp tục hoàn thiện TAB “Tài khoản”.
+
+Hãy tham khảo chức năng trong giao diện mẫu nhưng KHÔNG copy nguyên bố cục, màu sắc, card hoặc cách trình bày. Thiết kế lại hiện đại, gọn và có nhận diện riêng, đồng bộ với website hiện tại.
+
+TAB TÀI KHOẢN cần có:
+
+1. THÔNG TIN TÀI KHOẢN
+Hiển thị:
+- Tên tài khoản / username
+- Ngày tham gia
+- Ngày hết hạn
+- Email
+- Gói dịch vụ hiện tại
+
+Phần gói dịch vụ cần hiển thị rõ:
+- Tên gói hiện tại: Plus / Pro / Unlimited
+- Số tài khoản Telegram được phép sử dụng
+- Giới hạn chiến dịch
+- Trạng thái gói
+- Thời gian còn lại
+
+Có thể thiết kế phần này thành một profile card hoặc dashboard summary khác với mẫu tham khảo.
+
+2. THỐNG KÊ QUYỀN SỬ DỤNG
+
+Tạo khu vực “Tài nguyên sử dụng” hoặc tên tương tự.
+
+Hiển thị các giới hạn:
+
+TÀI KHOẢN TELEGRAM
+- Đã sử dụng / giới hạn
+- Ví dụ: 3 / 3
+- Hiển thị số lượng còn lại
+- Có progress bar hoặc biểu đồ trực quan.
+
+CHIẾN DỊCH
+- Số chiến dịch hiện tại
+- Giới hạn theo gói
+- Nếu Unlimited thì hiển thị “Không giới hạn”.
+
+TIN NHẮN
+- Số tin nhắn đã sử dụng
+- Giới hạn trong ngày
+- Số lượng còn lại
+- Hiển thị progress bar.
+
+3. TRẠNG THÁI GÓI
+Hiển thị rõ:
+- Gói hiện tại
+- Ngày bắt đầu
+- Ngày hết hạn
+- Còn bao nhiêu ngày
+- Trạng thái: Đang hoạt động / Hết hạn
+
+Nếu gói sắp hết hạn thì có cảnh báo nhẹ và nút “Gia hạn / Nâng cấp”.
+
+4. THIẾT KẾ MOBILE-FIRST
+
+Giao diện phải tối ưu cho điện thoại:
+- Không bị tràn ngang.
+- Các card tự co theo màn hình.
+- Font dễ đọc.
+- Các thông tin quan trọng được ưu tiên ở phía trên.
+- Không tạo khoảng trắng quá lớn.
+- Progress bar rõ ràng.
+- Icon đơn giản, chuyên nghiệp.
+
+5. PHÂN QUYỀN
+
+Thông tin và giới hạn phải lấy từ dữ liệu tài khoản thực tế.
+
+Không hard-code:
+- Tên gói
+- Ngày hết hạn
+- Số Telegram
+- Số chiến dịch
+- Số tin nhắn.
+
+Backend phải xác định quyền dựa trên gói mà tài khoản đang sử dụng.
+
+Ví dụ:
+PLUS = 1 Telegram account
+PRO = 3 Telegram accounts
+UNLIMITED = không giới hạn Telegram accounts.
+
+6. ĐỒNG BỘ DỮ LIỆU
+
+Khi người dùng:
+- Thêm Telegram → số lượng sử dụng cập nhật.
+- Xóa Telegram → số lượng giảm.
+- Tạo chiến dịch → số chiến dịch cập nhật.
+- Gửi tin nhắn → số tin nhắn cập nhật.
+- Nâng cấp gói → quyền hạn và giới hạn cập nhật ngay.
+- Gia hạn → ngày hết hạn cập nhật.
+
+Không được chỉ thay đổi giao diện mà phải liên kết với dữ liệu/backend hiện có.
+
+7. QUAN TRỌNG
+
+Không xóa dữ liệu hiện tại.
+Không phá các chức năng đang chạy.
+Không thay đổi database/API hiện tại nếu không cần thiết.
+Kiểm tra code hiện tại trước khi sửa.
+
+Nếu cần thay đổi lớn, tạo thay đổi theo cách có thể rollback.
+
+Mục tiêu:
+Giữ nguyên chức năng của TAB Tài khoản nhưng thiết kế lại giao diện khác mẫu tham khảo, đẹp hơn, hiện đại hơn và đồng bộ với Dashboard + Nâng cấp.

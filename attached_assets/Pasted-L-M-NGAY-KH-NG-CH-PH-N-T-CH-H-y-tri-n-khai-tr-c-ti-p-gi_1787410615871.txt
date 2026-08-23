@@ -1,0 +1,126 @@
+LÀM NGAY, KHÔNG CHỈ PHÂN TÍCH.
+
+Hãy triển khai trực tiếp giao diện và chức năng cho tab "Nhóm" theo đúng ảnh tham chiếu tôi đã cung cấp.
+
+YÊU CẦU QUAN TRỌNG:
+- Không được chỉ mô tả hoặc đề xuất.
+- Hãy sửa code trực tiếp và chạy/test.
+- Giữ nguyên toàn bộ backend, API, database, authentication và các handler hiện tại.
+- Không tự ý thay đổi cấu trúc dữ liệu nếu không cần thiết.
+- Không làm hỏng các chức năng đang hoạt động.
+- Nếu có code cũ của tab Nhóm thì chỉnh sửa trên code hiện tại, không tạo một hệ thống giả lập riêng.
+
+1. TAB NHÓM
+
+Thiết kế lại giao diện tab Nhóm giống bố cục ảnh tham chiếu:
+
+Header:
+- Menu ☰ bên trái
+- Tiêu đề "Nhóm"
+- Nút "+ Thêm nhóm" màu xanh dương
+- Icon đăng xuất bên phải
+
+Các nút chức năng:
+- Đồng bộ
+- Dọn rác
+- Xuất nhóm
+- Join nhóm hàng loạt
+- Danh sách loại trừ
+
+Thanh tìm kiếm:
+"Tìm theo tiêu đề, chatId, username..."
+
+Bộ lọc:
+- Tất cả tài khoản
+- Tất cả trạng thái
+
+Danh sách nhóm:
+Mỗi nhóm hiển thị dạng card rõ ràng, responsive trên mobile.
+
+Card gồm:
+- Tên nhóm
+- Trạng thái Bật/Tắt
+- ID tài khoản Telegram đang quản lý nhóm
+- Chat ID
+- Username nếu có
+- "Gửi gần nhất"
+- Nút "Thử"
+- Nút "Sửa"
+- Nút "Ẩn"
+
+Giữ đúng logic Bật/Tắt, Ẩn/Hiện và các thao tác hiện tại.
+
+2. TAB TÀI KHOẢN TELEGRAM
+
+Giao diện thêm tài khoản phải hoạt động đúng quy trình:
+
+Bước 1:
+Hiển thị form thân thiện với người dùng:
+- Tên hiển thị (tùy chọn)
+- Nút "Tạo mã QR"
+
+Không bắt người dùng nhập API ID, API Hash, số điện thoại, OTP hoặc session string trên giao diện nếu hệ thống hiện tại đã có cơ chế cấu hình credentials phía server.
+
+Bước 2:
+Sau khi tạo QR:
+- Hiển thị QR đăng nhập Telegram chính thức.
+- Hướng dẫn người dùng quét QR bằng ứng dụng Telegram.
+- Theo dõi trạng thái đăng nhập.
+- Khi đăng nhập thành công thì tự động cập nhật tài khoản thành "Đã Login".
+
+Bước 3:
+Sau khi login thành công:
+- Lưu tài khoản.
+- Hiển thị số điện thoại Telegram.
+- Telegram ID.
+- Username nếu có.
+- Limit/ngày.
+- Trạng thái kết nối.
+
+Không được coi việc "Lưu tài khoản" là đã login. Phải có bước LOGIN thực tế và trạng thái phải phản ánh đúng trạng thái Telegram.
+
+3. UI/UX
+
+- Mobile-first.
+- Giao diện sạch, hiện đại, giống phong cách ảnh tham chiếu.
+- Bo góc card/nút.
+- Font dễ đọc.
+- Khoảng cách hợp lý.
+- Responsive tốt trên iPhone và desktop.
+- Không để modal/form bị tràn màn hình mobile.
+- Các nút phải dễ bấm trên điện thoại.
+
+4. QUAN TRỌNG VỀ LOGIC
+
+Không mock dữ liệu nếu API thật đã tồn tại.
+
+Hãy tìm và sử dụng:
+- API hiện tại
+- database hiện tại
+- Telegram connection handler hiện tại
+- group management handler hiện tại
+- authentication hiện tại
+
+Nếu một API chưa hoàn chỉnh, hãy sửa handler hiện tại để UI sử dụng được.
+
+5. TEST
+
+Sau khi sửa:
+- Chạy project.
+- Test tab Tài khoản Telegram.
+- Test tạo QR.
+- Test login Telegram.
+- Test trạng thái Đã Login.
+- Test tab Nhóm.
+- Test tìm kiếm.
+- Test filter.
+- Test Bật/Tắt.
+- Test Thử.
+- Test Sửa.
+- Test Ẩn.
+- Test responsive mobile.
+
+Nếu phát hiện lỗi thì tự sửa và test lại.
+
+KHÔNG DỪNG Ở PHÂN TÍCH.
+HÃY THỰC SỰ IMPLEMENT CODE VÀ HOÀN THÀNH.

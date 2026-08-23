@@ -1,0 +1,764 @@
+Telegram Campaign Manager
+
+1. Mục tiêu
+
+Xây dựng một web dashboard quản lý tài khoản Telegram, nhóm/kênh và chiến dịch đăng bài theo lịch.
+
+Hệ thống phải có giao diện hiện đại, responsive, dễ sử dụng trên điện thoại và máy tính.
+
+Chỉ hỗ trợ các tài khoản Telegram và nhóm/kênh mà người dùng có quyền truy cập hoặc quản lý. Không xây dựng chức năng spam, gửi hàng loạt ngoài quyền hạn, né giới hạn Telegram, hoặc tự động tham gia nhóm.
+
+⸻
+
+2. Công nghệ
+
+Ưu tiên stack:
+
+* Frontend: Next.js + TypeScript
+* UI: Tailwind CSS + shadcn/ui
+* Backend: API routes/server actions của Next.js hoặc backend Node.js
+* Database: PostgreSQL
+* ORM: Prisma
+* Queue/Scheduler: Redis + BullMQ nếu cần
+* Telegram: thư viện MTProto tương thích Telegram API
+* Authentication website: session/JWT an toàn
+* Password/session/token phải được mã hóa khi lưu.
+
+Nếu môi trường Replit không hỗ trợ một thành phần nào thì chọn giải pháp tương đương ổn định nhất.
+
+⸻
+
+3. Giao diện
+
+Tạo sidebar:
+
+* Dashboard
+* Tài khoản Telegram
+* Nhóm / Kênh
+* Chiến dịch
+* Lịch đăng
+* Nhật ký
+* Cài đặt
+
+Header:
+
+* Tên hệ thống
+* Trạng thái hệ thống
+* User menu
+* Logout
+
+Thiết kế:
+
+* Dark mode hiện đại
+* Card bo góc
+* Icon rõ ràng
+* Responsive mobile
+* Loading skeleton
+* Toast notification
+* Modal xác nhận trước các thao tác quan trọng
+* Empty state đẹp
+* Error state rõ ràng
+
+⸻
+
+4. Authentication website
+
+Tạo:
+
+* Login
+* Logout
+* Session management
+* Protected dashboard
+* Middleware bảo vệ các route /dashboard/*
+
+Database user:
+
+User
+- id
+- email
+- passwordHash
+- role
+- createdAt
+- updatedAt
+
+Role:
+
+* ADMIN
+* USER
+
+Mật khẩu phải hash bằng thuật toán an toàn, tuyệt đối không lưu plaintext.
+
+⸻
+
+5. Dashboard
+
+Trang /dashboard.
+
+Hiển thị:
+
+Telegram Accounts
+Active Accounts
+Groups / Channels
+Active Campaigns
+Scheduled Posts
+Successful Posts
+Failed Posts
+
+Thêm biểu đồ:
+
+* Bài đăng theo ngày
+* Thành công / thất bại
+* Chiến dịch đang hoạt động
+
+Hiển thị Recent Activity:
+
+14:30 Campaign A scheduled
+14:25 Telegram account connected
+14:20 Post successfully published
+14:15 Group synchronized
+
+⸻
+
+6. Telegram Accounts
+
+Trang:
+
+/dashboard/telegram-accounts
+
+Hiển thị danh sách:
+
+Account
+Phone / Identifier
+Status
+Last Sync
+Groups
+Actions
+
+Status:
+
+* CONNECTED
+* DISCONNECTED
+* AUTH_REQUIRED
+* ERROR
+
+Nút:
+
++ Add Telegram Account
+
+⸻
+
+7. Thêm tài khoản Telegram
+
+Tạo wizard:
+
+Step 1
+
+Nhập thông tin Telegram API cần thiết theo cơ chế chính thức của Telegram.
+
+Không yêu cầu người dùng cung cấp mật khẩu Telegram cho website.
+
+Step 2
+
+Thực hiện authentication an toàn.
+
+Nếu Telegram yêu cầu:
+
+* verification code
+* 2FA
+
+thì hiển thị bước tương ứng.
+
+Không log verification code hoặc password.
+
+Step 3
+
+Sau khi xác thực:
+
+Connected successfully
+
+Hiển thị:
+
+* Account name
+* Telegram identifier
+* Connection status
+* Last synchronization
+
+Session credential phải được mã hóa khi lưu.
+
+Không hiển thị session string/token đầy đủ trên frontend.
+
+⸻
+
+8. Đồng bộ nhóm/kênh
+
+Sau khi tài khoản Telegram được kết nối, có nút:
+
+Sync Groups
+
+Backend lấy danh sách các nhóm/kênh mà tài khoản có thể truy cập hợp lệ.
+
+Lưu:
+
+TelegramChat
+- id
+- telegramAccountId
+- telegramChatId
+- title
+- username
+- type
+- memberCount
+- canPost
+- lastSyncedAt
+
+Type:
+
+* GROUP
+* SUPERGROUP
+* CHANNEL
+
+Chỉ cho phép chọn chat nếu tài khoản có quyền đăng bài.
+
+Không tự động join group/channel.
+
+⸻
+
+9. Trang Groups / Channels
+
+Route:
+
+/dashboard/groups
+
+Bảng:
+
+☑
+Name
+Type
+Account
+Can Post
+Members
+Last Sync
+
+Có:
+
+* Search
+* Filter account
+* Filter type
+* Filter canPost
+* Select all
+* Pagination
+
+Khi chọn một nhóm:
+
+Hiển thị thông tin:
+
+Group name
+Username
+Type
+Telegram account
+Posting permission
+
+⸻
+
+10. Campaigns
+
+Route:
+
+/dashboard/campaigns
+
+Nút:
+
++ Create Campaign
+
+Campaign gồm:
+
+Campaign
+- id
+- name
+- telegramAccountId
+- content
+- mediaUrl
+- status
+- createdAt
+- updatedAt
+
+Status:
+
+* DRAFT
+* SCHEDULED
+* RUNNING
+* COMPLETED
+* PAUSED
+* FAILED
+
+⸻
+
+11. Tạo Campaign
+
+Wizard:
+
+Step 1 — Campaign information
+
+Fields:
+
+Campaign name
+Telegram account
+
+Step 2 — Select groups
+
+Hiển thị danh sách nhóm/kênh mà account có quyền đăng.
+
+Cho phép:
+
+* Search
+* Select multiple
+* Select all visible
+
+Step 3 — Content
+
+Textarea lớn:
+
+Nhập nội dung bài đăng...
+
+Cho phép:
+
+* Text
+* Image
+* Video
+* File nếu Telegram API/thư viện hỗ trợ an toàn
+
+Preview:
+
+Telegram Post Preview
+
+Step 4 — Schedule
+
+Các lựa chọn:
+
+Post now
+Schedule
+Recurring
+
+Schedule:
+
+Date
+Time
+Timezone
+
+Recurring:
+
+Daily
+Weekly
+Custom
+
+Có nút:
+
+Save Draft
+
+Schedule Campaign
+
+⸻
+
+12. Scheduler
+
+Không dùng setTimeout() đơn giản trong production.
+
+Tạo queue/worker để xử lý scheduled posts.
+
+Ví dụ logic:
+
+Campaign
+    ↓
+ScheduledPost
+    ↓
+Queue
+    ↓
+Worker
+    ↓
+Telegram API
+    ↓
+Success / Failed
+
+Database:
+
+ScheduledPost
+- id
+- campaignId
+- chatId
+- scheduledAt
+- status
+- attempts
+- publishedAt
+- errorMessage
+- createdAt
+- updatedAt
+
+Status:
+
+PENDING
+PROCESSING
+SUCCESS
+FAILED
+CANCELLED
+
+Worker phải đảm bảo một scheduled post không bị xử lý hai lần.
+
+⸻
+
+13. Lịch
+
+Route:
+
+/dashboard/calendar
+
+Hiển thị calendar:
+
+* Month
+* Week
+* Day
+
+Mỗi scheduled post hiển thị:
+
+Campaign name
+Group name
+Scheduled time
+Status
+
+Click vào event mở detail.
+
+Cho phép:
+
+* Edit schedule
+* Cancel
+* View campaign
+
+⸻
+
+14. Nhật ký
+
+Route:
+
+/dashboard/logs
+
+Hiển thị:
+
+Time
+Account
+Campaign
+Group
+Action
+Status
+Error
+
+Ví dụ:
+
+14:30
+Account A
+Campaign Sale
+Group ABC
+POST
+SUCCESS
+
+Nếu lỗi:
+
+POST
+FAILED
+Permission denied
+
+Không lưu password, verification code hoặc secret credential vào log.
+
+⸻
+
+15. Campaign detail
+
+Route:
+
+/dashboard/campaigns/[id]
+
+Hiển thị:
+
+Campaign name
+Account
+Content
+Media
+Status
+Created date
+
+Bên dưới:
+
+Target Groups
+Group              Schedule       Status
+Group A            15:00          SUCCESS
+Group B            15:00          PENDING
+Group C            15:00          FAILED
+
+Có:
+
+* Pause
+* Resume
+* Cancel
+* Edit
+* Delete
+
+Không cho sửa campaign đang xử lý nếu có nguy cơ tạo duplicate post.
+
+⸻
+
+16. Rate limit và an toàn
+
+Thiết kế queue có giới hạn tốc độ hợp lý.
+
+Không cố tình bypass Telegram rate limits.
+
+Nếu Telegram trả về rate-limit/flood-wait:
+
+* Đọc thời gian chờ được API trả về
+* Đưa job về trạng thái delayed
+* Retry sau thời gian được yêu cầu
+* Không spam retry liên tục
+
+Retry tối đa một số lần cấu hình được.
+
+Ví dụ:
+
+maxAttempts = 3
+
+Sử dụng exponential backoff.
+
+⸻
+
+17. Database schema
+
+Tạo Prisma schema cho tối thiểu:
+
+User
+TelegramAccount
+TelegramChat
+Campaign
+CampaignChat
+ScheduledPost
+ActivityLog
+
+Quan hệ:
+
+User
+ └── TelegramAccount
+       └── TelegramChat
+TelegramAccount
+ └── Campaign
+       └── CampaignChat
+             └── ScheduledPost
+
+⸻
+
+18. API
+
+Tạo API rõ ràng:
+
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/telegram/accounts
+POST   /api/telegram/accounts
+DELETE /api/telegram/accounts/:id
+POST   /api/telegram/accounts/:id/sync
+GET    /api/chats
+GET    /api/chats/:id
+GET    /api/campaigns
+POST   /api/campaigns
+GET    /api/campaigns/:id
+PATCH  /api/campaigns/:id
+DELETE /api/campaigns/:id
+POST   /api/campaigns/:id/schedule
+POST   /api/campaigns/:id/pause
+POST   /api/campaigns/:id/resume
+POST   /api/campaigns/:id/cancel
+GET    /api/calendar
+GET    /api/logs
+
+Validate tất cả request phía server.
+
+Không tin tưởng dữ liệu từ frontend.
+
+⸻
+
+19. Security
+
+Bắt buộc:
+
+* HTTPS khi deploy
+* Password hashing
+* Secure cookies
+* CSRF protection nếu phù hợp
+* Rate limiting cho login/API
+* Server-side authorization
+* Validate input
+* SQL injection protection thông qua ORM
+* Escape/sanitize nội dung hiển thị
+* Encrypt Telegram credentials/session data
+* Không đưa Telegram secret lên client
+* Không ghi secret vào console/log
+* Không commit .env
+* Tạo .env.example
+
+Ví dụ:
+
+DATABASE_URL=
+REDIS_URL=
+TELEGRAM_API_ID=
+TELEGRAM_API_HASH=
+SESSION_ENCRYPTION_KEY=
+AUTH_SECRET=
+
+⸻
+
+20. Error handling
+
+Các lỗi phải hiển thị dễ hiểu.
+
+Ví dụ:
+
+Telegram account disconnected
+Authentication required
+You don't have permission to post in this chat
+Telegram rate limit reached
+Scheduled time is invalid
+Campaign has no target groups
+
+Không hiển thị stack trace cho người dùng.
+
+Stack trace chỉ được ghi vào server log khi cần debug.
+
+⸻
+
+21. Seed data
+
+Tạo seed database để khi chạy lần đầu có:
+
+* 1 admin demo
+* Một vài campaign demo
+* Một vài activity log demo
+
+Nhưng tuyệt đối không tạo Telegram credential giả có vẻ như thật.
+
+⸻
+
+22. README
+
+Tạo README.md hướng dẫn:
+
+1. Install
+2. Environment variables
+3. PostgreSQL
+4. Redis nếu cần
+5. Prisma migration
+6. Seed
+7. Run development server
+8. Build production
+9. Deploy trên Replit
+10. Cách cấu hình Telegram API
+
+⸻
+
+23. Replit requirements
+
+Tạo đầy đủ:
+
+package.json
+.env.example
+README.md
+prisma/schema.prisma
+prisma/seed.*
+
+Cấu hình Replit để:
+
+npm install
+npm run dev
+
+hoạt động.
+
+Nếu cần worker riêng, cấu hình workflow riêng cho:
+
+Web
+Worker
+
+Đảm bảo database migration chạy được.
+
+⸻
+
+24. UI quality
+
+Không làm giao diện kiểu prototype sơ sài.
+
+Yêu cầu:
+
+* Professional SaaS dashboard
+* Dark theme
+* Responsive
+* Sidebar collapse trên mobile
+* Table đẹp
+* Modal đẹp
+* Form validation
+* Toast
+* Skeleton loading
+* Empty state
+* Confirmation dialog
+* Pagination
+* Search
+* Filter
+* Status badges
+* Calendar UI
+
+Tên hệ thống tạm thời:
+
+TeleCampaign
+
+Logo đơn giản dạng:
+
+◈ TeleCampaign
+
+⸻
+
+25. Quan trọng
+
+Trước tiên hãy xây toàn bộ UI + database + authentication + campaign management.
+
+Sau đó tích hợp Telegram API.
+
+Không hardcode API credentials.
+
+Nếu Telegram API chưa được cấu hình trong Replit, ứng dụng vẫn phải chạy được ở chế độ demo để tôi có thể xem toàn bộ giao diện.
+
+Khi một phần Telegram API chưa hoạt động, hiển thị:
+
+Telegram integration is not configured.
+Configure TELEGRAM_API_ID and TELEGRAM_API_HASH to connect an account.
+
+Không làm ứng dụng crash.
+
+⸻
+
+26. Tiêu chí hoàn thành
+
+Tôi cần có thể:
+
+1. Đăng nhập admin.
+2. Vào dashboard.
+3. Thêm Telegram account.
+4. Xác thực account theo Telegram API.
+5. Đồng bộ nhóm/kênh mà account có quyền truy cập.
+6. Chọn nhóm.
+7. Tạo campaign.
+8. Nhập nội dung.
+9. Chọn nhiều nhóm.
+10. Chọn thời gian.
+11. Lưu campaign.
+12. Xem campaign trên calendar.
+13. Worker xử lý scheduled post.
+14. Theo dõi trạng thái từng nhóm.
+15. Xem log thành công/thất bại.
+16. Pause/resume/cancel campaign.
+17. Không làm lộ credential.
+18. Không có chức năng spam, tự động join nhóm hoặc bypass Telegram rate limits.
+
+Hãy tự tạo toàn bộ file cần thiết, chạy migration, khởi động ứng dụng và kiểm tra các route chính trước khi báo hoàn thành.
+
+Nếu gặp lỗi build/runtime, tự sửa và chạy lại cho đến khi ứng dụng khởi động bình thường.

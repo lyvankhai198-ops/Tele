@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "TeleCampaign"
+description = "A responsive dark dashboard for safely managing Telegram accounts, approved groups, campaigns, scheduled posts, and activity logs."
+version = "1.0.0"
+id = "artifacts/telecampaign"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19985
+
+[services.development]
+run = "pnpm --filter @workspace/telecampaign run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/telecampaign", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/telecampaign/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19985"
+BASE_PATH = "/"

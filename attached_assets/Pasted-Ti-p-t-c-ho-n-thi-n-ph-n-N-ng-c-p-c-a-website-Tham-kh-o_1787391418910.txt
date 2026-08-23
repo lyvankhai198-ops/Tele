@@ -1,0 +1,104 @@
+Tiếp tục hoàn thiện phần “Nâng cấp” của website.
+
+Tham khảo ý tưởng và chức năng của giao diện hiện tại, nhưng KHÔNG copy nguyên xi giao diện, bố cục, câu chữ hoặc cách trình bày. Hãy thiết kế lại theo phong cách riêng, hiện đại và chuyên nghiệp hơn.
+
+YÊU CẦU:
+
+1. KHU VỰC GÓI DỊCH VỤ
+Tạo một khu vực hiển thị 3 gói:
+
+- PLUS
+  • 1 tài khoản Telegram
+  • Quản lý chiến dịch
+  • Mẫu tin nhắn
+  • Theo dõi nhật ký
+  • Đồng bộ nhóm tự động
+  • Tự động hóa chiến dịch
+  • Hỗ trợ kỹ thuật
+
+- PRO
+  • 3 tài khoản Telegram
+  • Quản lý chiến dịch
+  • Mẫu tin nhắn
+  • Theo dõi nhật ký
+  • Đồng bộ nhóm tự động
+  • Tự động hóa chiến dịch
+  • Hỗ trợ ưu tiên
+
+- UNLIMITED
+  • Không giới hạn tài khoản Telegram
+  • Quản lý chiến dịch
+  • Mẫu tin nhắn
+  • Theo dõi nhật ký
+  • Đồng bộ nhóm tự động
+  • Tự động hóa chiến dịch
+  • Hỗ trợ ưu tiên 24/7
+
+Có thể thay đổi cách đặt tên phụ, icon, màu sắc, bố cục và cách trình bày để giao diện có nhận diện riêng.
+
+2. THIẾT KẾ GIAO DIỆN
+Không làm dạng các card giống hệt mẫu tham khảo.
+
+Hãy tạo giao diện hiện đại, responsive, ưu tiên mobile:
+- Có tiêu đề “Nâng cấp gói dịch vụ”
+- Có phần mô tả ngắn giải thích lợi ích của việc nâng cấp.
+- Ba gói được trình bày rõ ràng, dễ so sánh.
+- Làm nổi bật gói PRO hoặc gói được đề xuất.
+- Mỗi gói có nút hành động riêng, ví dụ “Chọn gói”.
+- Có icon phù hợp cho từng tính năng.
+- Có hiệu ứng hover/click nhẹ.
+- Khoảng cách, font chữ và kích thước phải dễ đọc trên điện thoại.
+- Không sử dụng quá nhiều màu.
+- Giữ phong cách đồng bộ với toàn bộ website hiện tại.
+
+3. KHU VỰC KÍCH HOẠT KEY
+Tạo một khu vực riêng để người dùng nhập key bản quyền.
+
+Bao gồm:
+- Tiêu đề “Kích hoạt gói”
+- Ô nhập license key
+- Nút “Kích hoạt”
+- Nút/link “Mua key”
+- Hiển thị thông báo thành công/thất bại rõ ràng.
+- Validate key trước khi kích hoạt.
+- Không hiển thị key của người khác.
+- Không lưu key ở frontend nếu không cần thiết.
+
+Có thể thiết kế khu vực này dạng hộp nổi bật hoặc section riêng, KHÔNG copy bố cục mẫu.
+
+4. LOGIC NÂNG CẤP
+Khi người dùng nâng cấp lên gói cao hơn:
+- Kiểm tra gói hiện tại.
+- Tính thời gian còn lại của gói hiện tại.
+- Quy đổi thời gian còn lại theo logic hệ thống hiện có.
+- Cộng phần thời gian được quy đổi vào gói mới.
+- Cập nhật quyền sử dụng tài khoản Telegram tương ứng với gói mới.
+- Không làm mất dữ liệu tài khoản, nhóm, chiến dịch hoặc nhật ký hiện có.
+
+5. QUYỀN THEO GÓI
+PLUS = 1 Telegram account
+PRO = 3 Telegram accounts
+UNLIMITED = không giới hạn Telegram accounts
+
+Phần giới hạn phải được kiểm tra ở BACKEND, không chỉ ẩn/hiện trên frontend.
+
+6. TRẢI NGHIỆM NGƯỜI DÙNG
+Nếu người dùng đang ở gói hiện tại:
+- Hiển thị rõ “Gói hiện tại”.
+- Không cho thao tác nâng cấp sai.
+- Nếu đang dùng PLUS và chọn PRO thì hiển thị xác nhận.
+- Nếu chọn UNLIMITED thì hiển thị xác nhận nâng cấp.
+
+Sau khi nâng cấp thành công:
+- Cập nhật giao diện ngay.
+- Hiển thị thông báo thành công.
+- Hiển thị gói mới và thời hạn mới.
+
+7. QUAN TRỌNG
+Không phá vỡ các chức năng đang hoạt động.
+Không tự ý xóa database hoặc dữ liệu hiện tại.
+Không thay đổi API hiện có nếu không cần thiết.
+Trước khi sửa, kiểm tra code hiện tại để tận dụng component/API/database đang có.
+Nếu cần thay đổi cấu trúc lớn, ưu tiên tạo bản thay đổi có thể rollback.
+
+Mục tiêu là giữ nguyên CHỨC NĂNG nhưng làm giao diện và trải nghiệm khác mẫu tham khảo, chuyên nghiệp, hiện đại và có nhận diện riêng.

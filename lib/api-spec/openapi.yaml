@@ -1,0 +1,1386 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+  - name: telegram
+  - name: destinations
+  - name: campaigns
+  - name: activity
+  - name: admin
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /auth/register:
+    post:
+      operationId: registerAuth
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationInput" }
+      responses:
+        "201":
+          description: Registered and signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthUser" }
+        "400": { description: Invalid registration data }
+        "409": { description: Username already exists }
+        "429": { description: Too many attempts }
+        "503": { description: Registration is disabled or workspace is in maintenance mode }
+  /auth/login:
+    post:
+      operationId: loginAuth
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthUser" }
+        "400": { description: Invalid login data }
+        "401": { description: Invalid credentials }
+        "429": { description: Too many attempts }
+  /auth/logout:
+    post:
+      operationId: logoutAuth
+      tags: [auth]
+      responses:
+        "204": { description: Signed out }
+  /auth/me:
+    get:
+      operationId: getAuthUser
+      tags: [auth]
+      responses:
+        "200":
+          description: Current authenticated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthUser" }
+        "401": { description: Authentication is required }
+  /auth/legacy-owner-mappings:
+    post:
+      operationId: migrateLegacyAuthOwner
+      tags: [auth]
+      parameters:
+        - name: X-Auth-Migration-Token
+          in: header
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 512 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LegacyOwnerMappingInput" }
+      responses:
+        "200":
+          description: Legacy owner mapped safely
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacyOwnerMigrationResult" }
+        "401": { description: Authentication is required }
+        "403": { description: Migration authorization failed }
+        "404": { description: Legacy owner or target user not found }
+        "503": { description: Migration token is not configured }
+  /telegram/config:
+    get:
+      operationId: getTelegramConfig
+      tags: [telegram]
+      responses:
+        "200":
+          description: Telegram configuration status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramConfig"
+  /telegram/accounts:
+    get:
+      operationId: listTelegramAccounts
+      tags: [telegram]
+      responses:
+        "200":
+          description: Accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TelegramAccount" }
+    post:
+      operationId: createTelegramAccount
+      tags: [telegram]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelegramAccountInput" }
+      responses:
+        "201":
+          description: Telegram account saved and verification code sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramLoginStart" }
+        "403":
+          description: Telegram account quota exceeded
+  /telegram/accounts/{accountId}:
+    delete:
+      operationId: deleteTelegramAccount
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "200":
+          description: Telegram account deleted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramAccountDeletion" }
+  /telegram/accounts/{accountId}/sync:
+    post:
+      operationId: syncTelegramDestinations
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "202":
+          description: Sync accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncResult" }
+  /telegram/accounts/{accountId}/login:
+    post:
+      operationId: startTelegramLogin
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "201":
+          description: Telegram verification code sent
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramLoginStart" }
+        "409": { description: Account is not ready for a new login attempt }
+  /telegram/accounts/{accountId}/login/code:
+    post:
+      operationId: confirmTelegramLoginCode
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelegramLoginCodeInput" }
+      responses:
+        "200":
+          description: Telegram code processed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramLoginResult" }
+        "409": { description: "Challenge is invalid, expired, or no longer active" }
+  /telegram/accounts/{accountId}/login/password:
+    post:
+      operationId: confirmTelegramLoginPassword
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelegramLoginPasswordInput" }
+      responses:
+        "200":
+          description: Telegram 2FA password processed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramLoginResult" }
+        "409": { description: "Challenge is invalid, expired, or no longer active" }
+  /destinations:
+    get:
+      operationId: listDestinations
+      tags: [destinations]
+      responses:
+        "200":
+          description: Destinations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Destination" }
+  /telegram/accounts/{accountId}/saved-messages:
+    get:
+      operationId: listTelegramSavedMessages
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "200":
+          description: Recent messages from the account's Saved Messages chat
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TelegramSavedMessage" }
+        "404": { description: Telegram account not found }
+        "409": { description: Telegram account is not connected }
+  /proxies:
+    get:
+      operationId: listProxies
+      tags: [proxy]
+      responses:
+        "200":
+          description: Proxies
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Proxy" }
+    post:
+      operationId: createProxy
+      tags: [proxy]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProxyInput" }
+      responses:
+        "201":
+          description: Proxy created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Proxy" }
+  /proxies/{proxyId}:
+    patch:
+      operationId: updateProxy
+      tags: [proxy]
+      parameters:
+        - { $ref: "#/components/parameters/ProxyId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProxyInput" }
+      responses:
+        "200":
+          description: Proxy updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Proxy" }
+    delete:
+      operationId: deleteProxy
+      tags: [proxy]
+      parameters:
+        - { $ref: "#/components/parameters/ProxyId" }
+      responses:
+        "204": { description: Proxy deleted }
+  /proxies/{proxyId}/accounts/{accountId}:
+    post:
+      operationId: attachProxyAccount
+      tags: [proxy]
+      parameters:
+        - { $ref: "#/components/parameters/ProxyId" }
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "204": { description: Proxy attached }
+    delete:
+      operationId: detachProxyAccount
+      tags: [proxy]
+      parameters:
+        - { $ref: "#/components/parameters/ProxyId" }
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "204": { description: Proxy detached }
+  /message-templates:
+    get:
+      operationId: listMessageTemplates
+      tags: [templates]
+      responses:
+        "200":
+          description: Message templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MessageTemplate" }
+    post:
+      operationId: createMessageTemplate
+      tags: [templates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageTemplateInput" }
+      responses:
+        "201":
+          description: Message template created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageTemplate" }
+        "400": { description: Invalid template input }
+        "404": { description: Source Telegram account not found }
+        "409": { description: Source account is not connected }
+  /message-templates/{templateId}:
+    patch:
+      operationId: updateMessageTemplate
+      tags: [templates]
+      parameters:
+        - { $ref: "#/components/parameters/TemplateId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MessageTemplateUpdateInput" }
+      responses:
+        "200":
+          description: Message template updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageTemplate" }
+        "400": { description: Invalid template input }
+        "404": { description: Message template or source account not found }
+        "409": { description: Source account is not connected }
+    delete:
+      operationId: deleteMessageTemplate
+      tags: [templates]
+      parameters:
+        - { $ref: "#/components/parameters/TemplateId" }
+      responses:
+        "204": { description: Message template deleted }
+        "404": { description: Message template not found }
+  /campaigns:
+    get:
+      operationId: listCampaigns
+      tags: [campaigns]
+      responses:
+        "200":
+          description: Campaigns
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Campaign" }
+    post:
+      operationId: createCampaign
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignInput" }
+      responses:
+        "201":
+          description: Campaign created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+  /campaigns/{campaignId}:
+    patch:
+      operationId: updateCampaignStatus
+      tags: [campaigns]
+      parameters:
+        - { $ref: "#/components/parameters/CampaignId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampaignStatusInput" }
+      responses:
+        "200":
+          description: Updated campaign
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+    delete:
+      operationId: deleteCampaign
+      tags: [campaigns]
+      parameters:
+        - { $ref: "#/components/parameters/CampaignId" }
+      responses:
+        "204": { description: Deleted }
+  /calendar:
+    get:
+      operationId: listCalendarItems
+      tags: [campaigns]
+      parameters:
+        - { name: from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Scheduled items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CalendarItem" }
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200":
+          description: Activity log
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ActivityLog" }
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Dashboard summary for the authenticated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+        "401": { description: Authentication is required }
+        "503": { description: Ownership migration is pending }
+  /account:
+    get:
+      operationId: getAccountSummary
+      tags: [account]
+      responses:
+        "200":
+          description: Authenticated account profile, subscription, and usage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountSummary" }
+        "401": { description: Authentication is required }
+        "503": { description: Ownership migration is pending }
+  /system-defaults:
+    get:
+      operationId: getSystemDefaults
+      tags: [settings]
+      responses:
+        "200":
+          description: Operational defaults used by new accounts and campaigns
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemDefaults" }
+        "401": { description: Authentication is required }
+        "503": { description: Ownership migration is pending }
+  /upgrade:
+    get:
+      operationId: getUpgradeSummary
+      tags: [upgrade]
+      responses:
+        "200":
+          description: Available plans and current subscription
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UpgradeSummary" }
+        "401": { description: Authentication is required }
+        "503": { description: Ownership migration is pending }
+  /admin/purchase-settings:
+    get:
+      operationId: getAdminPurchaseSettings
+      tags: [admin]
+      responses:
+        "200":
+          description: Admin-configured purchase links
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseSettings" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+    patch:
+      operationId: updateAdminPurchaseSettings
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseSettingsInput" }
+      responses:
+        "200":
+          description: Purchase links updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PurchaseSettings" }
+        "400": { description: Invalid Telegram purchase link }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/system-settings:
+    get:
+      operationId: getAdminSystemSettings
+      tags: [admin]
+      responses:
+        "200":
+          description: System settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSystemSettings" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+    patch:
+      operationId: updateAdminSystemSettings
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSystemSettingsInput" }
+      responses:
+        "200":
+          description: System settings updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSystemSettings" }
+        "400": { description: Invalid system settings }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/operations:
+    get:
+      operationId: getAdminOperations
+      tags: [admin]
+      responses:
+        "200":
+          description: Operational monitoring data for administrators
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOperations" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/campaigns/{campaignId}:
+    patch:
+      operationId: updateAdminCampaignStatus
+      tags: [admin]
+      parameters:
+        - { name: campaignId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminCampaignStatusInput" }
+      responses:
+        "200":
+          description: Campaign status updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOperationCampaign" }
+        "400": { description: Invalid status }
+        "404": { description: Campaign not found }
+  /admin/targets/{targetId}/retry:
+    post:
+      operationId: retryAdminCampaignTarget
+      tags: [admin]
+      parameters:
+        - { name: targetId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Campaign target requeued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOperationTarget" }
+        "404": { description: Target not found }
+  /upgrade/activate:
+    post:
+      operationId: activateLicense
+      tags: [upgrade]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActivateLicenseInput" }
+      responses:
+        "200":
+          description: License activated and subscription updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LicenseActivationResult" }
+        "400": { description: Invalid license key input }
+        "401": { description: Authentication is required }
+        "409": { description: "License is invalid, already used, or cannot downgrade" }
+        "503": { description: Ownership migration is pending }
+  /admin/license-keys:
+    get:
+      operationId: listAdminLicenseKeys
+      tags: [admin]
+      parameters:
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/LicenseKeyStatus" } }
+        - { name: plan, in: query, required: false, schema: { $ref: "#/components/schemas/PlanCode" } }
+      responses:
+        "200":
+          description: License key inventory
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminLicenseKey" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+    post:
+      operationId: createAdminLicenseKey
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAdminLicenseKeyInput" }
+      responses:
+        "201":
+          description: License key created; plaintext key is returned only in this response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateAdminLicenseKeyResult" }
+        "400": { description: Invalid key parameters }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/license-keys/{licenseKeyId}/revoke:
+    post:
+      operationId: revokeAdminLicenseKey
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/LicenseKeyId" }
+      responses:
+        "204": { description: Unused license key revoked }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: License key not found }
+        "409": { description: License key is already claimed or revoked }
+  /admin/overview:
+    get:
+      operationId: getAdminOverview
+      tags: [admin]
+      responses:
+        "200":
+          description: System-wide admin dashboard metrics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOverview" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string, maxLength: 64 } }
+        - { name: plan, in: query, required: false, schema: { $ref: "#/components/schemas/PlanCode" } }
+      responses:
+        "200":
+          description: Users with subscription and resource usage summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminUser" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/users/{userId}:
+    get:
+      operationId: getAdminUser
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+      responses:
+        "200":
+          description: User details for administrator support
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUser" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: User not found }
+  /admin/users/{userId}/subscription:
+    patch:
+      operationId: updateAdminUserSubscription
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSubscriptionUpdateInput" }
+      responses:
+        "200":
+          description: Subscription extended or upgraded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subscription" }
+        "400": { description: Invalid subscription change }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: User not found }
+        "409": { description: Subscription cannot be downgraded }
+components:
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema: { type: string }
+    CampaignId:
+      name: campaignId
+      in: path
+      required: true
+      schema: { type: string }
+    TemplateId:
+      name: templateId
+      in: path
+      required: true
+      schema: { type: string }
+    ProxyId:
+      name: proxyId
+      in: path
+      required: true
+      schema: { type: string }
+    LicenseKeyId:
+      name: licenseKeyId
+      in: path
+      required: true
+      schema: { type: string }
+    AdminUserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AuthUser:
+      type: object
+      required: [id, username, role]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        role: { type: string, enum: [user, admin] }
+    RegistrationInput:
+      type: object
+      required: [username, password, confirmPassword]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 32 }
+        password: { type: string, minLength: 10, maxLength: 128 }
+        confirmPassword: { type: string, minLength: 10, maxLength: 128 }
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128 }
+        password: { type: string, minLength: 1, maxLength: 128 }
+    LegacyOwnerMappingInput:
+      type: object
+      required: [legacyOwnerId, targetUserId]
+      properties:
+        legacyOwnerId: { type: string, minLength: 1, maxLength: 200 }
+        targetUserId: { type: string, minLength: 1, maxLength: 64 }
+    LegacyOwnerMigrationResult:
+      type: object
+      required: [mappedRecords, remainingUnmappedOwners, restartRequired]
+      properties:
+        mappedRecords: { type: number }
+        remainingUnmappedOwners: { type: number }
+        restartRequired: { type: boolean }
+    TelegramConfig:
+      type: object
+      required: [configured, missing, apiId]
+      properties:
+        configured: { type: boolean }
+        missing:
+          type: array
+          items: { type: string }
+        apiId: { type: ["number", "null"] }
+    TelegramAccount:
+      type: object
+      required: [id, name, username, phone, api_id, telegramUserId, status, daily_limit, proxyId, lastSyncAt, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        api_id: { type: ["number", "null"] }
+        telegramUserId: { type: ["string", "null"] }
+        status: { type: string }
+        daily_limit: { type: number }
+        proxyId: { type: ["string", "null"] }
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    TelegramAccountInput:
+      type: object
+      required: [api_id, api_hash, phone, daily_limit]
+      properties:
+        api_id: { type: number, minimum: 1 }
+        api_hash: { type: string, minLength: 1, maxLength: 128 }
+        phone: { type: string, minLength: 7, maxLength: 24 }
+        daily_limit: { type: number, minimum: 1, maximum: 100000, default: 200 }
+    TelegramAccountDeletion:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    TelegramLoginChallenge:
+      type: object
+      required: [id, expiresAt, delivery]
+      properties:
+        id: { type: string }
+        expiresAt: { type: string, format: date-time }
+        delivery: { type: string, enum: [app, sms] }
+    TelegramLoginStart:
+      type: object
+      required: [account, challenge]
+      properties:
+        account: { $ref: "#/components/schemas/TelegramAccount" }
+        challenge: { $ref: "#/components/schemas/TelegramLoginChallenge" }
+    TelegramLoginCodeInput:
+      type: object
+      required: [challengeId, code]
+      properties:
+        challengeId: { type: string, minLength: 1 }
+        code: { type: string, minLength: 3, maxLength: 16 }
+    TelegramLoginPasswordInput:
+      type: object
+      required: [challengeId, password]
+      properties:
+        challengeId: { type: string, minLength: 1 }
+        password: { type: string, minLength: 1, maxLength: 256 }
+    TelegramLoginResult:
+      type: object
+      required: [status, account]
+      properties:
+        status: { type: string, enum: [connected, requires_2fa] }
+        account: { $ref: "#/components/schemas/TelegramAccount" }
+    SyncResult:
+      type: object
+      required: [count]
+      properties:
+        count: { type: number }
+    Destination:
+      type: object
+      required: [id, accountId, telegramId, title, username, kind, memberCount, canPost, permissionReason, permissionCheckedAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        telegramId: { type: string }
+        title: { type: string }
+        username: { type: ["string", "null"] }
+        kind: { type: string }
+        memberCount: { type: ["number", "null"] }
+        canPost: { type: boolean }
+        permissionReason: { type: ["string", "null"] }
+        permissionCheckedAt: { type: ["string", "null"], format: date-time }
+    TelegramSavedMessage:
+      type: object
+      required: [id, text, date, hasMedia]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        date: { type: ["string", "null"], format: date-time }
+        hasMedia: { type: boolean }
+    MessageTemplate:
+      type: object
+      required: [id, name, mode, content, sourceAccountId, sourceMessageId, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        mode: { type: string, enum: [text, forward] }
+        content: { type: string }
+        sourceAccountId: { type: ["string", "null"] }
+        sourceMessageId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MessageTemplateInput:
+      type: object
+      required: [name, mode]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        mode: { type: string, enum: [text, forward] }
+        content: { type: string, maxLength: 4096 }
+        sourceAccountId: { type: ["string", "null"] }
+        sourceMessageId: { type: ["string", "null"] }
+    MessageTemplateUpdateInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        mode: { type: string, enum: [text, forward] }
+        content: { type: string, maxLength: 4096 }
+        sourceAccountId: { type: ["string", "null"] }
+        sourceMessageId: { type: ["string", "null"] }
+    Campaign:
+      type: object
+      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        content: { type: string }
+        telegramAccountId: { type: ["string", "null"] }
+        templateId: { type: ["string", "null"] }
+        templateMode: { type: string, enum: [text, forward] }
+        templateSourceAccountId: { type: ["string", "null"] }
+        templateSourceMessageId: { type: ["string", "null"] }
+        mediaUrl: { type: ["string", "null"] }
+        status: { type: string }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        timezone: { type: string }
+        maxRetries: { type: number }
+        repeatCount: { type: number }
+        delayMinSeconds: { type: number }
+        delayMaxSeconds: { type: number }
+        roundDelayMinSeconds: { type: number }
+        roundDelayMaxSeconds: { type: number }
+        createdAt: { type: string, format: date-time }
+        targetCount: { type: number }
+        sentCount: { type: number }
+        failedCount: { type: number }
+    CampaignInput:
+      type: object
+      required: [name, destinationIds]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, maxLength: 4096, default: "" }
+        telegramAccountId: { type: ["string", "null"] }
+        templateId: { type: ["string", "null"] }
+        mediaUrl: { type: ["string", "null"] }
+        destinationIds:
+          type: array
+          minItems: 1
+          items: { type: string }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        timezone: { type: string, default: Asia/Ho_Chi_Minh }
+        repeatCount: { type: number, minimum: 1, maximum: 300, default: 1 }
+        delayMinSeconds: { type: number, minimum: 0, maximum: 120, default: 5 }
+        delayMaxSeconds: { type: number, minimum: 0, maximum: 120, default: 8 }
+        roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200, default: 1 }
+        roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200, default: 3 }
+    CampaignStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [draft, queued, paused, cancelled] }
+    CalendarItem:
+      type: object
+      required: [id, campaignId, name, scheduledAt, status, targetCount]
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        name: { type: string }
+        scheduledAt: { type: string, format: date-time }
+        status: { type: string }
+        targetCount: { type: number }
+    ActivityLog:
+      type: object
+      required: [id, level, event, message, accountId, campaignId, targetId, metadata, createdAt]
+      properties:
+        id: { type: string }
+        level: { type: string }
+        event: { type: string }
+        message: { type: string }
+        accountId: { type: ["string", "null"] }
+        campaignId: { type: ["string", "null"] }
+        targetId: { type: ["string", "null"] }
+        metadata: { type: ["object", "null"], additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+    ProxyAccount:
+      type: object
+      required: [id, name, phone]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone: { type: ["string", "null"] }
+    Proxy:
+      type: object
+      required: [id, name, type, host, port, hasAuth, status, accountCount, accounts, lastCheckedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [http, socks5] }
+        host: { type: string }
+        port: { type: number }
+        hasAuth: { type: boolean }
+        status: { type: string, enum: [active, inactive] }
+        accountCount: { type: number }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/ProxyAccount" }
+        lastCheckedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateProxyInput:
+      type: object
+      required: [name, type, host, port]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        type: { type: string, enum: [http, socks5] }
+        host: { type: string, minLength: 1, maxLength: 255 }
+        port: { type: number, minimum: 1, maximum: 65535 }
+        username: { type: string, maxLength: 255 }
+        password: { type: string, maxLength: 255 }
+        accountId: { type: ["string", "null"] }
+    UpdateProxyInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        type: { type: string, enum: [http, socks5] }
+        host: { type: string, minLength: 1, maxLength: 255 }
+        port: { type: number, minimum: 1, maximum: 65535 }
+        username: { type: string, maxLength: 255 }
+        password: { type: string, maxLength: 255 }
+        status: { type: string, enum: [active, inactive] }
+    DashboardMetricSummary:
+      type: object
+      required: [telegramAccounts, activeGroups, messageTemplates, campaigns, sentToday, failedToday]
+      properties:
+        telegramAccounts: { type: number }
+        activeGroups: { type: number }
+        messageTemplates: { type: number }
+        campaigns: { type: number }
+        sentToday: { type: number }
+        failedToday: { type: number }
+    AdminNotification:
+      type: object
+      required: [id, title, body, publishedAt, createdAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body: { type: string }
+        publishedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    DashboardSummary:
+      type: object
+      required: [metrics, recentCampaigns, recentActivity, adminNotifications]
+      properties:
+        metrics: { $ref: "#/components/schemas/DashboardMetricSummary" }
+        recentCampaigns:
+          type: array
+          items: { $ref: "#/components/schemas/Campaign" }
+        recentActivity:
+          type: array
+          items: { $ref: "#/components/schemas/ActivityLog" }
+        adminNotifications:
+          type: array
+          items: { $ref: "#/components/schemas/AdminNotification" }
+    PlanCode:
+      type: string
+      enum: [plus, pro, unlimited]
+    Plan:
+      type: object
+      required: [code, name, tagline, accountLimit, campaignLimit, messageDailyLimit, durationDays]
+      properties:
+        code: { $ref: "#/components/schemas/PlanCode" }
+        name: { type: string }
+        tagline: { type: string }
+        accountLimit: { type: ["number", "null"] }
+        campaignLimit: { type: ["number", "null"] }
+        messageDailyLimit: { type: ["number", "null"] }
+        durationDays: { type: number }
+    Subscription:
+      type: object
+      required: [plan, startedAt, expiresAt, status, accountLimit, campaignLimit, messageDailyLimit]
+      properties:
+        plan: { $ref: "#/components/schemas/PlanCode" }
+        startedAt: { type: string, format: date-time }
+        expiresAt: { type: ["string", "null"], format: date-time }
+        status: { type: string, enum: [active, expired] }
+        accountLimit: { type: ["number", "null"] }
+        campaignLimit: { type: ["number", "null"] }
+        messageDailyLimit: { type: ["number", "null"] }
+    UpgradeSummary:
+      type: object
+      required: [plans, subscription, telegramPurchaseUrl]
+      properties:
+        plans:
+          type: array
+          items: { $ref: "#/components/schemas/Plan" }
+        subscription: { $ref: "#/components/schemas/Subscription" }
+        telegramPurchaseUrl: { type: ["string", "null"] }
+    PurchaseSettings:
+      type: object
+      required: [telegramPurchaseUrl]
+      properties:
+        telegramPurchaseUrl: { type: ["string", "null"] }
+    PurchaseSettingsInput:
+      type: object
+      required: [telegramPurchaseUrl]
+      properties:
+        telegramPurchaseUrl: { type: string, minLength: 1, maxLength: 512 }
+    PlanLimitSettings:
+      type: object
+      required: [accountLimit, campaignLimit, messageDailyLimit]
+      properties:
+        accountLimit: { type: ["number", "null"], minimum: 0 }
+        campaignLimit: { type: ["number", "null"], minimum: 0 }
+        messageDailyLimit: { type: ["number", "null"], minimum: 0 }
+    CampaignDefaults:
+      type: object
+      required: [maxRetries, delayMinSeconds, delayMaxSeconds, roundDelayMinSeconds, roundDelayMaxSeconds]
+      properties:
+        maxRetries: { type: number, minimum: 0, maximum: 20 }
+        delayMinSeconds: { type: number, minimum: 0, maximum: 120 }
+        delayMaxSeconds: { type: number, minimum: 0, maximum: 120 }
+        roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200 }
+        roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
+    SystemDefaults:
+      type: object
+      required: [defaultAccountDailyLimit, campaignDefaults, defaultTimezone]
+      properties:
+        defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
+        campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
+        defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
+    AdminSystemSettings:
+      type: object
+      required: [planLimits, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      properties:
+        planLimits:
+          type: object
+          required: [plus, pro, unlimited]
+          properties:
+            plus: { $ref: "#/components/schemas/PlanLimitSettings" }
+            pro: { $ref: "#/components/schemas/PlanLimitSettings" }
+            unlimited: { $ref: "#/components/schemas/PlanLimitSettings" }
+        defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
+        campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
+        registrationEnabled: { type: boolean }
+        maintenanceMode: { type: boolean }
+        defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
+    AdminSystemSettingsInput:
+      type: object
+      required: [planLimits, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      properties:
+        planLimits:
+          type: object
+          required: [plus, pro, unlimited]
+          properties:
+            plus: { $ref: "#/components/schemas/PlanLimitSettings" }
+            pro: { $ref: "#/components/schemas/PlanLimitSettings" }
+            unlimited: { $ref: "#/components/schemas/PlanLimitSettings" }
+        defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
+        campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
+        registrationEnabled: { type: boolean }
+        maintenanceMode: { type: boolean }
+        defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
+    AdminOperationAccount:
+      type: object
+      required: [id, ownerUsername, name, status, proxyName, proxyStatus, lastSyncAt, cooldownUntil, failedTargets]
+      properties:
+        id: { type: string }
+        ownerUsername: { type: string }
+        name: { type: string }
+        status: { type: string }
+        proxyName: { type: ["string", "null"] }
+        proxyStatus: { type: ["string", "null"] }
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+        cooldownUntil: { type: ["string", "null"], format: date-time }
+        failedTargets: { type: number }
+    AdminOperationCampaign:
+      type: object
+      required: [id, ownerUsername, name, status, pendingTargets, failedTargets, sentTargets]
+      properties:
+        id: { type: string }
+        ownerUsername: { type: string }
+        name: { type: string }
+        status: { type: string }
+        pendingTargets: { type: number }
+        failedTargets: { type: number }
+        sentTargets: { type: number }
+    AdminCampaignStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [queued, paused] }
+    AdminOperationTarget:
+      type: object
+      required: [id, campaignId, campaignName, ownerUsername, destinationTitle, status, attempts, nextAttemptAt, lastError]
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        campaignName: { type: string }
+        ownerUsername: { type: string }
+        destinationTitle: { type: ["string", "null"] }
+        status: { type: string }
+        attempts: { type: number }
+        nextAttemptAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+    AdminAuditLog:
+      type: object
+      required: [id, actorUsername, level, event, message, ip, campaignId, accountId, createdAt]
+      properties:
+        id: { type: string }
+        actorUsername: { type: string }
+        level: { type: string }
+        event: { type: string }
+        message: { type: string }
+        ip: { type: ["string", "null"] }
+        campaignId: { type: ["string", "null"] }
+        accountId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    AdminOperations:
+      type: object
+      required: [accounts, campaigns, targets, auditLogs]
+      properties:
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/AdminOperationAccount" }
+        campaigns:
+          type: array
+          items: { $ref: "#/components/schemas/AdminOperationCampaign" }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/AdminOperationTarget" }
+        auditLogs:
+          type: array
+          items: { $ref: "#/components/schemas/AdminAuditLog" }
+    ActivateLicenseInput:
+      type: object
+      required: [licenseKey]
+      properties:
+        licenseKey: { type: string, minLength: 8, maxLength: 128 }
+    LicenseActivationResult:
+      type: object
+      required: [message, subscription]
+      properties:
+        message: { type: string }
+        subscription: { $ref: "#/components/schemas/Subscription" }
+    LicenseKeyStatus:
+      type: string
+      enum: [available, claimed, revoked]
+    AdminLicenseKey:
+      type: object
+      required: [id, plan, durationDays, label, status, createdAt, createdByUsername, claimedAt, claimedByUsername, revokedAt, revokedByUsername]
+      properties:
+        id: { type: string }
+        plan: { $ref: "#/components/schemas/PlanCode" }
+        durationDays: { type: number }
+        label: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/LicenseKeyStatus" }
+        createdAt: { type: string, format: date-time }
+        createdByUsername: { type: ["string", "null"] }
+        claimedAt: { type: ["string", "null"], format: date-time }
+        claimedByUsername: { type: ["string", "null"] }
+        revokedAt: { type: ["string", "null"], format: date-time }
+        revokedByUsername: { type: ["string", "null"] }
+    CreateAdminLicenseKeyInput:
+      type: object
+      required: [plan, durationDays, quantity]
+      properties:
+        plan: { type: string, enum: [pro, unlimited] }
+        durationDays: { type: number, minimum: 1, maximum: 3660, multipleOf: 1 }
+        quantity: { type: number, minimum: 1, maximum: 100, multipleOf: 1 }
+        label: { type: string, minLength: 1, maxLength: 120 }
+    CreateAdminLicenseKeyResult:
+      type: object
+      required: [licenseKeys, licenses]
+      properties:
+        licenseKeys:
+          type: array
+          items: { type: string }
+        licenses:
+          type: array
+          items: { $ref: "#/components/schemas/AdminLicenseKey" }
+    AdminOverview:
+      type: object
+      required: [usersTotal, usersNewLast30Days, usersAdmins, subscriptions, licenses, telegramAccountsTotal, telegramAccountsConnected, campaignsTotal, campaignsQueued, campaignsFailed]
+      properties:
+        usersTotal: { type: number }
+        usersNewLast30Days: { type: number }
+        usersAdmins: { type: number }
+        subscriptions:
+          $ref: "#/components/schemas/AdminPlanDistribution"
+        licenses:
+          $ref: "#/components/schemas/AdminLicenseDistribution"
+        telegramAccountsTotal: { type: number }
+        telegramAccountsConnected: { type: number }
+        campaignsTotal: { type: number }
+        campaignsQueued: { type: number }
+        campaignsFailed: { type: number }
+    AdminPlanDistribution:
+      type: object
+      required: [plus, pro, unlimited, expired]
+      properties:
+        plus: { type: number }
+        pro: { type: number }
+        unlimited: { type: number }
+        expired: { type: number }
+    AdminLicenseDistribution:
+      type: object
+      required: [available, claimed, revoked]
+      properties:
+        available: { type: number }
+        claimed: { type: number }
+        revoked: { type: number }
+    AdminUserUsage:
+      type: object
+      required: [telegramAccounts, campaigns]
+      properties:
+        telegramAccounts: { type: number }
+        campaigns: { type: number }
+    AdminUser:
+      type: object
+      required: [id, username, role, joinedAt, lastActiveAt, storedPlan, subscription, usage]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        role: { type: string, enum: [user, admin] }
+        joinedAt: { type: string, format: date-time }
+        lastActiveAt: { type: ["string", "null"], format: date-time }
+        storedPlan: { $ref: "#/components/schemas/PlanCode" }
+        subscription: { $ref: "#/components/schemas/Subscription" }
+        usage: { $ref: "#/components/schemas/AdminUserUsage" }
+    AdminSubscriptionUpdateInput:
+      type: object
+      required: [plan, durationDays]
+      properties:
+        plan: { $ref: "#/components/schemas/PlanCode" }
+        durationDays: { type: number, minimum: 1, maximum: 3660 }
+    UsageMetric:
+      type: object
+      required: [used, limit, remaining, percentage]
+      properties:
+        used: { type: number }
+        limit: { type: ["number", "null"] }
+        remaining: { type: ["number", "null"] }
+        percentage: { type: number }
+    AccountProfile:
+      type: object
+      required: [username, joinedAt, email]
+      properties:
+        username: { type: string }
+        joinedAt: { type: string, format: date-time }
+        email: { type: ["string", "null"] }
+    AccountUsage:
+      type: object
+      required: [telegramAccounts, campaigns, messagesToday]
+      properties:
+        telegramAccounts: { $ref: "#/components/schemas/UsageMetric" }
+        campaigns: { $ref: "#/components/schemas/UsageMetric" }
+        messagesToday: { $ref: "#/components/schemas/UsageMetric" }
+    AccountSummary:
+      type: object
+      required: [profile, subscription, usage]
+      properties:
+        profile: { $ref: "#/components/schemas/AccountProfile" }
+        subscription: { $ref: "#/components/schemas/Subscription" }
+        usage: { $ref: "#/components/schemas/AccountUsage" }
+

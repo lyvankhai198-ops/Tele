@@ -1,0 +1,263 @@
+Hãy redesign lại RIÊNG phần "Tài khoản Telegram" của website hiện tại.
+
+QUAN TRỌNG:
+- Không được xóa hoặc làm hỏng logic/backend/API hiện tại.
+- Không thay đổi các chức năng khác của website.
+- Trước khi sửa hãy kiểm tra code hiện tại và xác định component/page đang render phần Tài khoản Telegram.
+- Giữ nguyên toàn bộ chức năng đang hoạt động: thêm tài khoản, đăng nhập, OTP, API ID, API Hash, số điện thoại, limit/ngày, trạng thái login, xóa tài khoản...
+- Chỉ thay đổi UI/UX và cách bố trí để giao diện có thiết kế riêng, hiện đại hơn.
+- Không copy nguyên bố cục, wording hoặc thiết kế của giao diện tham khảo.
+- Responsive tốt trên iPhone/mobile và desktop.
+- Nếu đang có CSS/component dùng chung thì tránh làm ảnh hưởng các trang khác.
+
+==================================================
+1. TAB "TÀI KHOẢN TELEGRAM"
+==================================================
+
+Thiết kế lại header:
+
+[Tài khoản Telegram]                         [?] [+] [icon đăng xuất nếu hiện tại có]
+
+Trong đó:
+
+- [?] = nút mở hướng dẫn.
+- [+] = nút thêm tài khoản Telegram.
+- Giữ chức năng hiện tại của các nút.
+
+Thiết kế danh sách tài khoản theo kiểu card hiện đại, KHÔNG làm giống card hiện tại.
+
+Mỗi tài khoản nên có:
+
+- Avatar/icon Telegram.
+- Tên tài khoản.
+- Username nếu có.
+- Số điện thoại.
+- Telegram ID.
+- Badge trạng thái:
+  + "Đã kết nối" nếu đang login.
+  + "Chưa kết nối" nếu chưa login.
+- Limit/ngày.
+- Hiển thị mức sử dụng nếu backend hiện tại đã có dữ liệu.
+- Nút thao tác chính:
+  + "Kết nối" hoặc "Đăng nhập" nếu chưa login.
+  + "Đã kết nối" hoặc "Quản lý" nếu đã login.
+- Menu "⋮" cho các thao tác phụ như Xóa/Chỉnh sửa nếu logic hiện tại hỗ trợ.
+
+Không hiển thị quá nhiều thông tin một cách rối mắt.
+Ưu tiên hierarchy rõ ràng:
+Tên → trạng thái → thông tin → giới hạn → thao tác.
+
+Nếu có nhiều tài khoản, các card phải có khoảng cách hợp lý và dễ quét trên mobile.
+
+==================================================
+2. NÚT "+" — THÊM TÀI KHOẢN TELEGRAM
+==================================================
+
+Khi nhấn "+" mở modal/drawer thêm tài khoản.
+
+Thiết kế khác giao diện cũ, sạch và hiện đại.
+
+Tiêu đề:
+
+"Thêm tài khoản Telegram"
+
+Có thể thêm dòng mô tả nhỏ:
+
+"Kết nối một tài khoản Telegram mới với hệ thống."
+
+Các trường hiện tại phải được giữ nguyên:
+
+- API ID
+- API Hash
+- Số điện thoại
+- Limit/ngày
+
+Không được tự ý bỏ field hoặc thay đổi tên biến backend.
+
+Có thể thêm icon nhỏ bên trái mỗi field.
+
+Nút chính:
+
+"Thêm tài khoản"
+
+hoặc
+
+"Lưu & kết nối"
+
+Tùy theo logic hiện tại.
+
+Nếu hệ thống hiện tại có validation/error/loading thì PHẢI giữ nguyên.
+
+==================================================
+3. NÚT "?" — HƯỚNG DẪN
+==================================================
+
+Thiết kế lại phần hướng dẫn.
+
+Không dùng 9 card lớn giống giao diện tham khảo.
+
+Thay bằng dạng accordion/step list gọn hơn.
+
+Tiêu đề:
+
+"Hướng dẫn kết nối Telegram"
+
+Mô tả:
+
+"Làm theo các bước dưới đây để kết nối tài khoản."
+
+Các bước:
+
+01. Đăng nhập Telegram
+- Đăng nhập tài khoản Telegram muốn kết nối.
+
+02. Mở Telegram API
+- Truy cập my.telegram.org và đăng nhập bằng tài khoản Telegram.
+
+03. Tạo ứng dụng
+- Mở API development tools.
+- Tạo một application mới.
+
+04. Lấy API ID & API Hash
+- Sau khi tạo application, lấy API ID và API Hash.
+
+05. Nhập thông tin
+- Quay lại website.
+- Điền API ID, API Hash và số điện thoại vào form thêm tài khoản.
+
+06. Xác nhận đăng nhập
+- Nhấn kết nối.
+- Nhập mã OTP Telegram khi hệ thống yêu cầu.
+- Nếu có 2FA thì nhập mật khẩu 2FA.
+
+07. Hoàn tất
+- Khi trạng thái chuyển thành "Đã kết nối", tài khoản đã sẵn sàng sử dụng.
+
+Mỗi step có số thứ tự, icon và có thể bấm mở rộng để xem nội dung.
+
+Không cần hiển thị toàn bộ nội dung cùng lúc.
+
+==================================================
+4. UI/UX
+==================================================
+
+Phong cách:
+
+- Modern SaaS dashboard.
+- Sạch, chuyên nghiệp.
+- Nền sáng.
+- Border nhẹ.
+- Border-radius vừa phải.
+- Typography rõ ràng.
+- Màu xanh Telegram/xanh hệ thống làm màu accent.
+- Không lạm dụng gradient.
+- Không làm giao diện quá màu mè.
+
+Mobile-first.
+
+Trên iPhone:
+- Không bị tràn ngang.
+- Modal vừa màn hình.
+- Input dễ bấm.
+- Button đủ lớn.
+- Nội dung hướng dẫn cuộn mượt.
+- Header không bị che bởi Safari.
+- Card tài khoản không quá cao.
+
+Desktop:
+- Không để card kéo dài toàn màn hình một cách vô lý.
+- Có max-width hợp lý.
+- Khoảng cách giữa các thành phần rõ ràng.
+
+==================================================
+5. QUAN TRỌNG VỀ LOGIC
+==================================================
+
+Đây chỉ là redesign UI/UX.
+
+KHÔNG được:
+- Tạo database mới nếu không cần.
+- Đổi API endpoint hiện tại.
+- Đổi tên database field.
+- Đổi authentication flow.
+- Đổi cơ chế OTP.
+- Đổi logic Telegram login.
+- Đổi limit/ngày hiện tại.
+- Xóa dữ liệu tài khoản.
+- Xóa các chức năng đang chạy.
+
+Hãy tận dụng toàn bộ state, API, component và backend hiện tại.
+
+Nếu cần refactor code để UI đẹp hơn thì chỉ refactor phần liên quan trực tiếp đến Telegram Accounts.
+
+==================================================
+6. AN TOÀN KHI SỬA CODE
+==================================================
+
+Trước khi sửa:
+
+1. Kiểm tra cấu trúc project.
+2. Tìm component/page của "Tài khoản Telegram".
+3. Tìm API/backend liên quan.
+4. Xác định các function đang xử lý:
+   - thêm tài khoản
+   - login
+   - OTP
+   - xóa
+   - limit
+   - lấy danh sách tài khoản
+5. Chỉ sau đó mới tiến hành sửa UI.
+
+Sau khi sửa:
+
+- Chạy build.
+- Kiểm tra lỗi TypeScript/JavaScript.
+- Kiểm tra console.
+- Kiểm tra mobile responsive.
+- Kiểm tra:
+  + mở tab Telegram Accounts
+  + thêm tài khoản
+  + login
+  + OTP
+  + trạng thái Đã kết nối
+  + limit/ngày
+  + xóa tài khoản
+  + mở hướng dẫn
+  + đóng modal
+- Đảm bảo các chức năng cũ vẫn hoạt động.
+
+==================================================
+7. KHÔNG ĐƯỢC TỰ Ý MỞ RỘNG
+==================================================
+
+Không thêm các tính năng mới ngoài yêu cầu.
+
+Không thay đổi các tab khác.
+
+Không thay đổi sidebar/navigation khác.
+
+Không thay đổi màu sắc toàn bộ website.
+
+Chỉ redesign khu vực Tài khoản Telegram và hai giao diện:
+- Thêm tài khoản
+- Hướng dẫn
+
+Nếu có phần nào chưa chắc chắn, hãy đọc code hiện tại trước thay vì tự đoán.
+
+==================================================
+8. ROLLBACK
+==================================================
+
+Trước khi chỉnh sửa hãy tạo một checkpoint/commit để có thể rollback.
+
+Nếu build lỗi hoặc chức năng Telegram bị lỗi sau khi redesign:
+- xác định nguyên nhân
+- sửa lỗi
+- nếu không thể đảm bảo an toàn thì rollback về phiên bản trước khi redesign.
+
+Cuối cùng báo cáo ngắn:
+1. Đã sửa những file nào.
+2. Đã thay đổi UI nào.
+3. Logic nào được giữ nguyên.
+4. Build/test có lỗi gì không.
+5. Có cần rollback hay không.

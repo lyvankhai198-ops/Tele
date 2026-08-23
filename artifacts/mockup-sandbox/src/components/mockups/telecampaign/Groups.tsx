@@ -1,0 +1,38 @@
+import { useMemo, useState } from "react";
+import { Filter, LockKeyhole, MessageSquareText, Search, SlidersHorizontal, Users } from "lucide-react";
+import { AppLayout, Modal, PageIntro, Panel, PrimaryButton, QuietButton, SectionHeader, StatusBadge, Toast } from "./_shared/AppLayout";
+
+type Group = { id: number; name: string; handle: string; members: string; type: string; owner: string; posts: number; permission: boolean; status: "active" | "restricted" };
+const seedGroups: Group[] = [
+  { id: 1, name: "Hanoi Product Builders", handle: "@hanoi_product", members: "486", type: "Group", owner: "Minh · primary", posts: 82, permission: true, status: "active" },
+  { id: 2, name: "Indie Makers Vietnam", handle: "@indie_makers_vn", members: "1,204", type: "Channel", owner: "Minh · primary", posts: 61, permission: true, status: "active" },
+  { id: 3, name: "Remote Work Asia", handle: "@remote_work_asia", members: "3,842", type: "Channel", owner: "TeleCampaign Bot", posts: 44, permission: true, status: "active" },
+  { id: 4, name: "Design Systems Club", handle: "@designsystemsclub", members: "762", type: "Group", owner: "Community backup", posts: 0, permission: false, status: "restricted" },
+  { id: 5, name: "Saigon Founders Table", handle: "@sg_founders", members: "2,118", type: "Group", owner: "Minh · primary", posts: 27, permission: true, status: "active" },
+];
+
+export function Groups() {
+  const [groups, setGroups] = useState(seedGroups);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("All destinations");
+  const [selected, setSelected] = useState<Group | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const visible = useMemo(() => groups.filter((group) => (group.name.toLowerCase().includes(query.toLowerCase()) || group.handle.includes(query.toLowerCase())) && (filter === "All destinations" || group.type === filter)), [groups, query, filter]);
+  function togglePermission(id: number) {
+    setGroups((current) => current.map((group) => group.id === id ? { ...group, permission: !group.permission, status: !group.permission ? "active" : "restricted" } : group));
+    setToast("Posting permission updated");
+  }
+
+  return <AppLayout activePage="groups" title="Groups & channels" subtitle="Approved destinations and posting access" headerAction={<QuietButton onClick={() => setToast("Destination sync started")}><SlidersHorizontal className="h-3.5 w-3.5" />Sync destinations</QuietButton>}>
+    <PageIntro kicker="Destinations" heading="Groups & channels" detail="A clear boundary around where your team can publish. Review every destination before adding it to a campaign." action={<PrimaryButton onClick={() => setToast("Telegram integration is not configured. Configure TELEGRAM_API_ID and TELEGRAM_API_HASH to connect an account.")}><Users className="h-4 w-4" />Discover managed groups</PrimaryButton>} />
+    <Panel className="overflow-hidden">
+      <div className="flex flex-col gap-4 border-b border-[#24384d] p-5 sm:p-6 lg:flex-row lg:items-center"><div className="relative flex-1"><Search className="absolute left-3.5 top-3 h-4 w-4 text-[#64819b]" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search groups, channels, or handles" className="w-full rounded-xl border border-[#2b445b] bg-[#0d1b2a] py-2.5 pl-10 pr-4 text-[12px] text-[#e5f0f8] outline-none placeholder:text-[#526d87] focus:border-[#58aef1]" /></div><div className="flex items-center gap-2"><Filter className="h-4 w-4 text-[#64819b]" /><select value={filter} onChange={(event) => setFilter(event.target.value)} className="h-10 flex-1 rounded-xl border border-[#2b445b] bg-[#142638] px-3 text-[11px] text-[#b7ccde] outline-none focus:border-[#5aaef2] sm:flex-none"><option>All destinations</option><option>Group</option><option>Channel</option></select></div></div>
+      <div className="hidden grid-cols-[minmax(220px,1.4fr)_120px_150px_110px_150px] gap-4 border-b border-[#21364a] bg-[#0e1b29] px-6 py-3 font-mono text-[9px] font-semibold uppercase tracking-[0.13em] text-[#617d96] md:grid"><span>Destination</span><span>Type</span><span>Managed by</span><span>Posts</span><span>Posting permission</span></div>
+      <div className="divide-y divide-[#21364a]">{visible.map((group) => <div key={group.id} className="grid gap-3 px-5 py-4 md:grid-cols-[minmax(220px,1.4fr)_120px_150px_110px_150px] md:items-center md:gap-4 md:px-6"><div className="flex items-center gap-3"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${group.type === "Channel" ? "bg-[#1b4b70] text-[#8dcefa]" : "bg-[#4b3e2b] text-[#efc98f]"}`}><MessageSquareText className="h-4 w-4" /></span><button onClick={() => setSelected(group)} className="min-w-0 text-left"><p className="truncate text-[12px] font-semibold text-[#dceaf4] hover:text-[#79c5fb]">{group.name}</p><p className="mt-1 truncate font-mono text-[10px] text-[#6f8aa3]">{group.handle} · {group.members} members</p></button></div><div className="hidden md:block"><span className="text-[11px] text-[#9bb1c3]">{group.type}</span></div><div className="hidden md:block text-[11px] text-[#9bb1c3]">{group.owner}</div><div className="hidden md:block font-mono text-[11px] text-[#b5c9d8]">{group.posts}</div><div className="flex items-center justify-between md:justify-start"><StatusBadge status={group.permission ? "active" : "restricted"} label={group.permission ? "Allowed" : "Restricted"} /><button onClick={() => togglePermission(group.id)} className={`relative ml-3 h-5 w-9 rounded-full border transition ${group.permission ? "border-[#2c8b68] bg-[#1b6a50]" : "border-[#41536a] bg-[#243446]"}`} aria-label={`Toggle posting permission for ${group.name}`}><span className={`absolute top-[3px] h-3 w-3 rounded-full bg-[#e8f3fa] transition ${group.permission ? "left-[18px]" : "left-[3px]"}`} /></button></div></div>)}</div>
+      {visible.length === 0 && <div className="p-8 text-center text-[12px] text-[#7891a8]">No destinations match this search.</div>}
+      <div className="border-t border-[#21364a] px-5 py-4 font-mono text-[10px] text-[#66829b] sm:px-6">Showing {visible.length} of {groups.length} approved destinations <span className="mx-2 text-[#304b63]">·</span> Changes apply to new campaigns</div>
+    </Panel>
+    {selected && <Modal title={selected.name} description={`${selected.type} · ${selected.handle}`} onClose={() => setSelected(null)}><div className="space-y-4"><div className="grid grid-cols-2 gap-3"><div className="rounded-xl border border-[#2a4258] bg-[#0e1b2a] p-4"><p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#66829b]">Members</p><p className="mt-2 text-[19px] font-semibold text-[#e5f0f7]">{selected.members}</p></div><div className="rounded-xl border border-[#2a4258] bg-[#0e1b2a] p-4"><p className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#66829b]">Posts sent</p><p className="mt-2 text-[19px] font-semibold text-[#e5f0f7]">{selected.posts}</p></div></div><div className="flex items-center gap-3 rounded-xl border border-[#2a4258] bg-[#0e1b2a] p-4"><LockKeyhole className="h-4 w-4 text-[#e4b16d]" /><p className="text-[12px] leading-5 text-[#9eb4c6]">Only users with explicit admin permission can publish here. TeleCampaign does not alter group membership.</p></div><div className="flex justify-end"><PrimaryButton onClick={() => { togglePermission(selected.id); setSelected(null); }}>Update permission</PrimaryButton></div></div></Modal>}
+    {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+  </AppLayout>;
+}

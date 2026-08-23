@@ -1,0 +1,5 @@
+- [Subscription upgrade policy](subscription-upgrade-policy.md) — license upgrades preserve active time 1:1, only allow upward tiers, and fall back to PLUS once expired.
+- [Telegram account verification](telegram-account-verification.md) — saving API credentials and a phone never proves a Telegram session; keep unverified accounts out of sync/send paths.
+- [OpenAPI numeric validation](openapi-numeric-validation.md) — use `number` plus route-level integer validation; generated `integer` schemas are incompatible with this Zod toolchain.
+- [Telegram proxy transport](telegram-proxy-transport.md) — HTTP/SOCKS5 assignments are stored per account; GramJS needs a socket adapter before they can carry MTProto traffic.
+- [Concurrent delivery quotas](concurrent-delivery-quotas.md) — daily delivery quotas need an atomic reservation before sending when more than one worker can run.

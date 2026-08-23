@@ -1,0 +1,802 @@
+Hãy triển khai lại hệ thống AUTHENTICATION của TeleCampaign theo đúng yêu cầu dưới đây.
+
+========================
+1. MỤC TIÊU
+========================
+
+Xây dựng hệ thống tài khoản cho TeleCampaign với 2 chức năng:
+
+- Đăng ký tài khoản
+- Đăng nhập tài khoản
+
+Người dùng đăng ký bằng:
+
+- Tên đăng nhập (username)
+- Mật khẩu
+- Xác nhận mật khẩu
+
+SAU ĐÓ dùng:
+
+- Username
+- Password
+
+để đăng nhập.
+
+TUYỆT ĐỐI KHÔNG sử dụng Google Login.
+
+Không sử dụng Google OAuth.
+
+Không bắt buộc email.
+
+Không yêu cầu OTP email.
+
+Không yêu cầu số điện thoại.
+
+Không tạo tài khoản thông qua Google.
+
+========================
+2. QUAN TRỌNG: KIỂM TRA AUTH HIỆN TẠI
+========================
+
+Trước khi sửa code, hãy kiểm tra toàn bộ project để xác định authentication hiện tại đang sử dụng gì.
+
+Kiểm tra:
+
+- frontend authentication
+- backend authentication
+- database schema
+- user table/model
+- session/cookie
+- middleware auth
+- protected routes
+- API authentication
+- Clerk hoặc các thư viện authentication hiện tại nếu đang tồn tại
+
+KHÔNG được tạo thêm một hệ thống authentication độc lập nếu project đã có authentication hiện tại.
+
+Nếu project hiện đang dùng Clerk nhưng yêu cầu Username + Password không phù hợp với cấu hình hiện tại, hãy kiểm tra khả năng dùng Password Authentication đúng cách.
+
+Nếu kiến trúc hiện tại không phù hợp với username/password native, hãy chọn phương án an toàn và tương thích nhất với database/backend hiện tại.
+
+Mục tiêu là chỉ có MỘT hệ thống authentication duy nhất.
+
+Không để xảy ra tình trạng:
+
+- Clerk quản lý một user
+- Database tự quản lý một user khác
+- Hai hệ thống session khác nhau
+- User bị tạo duplicate
+
+========================
+3. TRANG ĐĂNG KÝ
+========================
+
+Tạo/chỉnh sửa trang đăng ký theo đúng phong cách giao diện TeleCampaign hiện tại.
+
+Giao diện cần có:
+
+Logo TeleCampaign
+
+Tiêu đề:
+
+"Đăng ký"
+
+Mô tả:
+
+"Tạo tài khoản để sử dụng Tele Campaign"
+
+Form:
+
+"Tài khoản"
+
+Placeholder:
+
+"Tên đăng nhập"
+
+"Mật khẩu"
+
+Placeholder:
+
+"Nhập mật khẩu"
+
+"Xác nhận mật khẩu"
+
+Placeholder:
+
+"Nhập lại mật khẩu"
+
+Nút chính:
+
+"Đăng ký"
+
+Phía dưới:
+
+"Đã có tài khoản? Đăng nhập"
+
+Không hiển thị:
+
+"Continue with Google"
+
+Không hiển thị Google Login.
+
+Không hiển thị Email address.
+
+Không hiển thị các phương thức OAuth khác.
+
+========================
+4. TRANG ĐĂNG NHẬP
+========================
+
+Trang đăng nhập có:
+
+Tiêu đề:
+
+"Đăng nhập"
+
+Mô tả:
+
+"Nhập tài khoản để vào bảng điều khiển Tele Campaign"
+
+Form:
+
+"Tài khoản"
+
+Placeholder:
+
+"Tên đăng nhập"
+
+"Mật khẩu"
+
+Placeholder:
+
+"Nhập mật khẩu"
+
+Nút:
+
+"Đăng nhập"
+
+Phía dưới:
+
+"Chưa có tài khoản? Đăng ký miễn phí"
+
+Khi bấm "Đăng ký miễn phí" chuyển sang trang đăng ký.
+
+Khi bấm "Đăng nhập" thực hiện authentication bằng username + password.
+
+Không có Google Login.
+
+Không có email login.
+
+========================
+5. USERNAME
+========================
+
+Username phải là định danh duy nhất.
+
+Khi đăng ký:
+
+- trim khoảng trắng đầu/cuối
+- không cho username rỗng
+- không cho username trùng
+- username không phân biệt hoa thường khi kiểm tra trùng
+
+Ví dụ:
+
+Admin
+admin
+ADMIN
+
+phải được coi là cùng một username nếu hệ thống không có yêu cầu đặc biệt khác.
+
+Nên chuẩn hóa username trước khi lưu.
+
+Cho phép username dễ sử dụng, ví dụ:
+
+teleuser123
+nguyenvana
+shoptele
+
+Không cho phép username chứa ký tự nguy hiểm hoặc gây lỗi routing/database.
+
+Có validation rõ ràng.
+
+========================
+6. PASSWORD
+========================
+
+Không bao giờ lưu password dạng plaintext.
+
+Password phải được hash bằng thư viện/thuật toán an toàn phù hợp với stack hiện tại.
+
+Không tự viết thuật toán hash.
+
+Không log password ra console.
+
+Không trả password trong API response.
+
+Không lưu password trong localStorage.
+
+Không lưu password trong frontend state lâu hơn mức cần thiết.
+
+Khi đăng nhập phải verify password với password hash.
+
+========================
+7. ĐĂNG KÝ
+========================
+
+Flow:
+
+User mở /register.
+
+User nhập:
+
+username
+password
+confirm password
+
+Frontend validation trước.
+
+Sau đó gửi request tới backend.
+
+Backend phải kiểm tra lại toàn bộ validation.
+
+Backend kiểm tra username đã tồn tại chưa.
+
+Nếu đã tồn tại:
+
+Hiển thị:
+
+"Tên đăng nhập đã tồn tại"
+
+Nếu password và confirm password khác nhau:
+
+"Mật khẩu xác nhận không khớp"
+
+Nếu dữ liệu không hợp lệ:
+
+Hiển thị lỗi rõ ràng.
+
+Nếu hợp lệ:
+
+1. Hash password.
+2. Tạo user trong database.
+3. Tạo session đăng nhập.
+4. Trả kết quả thành công.
+5. Redirect vào dashboard.
+
+Không được tạo duplicate user nếu request đăng ký được gửi nhiều lần.
+
+Database phải có unique constraint cho username.
+
+Không chỉ dựa vào frontend để chống username trùng.
+
+========================
+8. ĐĂNG NHẬP
+========================
+
+Flow:
+
+User nhập:
+
+username
+password
+
+Backend:
+
+1. Tìm user theo username đã chuẩn hóa.
+2. Nếu không tồn tại → thông báo thông tin đăng nhập không đúng.
+3. Verify password.
+4. Nếu password sai → thông báo thông tin đăng nhập không đúng.
+5. Nếu đúng → tạo session.
+6. Set cookie/session an toàn.
+7. Redirect về dashboard.
+
+Không trả về thông tin nhạy cảm.
+
+Không tiết lộ quá chi tiết rằng username có tồn tại hay không trong trường hợp không cần thiết.
+
+========================
+9. SESSION
+========================
+
+Session phải được quản lý an toàn theo kiến trúc backend hiện tại.
+
+Nếu sử dụng cookie:
+
+- HttpOnly
+- Secure khi chạy production
+- SameSite phù hợp
+- có expiration
+- không lưu session token trong localStorage nếu không cần thiết
+
+Logout phải:
+
+- xóa/invalidate session
+- xóa cookie liên quan
+- đưa user về trang đăng nhập
+
+Không để user đã logout tiếp tục truy cập dashboard bằng session cũ.
+
+========================
+10. AUTH GUARD
+========================
+
+Tất cả các trang/dashboard/API private phải yêu cầu đăng nhập.
+
+Ví dụ:
+
+/dashboard
+/campaigns
+/groups
+/destinations
+/calendar
+/activity
+/telegram-accounts
+
+và các API private tương ứng.
+
+Nếu chưa đăng nhập:
+
+→ không được trả dữ liệu private.
+
+→ chuyển về /login hoặc trả HTTP 401 tùy loại request.
+
+Không được chỉ bảo vệ frontend.
+
+Backend API cũng phải kiểm tra authentication.
+
+========================
+11. USER DATA ISOLATION
+========================
+
+Đây là phần cực kỳ quan trọng.
+
+Mỗi user chỉ được nhìn thấy và thao tác dữ liệu thuộc về chính user đó.
+
+Ví dụ:
+
+User A đăng nhập:
+
+→ chỉ thấy Telegram accounts của A.
+→ chỉ thấy campaigns của A.
+→ chỉ thấy destinations của A.
+→ chỉ thấy scheduled posts của A.
+→ chỉ thấy activity logs của A.
+
+User B:
+
+→ không được đọc/sửa/xóa dữ liệu của A chỉ bằng cách thay đổi ID trên request.
+
+Tất cả API phải kiểm tra ownership ở backend.
+
+Không tin userId do frontend gửi lên.
+
+User ID phải được lấy từ session/authenticated user.
+
+========================
+12. DATABASE
+========================
+
+Kiểm tra schema hiện tại trước khi thay đổi.
+
+Nếu đã có bảng users thì tận dụng bảng hiện tại.
+
+Nếu cần migration:
+
+- tạo migration rõ ràng
+- không xóa dữ liệu hiện tại
+- không reset database production
+- không làm mất user hiện có
+
+User tối thiểu cần có:
+
+- id
+- username
+- passwordHash
+- createdAt
+- updatedAt
+
+Nếu schema hiện tại có các field khác cần thiết thì giữ nguyên.
+
+Username phải UNIQUE.
+
+Nếu user hiện tại được tạo bằng authentication cũ, không tự ý xóa.
+
+Phải đảm bảo migration an toàn.
+
+========================
+13. KHÔNG DÙNG DATA DEMO
+========================
+
+Không dùng mock user.
+
+Không dùng fake login.
+
+Không hardcode:
+
+username = admin
+password = admin
+
+Không bypass authentication.
+
+Không tạo login giả chỉ để UI hoạt động.
+
+UI phải kết nối database/backend thật.
+
+========================
+14. LOADING STATE
+========================
+
+Khi user bấm:
+
+"Đăng ký"
+
+hoặc:
+
+"Đăng nhập"
+
+phải có loading state.
+
+Trong lúc request đang chạy:
+
+- disable button
+- tránh submit nhiều lần
+- hiển thị trạng thái đang xử lý
+
+Nếu request thất bại thì cho phép thử lại.
+
+========================
+15. ERROR HANDLING
+========================
+
+Hiển thị lỗi thân thiện bằng tiếng Việt.
+
+Các trường hợp cần xử lý:
+
+- Username trống
+- Username không hợp lệ
+- Username đã tồn tại
+- Password trống
+- Password quá yếu
+- Password không khớp
+- Sai username/password
+- Server error
+- Database error
+- Session error
+- Network error
+
+Không hiển thị stack trace cho user.
+
+Không hiển thị secret/env/password.
+
+========================
+16. GIAO DIỆN
+========================
+
+Giữ phong cách thiết kế TeleCampaign hiện tại.
+
+Theo ảnh mẫu:
+
+- nền sáng
+- card đăng nhập/đăng ký
+- bo góc
+- typography rõ ràng
+- nút màu xanh
+- icon tài khoản
+- icon khóa
+- khoảng cách thoáng
+- responsive mobile
+
+Không phá giao diện header hiện tại.
+
+Không thay đổi dashboard nếu không liên quan.
+
+Trang mobile phải hiển thị đẹp như ảnh mẫu.
+
+Không để form bị tràn màn hình.
+
+========================
+17. HEADER
+========================
+
+Giữ nguyên:
+
+Logo TeleCampaign
+
+Tên:
+
+"Tele Campaign"
+
+Mô tả:
+
+"Quản trị Chiến dịch Telegram"
+
+Ngôn ngữ:
+
+VI / EN
+
+Trang chủ
+
+Không thay đổi các thành phần này nếu không cần thiết.
+
+========================
+18. BẢO MẬT
+========================
+
+Trước khi hoàn thành phải kiểm tra:
+
+- SQL injection
+- authentication bypass
+- IDOR
+- session fixation
+- insecure cookie
+- password plaintext
+- password logging
+- thiếu authorization ở API
+- user A đọc dữ liệu user B
+- user A sửa dữ liệu user B
+- user A xóa dữ liệu user B
+- duplicate username
+- brute-force protection/rate limit phù hợp
+
+Không đưa secret vào frontend.
+
+Không commit secret.
+
+Không hardcode API key.
+
+Không hardcode database password.
+
+Không hardcode session secret.
+
+========================
+19. NẾU ĐANG DÙNG CLERK
+========================
+
+Nếu project hiện tại đang sử dụng Clerk:
+
+Không tự ý xóa Clerk ngay.
+
+Trước tiên kiểm tra:
+
+- package @clerk
+- ClerkProvider
+- SignIn
+- SignUp
+- middleware
+- currentUser
+- auth()
+- session
+- user mapping trong database
+
+Sau đó xác định cách triển khai username/password tương thích.
+
+Nếu Clerk hiện tại không phù hợp với yêu cầu username/password mà không có email/Google, hãy đánh giá kiến trúc trước khi thay đổi.
+
+Nếu cần thay authentication provider thì phải:
+
+- migration user an toàn
+- giữ dữ liệu user
+- giữ ownership
+- giữ protected routes
+- giữ session security
+
+Tuyệt đối không để tồn tại hai hệ thống auth song song.
+
+========================
+20. GOOGLE
+========================
+
+Google Login KHÔNG được sử dụng.
+
+Xóa/ẩn các nút:
+
+"Continue with Google"
+
+"Sign in with Google"
+
+Google OAuth button
+
+nếu chúng xuất hiện trên trang login/register.
+
+Không cần cấu hình Google OAuth.
+
+========================
+21. ROUTES
+========================
+
+Đảm bảo có flow tương tự:
+
+/login
+/register
+/dashboard
+
+Nếu project đang sử dụng route khác thì giữ convention hiện tại.
+
+Flow:
+
+/register
+↓
+Đăng ký thành công
+↓
+Tự động đăng nhập
+↓
+/dashboard
+
+Flow login:
+
+/login
+↓
+Username + Password
+↓
+Authentication thành công
+↓
+/dashboard
+
+Flow logout:
+
+/dashboard
+↓
+Logout
+↓
+/login
+
+========================
+22. API
+========================
+
+Tạo/chỉnh sửa API authentication phù hợp với backend hiện tại.
+
+Ví dụ nếu kiến trúc hiện tại dùng REST:
+
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/logout
+GET /api/auth/me
+
+Nhưng trước khi tạo route mới hãy kiểm tra route hiện tại.
+
+Không tạo duplicate API nếu project đã có.
+
+GET /api/auth/me chỉ trả thông tin user an toàn, ví dụ:
+
+id
+username
+
+Không trả:
+
+passwordHash
+session secret
+credential
+token bí mật
+
+========================
+23. KIỂM TRA TOÀN BỘ FLOW
+========================
+
+Sau khi triển khai phải tự test:
+
+TEST 1:
+Đăng ký user mới.
+
+TEST 2:
+Đăng ký lại cùng username.
+
+Kết quả:
+→ bị từ chối.
+
+TEST 3:
+Password và confirm password khác nhau.
+
+Kết quả:
+→ bị từ chối.
+
+TEST 4:
+Đăng ký thành công.
+
+Kết quả:
+→ user được tạo trong database.
+→ session được tạo.
+→ chuyển dashboard.
+
+TEST 5:
+Logout.
+
+Kết quả:
+→ session bị invalid.
+→ không truy cập được dashboard.
+
+TEST 6:
+Đăng nhập lại bằng username/password đúng.
+
+Kết quả:
+→ vào dashboard.
+
+TEST 7:
+Đăng nhập password sai.
+
+Kết quả:
+→ bị từ chối.
+
+TEST 8:
+User A thử truy cập dữ liệu User B bằng cách thay đổi ID.
+
+Kết quả:
+→ backend từ chối.
+
+TEST 9:
+User chưa đăng nhập gọi private API.
+
+Kết quả:
+→ HTTP 401 hoặc redirect phù hợp.
+
+TEST 10:
+Kiểm tra mobile UI.
+
+========================
+24. BUILD / TYPECHECK
+========================
+
+Sau khi sửa:
+
+- chạy typecheck
+- chạy lint nếu project có
+- chạy build
+- chạy test nếu project có
+- sửa toàn bộ lỗi phát sinh
+
+Không được báo "đã hoàn thành" nếu build/typecheck đang fail.
+
+========================
+25. QUY TẮC QUAN TRỌNG
+========================
+
+Không tự ý thay đổi những phần không liên quan.
+
+Không reset database.
+
+Không xóa dữ liệu hiện tại.
+
+Không dùng mock authentication.
+
+Không dùng Google.
+
+Không bắt buộc email.
+
+Không tạo auth system thứ hai.
+
+Không bypass authentication.
+
+Không lưu password plaintext.
+
+Không để frontend quyết định user nào được truy cập dữ liệu.
+
+Hãy đọc toàn bộ code hiện tại trước khi chỉnh sửa để tránh phá các chức năng Telegram Campaign, queue, worker, campaign, destination, calendar và activity log đang có.
+
+Nếu phát hiện vấn đề kiến trúc lớn có thể làm mất dữ liệu hoặc phá authentication hiện tại, hãy dừng trước bước destructive change và báo rõ vấn đề thay vì tự ý xóa/sửa dữ liệu.
+
+Sau khi hoàn thành, hãy báo cáo ngắn gọn:
+
+1. Đã sửa những file nào.
+2. Authentication hiện tại đang hoạt động theo kiến trúc nào.
+3. Database đã thay đổi gì.
+4. Đăng ký username/password hoạt động ra sao.
+5. Đăng nhập hoạt động ra sao.
+6. Session được bảo vệ thế nào.
+7. Đã test những flow nào.
+8. Typecheck/build có PASS hay không.
+9. Có vấn đề nào còn cần tôi xử lý hay không.
+
+Mục tiêu cuối cùng:
+
+USER
+→ Đăng ký bằng Username + Password
+→ Tạo tài khoản thật trong database
+→ Tự động đăng nhập
+→ Vào Dashboard
+→ Logout
+→ Đăng nhập lại bằng Username + Password
+
+KHÔNG CÓ GOOGLE LOGIN.
+KHÔNG CÓ EMAIL LOGIN.
+KHÔNG DÙNG DATA DEMO.

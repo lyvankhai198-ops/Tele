@@ -1,0 +1,167 @@
+THIẾT KẾ LẠI TAB “NHÓM” — CHỈ ĐỔI UI/UX, KHÔNG ĐỔI LOGIC
+
+Tôi muốn làm lại giao diện tab “Nhóm” hiện tại theo hướng hiện đại, gọn và khác giao diện cũ một chút, nhưng PHẢI GIỮ NGUYÊN toàn bộ chức năng/backend/API đang có.
+
+GIAO DIỆN MONG MUỐN:
+
+1. HEADER
+- Giữ tiêu đề “Nhóm”.
+- Giữ nút “+ Thêm nhóm”.
+- Giao diện mobile-first, responsive.
+- Header sạch, ít chiếm diện tích.
+
+2. KHU VỰC TỔNG QUAN
+Bên dưới header tạo một khu vực nhỏ hiển thị:
+- Tổng số nhóm
+- Nhóm đang Bật
+- Nhóm đang Tắt
+- Có thể thêm số nhóm đang hoạt động nếu dữ liệu backend đã có.
+
+Thiết kế dạng các ô/card nhỏ, không quá to.
+
+3. KHU VỰC CÔNG CỤ
+Tạo một khu vực “Công cụ” hoặc “Thao tác nhanh”.
+
+Giữ nguyên các chức năng hiện tại:
+- Đồng bộ
+- Dọn rác
+- Xuất nhóm
+- Join nhóm hàng loạt
+- Danh sách loại trừ
+
+Có thể bố trí thành các nút/card nhỏ có icon để giao diện khác hiện tại và dễ sử dụng trên điện thoại.
+
+KHÔNG được xóa hoặc vô hiệu hóa bất kỳ chức năng nào.
+
+4. TÌM KIẾM + BỘ LỌC
+Thiết kế lại phần tìm kiếm thành một search box nổi bật:
+
+“Tìm nhóm theo tên, chat ID hoặc username...”
+
+Bên dưới giữ:
+- Lọc theo tài khoản Telegram
+- Lọc theo trạng thái
+
+Có thể dùng dropdown/card filter đẹp hơn nhưng phải giữ nguyên dữ liệu và logic lọc hiện tại.
+
+5. DANH SÁCH NHÓM
+Mỗi nhóm hiển thị dưới dạng card hiện đại.
+
+Ví dụ:
+
+[TÊN NHÓM]                         [BẬT]
+
+Chat ID: 4318460522
+Telegram: 573171257111
+Username: @achuanqunzu
+Gửi gần nhất: —
+
+--------------------------------
+
+[Thử]        [Sửa]        [Ẩn]
+
+Thiết kế card:
+- Bo góc vừa phải.
+- Có shadow nhẹ.
+- Khoảng cách giữa các card rõ ràng.
+- Tên nhóm nổi bật.
+- Badge Bật/Tắt dễ nhìn.
+- Thông tin phụ nhỏ hơn.
+- Các nút thao tác dễ bấm trên màn hình điện thoại.
+
+6. NÚT TRẠNG THÁI
+Giữ nguyên khả năng Bật/Tắt nhóm.
+
+Không được biến trạng thái thành text tĩnh.
+
+Khi người dùng bật/tắt:
+- Gọi đúng API/backend hiện tại.
+- Cập nhật trạng thái trên giao diện.
+- Không reload toàn bộ trang nếu không cần thiết.
+
+7. NÚT “THỬ”
+Giữ nguyên chức năng Thử hiện tại.
+
+Không được chỉ đổi giao diện mà làm mất logic phía sau.
+
+8. NÚT “SỬA”
+Giữ nguyên chức năng chỉnh sửa nhóm hiện tại.
+
+Khi bấm Sửa phải mở đúng form/modal đang sử dụng hiện tại và giữ toàn bộ dữ liệu/chức năng.
+
+9. NÚT “ẨN”
+Giữ nguyên chức năng Ẩn nhóm.
+
+Không được xóa nhóm khỏi database nếu chức năng hiện tại chỉ là ẩn.
+
+10. RESPONSIVE MOBILE
+Đây là yêu cầu rất quan trọng.
+
+Tôi chủ yếu sử dụng trên điện thoại nên:
+- Không để card bị tràn ngang.
+- Không để nút quá nhỏ.
+- Các nút công cụ tự xuống dòng khi màn hình nhỏ.
+- Search và filter phải dễ bấm.
+- Text dài phải xuống dòng hợp lý.
+- Không làm xuất hiện horizontal scroll ngoài ý muốn.
+
+11. PHONG CÁCH
+Phong cách tổng thể:
+- Hiện đại
+- Sạch
+- Chuyên nghiệp
+- Tối giản
+- Dễ sử dụng
+- Giữ tông màu xanh hiện tại nhưng có thể tinh chỉnh sắc độ.
+- Không làm giao diện quá nhiều màu.
+- Icon sử dụng đồng nhất.
+
+QUAN TRỌNG — KHÔNG ĐƯỢC PHÁ LOGIC:
+
+Đây là yêu cầu REDESIGN UI/UX của TAB NHÓM.
+
+KHÔNG được:
+- Viết lại backend nếu không cần.
+- Đổi API endpoint.
+- Đổi database schema.
+- Đổi tên field backend.
+- Xóa chức năng.
+- Làm nút giả chỉ để đẹp giao diện.
+- Hard-code dữ liệu nhóm.
+- Tạo dữ liệu mẫu thay cho dữ liệu thật.
+- Làm mất chức năng Đồng bộ.
+- Làm mất Dọn rác.
+- Làm mất Xuất nhóm.
+- Làm mất Join nhóm hàng loạt.
+- Làm mất Danh sách loại trừ.
+- Làm mất Thử/Sửa/Ẩn.
+- Làm mất bộ lọc tài khoản/trạng thái.
+
+Hãy tận dụng component/API/logic hiện tại và chỉ thay đổi phần presentation/UI khi có thể.
+
+TRƯỚC KHI SỬA:
+- Kiểm tra component của tab Nhóm.
+- Kiểm tra các API mà tab Nhóm đang gọi.
+- Kiểm tra các handler của từng nút.
+- Không được tự đoán tên API nếu code hiện tại đã có.
+
+SAU KHI SỬA:
+- Kiểm tra lại toàn bộ chức năng.
+- Test thêm nhóm.
+- Test tìm kiếm.
+- Test lọc tài khoản.
+- Test lọc trạng thái.
+- Test bật/tắt.
+- Test Thử.
+- Test Sửa.
+- Test Ẩn.
+- Test Đồng bộ.
+- Test Dọn rác.
+- Test Xuất nhóm.
+- Test Join nhóm hàng loạt.
+- Test Danh sách loại trừ.
+
+Nếu phần UI mới gây lỗi thì ưu tiên rollback phần UI vừa thay đổi, KHÔNG làm ảnh hưởng backend và các chức năng đang chạy ổn định.
+
+Mục tiêu cuối cùng:
+TAB “NHÓM” nhìn khác giao diện cũ, đẹp và chuyên nghiệp hơn, đặc biệt tối ưu cho điện thoại, nhưng chức năng phải hoạt động y như hệ thống hiện tại.
