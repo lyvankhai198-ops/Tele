@@ -23,7 +23,9 @@ async function deferForDailyQuota(campaign: typeof campaignsTable.$inferSelect, 
     getSubscription(campaign.ownerUserId),
     getSystemSettings(),
   ]);
-  if (subscription.messageDailyLimit === null) return false;
+  // UNLIMITED must never be deferred by the daily quota guard, even if an
+  // older queued target still has a stale quota retry timestamp.
+  if (subscription.plan === "unlimited" || subscription.messageDailyLimit === null) return false;
   const timezone = settings.defaultTimezone.replace(/'/g, "");
   const dayStart = sql`date_trunc('day', now() AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
   const nextDayStart = sql`(date_trunc('day', now() AT TIME ZONE ${timezone}) + interval '1 day') AT TIME ZONE ${timezone}`;
@@ -53,13 +55,33 @@ async function deferForDailyQuota(campaign: typeof campaignsTable.$inferSelect, 
 }
 
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
-  const targets = await db.select().from(campaignTargetsTable)
+  const targets = await db.select({
+    target: campaignTargetsTable,
+    destinationTitle: destinationsTable.title,
+  }).from(campaignTargetsTable)
+    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
     .where(eq(campaignTargetsTable.campaignId, campaign.id));
   return {
     ...campaign,
     targetCount: targets.length,
-    sentCount: targets.filter((target) => target.status === "sent").length,
-    failedCount: targets.filter((target) => ["failed", "requires_review"].includes(target.status)).length,
+    destinationIds: [...new Set(targets.map(({ target }) => target.destinationId))],
+    sentCount: targets.filter(({ target }) => target.status === "sent").length,
+    failedCount: targets.filter(({ target }) => ["failed", "requires_review"].includes(target.status)).length,
+    errors: targets
+      .filter(({ target }) => Boolean(target.lastError))
+      .map(({ target, destinationTitle }) => ({
+        destinationId: target.destinationId,
+        destinationTitle,
+        status: target.status,
+        attempts: target.attempts,
+        lastError: target.lastError,
+        nextAttemptAt: target.nextAttemptAt,
+      }))
+      .sort((a, b) => {
+        const aTime = a.nextAttemptAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const bTime = b.nextAttemptAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        return aTime - bTime || a.destinationTitle.localeCompare(b.destinationTitle);
+      }),
   };
 }
 
