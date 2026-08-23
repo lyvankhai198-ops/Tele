@@ -7,6 +7,7 @@ import { requireTelegramConfiguration } from "./telegram-config";
 import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
+import { logger } from "./logger";
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -16,6 +17,7 @@ type TelegramEntity = {
   className?: string;
   broadcast?: boolean;
   megagroup?: boolean;
+  forum?: boolean;
   creator?: boolean;
   adminRights?: {
     postMessages?: boolean;
@@ -147,9 +149,50 @@ function canPostToEntity(entity: TelegramEntity): boolean {
 
 type TelegramDestination = {
   telegramId: string;
+  topicId: number | null;
   username: string | null;
   title: string;
 };
+
+type TelegramForumTopic = {
+  id: number;
+  date: number;
+  topMessage: number;
+  title: string;
+  closed?: boolean;
+  hidden?: boolean;
+};
+
+async function listForumTopics(client: TelegramClient, channel: any): Promise<TelegramForumTopic[]> {
+  const topics: TelegramForumTopic[] = [];
+  let offsetDate = 0;
+  let offsetId = 0;
+  let offsetTopic = 0;
+  const pageSize = 100;
+
+  for (let page = 0; page < 100; page += 1) {
+    const result = await client.invoke(new Api.channels.GetForumTopics({
+      channel,
+      offsetDate,
+      offsetId,
+      offsetTopic,
+      limit: pageSize,
+    })) as unknown as { topics?: TelegramForumTopic[]; count?: number };
+    const batch = (result.topics ?? []).filter((topic) =>
+      Number.isSafeInteger(topic.id)
+      && topic.id > 0
+      && typeof topic.title === "string",
+    );
+    topics.push(...batch);
+    if (!batch.length || batch.length < pageSize || topics.length >= (result.count ?? 0)) break;
+
+    const last = batch.at(-1)!;
+    offsetDate = last.date;
+    offsetId = last.topMessage;
+    offsetTopic = last.id;
+  }
+  return topics;
+}
 
 async function resolveDestinationEntity(client: TelegramClient, destination: TelegramDestination) {
   const validate = async (inputEntity: any): Promise<any> => {
@@ -245,7 +288,47 @@ export async function syncAccountDestinations(accountId: string) {
   try {
     const previousDestinations = await db.select().from(destinationsTable)
       .where(eq(destinationsTable.accountId, accountId));
+    const syncedDestinationKeys = new Set<string>();
     const syncedTelegramIds = new Set<string>();
+    const topicSyncVerifiedForTelegramIds = new Set<string>();
+
+    const destinationKey = (telegramId: string, topicId: number | null) =>
+      `${telegramId}:${topicId ?? "chat"}`;
+
+    const upsertDestination = async (values: {
+      telegramId: string;
+      topicId: number | null;
+      parentTitle: string | null;
+      title: string;
+      username: string | null;
+      kind: "channel" | "group" | "forum" | "topic";
+      memberCount: number | null;
+      canPost: boolean;
+      permissionReason: string;
+    }) => {
+      const conditions = [
+        eq(destinationsTable.accountId, accountId),
+        eq(destinationsTable.telegramId, values.telegramId),
+        values.topicId === null
+          ? isNull(destinationsTable.topicId)
+          : eq(destinationsTable.topicId, values.topicId),
+      ];
+      const storedValues = {
+        accountId,
+        ...values,
+        permissionCheckedAt: new Date(),
+        updatedAt: new Date(),
+      };
+      const [sameDestination] = await db.select().from(destinationsTable).where(and(...conditions));
+      if (sameDestination) {
+        await db.update(destinationsTable).set(storedValues).where(eq(destinationsTable.id, sameDestination.id));
+      } else {
+        await db.insert(destinationsTable).values(storedValues);
+      }
+      syncedDestinationKeys.add(destinationKey(values.telegramId, values.topicId));
+      count += 1;
+    };
+
     for await (const dialog of (client as any).iterDialogs({})) {
       const entity = dialog.entity as TelegramEntity;
       if (!entity || (!entity.megagroup && !entity.broadcast && !String(entity.className ?? "").includes("Chat"))) {
@@ -255,29 +338,63 @@ export async function syncAccountDestinations(accountId: string) {
       if (!id) continue;
       const canPost = canPostToEntity(entity);
       syncedTelegramIds.add(id);
-      const values = {
-        accountId,
+      await upsertDestination({
         telegramId: id,
+        topicId: null,
+        parentTitle: null,
         title: displayTitle(entity),
         username: entity.username ?? null,
-        kind: entity.broadcast ? "channel" : "group",
+        kind: entity.broadcast ? "channel" : entity.forum ? "forum" : "group",
         memberCount: entity.participantsCount ?? null,
         canPost,
         permissionReason: canPost ? "Posting permission available" : "Posting is restricted by Telegram",
-        permissionCheckedAt: new Date(),
-        updatedAt: new Date(),
-      };
-      const [sameDestination] = await db.select().from(destinationsTable)
-        .where(and(eq(destinationsTable.accountId, accountId), eq(destinationsTable.telegramId, id)));
-      if (sameDestination) {
-        await db.update(destinationsTable).set(values).where(eq(destinationsTable.id, sameDestination.id));
-      } else {
-        await db.insert(destinationsTable).values(values);
+      });
+
+      if (!entity.forum || entity.broadcast) {
+        topicSyncVerifiedForTelegramIds.add(id);
+        continue;
       }
-      count += 1;
+
+      try {
+        const topics = await listForumTopics(client, dialog.inputEntity);
+        topicSyncVerifiedForTelegramIds.add(id);
+        for (const topic of topics) {
+          // The parent forum destination represents the General topic. Keeping
+          // it as a single destination preserves existing campaign behavior.
+          if (topic.id === 1) continue;
+          const topicCanPost = canPost && !topic.closed && !topic.hidden;
+          await upsertDestination({
+            telegramId: id,
+            topicId: topic.id,
+            parentTitle: displayTitle(entity),
+            title: topic.title,
+            username: entity.username ?? null,
+            kind: "topic",
+            memberCount: entity.participantsCount ?? null,
+            canPost: topicCanPost,
+            permissionReason: topicCanPost
+              ? "Posting permission available"
+              : topic.closed
+                ? "Topic is closed by Telegram"
+                : topic.hidden
+                  ? "Topic is hidden by Telegram"
+                  : "Posting is restricted by Telegram",
+          });
+        }
+      } catch (error) {
+        // Retain previously synced topics if Telegram temporarily refuses the
+        // forum-topic request; marking all of them unavailable would pause
+        // campaigns for a transient API failure.
+        logger.warn({ err: error, accountId, telegramId: id }, "Telegram forum topic sync failed");
+      }
     }
     await Promise.all(previousDestinations
-      .filter((destination) => !syncedTelegramIds.has(destination.telegramId))
+      .filter((destination) => {
+        if (!syncedTelegramIds.has(destination.telegramId)) return true;
+        if (destination.topicId === null) return false;
+        return topicSyncVerifiedForTelegramIds.has(destination.telegramId)
+          && !syncedDestinationKeys.has(destinationKey(destination.telegramId, destination.topicId));
+      })
       .map((destination) => db.update(destinationsTable).set({
         canPost: false,
         permissionReason: "This destination is no longer available to the connected account",
@@ -323,7 +440,10 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
     const entity = await resolveDestinationEntity(client, destination);
-    const sent = await client.sendMessage(entity, { message: content });
+    const sent = await client.sendMessage(entity, {
+      message: content,
+      ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
+    });
     return String((sent as any).id ?? "");
   } finally {
     await client.disconnect();
@@ -340,11 +460,22 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
       throw new Error("The saved Telegram message ID is invalid");
     }
-    const messages = await client.forwardMessages(entity, {
-      messages: numericSourceMessageId,
-      fromPeer: "me",
+    if (destination.topicId === null) {
+      const messages = await client.forwardMessages(entity, {
+        messages: numericSourceMessageId,
+        fromPeer: "me",
+      });
+      return String((messages[0] as any)?.id ?? "");
+    }
+    const request = new Api.messages.ForwardMessages({
+      fromPeer: await client.getInputEntity("me"),
+      id: [numericSourceMessageId],
+      toPeer: entity,
+      topMsgId: destination.topicId,
     });
-    return String((messages[0] as any)?.id ?? "");
+    const result = await client.invoke(request);
+    const sent = await (client as any)._getResponseMessage(request, result, entity);
+    return String(sent?.id ?? "");
   } finally {
     await client.disconnect();
   }

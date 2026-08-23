@@ -272,6 +272,8 @@ export const ListDestinationsResponseItem = zod.object({
   "id": zod.string(),
   "accountId": zod.string(),
   "telegramId": zod.string(),
+  "topicId": zod.number().nullable(),
+  "parentTitle": zod.string().nullable(),
   "title": zod.string(),
   "username": zod.string().nullable(),
   "kind": zod.string(),

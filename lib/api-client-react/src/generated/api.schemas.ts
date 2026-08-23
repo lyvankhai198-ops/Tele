@@ -184,6 +184,10 @@ export interface Destination {
   id: string;
   accountId: string;
   telegramId: string;
+  /** @nullable */
+  topicId: number | null;
+  /** @nullable */
+  parentTitle: string | null;
   title: string;
   /** @nullable */
   username: string | null;

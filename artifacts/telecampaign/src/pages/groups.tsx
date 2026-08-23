@@ -50,7 +50,7 @@ export default function Groups() {
     export: "Xuất nhóm",
     search: "Tìm theo tiêu đề, chatId, username...",
     allAccounts: "Tất cả tài khoản",
-    total: "Tổng số nhóm",
+    total: "Tổng số điểm gửi",
     enabled: "Nhóm đang bật",
     disabled: "Nhóm đang tắt",
     connected: "tài khoản đã kết nối",
@@ -78,8 +78,13 @@ export default function Groups() {
     noPermissionReason: "Quyền đăng được kiểm tra từ Telegram trong lần đồng bộ gần nhất.",
     kindChannel: "Kênh",
     kindGroup: "Nhóm",
+    kindForum: "Nhóm chủ đề",
+    kindTopic: "Chủ đề",
+    generalTopic: "Chung",
+    parentGroup: "Nhóm cha",
+    topicId: "Topic ID",
     eyebrow: "Quản lý không gian",
-    subtitle: "Quản lý các nhóm và kênh được phép đăng bài.",
+    subtitle: "Quản lý các nhóm, kênh và chủ đề được phép đăng bài.",
     toolsTitle: "Công cụ",
     toolsSubtitle: "Thao tác nhanh trên dữ liệu nhóm hiện tại",
     noAccountToast: "Hãy kết nối tài khoản Telegram trước khi đồng bộ.",
@@ -92,7 +97,7 @@ export default function Groups() {
     export: "Export groups",
     search: "Search by title, chatId, username...",
     allAccounts: "All accounts",
-    total: "Total groups",
+    total: "Total destinations",
     enabled: "Enabled groups",
     disabled: "Disabled groups",
     connected: "connected accounts",
@@ -120,8 +125,13 @@ export default function Groups() {
     noPermissionReason: "Posting permission was checked by Telegram during the latest sync.",
     kindChannel: "Channel",
     kindGroup: "Group",
+    kindForum: "Forum group",
+    kindTopic: "Topic",
+    generalTopic: "General",
+    parentGroup: "Parent group",
+    topicId: "Topic ID",
     eyebrow: "Workspace management",
-    subtitle: "Manage groups and channels approved for publishing.",
+    subtitle: "Manage groups, channels, and topics approved for publishing.",
     toolsTitle: "Tools",
     toolsSubtitle: "Quick actions for the current group data",
     noAccountToast: "Connect a Telegram account before syncing.",
@@ -129,6 +139,16 @@ export default function Groups() {
   };
 
   const accountName = (accountId: string) => accounts.data?.find((account) => account.id === accountId)?.name ?? accountId;
+  const destinationLabel = (destination: Destination) => {
+    if (destination.kind === "topic") return `${destination.parentTitle ?? "Telegram"} › ${destination.title}`;
+    if (destination.kind === "forum") return `${destination.title} › ${copy.generalTopic}`;
+    return destination.title;
+  };
+  const destinationKind = (destination: Destination) => {
+    if (destination.kind === "topic") return copy.kindTopic;
+    if (destination.kind === "forum") return copy.kindForum;
+    return destination.kind === "channel" ? copy.kindChannel : copy.kindGroup;
+  };
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected").length;
   const enabledCount = rows.filter((item) => item.canPost).length;
   const disabledCount = rows.length - enabledCount;
@@ -140,6 +160,8 @@ export default function Groups() {
       const statusMatches = statusFilter === "all" || (statusFilter === "active" ? item.canPost : !item.canPost);
       const searchMatches = !needle || [
         item.title,
+        item.parentTitle ?? "",
+        item.topicId?.toString() ?? "",
         item.username ?? "",
         item.telegramId,
         item.accountId,
@@ -165,11 +187,13 @@ export default function Groups() {
 
   const exportGroups = () => {
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
-    const header = ["title", "status", "account_id", "chat_id", "username", "members"];
+    const header = ["title", "parent_group", "topic_id", "status", "account_id", "chat_id", "username", "members"];
     const content = [
       header.join(","),
       ...visible.map((item) => [
-        item.title,
+        destinationLabel(item),
+        item.parentTitle ?? "",
+        item.topicId?.toString() ?? "",
         item.canPost ? "enabled" : "disabled",
         item.accountId,
         item.telegramId,
@@ -278,17 +302,17 @@ export default function Groups() {
               <button key={item.id} onClick={() => setSelected(item)} className="group w-full rounded-2xl border border-[#e5eaf0] bg-white p-4 text-left shadow-[0_2px_8px_rgba(15,23,42,0.03)] transition hover:border-[#b8c4db] hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)] sm:p-5" data-testid={`group-card-${item.id}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
-                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.kind === "channel" ? "bg-[#eef2ff] text-[#4f46e5]" : "bg-[#eff6ff] text-[#2563eb]"}`}><MessageCircle className="h-[18px] w-[18px]" /></span>
+                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.kind === "channel" ? "bg-[#eef2ff] text-[#4f46e5]" : item.kind === "topic" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#eff6ff] text-[#2563eb]"}`}><MessageCircle className="h-[18px] w-[18px]" /></span>
                     <div className="min-w-0">
-                      <h4 className="truncate text-[15px] font-extrabold text-[#0f172a] group-hover:text-[#1a2b88]">{item.title}</h4>
-                      <p className="mt-1 truncate text-[12px] font-medium text-[#64748b]">{item.memberCount?.toLocaleString()} {copy.members}</p>
+                      <h4 className="truncate text-[15px] font-extrabold text-[#0f172a] group-hover:text-[#1a2b88]">{destinationLabel(item)}</h4>
+                      <p className="mt-1 truncate text-[12px] font-medium text-[#64748b]">{item.kind === "topic" ? `${copy.parentGroup}: ${item.parentTitle}` : `${item.memberCount?.toLocaleString()} ${copy.members}`}</p>
                     </div>
                   </div>
                   <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${item.canPost ? "bg-[#eaf8f1] text-[#059669]" : "bg-[#fff1f2] text-[#e11d48]"}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{item.canPost ? copy.on : copy.off}</span>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[#f1f4f7] pt-4 sm:grid-cols-4">
                   <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.managedBy}</p><p className="mt-1 truncate text-[12px] font-bold text-[#334155]" title={item.accountId}>{accountName(item.accountId)}</p></div>
-                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.chatId}</p><p className="mt-1 truncate font-mono text-[12px] font-bold text-[#334155]">{item.telegramId}</p></div>
+                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{item.kind === "topic" ? copy.topicId : copy.chatId}</p><p className="mt-1 truncate font-mono text-[12px] font-bold text-[#334155]">{item.kind === "topic" ? item.topicId : item.telegramId}</p></div>
                   <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.username}</p><p className="mt-1 truncate text-[12px] font-bold text-[#334155]">{item.username ? `@${item.username}` : copy.noUsername}</p></div>
                   <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.lastSent}</p><p className="mt-1 text-[12px] font-bold text-[#334155]">—</p></div>
                 </div>
@@ -303,7 +327,7 @@ export default function Groups() {
         </Panel>
       </div>
 
-      {selected && <Modal title={selected.title} description={`${selected.kind === "channel" ? copy.kindChannel : copy.kindGroup} · ${selected.username ? `@${selected.username}` : selected.telegramId}`} onClose={() => setSelected(null)}>
+      {selected && <Modal title={destinationLabel(selected)} description={`${destinationKind(selected)} · ${selected.username ? `@${selected.username}` : selected.telegramId}`} onClose={() => setSelected(null)}>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl border border-[#e5eaf0] bg-[#f8fafc] p-4"><p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#94a3b8]">{copy.members}</p><p className="mt-2 text-[21px] font-extrabold text-[#0f172a]">{selected.memberCount?.toLocaleString() ?? "—"}</p></div>

@@ -11,7 +11,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import type { Campaign } from "@workspace/api-client-react";
+import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   deleteCampaign,
   useCreateCampaign,
@@ -66,6 +66,8 @@ const copy = {
     searchGroupPlaceholder: "Search groups…",
     pickAccountHint: "Select a Telegram account to see active groups.",
     noGroupsHint: "No groups with posting permission.",
+    generalTopic: "General",
+    topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
     repeatCountHint: "Max 300 (admin configured).",
     delayBetweenRounds: "Delay between rounds",
@@ -140,6 +142,8 @@ const copy = {
     searchGroupPlaceholder: "Tìm nhóm...",
     pickAccountHint: "Chọn tài khoản Telegram để hiển thị nhóm đang hoạt động.",
     noGroupsHint: "Không có nhóm nào được phép gửi.",
+    generalTopic: "Chung",
+    topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
     repeatCountHint: "Tối đa 300 (admin cấu hình).",
     delayBetweenRounds: "Delay giữa các vòng lặp",
@@ -263,6 +267,19 @@ function isActive(status: string) {
   return status === "queued" || status === "running";
 }
 
+function destinationLabel(
+  destination: Destination,
+  c: (typeof copy)["en"] | (typeof copy)["vi"],
+) {
+  if (destination.kind === "topic") {
+    return `${destination.parentTitle ?? "Telegram"} › ${destination.title}`;
+  }
+  if (destination.kind === "forum") {
+    return `${destination.title} › ${c.generalTopic}`;
+  }
+  return destination.title;
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -292,13 +309,21 @@ export default function Campaigns() {
     const needle = search.trim().toLowerCase();
     return (!needle || campaign.name.toLowerCase().includes(needle)) && (status === "all" || campaign.status === status);
   }), [campaigns.data, search, status]);
-  const accountDestinations = useMemo(() => (destinations.data ?? []).filter((destination) =>
-    destination.accountId === form.accountId && destination.canPost && (
-      !groupSearch.trim() ||
-      destination.title.toLowerCase().includes(groupSearch.trim().toLowerCase()) ||
-      (destination.username ?? "").toLowerCase().includes(groupSearch.trim().toLowerCase())
-    ),
-  ), [destinations.data, form.accountId, groupSearch]);
+  const accountDestinations = useMemo(() => {
+    const needle = groupSearch.trim().toLowerCase();
+    return (destinations.data ?? [])
+      .filter((destination) =>
+        destination.accountId === form.accountId
+        && destination.canPost
+        && (!needle
+          || destination.title.toLowerCase().includes(needle)
+          || (destination.parentTitle ?? "").toLowerCase().includes(needle)
+          || (destination.username ?? "").toLowerCase().includes(needle)),
+      )
+      .sort((left, right) =>
+        destinationLabel(left, c).localeCompare(destinationLabel(right, c), language === "vi" ? "vi" : "en"),
+      );
+  }, [destinations.data, form.accountId, groupSearch, language, c]);
   const accountTemplates = useMemo(() => (templates.data ?? []).filter((template) =>
     template.mode !== "forward" || template.sourceAccountId === form.accountId,
   ), [templates.data, form.accountId]);
@@ -586,7 +611,8 @@ export default function Campaigns() {
                         ? accountDestinations.map((destination) => (
                             <button type="button" key={destination.id} onClick={() => toggleDestination(destination.id)} className="flex w-full items-center gap-3 px-2 py-2.5 text-left">
                               <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
-                              <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destination.title}</span>
+                              <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c)}</span>
+                              {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
                             </button>
                           ))
                         : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">{c.noGroupsHint}</p>}

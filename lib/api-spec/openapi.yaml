@@ -909,11 +909,13 @@ components:
         count: { type: number }
     Destination:
       type: object
-      required: [id, accountId, telegramId, title, username, kind, memberCount, canPost, permissionReason, permissionCheckedAt]
+      required: [id, accountId, telegramId, topicId, parentTitle, title, username, kind, memberCount, canPost, permissionReason, permissionCheckedAt]
       properties:
         id: { type: string }
         accountId: { type: string }
         telegramId: { type: string }
+        topicId: { type: ["number", "null"] }
+        parentTitle: { type: ["string", "null"] }
         title: { type: string }
         username: { type: ["string", "null"] }
         kind: { type: string }

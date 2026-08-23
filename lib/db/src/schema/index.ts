@@ -95,6 +95,8 @@ export const destinationsTable = pgTable("destinations", {
   id: uuid("id").primaryKey().defaultRandom(),
   accountId: uuid("account_id").notNull().references(() => telegramAccountsTable.id, { onDelete: "cascade" }),
   telegramId: text("telegram_id").notNull(),
+  topicId: integer("topic_id"),
+  parentTitle: text("parent_title"),
   title: text("title").notNull(),
   username: text("username"),
   kind: text("kind").notNull().default("group"),
