@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link2, LoaderCircle, Plus, ShieldAlert, Trash2, X } from "lucide-react";
+import { Link2, LoaderCircle, PlugZap, Plus, ShieldAlert, Trash2, X } from "lucide-react";
 import type { Proxy } from "@workspace/api-client-react";
 import {
   attachProxyAccount,
   deleteProxy,
   detachProxyAccount,
+  testProxy,
   useCreateProxy,
   useListProxies,
   useListTelegramAccounts,
@@ -35,6 +36,11 @@ export default function ProxyPage() {
     authNo: "Không",
     statusActive: "Hoạt động",
     statusPaused: "Tạm dừng",
+    test: "Test",
+    testing: "Đang test...",
+    toastProxyOk: "Proxy kết nối OK.",
+    toastProxyFailed: "Proxy không kết nối được.",
+    ariaTest: (name: string) => `Test kết nối ${name}`,
     ariaDelete: (name: string) => `Xóa ${name}`,
     attachTitle: (name: string) => (
       <>Gắn tài khoản với <span className="text-[#1d3bb8]">{name}</span></>
@@ -82,6 +88,11 @@ export default function ProxyPage() {
     authNo: "None",
     statusActive: "Active",
     statusPaused: "Paused",
+    test: "Test",
+    testing: "Testing...",
+    toastProxyOk: "Proxy connection is working.",
+    toastProxyFailed: "Proxy connection failed.",
+    ariaTest: (name: string) => `Test connection for ${name}`,
     ariaDelete: (name: string) => `Delete ${name}`,
     attachTitle: (name: string) => (
       <>Attach account to <span className="text-[#1d3bb8]">{name}</span></>
@@ -124,6 +135,7 @@ export default function ProxyPage() {
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [testingProxyId, setTestingProxyId] = useState<string | null>(null);
   const [attachFor, setAttachFor] = useState<Record<string, string>>({});
   const connectedAccounts = useMemo(() => (accounts.data ?? []).filter((account) => account.status === "connected"), [accounts.data]);
 
@@ -193,6 +205,19 @@ export default function ProxyPage() {
     }
   }
 
+  async function test(proxy: Proxy) {
+    setTestingProxyId(proxy.id);
+    try {
+      const result = await testProxy(proxy.id);
+      await proxies.refetch();
+      setToast(result.ok ? copy.toastProxyOk : `${copy.toastProxyFailed} ${result.message}`);
+    } catch (error) {
+      setToast(errorText(error));
+    } finally {
+      setTestingProxyId(null);
+    }
+  }
+
   const totalAttached = (proxies.data ?? []).reduce((total, proxy) => total + proxy.accountCount, 0);
 
   return (
@@ -249,9 +274,23 @@ export default function ProxyPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4 text-right">
-                          <button onClick={() => void remove(proxy)} className="rounded-xl p-2 text-[#ef4444] hover:bg-[#fff1f2]" aria-label={copy.ariaDelete(proxy.name)}>
-                            <Trash2 className="h-[18px] w-[18px]" />
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => void test(proxy)}
+                              disabled={testingProxyId === proxy.id}
+                              className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-[12px] font-extrabold text-[#1d3bb8] hover:bg-[#eef2ff] disabled:cursor-wait disabled:opacity-60"
+                              aria-label={copy.ariaTest(proxy.name)}
+                              data-testid={`proxy-test-${proxy.id}`}
+                            >
+                              {testingProxyId === proxy.id
+                                ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" />
+                                : <PlugZap className="h-[17px] w-[17px]" />}
+                              <span className="hidden sm:inline">{testingProxyId === proxy.id ? copy.testing : copy.test}</span>
+                            </button>
+                            <button onClick={() => void remove(proxy)} className="rounded-xl p-2 text-[#ef4444] hover:bg-[#fff1f2]" aria-label={copy.ariaDelete(proxy.name)}>
+                              <Trash2 className="h-[18px] w-[18px]" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

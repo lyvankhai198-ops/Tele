@@ -46,6 +46,8 @@ import {
   DeleteProxyParams,
   DetachProxyAccountParams,
   ListProxiesResponse,
+  ProxyTestResponseSchema,
+  TestProxyParams,
   UpdateProxyBody,
   UpdateProxyParams,
   UpdateProxyResponse,
@@ -90,6 +92,7 @@ import {
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
+import { testProxyConnection } from "../lib/proxy-test";
 
 const router: IRouter = Router();
 const sendError = (res: any, status: number, error: string) => {
@@ -100,8 +103,31 @@ const normalizePhone = (phone: string) => phone.trim().replace(/[\s-]/g, "");
 const maskPhone = (phone: string) => `••••${phone.slice(-4)}`;
 const LOGIN_CHALLENGE_TTL_MS = 10 * 60_000;
 const MAX_LOGIN_ATTEMPTS = 5;
+const PROXY_TEST_WINDOW_MS = 5 * 60_000;
+const MAX_PROXY_TESTS_PER_WINDOW = 3;
+const MAX_CONCURRENT_PROXY_TESTS_PER_USER = 1;
+const proxyTestLimits = new Map<string, { active: number; attempts: number[] }>();
 type WaitingLoginStatus = "waiting_code" | "waiting_password";
 type ProcessingLoginStatus = "processing_code" | "processing_password";
+
+function acquireProxyTestSlot(ownerUserId: string): (() => void) | null {
+  const now = Date.now();
+  const state = proxyTestLimits.get(ownerUserId) ?? { active: 0, attempts: [] };
+  state.attempts = state.attempts.filter((attempt) => now - attempt < PROXY_TEST_WINDOW_MS);
+  if (state.active >= MAX_CONCURRENT_PROXY_TESTS_PER_USER || state.attempts.length >= MAX_PROXY_TESTS_PER_WINDOW) {
+    proxyTestLimits.set(ownerUserId, state);
+    return null;
+  }
+  state.active += 1;
+  state.attempts.push(now);
+  proxyTestLimits.set(ownerUserId, state);
+  return () => {
+    state.active = Math.max(0, state.active - 1);
+    if (state.active === 0 && state.attempts.every((attempt) => Date.now() - attempt >= PROXY_TEST_WINDOW_MS)) {
+      proxyTestLimits.delete(ownerUserId);
+    }
+  };
+}
 const telegramAccountResponse = (account: typeof telegramAccountsTable.$inferSelect) => ({
   id: account.id,
   name: account.name,
@@ -492,6 +518,57 @@ router.post("/proxies", async (req, res): Promise<void> => {
   }
   await recordActivity({ ownerUserId, event: "proxy.created", message: `Created proxy: ${proxy.name}`, level: "success", metadata: { type: proxy.type, host: proxy.host, port: proxy.port } });
   res.status(201).json(CreateProxyResponse.parse(await proxyResponse(proxy)));
+});
+
+router.post("/proxies/:proxyId/test", async (req, res): Promise<void> => {
+  const params = TestProxyParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+
+  const ownerUserId = currentUserId(req);
+  const existing = await ownedProxy(params.data.proxyId, ownerUserId);
+  if (!existing) return void sendError(res, 404, "Không tìm thấy proxy.");
+  const releaseSlot = acquireProxyTestSlot(ownerUserId);
+  if (!releaseSlot) return void sendError(res, 429, "Bạn đang test proxy quá nhanh. Vui lòng thử lại sau vài phút.");
+
+  const checkedAt = new Date();
+  let ok = true;
+  let message = "Proxy connection is working.";
+  try {
+    await testProxyConnection({
+      type: existing.type === "socks5" ? "socks5" : "http",
+      host: existing.host,
+      port: existing.port,
+      username: existing.usernameEncrypted ? decryptSecret(existing.usernameEncrypted) : undefined,
+      password: existing.passwordEncrypted ? decryptSecret(existing.passwordEncrypted) : undefined,
+    });
+  } catch (error) {
+    ok = false;
+    message = error instanceof Error && error.name === "ProxyTestError"
+      ? error.message
+      : "Could not connect through the proxy. Check the host, port, and credentials.";
+  } finally {
+    releaseSlot();
+  }
+
+  await db.update(proxiesTable).set({
+    status: ok ? "active" : "inactive",
+    lastCheckedAt: checkedAt,
+    updatedAt: checkedAt,
+  }).where(eq(proxiesTable.id, existing.id));
+  await recordActivity({
+    ownerUserId,
+    event: ok ? "proxy.tested" : "proxy.test_failed",
+    message: `${ok ? "Proxy test succeeded" : "Proxy test failed"}: ${existing.name}`,
+    level: ok ? "success" : "warning",
+    metadata: { type: existing.type, host: existing.host, port: existing.port },
+  });
+
+  res.json(ProxyTestResponseSchema.parse({
+    ok,
+    status: ok ? "connected" : "failed",
+    message,
+    checkedAt,
+  }));
 });
 
 router.patch("/proxies/:proxyId", async (req, res): Promise<void> => {

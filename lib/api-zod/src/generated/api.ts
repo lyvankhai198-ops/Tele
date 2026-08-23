@@ -412,6 +412,18 @@ export const DeleteProxyParams = zod.object({
 export const DeleteProxyResponse = zod.void()
 
 
+export const TestProxyParams = zod.object({
+  "proxyId": zod.coerce.string()
+})
+
+export const TestProxyResponse = zod.object({
+  "ok": zod.boolean(),
+  "status": zod.enum(['connected', 'failed']),
+  "message": zod.string(),
+  "checkedAt": zod.coerce.date()
+})
+
+
 export const AttachProxyAccountParams = zod.object({
   "proxyId": zod.coerce.string(),
   "accountId": zod.coerce.string()

@@ -72,6 +72,8 @@ export * from './planLimitSettings';
 export * from './proxy';
 export * from './proxyAccount';
 export * from './proxyStatus';
+export * from './proxyTestResponse';
+export * from './proxyTestResponseStatus';
 export * from './proxyType';
 export * from './purchaseSettings';
 export * from './purchaseSettingsInput';

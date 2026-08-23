@@ -468,6 +468,21 @@ export interface Proxy {
   updatedAt: string;
 }
 
+export type ProxyTestResponseStatus = typeof ProxyTestResponseStatus[keyof typeof ProxyTestResponseStatus];
+
+
+export const ProxyTestResponseStatus = {
+  connected: 'connected',
+  failed: 'failed',
+} as const;
+
+export interface ProxyTestResponse {
+  ok: boolean;
+  status: ProxyTestResponseStatus;
+  message: string;
+  checkedAt: string;
+}
+
 export type CreateProxyInputType = typeof CreateProxyInputType[keyof typeof CreateProxyInputType];
 
 

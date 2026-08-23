@@ -57,6 +57,7 @@ import type {
   MessageTemplateInput,
   MessageTemplateUpdateInput,
   Proxy,
+  ProxyTestResponse,
   PurchaseSettings,
   PurchaseSettingsInput,
   RegistrationInput,
@@ -1453,6 +1454,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteProxyMutationOptions(options));
+    }
+
+export const getTestProxyUrl = (proxyId: string,) => {
+
+
+
+
+  return `/api/proxies/${proxyId}/test`
+}
+
+export const testProxy = async (proxyId: string, options?: Parameters<typeof customFetch>[1]): Promise<ProxyTestResponse> => {
+
+  return customFetch<ProxyTestResponse>(getTestProxyUrl(proxyId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestProxyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testProxy>>, TError,{proxyId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testProxy>>, TError,{proxyId: string}, TContext> => {
+
+const mutationKey = ['testProxy'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testProxy>>, {proxyId: string}> = (props) => {
+          const {proxyId} = props ?? {};
+
+          return  testProxy(proxyId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestProxyMutationResult = NonNullable<Awaited<ReturnType<typeof testProxy>>>
+
+    export type TestProxyMutationError = ErrorType<void>
+
+    export const useTestProxy = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testProxy>>, TError,{proxyId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testProxy>>,
+        TError,
+        {proxyId: string},
+        TContext
+      > => {
+      return useMutation(getTestProxyMutationOptions(options));
     }
 
 export const getAttachProxyAccountUrl = (proxyId: string,

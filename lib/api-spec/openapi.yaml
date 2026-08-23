@@ -298,6 +298,19 @@ paths:
         - { $ref: "#/components/parameters/ProxyId" }
       responses:
         "204": { description: Proxy deleted }
+  /proxies/{proxyId}/test:
+    post:
+      operationId: testProxy
+      tags: [proxy]
+      parameters:
+        - { $ref: "#/components/parameters/ProxyId" }
+      responses:
+        "200":
+          description: Proxy connectivity test result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProxyTestResponse" }
+        "404": { description: Proxy not found }
   /proxies/{proxyId}/accounts/{accountId}:
     post:
       operationId: attachProxyAccount
@@ -1067,6 +1080,14 @@ components:
         lastCheckedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    ProxyTestResponse:
+      type: object
+      required: [ok, status, message, checkedAt]
+      properties:
+        ok: { type: boolean }
+        status: { type: string, enum: [connected, failed] }
+        message: { type: string }
+        checkedAt: { type: string, format: date-time }
     CreateProxyInput:
       type: object
       required: [name, type, host, port]
