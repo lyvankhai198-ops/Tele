@@ -94,6 +94,7 @@ import {
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
 import { testProxyConnection } from "../lib/proxy-test";
+import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 
 const router: IRouter = Router();
 const sendError = (res: any, status: number, error: string) => {
@@ -1044,7 +1045,10 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   }
   if (templateMode === "text" && !content) return void sendError(res, 400, "Choose a message template or enter campaign content.");
   const now = new Date();
-  const scheduledAt = parsed.data.scheduledAt ?? null;
+  const { scheduledAt, roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(
+    parsed.data.scheduledAt,
+    now,
+  );
   const [campaign] = await db.insert(campaignsTable).values({
     ownerUserId: currentUserId(req),
     name: parsed.data.name,
@@ -1067,7 +1071,7 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     roundDelayMinSeconds: parsed.data.roundDelayMinSeconds,
     roundDelayMaxSeconds: parsed.data.roundDelayMaxSeconds,
   }).returning();
-  let roundStartAt = (scheduledAt ?? now).getTime();
+  let roundStartAt = initialRoundStartAt.getTime();
   const targetRows = [];
   for (let round = 0; round < parsed.data.repeatCount; round += 1) {
     for (const destination of destinations) {
@@ -1177,7 +1181,14 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         return { kind: "error" as const, status: 409, message: "Every campaign destination must exist and have verified posting permission" };
       }
 
-      const scheduledAt = parsed.data.scheduledAt === undefined ? lockedCampaign.scheduledAt : parsed.data.scheduledAt;
+      const editSetAt = new Date();
+      const requestedScheduledAt = parsed.data.scheduledAt === undefined
+        ? lockedCampaign.scheduledAt
+        : parsed.data.scheduledAt;
+      const { scheduledAt, roundStartAt: configuredRoundStartAt } = resolveCampaignScheduleStart(
+        requestedScheduledAt,
+        editSetAt,
+      );
       const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
       const sentByDestination = new Map<string, number>();
       let latestSentAt: Date | null = null;
@@ -1195,8 +1206,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         ? latestSentAt.getTime() + randomRoundDelay() * 1000
         : Number.NEGATIVE_INFINITY;
       let roundStartAt = Math.max(
-        scheduledAt?.getTime() ?? Number.NEGATIVE_INFINITY,
-        Date.now(),
+        configuredRoundStartAt.getTime(),
+        editSetAt.getTime(),
         firstRoundAfterLastSend,
       );
       const remainingByDestination = new Map(destinations.map((destination) => [

@@ -13,10 +13,82 @@ import { forwardTelegramSavedMessage, sendTelegramMessage } from "./telegram";
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
+import { legacyScheduleOffsetMs } from "./campaign-schedule";
 
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
+
+/**
+ * Older campaigns could be created after their selected schedule had already
+ * passed (for example, selecting today's date with an empty time defaulted to
+ * 00:00). Their later rounds were incorrectly anchored to that old timestamp.
+ * Rebase only untouched pending deliveries, preserving sent deliveries and
+ * explicit retry/quota schedules.
+ */
+export async function rebaseLegacyPastScheduleCampaigns() {
+  const now = new Date();
+  const activeCampaigns = await db.select({ id: campaignsTable.id })
+    .from(campaignsTable)
+    .where(inArray(campaignsTable.status, ["queued", "running"]));
+
+  let rebasedCampaigns = 0;
+  let rebasedTargets = 0;
+  for (const candidate of activeCampaigns) {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
+      const [campaign] = await tx.select({
+        id: campaignsTable.id,
+        status: campaignsTable.status,
+        scheduledAt: campaignsTable.scheduledAt,
+        createdAt: campaignsTable.createdAt,
+      }).from(campaignsTable).where(eq(campaignsTable.id, candidate.id));
+      if (!campaign || !["queued", "running"].includes(campaign.status)) return { campaigns: 0, targets: 0 };
+
+      const offsetMs = legacyScheduleOffsetMs(campaign.scheduledAt, campaign.createdAt);
+      if (offsetMs === 0) return { campaigns: 0, targets: 0 };
+
+      const pendingTargets = await tx.select({
+        id: campaignTargetsTable.id,
+        nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+      }).from(campaignTargetsTable).where(and(
+        eq(campaignTargetsTable.campaignId, campaign.id),
+        eq(campaignTargetsTable.status, "pending"),
+        isNull(campaignTargetsTable.lastError),
+        gte(campaignTargetsTable.nextAttemptAt, now),
+      ));
+
+      let targets = 0;
+      for (const target of pendingTargets) {
+        if (!target.nextAttemptAt) continue;
+        const [rebased] = await tx.update(campaignTargetsTable).set({
+          nextAttemptAt: new Date(target.nextAttemptAt.getTime() + offsetMs),
+          updatedAt: now,
+        }).where(and(
+          eq(campaignTargetsTable.id, target.id),
+          eq(campaignTargetsTable.status, "pending"),
+          isNull(campaignTargetsTable.lastError),
+          eq(campaignTargetsTable.nextAttemptAt, target.nextAttemptAt),
+        )).returning({ id: campaignTargetsTable.id });
+        if (rebased) targets += 1;
+      }
+
+      // Null is the durable marker for an immediately configured campaign.
+      // It prevents this legacy correction from ever applying again.
+      await tx.update(campaignsTable).set({
+        scheduledAt: null,
+        updatedAt: now,
+      }).where(eq(campaignsTable.id, campaign.id));
+      return { campaigns: 1, targets };
+    });
+    rebasedCampaigns += result.campaigns;
+    rebasedTargets += result.targets;
+  }
+
+  if (rebasedCampaigns > 0) {
+    logger.info({ rebasedCampaigns, rebasedTargets }, "Rebased active campaign schedules that were anchored before configuration time");
+  }
+}
 
 async function withOwnerDeliveryLock<T>(ownerUserId: string, action: () => Promise<T>): Promise<T> {
   const client = await pool.connect();
