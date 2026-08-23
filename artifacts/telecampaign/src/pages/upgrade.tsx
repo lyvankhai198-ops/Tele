@@ -265,19 +265,21 @@ export default function Upgrade() {
         {/* License Activation Area */}
         <div
           id="activation-section"
-          className="bg-white rounded-[32px] p-6 sm:p-10 border border-[#eef2f6] shadow-sm mb-12 flex flex-col lg:flex-row gap-10 items-center"
+          className="relative isolate overflow-hidden rounded-[32px] border-2 border-[#c7d4ff] bg-gradient-to-br from-[#eef4ff] via-white to-[#f5f8ff] p-6 shadow-[0_20px_55px_rgba(26,43,136,.14)] ring-1 ring-[#dce5ff] mb-12 flex flex-col lg:flex-row gap-10 items-center sm:p-10"
         >
+          <div className="pointer-events-none absolute -right-20 -top-24 -z-10 h-64 w-64 rounded-full bg-[#dbe6ff]/70 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-32 -left-20 -z-10 h-56 w-56 rounded-full bg-[#e4efff]/80 blur-3xl" />
           <div className="lg:w-1/3 w-full">
-            <div className="inline-flex items-center justify-center p-3.5 bg-[#eff6ff] rounded-2xl mb-6 text-[#1a2b88] shadow-sm">
-              <Key className="h-6 w-6" strokeWidth={2.5} />
+            <div className="mb-6 inline-flex items-center justify-center rounded-2xl bg-[#1a2b88] p-3.5 text-white shadow-[0_10px_24px_rgba(26,43,136,.28)]">
+              <Key className="h-6 w-6" strokeWidth={2.7} />
             </div>
-            <h2 className="text-[24px] font-extrabold text-[#0f172a] mb-3 tracking-tight">{t("Activate plan")}</h2>
-            <p className="text-[#64748b] text-[15px] font-medium leading-relaxed">
+            <h2 className="mb-3 text-[26px] font-extrabold tracking-tight text-[#12236f]">{t("Activate plan")}</h2>
+            <p className="text-[15px] font-semibold leading-relaxed text-[#526789]">
               {t("Enter License Key")}
             </p>
           </div>
 
-          <div className="lg:w-2/3 w-full bg-[#f8fafc] p-6 sm:p-8 rounded-3xl border border-[#e2e8f0]">
+          <div className="w-full rounded-3xl border-2 border-[#d5def4] bg-white p-6 shadow-[0_12px_30px_rgba(26,43,136,.08)] lg:w-2/3 sm:p-8">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -286,7 +288,7 @@ export default function Upgrade() {
               className="flex flex-col gap-5"
             >
               <label className="block">
-                <span className="block text-[12px] font-extrabold text-[#475569] uppercase tracking-wider mb-2.5">
+                <span className="mb-2.5 block text-[12px] font-extrabold uppercase tracking-wider text-[#1a2b88]">
                   {t("Enter License Key")}
                 </span>
                 <input
@@ -296,7 +298,7 @@ export default function Upgrade() {
                   onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
                   placeholder="XXXX-XXXX-XXXX-XXXX"
                   aria-label={t("Enter License Key")}
-                  className="w-full rounded-2xl border-2 border-[#cbd5e1] bg-white px-5 py-4 text-[18px] sm:text-[20px] font-mono font-bold text-[#0f172a] outline-none placeholder:text-[#cbd5e1] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 transition-all text-center tracking-[0.2em] shadow-inner"
+                  className="w-full rounded-2xl border-2 border-[#9cadde] bg-[#fbfcff] px-5 py-4 text-center font-mono text-[18px] font-bold tracking-[0.2em] text-[#0f172a] outline-none placeholder:text-[#b4c0da] shadow-inner transition-all focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/15 sm:text-[20px]"
                   data-testid="input-license"
                 />
               </label>
@@ -335,7 +337,7 @@ export default function Upgrade() {
                 <button
                   type="submit"
                   disabled={activateMutation.isPending || licenseKey.length < 8}
-                  className="flex-1 py-4 rounded-xl bg-[#1a2b88] text-white font-extrabold hover:bg-[#152473] transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 text-[15px]"
+                  className="flex flex-1 items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-[#1a2b88] to-[#2847b5] py-4 text-[15px] font-extrabold text-white shadow-[0_10px_22px_rgba(26,43,136,.24)] transition-all hover:from-[#152473] hover:to-[#1a2b88] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                   data-testid="button-activate"
                 >
                   {activateMutation.isPending ? (
