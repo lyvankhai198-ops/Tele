@@ -5,8 +5,8 @@ description: Confirmed product meaning of campaign repeat counts and delivery de
 
 `repeatCount` means the number of complete rounds across the selected destinations, not the total number of messages. Total scheduled deliveries equal repeat count multiplied by the number of selected destinations.
 
-Delay values are in seconds. A fixed value of 17,280 seconds means 4 hours 48 minutes between scheduled deliveries, with the configured round delay also contributing at round boundaries.
+Delay values are in seconds. A fixed round delay of 17,280 seconds means 4 hours 48 minutes between each destination's deliveries across consecutive rounds. Group delay only offsets destinations within the same round; it does not add another round interval.
 
-**Why:** The user explicitly confirmed this interpretation on August 23, 2026.
+**Why:** The user explicitly clarified on August 23, 2026 that selecting more destinations must not make each destination wait an extra round interval.
 
 **How to apply:** Preserve this meaning when changing campaign scheduling, labels, validation, summaries, or delivery-plan generation. If product behavior changes, confirm the new semantics explicitly first.
