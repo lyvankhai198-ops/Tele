@@ -133,6 +133,40 @@ function canPostToEntity(entity: TelegramEntity): boolean {
   return !entity.defaultBannedRights?.sendMessages;
 }
 
+type TelegramDestination = {
+  telegramId: string;
+  username: string | null;
+  title: string;
+};
+
+async function resolveDestinationEntity(client: TelegramClient, destination: TelegramDestination) {
+  try {
+    return await client.getInputEntity(destination.telegramId);
+  } catch {
+    // Numeric IDs for users do not include the access hash. Loading dialogs
+    // gives GramJS the complete entity and refreshes its session cache.
+  }
+
+  if (destination.username) {
+    try {
+      return await client.getInputEntity(destination.username);
+    } catch {
+      // The username may have changed; fall back to the account's dialogs.
+    }
+  }
+
+  for await (const dialog of client.iterDialogs({})) {
+    const entity = dialog.entity as unknown as TelegramEntity;
+    if (telegramId(entity) === destination.telegramId) {
+      return dialog.inputEntity;
+    }
+  }
+
+  throw new Error(
+    `Telegram entity for "${destination.title}" is unavailable. Sync this Telegram account before retrying.`,
+  );
+}
+
 export async function getAccountClient(accountId: string): Promise<{
   client: TelegramClient;
   account: typeof telegramAccountsTable.$inferSelect;
@@ -229,7 +263,8 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
     if (!destination.canPost) throw new Error("Telegram posting permission is not available for this destination");
-    const sent = await client.sendMessage(destination.telegramId, { message: content });
+    const entity = await resolveDestinationEntity(client, destination);
+    const sent = await client.sendMessage(entity, { message: content });
     return String((sent as any).id ?? "");
   } finally {
     await client.disconnect();
@@ -242,7 +277,8 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
     if (!destination.canPost) throw new Error("Telegram posting permission is not available for this destination");
-    const messages = await client.forwardMessages(destination.telegramId, {
+    const entity = await resolveDestinationEntity(client, destination);
+    const messages = await client.forwardMessages(entity, {
       messages: Number(sourceMessageId),
       fromPeer: "me",
     });
