@@ -38,7 +38,7 @@ import type {
   CalendarItem,
   Campaign,
   CampaignInput,
-  CampaignStatusInput,
+  CampaignUpdateInput,
   CreateAdminLicenseKeyInput,
   CreateAdminLicenseKeyResult,
   CreateProxyInput,
@@ -2001,14 +2001,14 @@ export const getUpdateCampaignStatusUrl = (campaignId: string,) => {
 }
 
 export const updateCampaignStatus = async (campaignId: string,
-    campaignStatusInput: CampaignStatusInput, options?: Parameters<typeof customFetch>[1]): Promise<Campaign> => {
+    campaignUpdateInput: CampaignUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<Campaign> => {
 
   return customFetch<Campaign>(getUpdateCampaignStatusUrl(campaignId),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(campaignStatusInput)
+    body: JSON.stringify(campaignUpdateInput)
   }
 );}
 
@@ -2017,8 +2017,8 @@ export const updateCampaignStatus = async (campaignId: string,
 
 
 export const getUpdateCampaignStatusMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaignStatus>>, TError,{campaignId: string;data: BodyType<CampaignStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateCampaignStatus>>, TError,{campaignId: string;data: BodyType<CampaignStatusInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaignStatus>>, TError,{campaignId: string;data: BodyType<CampaignUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCampaignStatus>>, TError,{campaignId: string;data: BodyType<CampaignUpdateInput>}, TContext> => {
 
 const mutationKey = ['updateCampaignStatus'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -2030,7 +2030,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaignStatus>>, {campaignId: string;data: BodyType<CampaignStatusInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCampaignStatus>>, {campaignId: string;data: BodyType<CampaignUpdateInput>}> = (props) => {
           const {campaignId,data} = props ?? {};
 
           return  updateCampaignStatus(campaignId,data,requestOptions)
@@ -2044,15 +2044,15 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateCampaignStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateCampaignStatus>>>
-    export type UpdateCampaignStatusMutationBody = BodyType<CampaignStatusInput>
+    export type UpdateCampaignStatusMutationBody = BodyType<CampaignUpdateInput>
     export type UpdateCampaignStatusMutationError = ErrorType<unknown>
 
     export const useUpdateCampaignStatus = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaignStatus>>, TError,{campaignId: string;data: BodyType<CampaignStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCampaignStatus>>, TError,{campaignId: string;data: BodyType<CampaignUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateCampaignStatus>>,
         TError,
-        {campaignId: string;data: BodyType<CampaignStatusInput>},
+        {campaignId: string;data: BodyType<CampaignUpdateInput>},
         TContext
       > => {
       return useMutation(getUpdateCampaignStatusMutationOptions(options));
