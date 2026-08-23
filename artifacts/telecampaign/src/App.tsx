@@ -14,6 +14,7 @@ import {
   Router as WouterRouter,
   Redirect,
 } from 'wouter';
+import { useGetUpgradeSummary } from '@workspace/api-client-react';
 
 import Dashboard from '@/pages/dashboard';
 import Account from '@/pages/account';
@@ -195,6 +196,9 @@ function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const trialMessage = language === 'vi'
+    ? 'Dùng thử miễn phí trong 1 ngày. Sau đó, hãy kích hoạt license key PLUS, PRO hoặc UNLIMITED để tiếp tục.'
+    : 'Start with a free 1-day trial. Then activate a PLUS, PRO, or UNLIMITED license key to continue.';
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -220,7 +224,7 @@ function RegisterPage() {
     <AuthShell>
       <div className="mb-7 text-center">
         <h1 className="text-2xl font-bold tracking-[-0.035em]">{t('Create your account')}</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6d8499]">{t('Create an account to use TeleCampaign.')}</p>
+        <p className="mt-2 text-sm leading-6 text-[#6d8499]">{trialMessage}</p>
       </div>
       <form className="space-y-5" onSubmit={submit}>
         <AuthField
@@ -283,6 +287,63 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return user ? <>{children}</> : <Redirect to="/login" replace />;
 }
 
+function WorkspaceRoute({ children }: { children: ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#0b1420] text-[#dce8f5]">
+        <LoaderCircle className="h-6 w-6 animate-spin text-[#65b8f8]" />
+      </main>
+    );
+  }
+  if (!user) return <Redirect to="/login" replace />;
+  return <SubscriptionGate>{children}</SubscriptionGate>;
+}
+
+function SubscriptionGate({ children }: { children: ReactNode }) {
+  const { language } = useLanguage();
+  const { data: summary, isLoading, isError } = useGetUpgradeSummary();
+  const [, setLocation] = useLocation();
+
+  if (isLoading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#0b1420] text-[#dce8f5]">
+        <LoaderCircle className="h-6 w-6 animate-spin text-[#65b8f8]" />
+      </main>
+    );
+  }
+
+  if (!isError && summary?.subscription.status === 'expired') {
+    const expiredText = language === 'vi'
+      ? 'Thời gian dùng thử hoặc gói dịch vụ của bạn đã hết hạn.'
+      : 'Your trial or subscription has expired.';
+    const guidance = language === 'vi'
+      ? 'Kích hoạt license key PLUS, PRO hoặc UNLIMITED để tiếp tục dùng TeleCampaign.'
+      : 'Activate a PLUS, PRO, or UNLIMITED license key to continue using TeleCampaign.';
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#f3f7fb] px-4 py-8 text-[#16304a]">
+        <section className="w-full max-w-[500px] rounded-3xl border border-[#dbe6f0] bg-white p-7 text-center shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-10">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#fff4e8] text-[#dc6b19]">
+            <KeyRound className="h-7 w-7" />
+          </span>
+          <h1 className="mt-5 text-2xl font-bold tracking-[-0.035em]">{expiredText}</h1>
+          <p className="mt-3 text-sm leading-6 text-[#66809a]">{guidance}</p>
+          <button
+            type="button"
+            onClick={() => setLocation('/upgrade')}
+            className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5]"
+          >
+            <KeyRound className="h-4 w-4" />
+            {language === 'vi' ? 'Mua / kích hoạt key' : 'Buy / activate key'}
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function AdminRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
   if (isLoading)
@@ -303,16 +364,16 @@ function Router() {
         <Route path="/register" component={RegisterPage} />
         <Route path="/sign-in/*?"><Redirect to="/login" replace /></Route>
         <Route path="/sign-up/*?"><Redirect to="/register" replace /></Route>
-        <Route path="/dashboard" component={() => <ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/telegram-accounts" component={() => <ProtectedRoute><Accounts /></ProtectedRoute>} />
-        <Route path="/dashboard/groups" component={() => <ProtectedRoute><Groups /></ProtectedRoute>} />
-        <Route path="/dashboard/templates" component={() => <ProtectedRoute><Templates /></ProtectedRoute>} />
-        <Route path="/dashboard/campaigns" component={() => <ProtectedRoute><Campaigns /></ProtectedRoute>} />
-        <Route path="/dashboard/proxy" component={() => <ProtectedRoute><ProxyPage /></ProtectedRoute>} />
-        <Route path="/dashboard/calendar" component={() => <ProtectedRoute><Calendar /></ProtectedRoute>} />
-        <Route path="/dashboard/logs" component={() => <ProtectedRoute><Logs /></ProtectedRoute>} />
-        <Route path="/dashboard/account" component={() => <ProtectedRoute><Account /></ProtectedRoute>} />
-        <Route path="/dashboard/settings" component={() => <ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/dashboard" component={() => <WorkspaceRoute><Dashboard /></WorkspaceRoute>} />
+        <Route path="/dashboard/telegram-accounts" component={() => <WorkspaceRoute><Accounts /></WorkspaceRoute>} />
+        <Route path="/dashboard/groups" component={() => <WorkspaceRoute><Groups /></WorkspaceRoute>} />
+        <Route path="/dashboard/templates" component={() => <WorkspaceRoute><Templates /></WorkspaceRoute>} />
+        <Route path="/dashboard/campaigns" component={() => <WorkspaceRoute><Campaigns /></WorkspaceRoute>} />
+        <Route path="/dashboard/proxy" component={() => <WorkspaceRoute><ProxyPage /></WorkspaceRoute>} />
+        <Route path="/dashboard/calendar" component={() => <WorkspaceRoute><Calendar /></WorkspaceRoute>} />
+        <Route path="/dashboard/logs" component={() => <WorkspaceRoute><Logs /></WorkspaceRoute>} />
+        <Route path="/dashboard/account" component={() => <WorkspaceRoute><Account /></WorkspaceRoute>} />
+        <Route path="/dashboard/settings" component={() => <WorkspaceRoute><Settings /></WorkspaceRoute>} />
         <Route path="/upgrade" component={() => <ProtectedRoute><Upgrade /></ProtectedRoute>} />
         <Route path="/admin" component={() => <AdminRoute><AdminDashboardPage /></AdminRoute>} />
         <Route path="/admin/users" component={() => <AdminRoute><AdminUsersPage /></AdminRoute>} />

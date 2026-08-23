@@ -42,7 +42,6 @@ export * from './campaignStatusInput';
 export * from './campaignStatusInputStatus';
 export * from './campaignTemplateMode';
 export * from './createAdminLicenseKeyInput';
-export * from './createAdminLicenseKeyInputPlan';
 export * from './createAdminLicenseKeyResult';
 export * from './createProxyInput';
 export * from './createProxyInputType';

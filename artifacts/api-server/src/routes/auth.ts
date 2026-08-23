@@ -10,7 +10,7 @@ import {
   RegisterAuthBody,
   RegisterAuthResponse,
 } from "@workspace/api-zod";
-import { appUsersTable, authSessionsTable, db } from "@workspace/db";
+import { appUsersTable, authSessionsTable, db, subscriptionsTable } from "@workspace/db";
 import {
   createSessionToken,
   hashPassword,
@@ -29,6 +29,7 @@ import {
 import { requireSession } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
 import { recordActivity } from "../lib/activity";
+import { TRIAL_DURATION_DAYS } from "../lib/subscriptions";
 
 const router: IRouter = Router();
 const MAX_CREDENTIAL_ATTEMPTS = 5;
@@ -157,6 +158,13 @@ router.post("/auth/register", async (req, res): Promise<void> => {
         .insert(appUsersTable)
         .values({ username, usernameNormalized: username, passwordHash })
         .returning({ id: appUsersTable.id, username: appUsersTable.username, role: appUsersTable.role });
+      const trialStartedAt = new Date();
+      await tx.insert(subscriptionsTable).values({
+        ownerUserId: created.id,
+        plan: "plus",
+        startedAt: trialStartedAt,
+        expiresAt: new Date(trialStartedAt.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000),
+      });
       await tx.insert(authSessionsTable).values({
         userId: created.id,
         tokenHash: hashSessionToken(token),

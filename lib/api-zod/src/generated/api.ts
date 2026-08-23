@@ -1197,7 +1197,7 @@ export const createAdminLicenseKeyBodyLabelMax = 120;
 
 
 export const CreateAdminLicenseKeyBody = zod.object({
-  "plan": zod.enum(['pro', 'unlimited']),
+  "plan": zod.enum(['plus', 'pro', 'unlimited']),
   "durationDays": zod.number().min(1).max(createAdminLicenseKeyBodyDurationDaysMax).multipleOf(createAdminLicenseKeyBodyDurationDaysMultipleOf),
   "quantity": zod.number().min(1).max(createAdminLicenseKeyBodyQuantityMax).multipleOf(createAdminLicenseKeyBodyQuantityMultipleOf),
   "label": zod.string().min(1).max(createAdminLicenseKeyBodyLabelMax).optional()

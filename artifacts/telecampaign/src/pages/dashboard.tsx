@@ -11,11 +11,14 @@ import {
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
-import { useGetDashboard } from "@workspace/api-client-react";
+import { useGetDashboard, useGetUpgradeSummary } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 
 export default function Dashboard() {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const { data, isLoading, error } = useGetDashboard();
+  const { data: upgradeSummary } = useGetUpgradeSummary();
+  const [, setLocation] = useLocation();
 
   if (isLoading) {
     return (
@@ -41,9 +44,30 @@ export default function Dashboard() {
   }
 
   const { metrics, adminNotifications, recentCampaigns, recentActivity } = data;
+  const expiresAt = upgradeSummary?.subscription.expiresAt ? new Date(upgradeSummary.subscription.expiresAt) : null;
+  const remainingHours = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000))) : null;
+  const showExpiryNotice = upgradeSummary?.subscription.status === "active" && remainingHours !== null && remainingHours <= 24;
+  const expiryNotice = language === "vi"
+    ? `Thời gian sử dụng còn ${remainingHours} giờ. Hãy mua license key để không bị gián đoạn.`
+    : `${remainingHours} hour${remainingHours === 1 ? "" : "s"} remaining. Buy a license key to avoid interruption.`;
 
   return (
     <AppLayout activePage="dashboard" title={t("Dashboard")}>
+      {showExpiryNotice && (
+        <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#fed7aa] bg-[#fff7ed] p-5 sm:flex-row sm:items-center sm:justify-between" data-testid="subscription-expiry-notice">
+          <div>
+            <p className="font-extrabold text-[#9a3412]">{language === "vi" ? "Sắp hết thời gian dùng thử" : "Your trial is nearly over"}</p>
+            <p className="mt-1 text-sm font-medium text-[#9a3412]">{expiryNotice}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLocation("/upgrade")}
+            className="shrink-0 rounded-xl bg-[#ea580c] px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#c2410c]"
+          >
+            {language === "vi" ? "Mua key" : "Buy key"}
+          </button>
+        </section>
+      )}
       
       {/* Metric Cards Grid */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-8" data-testid="dashboard-metrics">

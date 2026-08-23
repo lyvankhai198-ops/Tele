@@ -88,7 +88,7 @@ import {
   getTelegramAccountAllowance,
   getConfiguredPlanCatalog,
 } from "../lib/subscriptions";
-import { requireAuth } from "../middlewares/authMiddleware";
+import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
 
 const router: IRouter = Router();
@@ -399,6 +399,8 @@ router.post("/upgrade/activate", async (req, res): Promise<void> => {
     subscription: result.subscription,
   }));
 });
+
+router.use(requireActiveSubscription);
 
 router.get("/dashboard", async (req, res): Promise<void> => {
   const ownerUserId = currentUserId(req);

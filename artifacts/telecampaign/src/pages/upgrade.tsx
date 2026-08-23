@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AppLayout, Modal, Toast, StatusBadge } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
@@ -50,6 +51,7 @@ const planTaglines = {
 export default function Upgrade() {
   const { language, t } = useLanguage();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const { data: summary, isLoading, isError } = useGetUpgradeSummary();
   const activateMutation = useActivateLicense();
 
@@ -75,7 +77,7 @@ export default function Upgrade() {
           setLicenseKey("");
           queryClient.invalidateQueries({ queryKey: getGetUpgradeSummaryQueryKey() });
           setToastMessage({ title: t("Activation successful! Dashboard limits have been updated."), type: "success" });
-          setTimeout(() => setActivateSuccess(false), 5000);
+          setTimeout(() => setLocation("/dashboard"), 700);
         },
         onError: (err) => {
           setActivateError(err);
@@ -110,7 +112,8 @@ export default function Upgrade() {
 
   const { plans, subscription, telegramPurchaseUrl } = summary;
   const sortedPlans = [...plans].sort((a, b) => (planOrder[a.code] || 0) - (planOrder[b.code] || 0));
-  const currentPlanLevel = planOrder[subscription.plan] || 0;
+  const subscriptionExpired = subscription.status === "expired";
+  const currentPlanLevel = subscriptionExpired ? 0 : planOrder[subscription.plan] || 0;
   const isForever = !subscription.expiresAt;
 
   return (
@@ -120,7 +123,11 @@ export default function Upgrade() {
         <div className="mb-10 max-w-2xl">
           <h1 className="text-[32px] sm:text-[40px] font-extrabold text-[#0f172a] tracking-tight mb-4 leading-tight">{t("Upgrade plan")}</h1>
           <p className="text-[16px] font-medium text-[#475569] leading-relaxed">
-            {t("Expand account limits and unlock advanced campaign management features. Optimise workflow efficiency with priority systems.")}
+            {subscriptionExpired
+              ? (language === "vi"
+                ? "Thời hạn đã kết thúc. Mua và kích hoạt key PLUS, PRO hoặc UNLIMITED để tiếp tục sử dụng."
+                : "Your access has ended. Buy and activate a PLUS, PRO, or UNLIMITED key to continue.")
+              : t("Expand account limits and unlock advanced campaign management features. Optimise workflow efficiency with priority systems.")}
           </p>
         </div>
 
@@ -149,6 +156,11 @@ export default function Upgrade() {
                   : t("Expires: {date}").replace("{date}", new Date(subscription.expiresAt!).toLocaleDateString())}
               </span>
             </div>
+            {subscriptionExpired && (
+              <p className="mt-4 text-sm font-semibold text-[#c2410c]">
+                {language === "vi" ? "Kích hoạt key để mở lại toàn bộ chức năng workspace." : "Activate a key to restore all workspace features."}
+              </p>
+            )}
           </div>
 
           <div className="relative z-10 w-full md:w-auto shrink-0">
@@ -167,8 +179,8 @@ export default function Upgrade() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-16">
           {sortedPlans.map((plan) => {
             const thisLevel = planOrder[plan.code] || 0;
-            const isCurrent = subscription.plan === plan.code;
-            const isLower = thisLevel < currentPlanLevel;
+            const isCurrent = !subscriptionExpired && subscription.plan === plan.code;
+            const isLower = !subscriptionExpired && thisLevel < currentPlanLevel;
 
             const isPro = plan.code === "pro";
             const isUnlimited = plan.code === "unlimited";
@@ -298,8 +310,8 @@ export default function Upgrade() {
                   <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
                   <span>
                     {localizedErrorMessage(
-                      (activateError as any)?.response?.data?.message
-                        ? new Error((activateError as any).response.data.message)
+                      ((activateError as any)?.response?.data?.error ?? (activateError as any)?.response?.data?.message)
+                        ? new Error((activateError as any).response.data.error ?? (activateError as any).response.data.message)
                         : activateError,
                       language,
                       t("Invalid or already used activation code."),

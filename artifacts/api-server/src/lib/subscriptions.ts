@@ -31,6 +31,7 @@ type PlanCatalog = ReadonlyArray<{
 }>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const TRIAL_DURATION_DAYS = 1;
 
 function isPlanCode(value: string): value is PlanCode {
   return (PLAN_ORDER as readonly string[]).includes(value);
@@ -123,13 +124,13 @@ export async function listAdminLicenseKeys(filters: { status?: AdminLicenseStatu
   return filtered.map((license) => toAdminLicenseRecord(license, usernames));
 }
 
-function generateLicenseKey(plan: Extract<PlanCode, "pro" | "unlimited">): string {
+function generateLicenseKey(plan: PlanCode): string {
   const entropy = randomBytes(18).toString("hex").toUpperCase();
   return `TC-${plan.toUpperCase()}-${entropy.slice(0, 12)}-${entropy.slice(12, 24)}-${entropy.slice(24)}`;
 }
 
 export async function createAdminLicenseKeys(input: {
-  plan: Extract<PlanCode, "pro" | "unlimited">;
+  plan: PlanCode;
   durationDays: number;
   quantity: number;
   label?: string;
@@ -468,10 +469,9 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
 
     const [current] = await tx.select().from(subscriptionsTable)
       .where(eq(subscriptionsTable.ownerUserId, ownerUserId)).limit(1);
-    const currentPlan = current && !current.expiresAt || current && current.expiresAt && current.expiresAt > now
-      ? (isPlanCode(current.plan) ? current.plan : "plus")
-      : "plus";
-    if (PLAN_ORDER.indexOf(license.plan) <= PLAN_ORDER.indexOf(currentPlan)) {
+    const hasActiveSubscription = Boolean(current && (!current.expiresAt || current.expiresAt > now));
+    const currentPlan = hasActiveSubscription && current && isPlanCode(current.plan) ? current.plan : null;
+    if (currentPlan && PLAN_ORDER.indexOf(license.plan) <= PLAN_ORDER.indexOf(currentPlan)) {
       return { ok: false as const, reason: "not_an_upgrade" as const };
     }
 

@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateAdminLicenseKeyInputPlan } from './createAdminLicenseKeyInputPlan';
+import type { PlanCode } from './planCode';
 
 export interface CreateAdminLicenseKeyInput {
-  plan: CreateAdminLicenseKeyInputPlan;
+  plan: PlanCode;
   /**
      * @minimum 1
      * @maximum 3660

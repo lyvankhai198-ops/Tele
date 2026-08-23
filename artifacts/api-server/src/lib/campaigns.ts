@@ -182,6 +182,26 @@ export async function processNextCampaignTarget() {
       }).where(eq(campaignTargetsTable.id, job.target.id));
       return true;
     }
+    const subscription = await getSubscription(job.campaign.ownerUserId);
+    if (subscription.status !== "active") {
+      await db.update(campaignTargetsTable).set({
+        status: "pending",
+        updatedAt: new Date(),
+      }).where(eq(campaignTargetsTable.id, job.target.id));
+      await db.update(campaignsTable).set({
+        status: "paused",
+        updatedAt: new Date(),
+      }).where(eq(campaignsTable.id, job.campaign.id));
+      await recordActivity({
+        ownerUserId: job.campaign.ownerUserId,
+        event: "campaign.paused.subscription_expired",
+        level: "warning",
+        campaignId: job.campaign.id,
+        targetId: job.target.id,
+        message: "Campaign paused because the trial or subscription expired.",
+      });
+      return true;
+    }
     if (!leaseActive) {
       await db.update(campaignTargetsTable).set({
         status: "requires_review",

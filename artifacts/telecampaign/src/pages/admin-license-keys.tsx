@@ -24,11 +24,13 @@ import {
   useUpdateAdminPurchaseSettings,
   getGetAdminPurchaseSettingsQueryKey,
   getListAdminLicenseKeysQueryKey,
-  type CreateAdminLicenseKeyInputPlan,
+  type CreateAdminLicenseKeyInput,
   type LicenseKeyStatus,
   type PlanCode,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+
+type LicenseKeyPlan = CreateAdminLicenseKeyInput["plan"];
 
 const copy = {
   en: {
@@ -240,12 +242,12 @@ export function AdminLicenseKeysPage() {
   // New License Key State
   const [newLicenseData, setNewLicenseData] = useState<{
     keys: string[];
-    plan: CreateAdminLicenseKeyInputPlan;
+    plan: LicenseKeyPlan;
     label: string | null;
   } | null>(null);
 
   // Form State
-  const [formPlan, setFormPlan] = useState<CreateAdminLicenseKeyInputPlan>("pro");
+  const [formPlan, setFormPlan] = useState<LicenseKeyPlan>("pro");
   const [formDuration, setFormDuration] = useState<string>("30");
   const [formQuantity, setFormQuantity] = useState<string>("1");
   const [formLabel, setFormLabel] = useState<string>("");
@@ -611,8 +613,8 @@ export function AdminLicenseKeysPage() {
           <div className="space-y-5">
             <div>
               <label className="mb-2.5 block text-[13px] font-bold text-[#475569]">{text.planLabel}</label>
-              <div className="grid grid-cols-2 gap-3">
-                {(["pro", "unlimited"] as CreateAdminLicenseKeyInputPlan[]).map((plan) => (
+              <div className="grid grid-cols-3 gap-3">
+                {(["plus", "pro", "unlimited"] as LicenseKeyPlan[]).map((plan) => (
                   <label
                     key={plan}
                     className={`flex cursor-pointer items-center justify-center rounded-xl border-2 px-4 py-3 font-bold uppercase tracking-wider text-[13px] transition-all ${

@@ -7,6 +7,7 @@ import {
   SESSION_COOKIE_NAME,
   type SafeAuthUser,
 } from "../lib/auth";
+import { getSubscription } from "../lib/subscriptions";
 
 declare global {
   namespace Express {
@@ -80,4 +81,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   next();
+}
+
+export async function requireActiveSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (!req.userId) {
+    res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+  try {
+    const subscription = await getSubscription(req.userId);
+    if (subscription.status !== "active") {
+      res.status(402).json({
+        error: "Thời gian dùng thử hoặc gói dịch vụ đã hết hạn. Hãy kích hoạt license key để tiếp tục.",
+        code: "SUBSCRIPTION_EXPIRED",
+      });
+      return;
+    }
+    next();
+  } catch (error) {
+    req.log.error({ err: error }, "Unable to verify subscription status");
+    res.status(503).json({ error: "Không thể kiểm tra trạng thái gói dịch vụ." });
+  }
 }

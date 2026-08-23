@@ -824,16 +824,8 @@ export interface AdminLicenseKey {
   revokedByUsername: string | null;
 }
 
-export type CreateAdminLicenseKeyInputPlan = typeof CreateAdminLicenseKeyInputPlan[keyof typeof CreateAdminLicenseKeyInputPlan];
-
-
-export const CreateAdminLicenseKeyInputPlan = {
-  pro: 'pro',
-  unlimited: 'unlimited',
-} as const;
-
 export interface CreateAdminLicenseKeyInput {
-  plan: CreateAdminLicenseKeyInputPlan;
+  plan: PlanCode;
   /**
      * @minimum 1
      * @maximum 3660
