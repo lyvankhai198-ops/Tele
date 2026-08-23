@@ -115,6 +115,7 @@ export default function Upgrade() {
   const subscriptionExpired = subscription.status === "expired";
   const currentPlanLevel = subscriptionExpired ? 0 : planOrder[subscription.plan] || 0;
   const isForever = !subscription.expiresAt;
+  const canActivate = licenseKey.trim().length >= 8;
 
   return (
     <AppLayout activePage="upgrade" title={t("Upgrade plan")}>
@@ -336,8 +337,12 @@ export default function Upgrade() {
               <div className="flex flex-col sm:flex-row gap-3 mt-1">
                 <button
                   type="submit"
-                  disabled={activateMutation.isPending || licenseKey.length < 8}
-                  className="flex flex-1 items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-[#1a2b88] to-[#2847b5] py-4 text-[15px] font-extrabold text-white shadow-[0_10px_22px_rgba(26,43,136,.24)] transition-all hover:from-[#152473] hover:to-[#1a2b88] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={activateMutation.isPending || !canActivate}
+                  className={`flex flex-1 items-center justify-center gap-2.5 rounded-xl py-4 text-[15px] font-extrabold transition-all active:scale-[0.98] ${
+                    canActivate && !activateMutation.isPending
+                      ? "bg-gradient-to-r from-[#2454d6] to-[#3b82f6] text-white shadow-[0_12px_28px_rgba(37,84,214,.38)] ring-2 ring-[#93b4ff]/45 hover:from-[#1d45bd] hover:to-[#2563eb]"
+                      : "cursor-not-allowed bg-[#aeb9dd] text-white/80 shadow-none"
+                  }`}
                   data-testid="button-activate"
                 >
                   {activateMutation.isPending ? (
@@ -353,12 +358,12 @@ export default function Upgrade() {
                     href={telegramPurchaseUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="sm:w-auto w-full px-8 py-4 rounded-xl bg-white border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] hover:text-[#0f172a] transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-2.5 text-[15px]"
+                    className="flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-[#1a2b88] bg-[#1a2b88] px-8 py-4 text-[15px] font-extrabold text-white shadow-[0_10px_22px_rgba(26,43,136,.22)] transition-all hover:border-[#152473] hover:bg-[#152473] active:scale-[0.98] sm:w-auto"
                     data-testid="button-buy-key"
                   >
-                    <CreditCard className="h-5 w-5 text-[#94a3b8]" />
+                    <CreditCard className="h-5 w-5 text-white/90" />
                     {t("Buy key")}
-                    <ExternalLink className="h-4 w-4 text-[#94a3b8]" />
+                    <ExternalLink className="h-4 w-4 text-white/80" />
                   </a>
                 ) : (
                   <button
