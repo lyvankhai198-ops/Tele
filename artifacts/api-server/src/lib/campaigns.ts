@@ -79,14 +79,23 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
   }).from(campaignTargetsTable)
     .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
     .where(eq(campaignTargetsTable.campaignId, campaign.id));
+  const nextPendingByDestination = new Map<string, typeof targets[number]>();
+  for (const row of targets) {
+    if (row.target.status !== "pending" || row.target.lastError || !row.target.nextAttemptAt) continue;
+    const current = nextPendingByDestination.get(row.target.destinationId);
+    if (!current || row.target.nextAttemptAt.getTime() < current.target.nextAttemptAt!.getTime()) {
+      nextPendingByDestination.set(row.target.destinationId, row);
+    }
+  }
+  const errorTargets = targets.filter(({ target }) => Boolean(target.lastError));
+  const waitingTargets = [...nextPendingByDestination.values()];
   return {
     ...campaign,
     targetCount: targets.length,
     destinationIds: [...new Set(targets.map(({ target }) => target.destinationId))],
     sentCount: targets.filter(({ target }) => target.status === "sent").length,
     failedCount: targets.filter(({ target }) => ["failed", "requires_review"].includes(target.status)).length,
-    errors: targets
-      .filter(({ target }) => Boolean(target.lastError))
+    errors: [...errorTargets, ...waitingTargets]
       .map(({ target, destinationTitle }) => ({
         destinationId: target.destinationId,
         destinationTitle,
