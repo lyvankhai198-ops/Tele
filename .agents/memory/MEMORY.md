@@ -6,4 +6,3 @@
 - [Campaign scheduling semantics](campaign-scheduling-semantics.md) — repeat count means full destination rounds; delays are measured in seconds between scheduled deliveries.
 - [Paused campaign edits](paused-campaign-edits.md) — editing a paused campaign preserves confirmed sends and rebuilds only its remaining deliveries.
 - [Shared VPS deployments](shared-vps-deployments.md) — publish workspace changes to GitHub main before the VPS pulls and rebuilds TeleCampaign.
-- [Safe UI refreshes](safe-ui-refreshes.md) — visual redesigns must preserve campaign behavior and keep the VI/EN switch reachable on desktop and mobile.

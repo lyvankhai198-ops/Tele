@@ -91,27 +91,26 @@ export function AppLayout({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#f5f1e9] text-[#17343b] font-sans">
+    <div className="min-h-[100dvh] bg-[#f4f7fb] text-[#0f172a] font-sans">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[244px] flex-col border-r border-[#365960] bg-[#17343b] text-[#d9e3dc] transition-transform duration-300 lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-[#eef2f6] bg-white transition-transform duration-300 lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="flex items-center justify-between border-b border-[#365960] px-5 py-6">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[#eef2f6]">
           <button onClick={() => navigate("/dashboard")} className="flex items-center gap-3 text-left">
-            <span className="grid h-9 w-9 place-items-center rounded-[11px] bg-[#ee876c] text-[#17343b] shadow-[0_5px_0_#b85f4e]">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eff6ff] text-[#1a2b88] shadow-sm">
               <MessageCircle className="h-6 w-6" />
             </span>
             <span>
-              <span className="block text-[14px] font-extrabold tracking-tight text-[#f5f1e9]">TeleCampaign</span>
-              <span className="mt-0.5 block font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-[#88a39e]">{t('Telegram Manager')}</span>
+              <span className="block text-[15px] font-extrabold text-[#0f172a] tracking-tight">Tele Campaign</span>
+              <span className="block text-[11px] font-bold text-[#64748b]">{t('Telegram Manager')}</span>
             </span>
           </button>
-          <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-[#9eb5ad] transition-colors hover:bg-[#24474e] lg:hidden" aria-label={t('Close sidebar')}>
+          <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-[#64748b] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Close sidebar')}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-5 py-7">
-          <div className="mb-3 px-3 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-[#789690]">{t("Workspace")}</div>
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
           {navigation.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
             const Icon = item.icon;
             const selected = activePage === item.key;
@@ -119,28 +118,28 @@ export function AppLayout({
               <button
                 key={item.key}
                 onClick={() => navigate(item.path)}
-                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[12px] font-bold transition-all ${
-                  selected ? "bg-[#31545a] text-[#fff8ed]" : "text-[#9eb5ad] hover:bg-[#24474e] hover:text-[#f5f1e9]"
+                className={`group flex w-full items-center gap-3.5 rounded-xl px-4 py-3.5 text-left text-[14px] font-bold transition-all ${
+                  selected ? "bg-[#eef2fa] text-[#1a2b88]" : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
                 }`}
                 data-testid={`nav-${item.key}`}
               >
-                <Icon className={`h-[17px] w-[17px] ${selected ? "text-[#ee876c]" : "text-[#789690] group-hover:text-[#ee876c]"}`} strokeWidth={selected ? 2.4 : 1.8} />
+                <Icon className={`h-[18px] w-[18px] ${selected ? "text-[#1a2b88]" : "text-[#64748b] group-hover:text-[#1a2b88]"}`} strokeWidth={selected ? 2.5 : 2} />
                 <span>{t(item.label)}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="border-t border-[#365960] p-5">
-          <div className="rounded-2xl border border-[#365960] bg-[#1d4148] p-2.5">
-            <div className="flex items-center gap-2 px-2 pb-2.5 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[#8facaa]">
+        <div className="p-4 border-t border-[#eef2f6]">
+          <div className="border border-[#eef2f6] rounded-2xl p-2.5 bg-[#f8fafc]">
+            <div className="flex items-center gap-2 px-2 pb-2.5 text-[11px] font-extrabold text-[#64748b] uppercase tracking-wider">
               {t("Language")}
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setLanguage("vi")}
-                className={`flex-1 rounded-xl py-2 text-xs font-extrabold transition-all ${
-                  language === "vi" ? "bg-[#f5f1e9] text-[#17343b] shadow-sm" : "text-[#9eb5ad] hover:bg-[#31545a] hover:text-[#f5f1e9]"
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                  language === "vi" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
                 }`}
                 data-testid="language-vi"
               >
@@ -148,8 +147,8 @@ export function AppLayout({
               </button>
               <button
                 onClick={() => setLanguage("en")}
-                className={`flex-1 rounded-xl py-2 text-xs font-extrabold transition-all ${
-                  language === "en" ? "bg-[#f5f1e9] text-[#17343b] shadow-sm" : "text-[#9eb5ad] hover:bg-[#31545a] hover:text-[#f5f1e9]"
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                  language === "en" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
                 }`}
                 data-testid="language-en"
               >
@@ -157,34 +156,33 @@ export function AppLayout({
               </button>
             </div>
           </div>
-          <div className="mb-2 mt-5 text-center font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-[#789690]">TeleCampaign v2.0</div>
+          <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Tele Campaign v2.0</div>
         </div>
       </aside>
 
-      {mobileOpen && <button aria-label="Close navigation overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-[#17343b]/35 backdrop-blur-sm transition-opacity lg:hidden" />}
+      {mobileOpen && <button aria-label="Close navigation overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-[#0f172a]/20 backdrop-blur-sm lg:hidden transition-opacity" />}
       
-      <main className="flex min-h-[100dvh] flex-col lg:pl-[244px]">
-        <header className="sticky top-0 z-20 border-b border-[#ded8cc] bg-[#f5f1e9]/90 backdrop-blur-xl">
-          <div className="flex min-h-[74px] items-center justify-between px-5 sm:px-8">
+      <main className="min-h-[100dvh] lg:pl-[280px] flex flex-col">
+        <header className="sticky top-0 z-20 border-b border-[#eef2f6] bg-white/95 backdrop-blur-xl">
+          <div className="flex min-h-[72px] items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#71817d] transition-colors hover:bg-[#e8e0d3] lg:hidden" aria-label={t('Open menu')}>
+              <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#475569] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Open menu')}>
                 <Menu className="h-6 w-6" />
               </button>
-              <div className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[#71817d]">
-                {t("Workspace")} <span className="mx-2 text-[#c7bdb0]">/</span> <span className="text-[#17343b]">{t(title)}</span>
-              </div>
+              <h1 className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
+              <h1 className="text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight">{t(title)}</h1>
             </div>
             
             <div className="flex items-center gap-4">
               {headerAction}
               {!hideUpgrade && <button
                 onClick={() => setLocation("/upgrade")}
-                className="rounded-xl bg-[#e97961] px-4 py-2.5 text-[12px] font-extrabold text-[#17343b] shadow-sm transition-all hover:bg-[#ee876c] active:scale-95"
+                className="bg-[#1a2b88] hover:bg-[#152473] text-white text-[13px] font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95"
                 data-testid="header-upgrade"
               >
                 {t("Upgrade")}
               </button>}
-              <button onClick={() => void signOut()} className="rounded-xl p-2.5 text-[#71817d] transition-colors hover:bg-[#e8e0d3] hover:text-[#17343b]" aria-label={t('Sign out')} data-testid="header-logout">
+              <button onClick={() => void signOut()} className="rounded-xl p-2.5 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors" aria-label={t('Sign out')} data-testid="header-logout">
                 <LogOut className="h-[22px] w-[22px]" />
               </button>
             </div>
@@ -193,8 +191,8 @@ export function AppLayout({
         
         {banner}
         
-        <div className="flex-1 px-5 py-8 sm:px-8 sm:py-10">
-          <div className="mx-auto max-w-[1370px]">
+        <div className="flex-1 p-4 sm:p-6 lg:p-8">
+          <div className="mx-auto max-w-[1440px]">
             {children}
           </div>
         </div>
@@ -204,16 +202,16 @@ export function AppLayout({
 }
 
 export function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-[#ded8cc] bg-[#fbf8f2] shadow-[0_8px_24px_rgba(50,64,57,0.04)] ${className}`}>{children}</section>;
+  return <section className={`rounded-3xl border border-[#eef2f6] bg-white shadow-sm ${className}`}>{children}</section>;
 }
 
 export function SectionHeader({ eyebrow, title, detail, action }: { eyebrow?: string; title: string; detail?: string; action?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        {eyebrow && <div className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#71817d]">{eyebrow}</div>}
-        <h2 className="text-[23px] font-extrabold tracking-tight text-[#17343b]">{title}</h2>
-        {detail && <p className="mt-1.5 text-[13px] font-medium text-[#71817d]">{detail}</p>}
+        {eyebrow && <div className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#64748b]">{eyebrow}</div>}
+        <h2 className="text-[19px] font-extrabold tracking-tight text-[#0f172a]">{title}</h2>
+        {detail && <p className="mt-1.5 text-[14px] font-medium text-[#475569]">{detail}</p>}
       </div>
       {action}
     </div>
@@ -250,31 +248,31 @@ export function MetricCard({ label, value, change, icon: Icon, tone = "blue" }: 
 }
 
 export function Toast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  return <div className="fixed bottom-6 right-6 z-[70] flex max-w-[calc(100vw-3rem)] items-center gap-3 rounded-xl bg-[#17343b] px-5 py-4 text-[13px] font-bold text-[#f5f1e9] shadow-xl"><span className="h-2.5 w-2.5 rounded-full bg-[#86c89b]" />{message}<button onClick={onDismiss} className="ml-3 text-[#9eb5ad] transition-colors hover:text-[#f5f1e9]" aria-label="Dismiss"><X className="h-4 w-4" /></button></div>;
+  return <div className="fixed bottom-6 right-6 z-[70] flex max-w-[calc(100vw-3rem)] items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white px-5 py-4 text-[14px] font-bold text-[#0f172a] shadow-xl"><span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />{message}<button onClick={onDismiss} className="ml-3 text-[#64748b] hover:text-[#0f172a] transition-colors" aria-label="Dismiss"><X className="h-4 w-4" /></button></div>;
 }
 
 export function Modal({ title, description, children, onClose, wide = false }: { title: string; description?: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-[#17343b]/35 p-4 backdrop-blur-sm"><div className={`max-h-[92dvh] w-full overflow-y-auto rounded-2xl border border-[#ded8cc] bg-[#fbf8f2] shadow-2xl ${wide ? "max-w-2xl" : "max-w-lg"}`}><div className="flex items-start justify-between border-b border-[#e6dfd4] px-6 py-6 sm:px-8"><div><h2 className="text-[19px] font-extrabold text-[#17343b]">{title}</h2>{description && <p className="mt-2 max-w-lg text-[13px] font-medium leading-relaxed text-[#71817d]">{description}</p>}</div><button onClick={onClose} className="rounded-xl p-2 text-[#71817d] transition-colors hover:bg-[#e9dfd2] hover:text-[#17343b]"><X className="h-5 w-5" /></button></div><div className="p-6 sm:p-8">{children}</div></div></div>;
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-[#0f172a]/30 p-4 backdrop-blur-sm"><div className={`max-h-[92dvh] w-full overflow-y-auto rounded-3xl border border-[#eef2f6] bg-white shadow-2xl ${wide ? "max-w-2xl" : "max-w-lg"}`}><div className="flex items-start justify-between border-b border-[#eef2f6] px-6 py-6 sm:px-8"><div><h2 className="text-[19px] font-extrabold text-[#0f172a]">{title}</h2>{description && <p className="mt-2 max-w-lg text-[14px] font-medium text-[#64748b] leading-relaxed">{description}</p>}</div><button onClick={onClose} className="rounded-xl p-2 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors"><X className="h-5 w-5" /></button></div><div className="p-6 sm:p-8">{children}</div></div></div>;
 }
 
 export function Input({ label, value, onChange, placeholder, type = "text", min, max, step }: { label?: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; min?: number; max?: number; step?: number }) {
-  return <label className="block">{label && <span className="mb-2.5 block text-[13px] font-bold text-[#4d625e]">{label}</span>}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} min={min} max={max} step={step} className="w-full rounded-xl border border-[#d9d1c4] bg-[#f5f1e9] px-4 py-3.5 text-[14px] font-semibold text-[#17343b] outline-none transition-all placeholder:text-[#9ba6a0] focus:border-[#d36e59] focus:ring-4 focus:ring-[#d36e59]/10" /></label>;
+  return <label className="block">{label && <span className="mb-2.5 block text-[13px] font-bold text-[#475569]">{label}</span>}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} min={min} max={max} step={step} className="w-full rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3.5 text-[15px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 transition-all" /></label>;
 }
 
 export function PrimaryButton({ children, onClick, type = "button", disabled = false }: { children: ReactNode; onClick?: () => void; type?: "button" | "submit"; disabled?: boolean }) {
-  return <button type={type} disabled={disabled} onClick={onClick} className="inline-flex items-center justify-center gap-2.5 rounded-xl bg-[#e97961] px-5 py-3 text-[13px] font-extrabold text-[#17343b] shadow-sm transition-all hover:bg-[#ee876c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">{children}</button>;
+  return <button type={type} disabled={disabled} onClick={onClick} className="inline-flex items-center justify-center gap-2.5 rounded-2xl bg-[#1a2b88] px-5 py-3 text-[14px] font-extrabold text-white shadow-sm transition-all hover:bg-[#152473] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">{children}</button>;
 }
 
 export function QuietButton({ children, onClick, type = "button" }: { children: ReactNode; onClick?: () => void; type?: "button" | "submit" }) {
-  return <button type={type} onClick={onClick} className="inline-flex items-center justify-center gap-2.5 rounded-xl border border-[#d9d1c4] bg-transparent px-5 py-3 text-[13px] font-extrabold text-[#71817d] transition-all hover:border-[#c9bfb1] hover:bg-[#e9dfd2] hover:text-[#17343b] active:scale-[0.98]">{children}</button>;
+  return <button type={type} onClick={onClick} className="inline-flex items-center justify-center gap-2.5 rounded-2xl border border-[#cbd5e1] bg-white px-5 py-3 text-[14px] font-extrabold text-[#475569] transition-all hover:border-[#94a3b8] hover:bg-[#f8fafc] hover:text-[#0f172a] active:scale-[0.98]">{children}</button>;
 }
 
 export function EmptyState({ icon: Icon, title, detail, action }: { icon: typeof Search; title: string; detail: string; action?: ReactNode }) {
-  return <div className="grid min-h-[220px] place-items-center px-6 py-12 text-center"><span className="mb-5 grid h-16 w-16 place-items-center rounded-3xl border border-[#ded8cc] bg-[#e9dfd2] text-[#d36e59]"><Icon className="h-7 w-7" /></span><h3 className="text-[17px] font-extrabold tracking-tight text-[#17343b]">{title}</h3><p className="mt-2.5 max-w-sm text-[14px] font-medium leading-relaxed text-[#71817d]">{detail}</p>{action && <div className="mt-6">{action}</div>}</div>;
+  return <div className="grid min-h-[220px] place-items-center px-6 py-12 text-center"><span className="mb-5 grid h-16 w-16 place-items-center rounded-3xl bg-[#f8fafc] text-[#64748b] shadow-sm border border-[#eef2f6]"><Icon className="h-7 w-7" /></span><h3 className="text-[17px] font-extrabold text-[#0f172a] tracking-tight">{title}</h3><p className="mt-2.5 max-w-sm text-[14px] font-medium text-[#64748b] leading-relaxed">{detail}</p>{action && <div className="mt-6">{action}</div>}</div>;
 }
 
 export function PageIntro({ kicker, heading, detail, action }: { kicker: string; heading: string; detail: string; action?: ReactNode }) {
-  return <div className="mb-10 flex flex-col gap-5 border-b border-[#d9d1c4] pb-9 lg:flex-row lg:items-end lg:justify-between"><div><div className="mb-3.5 flex items-center gap-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.19em] text-[#d36e59]"><span className="h-1.5 w-1.5 rounded-full bg-[#ee876c]" />{kicker}</div><h1 className="text-[36px] font-extrabold tracking-[-0.05em] text-[#17343b] sm:text-[50px]">{heading}</h1><p className="mt-3.5 max-w-2xl text-[14px] font-medium leading-relaxed text-[#71817d]">{detail}</p></div>{action}</div>;
+  return <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="mb-3.5 flex items-center gap-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[#1a2b88]"><span className="h-2 w-2 rounded-full bg-[#f59e0b]" />{kicker}</div><h1 className="text-[36px] font-extrabold tracking-tight text-[#0f172a] sm:text-[44px]">{heading}</h1><p className="mt-3.5 max-w-2xl text-[16px] font-medium text-[#475569] leading-relaxed">{detail}</p></div>{action}</div>;
 }
 
 export const addIcon = Plus;

@@ -31,8 +31,6 @@ import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 const copy = {
   en: {
     pageTitle: "Campaigns",
-    eyebrow: "Campaign desk",
-    subtitle: "Plan each send with a clear view of its account, approved destinations, message, and schedule.",
     addAriaLabel: "Create campaign",
     searchPlaceholder: "Search by name…",
     statusAll: "All statuses",
@@ -109,8 +107,6 @@ const copy = {
   },
   vi: {
     pageTitle: "Chiến dịch",
-    eyebrow: "Bàn điều hành chiến dịch",
-    subtitle: "Lập kế hoạch cho mỗi lần gửi với tài khoản, điểm đến đã duyệt, nội dung và lịch trình rõ ràng.",
     addAriaLabel: "Tạo chiến dịch",
     searchPlaceholder: "Tìm theo tên...",
     statusAll: "Tất cả trạng thái",
@@ -487,17 +483,9 @@ export default function Campaigns() {
 
   return (
     <AppLayout activePage="campaigns" title={c.pageTitle} hideUpgrade headerAction={
-      <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#e97961] text-[#17343b] shadow-sm transition hover:bg-[#ee876c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
+      <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
     }>
-      <div className="mx-auto max-w-[1060px]">
-        <section className="mb-8 flex flex-col justify-between gap-5 border-b border-[#d9d1c4] pb-8 sm:flex-row sm:items-end">
-          <div>
-            <p className="mb-3 flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.19em] text-[#d36e59]"><span className="h-1.5 w-1.5 rounded-full bg-[#ee876c]" />{c.eyebrow}</p>
-            <h1 className="font-serif text-[38px] font-normal tracking-[-0.045em] text-[#17343b] sm:text-[46px]">{c.pageTitle}</h1>
-            <p className="mt-3 max-w-[620px] text-[13px] font-medium leading-6 text-[#71817d]">{c.subtitle}</p>
-          </div>
-          <button onClick={openNew} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#e97961] px-4 text-[12px] font-extrabold text-[#17343b] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#ee876c]"><Plus className="h-4 w-4" />{c.createCampaignBtn}</button>
-        </section>
+      <div className="mx-auto max-w-[900px]">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#94a3b8]" />

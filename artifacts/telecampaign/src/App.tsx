@@ -39,53 +39,38 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 function AuthShell({ children }: { children: ReactNode }) {
   const { language, setLanguage, t } = useLanguage();
   return (
-    <main className="min-h-screen bg-[#f4efe6] px-4 py-6 text-[#17343b] sm:px-8 sm:py-10">
-      <section className="mx-auto w-full max-w-[1060px]">
-        <header className="mb-7 flex items-center justify-between gap-4 sm:mb-10">
+    <main className="min-h-screen bg-[#f3f7fb] px-4 py-8 text-[#16304a] sm:grid sm:place-items-center sm:p-8">
+      <section className="mx-auto w-full max-w-[440px]">
+        <div className="relative mb-7 flex items-center justify-center gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#e97961] text-[#17343b] shadow-[0_12px_26px_rgba(211,110,89,.22)]">
-              <MessageCircle className="h-6 w-6" strokeWidth={2.2} />
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#1888e8] text-white shadow-[0_10px_30px_rgba(24,136,232,.25)]">
+              <MessageCircle className="h-6 w-6" strokeWidth={2.4} />
             </span>
             <span>
-              <span className="block font-serif text-[20px] font-normal tracking-[-0.04em]">Tele Campaign</span>
-              <span className="mt-0.5 block font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-[#71817d]">{t('Telegram Campaign Manager')}</span>
+              <span className="block text-lg font-bold tracking-[-0.03em]">Tele Campaign</span>
+              <span className="block text-xs text-[#66809a]">{t('Telegram Campaign Manager')}</span>
             </span>
           </div>
-          <div className="flex items-center gap-1 rounded-xl border border-[#d9d1c4] bg-[#fbf8f2] p-1 shadow-sm" aria-label={language === 'vi' ? 'Chọn ngôn ngữ' : 'Choose language'}>
+          <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-[#dbe6f0] bg-white p-1 shadow-sm" aria-label={language === 'vi' ? 'Chọn ngôn ngữ' : 'Choose language'}>
             {(['vi', 'en'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setLanguage(option)}
                 aria-pressed={language === option}
-                className={`rounded-lg px-2.5 py-1.5 font-mono text-[10px] font-bold tracking-wide transition ${
+                className={`rounded-md px-2 py-1 text-[10px] font-extrabold tracking-wide transition ${
                   language === option
-                    ? 'bg-[#17343b] text-[#fff8f1] shadow-sm'
-                    : 'text-[#71817d] hover:bg-[#e9dfd2] hover:text-[#17343b]'
+                    ? 'bg-[#1888e8] text-white shadow-sm'
+                    : 'text-[#7190ab] hover:bg-[#eef6fc] hover:text-[#16304a]'
                 }`}
               >
                 {option.toUpperCase()}
               </button>
             ))}
           </div>
-        </header>
-        <div className="grid items-stretch gap-6 lg:grid-cols-[0.86fr_1.14fr] lg:gap-8">
-          <aside className="relative hidden overflow-hidden rounded-[28px] bg-[#17343b] p-8 text-[#fff8f1] lg:flex lg:flex-col lg:justify-between">
-            <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full border-[18px] border-[#d36e59]/30" />
-            <div className="absolute -bottom-20 -left-16 h-52 w-52 rounded-full border-[24px] border-[#e97961]/20" />
-            <div className="relative">
-              <p className="mb-5 flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[#e97961]"><span className="h-1.5 w-1.5 rounded-full bg-[#e97961]" />{language === 'vi' ? 'Không gian vận hành' : 'Operator workspace'}</p>
-              <h2 className="max-w-[320px] font-serif text-[46px] leading-[1.04] tracking-[-0.055em]">{language === 'vi' ? 'Gửi đúng người. Đúng nhịp.' : 'Send with intent.'}</h2>
-              <p className="mt-5 max-w-[320px] text-[13px] font-medium leading-6 text-[#b8c8bd]">{t('Sign in to securely manage your Telegram accounts and campaigns.')}</p>
-            </div>
-            <div className="relative flex items-center gap-3 border-t border-[#446057] pt-5">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#e97961] text-[#17343b]"><MessageCircle className="h-4 w-4" /></span>
-              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#b8c8bd]">{language === 'vi' ? 'Kiểm soát · Rõ ràng · An toàn' : 'Controlled · Clear · Safe'}</p>
-            </div>
-          </aside>
-          <div className="rounded-[28px] border border-[#d9d1c4] bg-[#fbf8f2] p-6 shadow-[0_20px_60px_rgba(79,61,42,.09)] sm:p-10">
-            {children}
-          </div>
+        </div>
+        <div className="rounded-3xl border border-[#dbe6f0] bg-white p-6 shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-8">
+          {children}
         </div>
       </section>
     </main>
@@ -99,13 +84,13 @@ function Landing() {
   return (
     <AuthShell>
       <div className="text-center">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#d36e59]">TeleCampaign</p>
-        <h1 className="mt-3 font-serif text-[36px] font-normal leading-tight tracking-[-0.05em]">{t('Controlled campaign delivery')}</h1>
-        <p className="mt-4 text-[13px] font-medium leading-6 text-[#71817d]">{t('Sign in to securely manage your Telegram accounts and campaigns.')}</p>
+        <p className="text-sm font-semibold text-[#1888e8]">TeleCampaign</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em]">{t('Controlled campaign delivery')}</h1>
+        <p className="mt-4 text-sm leading-6 text-[#66809a]">{t('Sign in to securely manage your Telegram accounts and campaigns.')}</p>
         <button
           type="button"
           disabled={isLoading}
-          className="mt-7 w-full rounded-xl bg-[#e97961] px-5 py-3 text-[13px] font-extrabold text-[#17343b] shadow-[0_8px_20px_rgba(211,110,89,.18)] transition hover:bg-[#ee876c] disabled:opacity-60"
+          className="mt-7 w-full rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:opacity-60"
           onClick={() => setLocation(user ? '/dashboard' : '/login')}
         >
           {isLoading ? t('Checking…') : user ? t('Go to dashboard') : t('Sign in')}
@@ -127,11 +112,11 @@ function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onCha
 }) {
   return (
     <label className="block">
-       <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-[0.06em] text-[#4d625e]">{label}</span>
-       <span className="flex items-center gap-3 rounded-xl border border-[#d9d1c4] bg-[#fdfaf5] px-3.5 py-3 transition focus-within:border-[#d36e59] focus-within:ring-4 focus-within:ring-[#d36e59]/10">
-         <Icon className="h-[18px] w-[18px] text-[#8b9a92]" />
+      <span className="mb-2 block text-sm font-semibold text-[#28445e]">{label}</span>
+      <span className="flex items-center gap-3 rounded-xl border border-[#ccdbe8] bg-[#fbfdff] px-3.5 py-3 transition focus-within:border-[#1888e8] focus-within:ring-4 focus-within:ring-[#1888e8]/10">
+        <Icon className="h-[18px] w-[18px] text-[#7190ab]" />
         <input
-           className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-[#17343b] outline-none placeholder:text-[#9ba6a0]"
+          className="min-w-0 flex-1 bg-transparent text-sm text-[#16304a] outline-none placeholder:text-[#9aafc0]"
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -139,14 +124,14 @@ function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onCha
           autoComplete={autoComplete}
         />
       </span>
-       {helperText && <span className="mt-2 block text-[11px] leading-5 text-[#71817d]">{helperText}</span>}
+      {helperText && <span className="mt-2 block text-xs leading-5 text-[#7190ab]">{helperText}</span>}
     </label>
   );
 }
 
 function AuthError({ message }: { message: string | null }) {
   return message ? (
-    <p role="alert" className="rounded-xl border border-[#edc6bc] bg-[#fff1ed] px-3.5 py-3 text-[12px] font-semibold text-[#b84c35]">
+    <p role="alert" className="rounded-xl border border-[#ffd0d0] bg-[#fff4f4] px-3.5 py-3 text-sm text-[#bd3434]">
       {message}
     </p>
   ) : null;
@@ -178,10 +163,9 @@ function LoginPage() {
 
   return (
     <AuthShell>
-       <div className="mb-8">
-         <p className="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#d36e59]">{language === 'vi' ? 'Đăng nhập an toàn' : 'Secure sign in'}</p>
-         <h1 className="font-serif text-[38px] font-normal leading-tight tracking-[-0.05em]">{t('Sign in to TeleCampaign')}</h1>
-         <p className="mt-3 max-w-[420px] text-[13px] font-medium leading-6 text-[#71817d]">{t('Enter your credentials to access the dashboard.')}</p>
+      <div className="mb-7 text-center">
+        <h1 className="text-2xl font-bold tracking-[-0.035em]">{t('Sign in to TeleCampaign')}</h1>
+        <p className="mt-2 text-sm leading-6 text-[#6d8499]">{t('Enter your credentials to access the dashboard.')}</p>
       </div>
       <form className="space-y-5" onSubmit={submit}>
         <AuthField
@@ -205,17 +189,17 @@ function LoginPage() {
         <button
           disabled={submitting}
           type="submit"
-           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#e97961] px-5 py-3 text-[13px] font-extrabold text-[#17343b] shadow-[0_8px_20px_rgba(211,110,89,.18)] transition hover:bg-[#ee876c] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {submitting ? t('Signing in…') : t('Sign in')}
         </button>
       </form>
-       <p className="mt-7 text-center text-[13px] font-medium text-[#71817d]">
+      <p className="mt-6 text-center text-sm text-[#66809a]">
         <button
           type="button"
           onClick={() => setLocation('/register')}
-           className="font-extrabold text-[#d36e59] hover:underline"
+          className="font-semibold text-[#147ed8] hover:underline"
         >
           {t('No account yet? Register for free')}
         </button>
@@ -299,7 +283,7 @@ function RegisterPage() {
         <button
           disabled={submitting}
           type="submit"
-           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#e97961] px-5 py-3 text-[13px] font-extrabold text-[#17343b] shadow-[0_8px_20px_rgba(211,110,89,.18)] transition hover:bg-[#ee876c] disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {submitting ? t('Creating account…') : t('Register')}
