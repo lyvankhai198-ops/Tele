@@ -5,6 +5,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { requireTelegramConfiguration } from "./telegram-config";
 import { recordActivity } from "./activity";
+import { resolvePublicProxyAddress } from "./proxy-test";
+import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -29,11 +31,15 @@ type TelegramEntity = {
 export type TelegramCredentials = { apiId: number; apiHash: string };
 export type TelegramLoginUser = { id: string; username: string | null; phone: string | null; name: string | null };
 
-export function createTelegramClient(session = "", credentials?: TelegramCredentials) {
+export function createTelegramClient(session = "", credentials?: TelegramCredentials, proxy?: TelegramProxyConfig) {
   const { apiId, apiHash } = credentials ?? requireTelegramConfiguration();
   return new TelegramClient(new StringSession(session), apiId, apiHash, {
     connectionRetries: 5,
     useWSS: false,
+    ...(proxy ? {
+      proxy: proxy as any,
+      networkSocket: TelegramProxySocket as unknown as typeof import("telegram/extensions/index.js").PromisedNetSockets,
+    } : {}),
   });
 }
 
@@ -52,8 +58,8 @@ export function phoneForAccount(account: typeof telegramAccountsTable.$inferSele
 const savedSession = (client: TelegramClient) => (client.session as unknown as { save: () => string }).save();
 const requiresTwoFactor = (error: unknown) => (error as { errorMessage?: string })?.errorMessage === "SESSION_PASSWORD_NEEDED";
 
-export async function startTelegramPhoneLogin(credentials: TelegramCredentials, phone: string) {
-  const client = createTelegramClient("", credentials);
+export async function startTelegramPhoneLogin(credentials: TelegramCredentials, phone: string, proxy?: TelegramProxyConfig) {
+  const client = createTelegramClient("", credentials, proxy);
   try {
     await client.connect();
     const result = await client.sendCode(credentials, phone);
@@ -73,11 +79,12 @@ export async function confirmTelegramPhoneCode(input: {
   phoneCodeHash: string;
   session: string;
   code: string;
+  proxy?: TelegramProxyConfig;
 }): Promise<
   | { status: "connected"; session: string; user: TelegramLoginUser }
   | { status: "requires_2fa"; session: string }
 > {
-  const client = createTelegramClient(input.session, input.credentials);
+  const client = createTelegramClient(input.session, input.credentials, input.proxy);
   try {
     await client.connect();
     await client.invoke(new Api.auth.SignIn({
@@ -98,8 +105,9 @@ export async function confirmTelegramTwoFactorPassword(input: {
   credentials: TelegramCredentials;
   session: string;
   password: string;
+  proxy?: TelegramProxyConfig;
 }): Promise<{ session: string; user: TelegramLoginUser }> {
-  const client = createTelegramClient(input.session, input.credentials);
+  const client = createTelegramClient(input.session, input.credentials, input.proxy);
   try {
     await client.connect();
     await client.signInWithPassword(input.credentials, {
@@ -197,14 +205,8 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
   if (!account.sessionEncrypted || !account.telegramUserId) {
     throw new Error("Telegram account has not completed authorization");
   }
-  if (account.proxyId) {
-    const [proxy] = await db.select({ id: proxiesTable.id, status: proxiesTable.status })
-      .from(proxiesTable)
-      .where(and(eq(proxiesTable.id, account.proxyId), eq(proxiesTable.ownerUserId, account.ownerUserId)));
-    if (!proxy || proxy.status !== "active") throw new Error("The Telegram account proxy is not active");
-    throw new Error("The assigned Telegram proxy transport is not supported yet; sending was stopped to prevent a direct connection");
-  }
-  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account));
+  const proxy = await getTelegramProxyConfig(account);
+  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy);
   await client.connect();
   try {
     const currentUser = await getCurrentUser(client);
@@ -216,6 +218,25 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     await disconnectQuietly(client);
     throw error;
   }
+}
+
+export async function getTelegramProxyConfig(account: typeof telegramAccountsTable.$inferSelect): Promise<TelegramProxyConfig | undefined> {
+  if (!account.proxyId) return undefined;
+  const [proxy] = await db.select().from(proxiesTable).where(and(
+    eq(proxiesTable.id, account.proxyId),
+    eq(proxiesTable.ownerUserId, account.ownerUserId),
+  ));
+  if (!proxy || proxy.status !== "active") throw new TelegramProxyError("The Telegram account proxy is not active.");
+  const resolved = await resolvePublicProxyAddress(proxy.host);
+  return {
+    type: proxy.type === "socks5" ? "socks5" : "http",
+    host: proxy.host,
+    address: resolved.address,
+    family: resolved.family,
+    port: proxy.port,
+    username: proxy.usernameEncrypted ? decryptSecret(proxy.usernameEncrypted) : undefined,
+    password: proxy.passwordEncrypted ? decryptSecret(proxy.passwordEncrypted) : undefined,
+  };
 }
 
 export async function syncAccountDestinations(accountId: string) {

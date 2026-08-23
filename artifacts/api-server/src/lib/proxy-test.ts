@@ -7,7 +7,7 @@ const TEST_TIMEOUT_MS = 10_000;
 const MAX_HTTP_RESPONSE_BYTES = 8 * 1024;
 
 type ProxyType = "http" | "socks5";
-type ResolvedProxyAddress = { address: string; family: 4 | 6 };
+export type ResolvedProxyAddress = { address: string; family: 4 | 6 };
 
 export type ProxyTestConfig = {
   type: ProxyType;
@@ -73,7 +73,7 @@ function isPublicAddress(address: string, family: number): address is string {
   return family === 4 ? isPublicIpv4(address) : family === 6 ? isPublicIpv6(address) : false;
 }
 
-async function resolvePublicProxyAddress(host: string): Promise<ResolvedProxyAddress> {
+export async function resolvePublicProxyAddress(host: string): Promise<ResolvedProxyAddress> {
   let addresses: Array<{ address: string; family: number }>;
   try {
     addresses = await lookup(host, { all: true, verbatim: true });

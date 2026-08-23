@@ -77,6 +77,7 @@ import {
   confirmTelegramTwoFactorPassword,
   credentialsForAccount,
   encryptSecret,
+  getTelegramProxyConfig,
   listTelegramSavedMessages,
   phoneForAccount,
   startTelegramPhoneLogin,
@@ -215,7 +216,7 @@ async function validateForwardTemplateSource(sourceAccountId: string | null | un
 }
 
 async function startLoginChallenge(account: typeof telegramAccountsTable.$inferSelect) {
-  const login = await startTelegramPhoneLogin(credentialsForAccount(account), phoneForAccount(account));
+  const login = await startTelegramPhoneLogin(credentialsForAccount(account), phoneForAccount(account), await getTelegramProxyConfig(account));
   const expiresAt = new Date(Date.now() + LOGIN_CHALLENGE_TTL_MS);
   await db.update(authChallengesTable).set({ status: "expired" })
     .where(and(
@@ -731,6 +732,7 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
       phoneCodeHash: decryptSecret(reservation.challenge.phoneCodeHashEncrypted),
       session: decryptSecret(reservation.challenge.sessionEncrypted),
       code,
+      proxy: await getTelegramProxyConfig(account),
     });
     if (result.status === "requires_2fa") {
       const [passwordChallenge] = await db.update(authChallengesTable).set({
@@ -792,6 +794,7 @@ router.post("/telegram/accounts/:accountId/login/password", async (req, res): Pr
       credentials: credentialsForAccount(account),
       session: decryptSecret(reservation.challenge.sessionEncrypted),
       password: parsed.data.password,
+      proxy: await getTelegramProxyConfig(account),
     });
     const connectedAccount = await completeTelegramLogin({
       account,
