@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   CheckSquare,
   Eye,
@@ -97,6 +97,10 @@ const copy = {
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
+    detailWaitingTitle: "Waiting to retry",
+    detailWaitingStatus: "Waiting",
+    detailWaitingMessage: "The campaign will retry automatically when the scheduled wait is over.",
+    detailWaitingCountdown: "Retry countdown:",
     detailErrorTitle: "Delivery errors",
     detailErrorEmpty: "No delivery errors recorded.",
     detailErrorAttempts: "attempts",
@@ -171,6 +175,10 @@ const copy = {
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
+    detailWaitingTitle: "Đang chờ thử lại",
+    detailWaitingStatus: "Đang chờ",
+    detailWaitingMessage: "Chiến dịch sẽ tự động thử lại khi hết thời gian chờ.",
+    detailWaitingCountdown: "Đếm ngược lần thử:",
     detailErrorTitle: "Chi tiết lỗi gửi",
     detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
     detailErrorAttempts: "lần thử",
@@ -213,12 +221,41 @@ const emptyForm = (): CampaignForm => ({
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formatSchedule(value: string | null, language: "en" | "vi") {
+function formatSchedule(value: Date | string | null, language: "en" | "vi") {
   if (!value) return "—";
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-US", {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function isWaitingRetry(error: Campaign["errors"][number]) {
+  return error.status === "pending" && Boolean(error.nextAttemptAt);
+}
+
+function formatCountdown(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
+}
+
+function retryTimestamp(value: Date | string | null) {
+  return value ? new Date(value).getTime() : 0;
+}
+
+function RetryCountdown({ nextAttemptAt }: { nextAttemptAt: Date | string }) {
+  const [remaining, setRemaining] = useState(() => retryTimestamp(nextAttemptAt) - Date.now());
+
+  useEffect(() => {
+    const update = () => setRemaining(retryTimestamp(nextAttemptAt) - Date.now());
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [nextAttemptAt]);
+
+  return <span className="font-black tabular-nums">{formatCountdown(remaining)}</span>;
 }
 
 function statusLabel(status: string, c: (typeof copy)["en"] | (typeof copy)["vi"]) {
@@ -646,21 +683,51 @@ export default function Campaigns() {
               {details.templateMode === "forward" ? c.detailForwardNote : details.content}
             </p>
              <div>
-               <h3 className="mb-2 text-[13px] font-extrabold text-[#0f172a]">{c.detailErrorTitle}</h3>
-               {details.errors.length ? (
-                 <div className="space-y-2">
-                   {details.errors.map((error) => (
-                     <div key={`${error.destinationId}-${error.status}`} className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-3 text-[12px] text-[#881337]">
-                       <div className="flex items-start justify-between gap-3">
-                         <strong>{error.destinationTitle}</strong>
-                         <span className="shrink-0 font-bold">{error.attempts} {c.detailErrorAttempts}</span>
+               {(() => {
+                 const waiting = details.errors.filter(isWaitingRetry);
+                 const failures = details.errors.filter((error) => !isWaitingRetry(error));
+                 return (
+                   <>
+                     {waiting.length > 0 && (
+                       <div className="mb-4">
+                         <h3 className="mb-2 text-[13px] font-extrabold text-[#92400e]">{c.detailWaitingTitle}</h3>
+                         <div className="space-y-2">
+                           {waiting.map((error) => (
+                              <div key={`${error.destinationId}-${error.status}-${error.attempts}-${retryTimestamp(error.nextAttemptAt)}`} className="rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3 text-[12px] text-[#92400e]">
+                               <div className="flex items-start justify-between gap-3">
+                                 <strong>{error.destinationTitle}</strong>
+                                 <span className="shrink-0 font-bold">{c.detailWaitingStatus}</span>
+                               </div>
+                               <p className="mt-2 text-[16px]">{c.detailWaitingCountdown} <RetryCountdown nextAttemptAt={error.nextAttemptAt!} /></p>
+                               <p className="mt-1 font-medium">{c.detailWaitingMessage}</p>
+                               {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
+                             </div>
+                           ))}
+                         </div>
                        </div>
-                       <p className="mt-1 break-words font-medium">{error.lastError ?? c.genericError}</p>
-                       {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
-                     </div>
-                   ))}
-                 </div>
-               ) : <p className="rounded-xl bg-[#f8fafc] p-3 text-[13px] font-medium text-[#64748b]">{c.detailErrorEmpty}</p>}
+                     )}
+                     {failures.length > 0 ? (
+                       <div>
+                         <h3 className="mb-2 text-[13px] font-extrabold text-[#be123c]">{c.detailErrorTitle}</h3>
+                         <div className="space-y-2">
+                           {failures.map((error) => (
+                             <div key={`${error.destinationId}-${error.status}-${error.attempts}-${retryTimestamp(error.nextAttemptAt)}`} className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-3 text-[12px] text-[#881337]">
+                               <div className="flex items-start justify-between gap-3">
+                                 <strong>{error.destinationTitle}</strong>
+                                 <span className="shrink-0 font-bold">{error.attempts} {c.detailErrorAttempts}</span>
+                               </div>
+                               <p className="mt-1 break-words font-medium">{error.lastError ?? c.genericError}</p>
+                               {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     ) : waiting.length === 0 ? (
+                       <p className="rounded-xl bg-[#f8fafc] p-3 text-[13px] font-medium text-[#64748b]">{c.detailErrorEmpty}</p>
+                     ) : null}
+                   </>
+                 );
+               })()}
              </div>
           </div>
         </Modal>
