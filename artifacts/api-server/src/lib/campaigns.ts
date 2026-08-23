@@ -193,7 +193,15 @@ export async function processNextCampaignTarget() {
     status: "sending",
     attempts: job.target.attempts + 1,
     updatedAt: now,
-  }).where(and(eq(campaignTargetsTable.id, job.target.id), eq(campaignTargetsTable.status, "pending"))).returning();
+  }).where(and(
+    eq(campaignTargetsTable.id, job.target.id),
+    eq(campaignTargetsTable.status, "pending"),
+    sql`EXISTS (
+      SELECT 1 FROM ${campaignsTable}
+      WHERE ${campaignsTable.id} = ${campaignTargetsTable.campaignId}
+      AND ${campaignsTable.status} IN ('queued', 'running')
+    )`,
+  )).returning();
   if (!claimed) {
     await db.update(telegramAccountsTable).set({ deliveryLeaseUntil: null, deliveryLeaseToken: null, updatedAt: new Date() })
       .where(and(eq(telegramAccountsTable.id, job.destination.accountId), eq(telegramAccountsTable.deliveryLeaseToken, leaseToken)));
