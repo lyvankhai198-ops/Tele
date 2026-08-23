@@ -1,0 +1,24 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "pZy0bF5aonuGz7uJRHDal"
+uri = "file://exports/telecampaign-project.zip"
+type = "unspecified"
+title = "TeleCampaign project source"
+description = "Full TeleCampaign source package with application code, API contract, database schema, configuration, scripts, documentation, and attached assets. Excludes node_modules, build outputs, caches, Git history, and environment/secret files."
+logical_id = "68461d03-c02c-4662-9235-2e2ad5e256c5"
+
+[[outputs]]
+id = "Ab-OW5sEUuWHvmzrT1Ark"
+uri = "file://exports/telecampaign-project.tar.gz"
+type = "unspecified"
+title = "TeleCampaign project source (tar.gz)"
+description = "Alternative single-file archive of the TeleCampaign source, API contract, database schema, configuration, scripts, documentation, and attached assets. Excludes node_modules, build outputs, caches, Git history, and environment/secret files."
+logical_id = "3f8125bc-e357-483d-a861-f828284d4ca9"
+content_hash = "sha256:f55cbab5ffc4e36ddbb24a85c386742becda5022902bc3d8de4a8e3200723bfb"
+size = 25303483
+mtime_ms = 1787496360772
+storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:e50f48d9-f039-4a78-adeb-f4af7ef37b06/3f8125bc-e357-483d-a861-f828284d4ca9/1eddab5d-0aec-4516-a14d-a567c6cb4cfc"
+storage_version_token = "1787496364489599"
+content_type = "application/octet-stream"

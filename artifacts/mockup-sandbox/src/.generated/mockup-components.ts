@@ -7,5 +7,10 @@ export const modules: ModuleMap = {
   "./components/mockups/telecampaign/Dashboard.tsx": () => import("../components/mockups/telecampaign/Dashboard.tsx"),
   "./components/mockups/telecampaign/Groups.tsx": () => import("../components/mockups/telecampaign/Groups.tsx"),
   "./components/mockups/telecampaign/Logs.tsx": () => import("../components/mockups/telecampaign/Logs.tsx"),
-  "./components/mockups/telecampaign/Settings.tsx": () => import("../components/mockups/telecampaign/Settings.tsx")
+  "./components/mockups/telecampaign/Settings.tsx": () => import("../components/mockups/telecampaign/Settings.tsx"),
+  "./components/mockups/telecampaign-current/Current.tsx": () => import("../components/mockups/telecampaign-current/Current.tsx"),
+  "./components/mockups/telecampaign-directions/CampaignStudio.tsx": () => import("../components/mockups/telecampaign-directions/CampaignStudio.tsx"),
+  "./components/mockups/telecampaign-directions/ControlCenter.tsx": () => import("../components/mockups/telecampaign-directions/ControlCenter.tsx"),
+  "./components/mockups/telecampaign-directions/OperationsMap.tsx": () => import("../components/mockups/telecampaign-directions/OperationsMap.tsx"),
+  "./components/mockups/telecampaign-directions/OperationsMapCreateCampaign.tsx": () => import("../components/mockups/telecampaign-directions/OperationsMapCreateCampaign.tsx")
 };

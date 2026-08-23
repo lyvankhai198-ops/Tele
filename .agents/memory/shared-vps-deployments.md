@@ -9,6 +9,18 @@ Keep TeleCampaign isolated from other VPS applications: change only its source d
 
 **How to apply:** Pull and build only the TeleCampaign repository, restart only its dedicated PM2 process, and verify its local health endpoint plus the public HTTPS host afterward.
 
+The user has explicitly confirmed that CheckGPT, AutoOrder, Bot Quà Tặng, Github-Importer2, and all other VPS services or `/var/www` deployments are protected and out of scope.
+
+**Why:** The VPS is shared by multiple unrelated products, and deployment work must not risk their availability.
+
+**How to apply:** Never restart, repair, rebuild, reconfigure, or inspect-mutably any non-TeleCampaign project; limit deployment commands to `/opt/telecampaign` and `telecampaign-api`.
+
+TeleCampaign backup and restore tooling must use the fixed `/etc/telecampaign/api.env` and store backups only below `/var/backups/telecampaign`.
+
+**Why:** Configurable environment-file or backup-directory paths could accidentally select, expose, or delete another shared-VPS project's data.
+
+**How to apply:** Reject overrides for the environment file, canonicalize backup paths under the TeleCampaign-owned root, fence only `telecampaign-api` during restores, and leave it stopped if recovery fails.
+
 The current public HTTPS host for TeleCampaign is `https://tele.khaimmo.shop`.
 
 **Why:** This is the user-confirmed public route for the VPS deployment.
@@ -26,3 +38,9 @@ The VPS API environment must include a valid `SESSION_SECRET` before account cre
 **Why:** Missing encryption configuration can leave health and read-only endpoints working while credential-saving requests fail at runtime.
 
 **How to apply:** Verify only the secret's presence in `/etc/telecampaign/api.env`; never print it. Restart only `telecampaign-api` after changing the file.
+
+The VPS deploys from GitHub `main`, not directly from the workspace task branch.
+
+**Why:** A completed workspace task can be newer than `origin/main`; the VPS will continue serving the old version until GitHub is updated.
+
+**How to apply:** Confirm the remote branch SHA before deployment. Publish the validated source changes to GitHub through the configured integration, then use a fast-forward pull, build both TeleCampaign artifacts, restart only `telecampaign-api`, and verify the public HTTPS health endpoint.
