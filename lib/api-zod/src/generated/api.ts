@@ -526,7 +526,16 @@ export const ListCampaignsResponseItem = zod.object({
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
-  "failedCount": zod.number()
+  "failedCount": zod.number(),
+  "destinationIds": zod.array(zod.string()),
+  "errors": zod.array(zod.object({
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable()
+}))
 })
 export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
 
@@ -597,7 +606,16 @@ export const CreateCampaignResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
-  "failedCount": zod.number()
+  "failedCount": zod.number(),
+  "destinationIds": zod.array(zod.string()),
+  "errors": zod.array(zod.object({
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable()
+}))
 })
 
 
@@ -605,8 +623,38 @@ export const UpdateCampaignStatusParams = zod.object({
   "campaignId": zod.coerce.string()
 })
 
+export const updateCampaignStatusBodyNameMax = 200;
+
+
+export const updateCampaignStatusBodyRepeatCountMax = 300;
+
+export const updateCampaignStatusBodyDelayMinSecondsMin = 0;
+export const updateCampaignStatusBodyDelayMinSecondsMax = 120;
+
+export const updateCampaignStatusBodyDelayMaxSecondsMin = 0;
+export const updateCampaignStatusBodyDelayMaxSecondsMax = 120;
+
+export const updateCampaignStatusBodyRoundDelayMinSecondsMin = 0;
+export const updateCampaignStatusBodyRoundDelayMinSecondsMax = 259200;
+
+export const updateCampaignStatusBodyRoundDelayMaxSecondsMin = 0;
+export const updateCampaignStatusBodyRoundDelayMaxSecondsMax = 259200;
+
+
+
 export const UpdateCampaignStatusBody = zod.object({
-  "status": zod.enum(['draft', 'queued', 'paused', 'cancelled'])
+  "status": zod.enum(['draft', 'queued', 'paused', 'cancelled']).optional(),
+  "name": zod.string().min(1).max(updateCampaignStatusBodyNameMax).optional(),
+  "telegramAccountId": zod.string().optional(),
+  "templateId": zod.string().optional(),
+  "destinationIds": zod.array(zod.string()).min(1).optional(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "timezone": zod.string().optional(),
+  "repeatCount": zod.number().min(1).max(updateCampaignStatusBodyRepeatCountMax).optional(),
+  "delayMinSeconds": zod.number().min(updateCampaignStatusBodyDelayMinSecondsMin).max(updateCampaignStatusBodyDelayMinSecondsMax).optional(),
+  "delayMaxSeconds": zod.number().min(updateCampaignStatusBodyDelayMaxSecondsMin).max(updateCampaignStatusBodyDelayMaxSecondsMax).optional(),
+  "roundDelayMinSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMinSecondsMin).max(updateCampaignStatusBodyRoundDelayMinSecondsMax).optional(),
+  "roundDelayMaxSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMaxSecondsMin).max(updateCampaignStatusBodyRoundDelayMaxSecondsMax).optional()
 })
 
 export const UpdateCampaignStatusResponse = zod.object({
@@ -631,7 +679,16 @@ export const UpdateCampaignStatusResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
-  "failedCount": zod.number()
+  "failedCount": zod.number(),
+  "destinationIds": zod.array(zod.string()),
+  "errors": zod.array(zod.object({
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable()
+}))
 })
 
 
@@ -712,7 +769,16 @@ export const GetDashboardResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
-  "failedCount": zod.number()
+  "failedCount": zod.number(),
+  "destinationIds": zod.array(zod.string()),
+  "errors": zod.array(zod.object({
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable()
+}))
 })),
   "recentActivity": zod.array(zod.object({
   "id": zod.string(),
