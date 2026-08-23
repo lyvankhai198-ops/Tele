@@ -834,6 +834,7 @@ router.delete("/telegram/accounts/:accountId", async (req, res): Promise<void> =
       .where(and(inArray(campaignTargetsTable.destinationId, destinationIds), inArray(campaignTargetsTable.status, ["pending", "sending"])));
     await db.update(campaignTargetsTable).set({
       status: "requires_review",
+      quotaReservedAt: null,
       nextAttemptAt: null,
       lastError: "Telegram account was removed",
       updatedAt: new Date(),
@@ -1274,7 +1275,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   const [campaign] = await db.update(campaignsTable).set({ status: nextStatus, updatedAt: new Date() })
     .where(eq(campaignsTable.id, existing.id)).returning();
   if (nextStatus === "cancelled") {
-    await db.update(campaignTargetsTable).set({ status: "cancelled", updatedAt: new Date() })
+    await db.update(campaignTargetsTable).set({ status: "cancelled", quotaReservedAt: null, updatedAt: new Date() })
       .where(and(eq(campaignTargetsTable.campaignId, campaign.id), inArray(campaignTargetsTable.status, ["pending", "sending"])));
   }
   await recordActivity({

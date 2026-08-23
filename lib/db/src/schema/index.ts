@@ -138,6 +138,7 @@ export const campaignTargetsTable = pgTable("campaign_targets", {
   destinationId: uuid("destination_id").notNull().references(() => destinationsTable.id, { onDelete: "restrict" }),
   status: text("status").notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
+  quotaReservedAt: timestamp("quota_reserved_at", { withTimezone: true }),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
   lastError: text("last_error"),
   sentMessageId: text("sent_message_id"),
