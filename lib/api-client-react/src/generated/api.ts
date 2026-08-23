@@ -25,6 +25,7 @@ import type {
   ActivityLog,
   AdminCampaignStatusInput,
   AdminLicenseKey,
+  AdminLicenseKeySecret,
   AdminOperationCampaign,
   AdminOperationTarget,
   AdminOperations,
@@ -3308,6 +3309,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getRevokeAdminLicenseKeyMutationOptions(options));
     }
+
+export const getGetAdminLicenseKeySecretUrl = (licenseKeyId: string,) => {
+
+
+
+
+  return `/api/admin/license-keys/${licenseKeyId}/secret`
+}
+
+export const getAdminLicenseKeySecret = async (licenseKeyId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminLicenseKeySecret> => {
+
+  return customFetch<AdminLicenseKeySecret>(getGetAdminLicenseKeySecretUrl(licenseKeyId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminLicenseKeySecretQueryKey = (licenseKeyId: string,) => {
+    return [
+    `/api/admin/license-keys/${licenseKeyId}/secret`
+    ] as const;
+    }
+
+
+export const getGetAdminLicenseKeySecretQueryOptions = <TData = Awaited<ReturnType<typeof getAdminLicenseKeySecret>>, TError = ErrorType<void>>(licenseKeyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminLicenseKeySecret>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminLicenseKeySecretQueryKey(licenseKeyId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminLicenseKeySecret>>> = ({ signal }) => getAdminLicenseKeySecret(licenseKeyId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: licenseKeyId !== null && licenseKeyId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminLicenseKeySecret>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminLicenseKeySecretQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminLicenseKeySecret>>>
+export type GetAdminLicenseKeySecretQueryError = ErrorType<void>
+
+
+
+export function useGetAdminLicenseKeySecret<TData = Awaited<ReturnType<typeof getAdminLicenseKeySecret>>, TError = ErrorType<void>>(
+ licenseKeyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminLicenseKeySecret>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminLicenseKeySecretQueryOptions(licenseKeyId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAdminOverviewUrl = () => {
 

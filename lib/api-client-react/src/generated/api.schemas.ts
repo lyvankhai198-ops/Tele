@@ -824,6 +824,14 @@ export interface AdminLicenseKey {
   revokedByUsername: string | null;
 }
 
+export interface AdminLicenseKeySecret {
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  licenseKey: string;
+}
+
 export interface CreateAdminLicenseKeyInput {
   plan: PlanCode;
   /**

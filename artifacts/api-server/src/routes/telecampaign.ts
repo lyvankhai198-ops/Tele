@@ -589,6 +589,7 @@ router.post("/telegram/accounts", async (req, res): Promise<void> => {
   try {
     loginStart = await startLoginChallenge(account);
   } catch (error) {
+    req.log.error({ err: error, accountId: account.id }, "Unable to start Telegram login challenge");
     await db.delete(telegramAccountsTable).where(eq(telegramAccountsTable.id, account.id));
     return void sendError(res, 502, "Không thể gửi mã xác minh Telegram. Hãy kiểm tra API ID, API Hash và số điện thoại.");
   }

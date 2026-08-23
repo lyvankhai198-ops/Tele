@@ -17,6 +17,7 @@ export * from './adminCampaignStatusInput';
 export * from './adminCampaignStatusInputStatus';
 export * from './adminLicenseDistribution';
 export * from './adminLicenseKey';
+export * from './adminLicenseKeySecret';
 export * from './adminNotification';
 export * from './adminOperationAccount';
 export * from './adminOperationCampaign';

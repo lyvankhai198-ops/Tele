@@ -666,6 +666,22 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: License key not found }
         "409": { description: License key is already claimed or revoked }
+  /admin/license-keys/{licenseKeyId}/secret:
+    get:
+      operationId: getAdminLicenseKeySecret
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/LicenseKeyId" }
+      responses:
+        "200":
+          description: Plaintext license key for an authenticated administrator
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminLicenseKeySecret" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: License key not found }
+        "409": { description: Plaintext is unavailable for legacy license keys }
   /admin/overview:
     get:
       operationId: getAdminOverview
@@ -1281,6 +1297,11 @@ components:
         claimedByUsername: { type: ["string", "null"] }
         revokedAt: { type: ["string", "null"], format: date-time }
         revokedByUsername: { type: ["string", "null"] }
+    AdminLicenseKeySecret:
+      type: object
+      required: [licenseKey]
+      properties:
+        licenseKey: { type: string, minLength: 8, maxLength: 128 }
     CreateAdminLicenseKeyInput:
       type: object
       required: [plan, durationDays, quantity]

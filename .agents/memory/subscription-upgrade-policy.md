@@ -1,13 +1,19 @@
 ---
-name: Subscription upgrade policy
-description: Entitlement rules for TeleCampaign license activation and Telegram account capacity.
+name: Subscription access policy
+description: Trial, expiry, renewal, and entitlement rules for TeleCampaign license activation and workspace access.
 ---
 
-License activation is an upward-only tier change: PLUS → PRO → UNLIMITED. A license for the current or a lower tier must be rejected; renewal is a separate future purchase flow, not same-tier redemption. Any unexpired time on the current subscription is retained one-for-one and the redeemed license duration is added after it. Once a timed subscription expires, the effective entitlement is PLUS.
+Every newly registered user begins a one-day PLUS trial. At trial or paid-subscription expiry, the entire workspace must be unavailable, except for the logged-in upgrade/license activation path; delivery workers must pause pending campaigns rather than sending outside the access period.
 
-**Why:** The near-expiry action should lead users toward buying a new key, while same-tier redemption remains unavailable until a separate purchase flow is designed; lower-tier activation would silently remove account capacity and create avoidable data-access risk.
+**Why:** A downgrade to effective PLUS limits after expiry is not sufficient access control: users must not create, change, or send campaign work after their paid access has ended.
 
-**How to apply:** Keep plan-capacity checks server-side at every Telegram account creation path. Reject current-tier and lower-tier claims; accept only strictly higher-tier claims. Implement buying/renewal separately when its purchase policy is approved.
+**How to apply:** Enforce active subscription status server-side on workspace endpoints, preserve access to upgrade/activation, gate the client route for clear guidance, and check the status again in the background delivery worker.
+
+While a subscription is active, activation is an upward-only tier change: PLUS → PRO → UNLIMITED. A key for the current or a lower tier is rejected. After expiry, an available key for PLUS, PRO, or UNLIMITED may restore access; any unexpired time on the current subscription is retained one-for-one and the redeemed key duration is added after it.
+
+**Why:** An expired trial user must be able to buy the entry-level PLUS plan, while active customers must not silently lower account capacity or consume a same-tier key as a renewal.
+
+**How to apply:** Keep plan-capacity checks server-side at every Telegram account creation path. On an active subscription accept only strictly higher-tier claims; when expired accept all valid plan keys and start the paid duration from redemption.
 
 License keys do not have a separate expiry before redemption. Their `durationDays` begins only after a successful activation.
 

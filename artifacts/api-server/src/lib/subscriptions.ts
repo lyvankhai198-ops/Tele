@@ -10,6 +10,7 @@ import {
   campaignsTable,
 } from "@workspace/db";
 import { getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
+import { decryptSecret, encryptSecret } from "./crypto";
 
 export const PLAN_ORDER = ["plus", "pro", "unlimited"] as const;
 export type PlanCode = SystemPlanCode;
@@ -84,6 +85,10 @@ type AdminLicenseRecord = {
   revokedByUsername: string | null;
 };
 
+export type AdminLicenseRevealResult =
+  | { ok: true; licenseKey: string }
+  | { ok: false; reason: "not_found" | "unavailable" };
+
 function licenseStatus(license: typeof licenseKeysTable.$inferSelect): AdminLicenseStatus {
   if (license.revokedAt) return "revoked";
   if (license.claimedAt) return "claimed";
@@ -124,6 +129,20 @@ export async function listAdminLicenseKeys(filters: { status?: AdminLicenseStatu
   return filtered.map((license) => toAdminLicenseRecord(license, usernames));
 }
 
+export async function revealAdminLicenseKey(licenseKeyId: string): Promise<AdminLicenseRevealResult> {
+  const [license] = await db.select({ keyEncrypted: licenseKeysTable.keyEncrypted })
+    .from(licenseKeysTable)
+    .where(eq(licenseKeysTable.id, licenseKeyId))
+    .limit(1);
+  if (!license) return { ok: false, reason: "not_found" };
+  if (!license.keyEncrypted) return { ok: false, reason: "unavailable" };
+  try {
+    return { ok: true, licenseKey: decryptSecret(license.keyEncrypted) };
+  } catch {
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
 function generateLicenseKey(plan: PlanCode): string {
   const entropy = randomBytes(18).toString("hex").toUpperCase();
   return `TC-${plan.toUpperCase()}-${entropy.slice(0, 12)}-${entropy.slice(12, 24)}-${entropy.slice(24)}`;
@@ -143,6 +162,7 @@ export async function createAdminLicenseKeys(input: {
       const licenses = await db.transaction(async (tx) => {
         const created = await tx.insert(licenseKeysTable).values(licenseKeys.map((licenseKey) => ({
           keyHash: licenseKeyHash(licenseKey),
+          keyEncrypted: encryptSecret(licenseKey),
           plan: input.plan,
           durationDays: input.durationDays,
           label: input.label?.trim() || null,

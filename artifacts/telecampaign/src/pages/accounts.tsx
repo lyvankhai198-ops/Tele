@@ -226,7 +226,7 @@ function AccountsDialog({
       document.removeEventListener("keydown", onKeyDown);
       previousFocus?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">

@@ -1228,6 +1228,20 @@ export const RevokeAdminLicenseKeyParams = zod.object({
 export const RevokeAdminLicenseKeyResponse = zod.void()
 
 
+export const GetAdminLicenseKeySecretParams = zod.object({
+  "licenseKeyId": zod.coerce.string()
+})
+
+export const getAdminLicenseKeySecretResponseLicenseKeyMin = 8;
+export const getAdminLicenseKeySecretResponseLicenseKeyMax = 128;
+
+
+
+export const GetAdminLicenseKeySecretResponse = zod.object({
+  "licenseKey": zod.string().min(getAdminLicenseKeySecretResponseLicenseKeyMin).max(getAdminLicenseKeySecretResponseLicenseKeyMax)
+})
+
+
 export const GetAdminOverviewResponse = zod.object({
   "usersTotal": zod.number(),
   "usersNewLast30Days": zod.number(),

@@ -70,6 +70,7 @@ export const subscriptionsTable = pgTable("subscriptions", {
 export const licenseKeysTable = pgTable("license_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
   keyHash: text("key_hash").notNull().unique(),
+  keyEncrypted: text("key_encrypted"),
   plan: text("plan").notNull(),
   durationDays: integer("duration_days").notNull(),
   label: text("label"),

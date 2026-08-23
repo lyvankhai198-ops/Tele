@@ -25,6 +25,8 @@ import {
   UpdateAdminCampaignStatusResponse,
   RetryAdminCampaignTargetParams,
   RetryAdminCampaignTargetResponse,
+  GetAdminLicenseKeySecretParams,
+  GetAdminLicenseKeySecretResponse,
 } from "@workspace/api-zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import {
@@ -45,6 +47,7 @@ import {
   listAdminUsers,
   getAdminUser,
   updateSubscriptionByAdmin,
+  revealAdminLicenseKey,
 } from "../lib/subscriptions";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
@@ -381,6 +384,19 @@ router.get("/admin/license-keys", async (req, res): Promise<void> => {
   if (!parsed.success) return void sendError(res, 400, "Bộ lọc license key không hợp lệ.");
   const licenses = await listAdminLicenseKeys(parsed.data);
   res.json(ListAdminLicenseKeysResponse.parse(licenses));
+});
+
+router.get("/admin/license-keys/:licenseKeyId/secret", async (req, res): Promise<void> => {
+  const parsed = GetAdminLicenseKeySecretParams.safeParse(req.params);
+  if (!parsed.success) return void sendError(res, 400, "License key không hợp lệ.");
+  const outcome = await revealAdminLicenseKey(parsed.data.licenseKeyId);
+  if (!outcome.ok && outcome.reason === "not_found") {
+    return void sendError(res, 404, "Không tìm thấy license key.");
+  }
+  if (!outcome.ok) {
+    return void sendError(res, 409, "License key này được tạo trước khi hỗ trợ sao chép lại.");
+  }
+  res.json(GetAdminLicenseKeySecretResponse.parse(outcome));
 });
 
 router.post("/admin/license-keys", async (req, res): Promise<void> => {
