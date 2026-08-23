@@ -1,7 +1,7 @@
 import { Api, TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
-import { db, destinationsTable, telegramAccountsTable } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { db, destinationsTable, proxiesTable, telegramAccountsTable } from "@workspace/db";
+import { and, eq, isNull } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { requireTelegramConfiguration } from "./telegram-config";
 import { recordActivity } from "./activity";
@@ -130,7 +130,11 @@ function canPostToEntity(entity: TelegramEntity): boolean {
   if (entity.bannedRights?.sendMessages !== undefined) {
     return !entity.bannedRights.sendMessages;
   }
-  return !entity.defaultBannedRights?.sendMessages;
+  if (entity.defaultBannedRights?.sendMessages !== undefined) {
+    return !entity.defaultBannedRights.sendMessages;
+  }
+  // Telegram omits ban rights when a known group has no sending restriction.
+  return true;
 }
 
 type TelegramDestination = {
@@ -140,8 +144,19 @@ type TelegramDestination = {
 };
 
 async function resolveDestinationEntity(client: TelegramClient, destination: TelegramDestination) {
+  const validate = async (inputEntity: any): Promise<any> => {
+    const entity = await client.getEntity(inputEntity as any) as unknown as TelegramEntity;
+    if (telegramId(entity) !== destination.telegramId) {
+      throw new Error(`Telegram username no longer points to "${destination.title}". Sync this account before retrying.`);
+    }
+    if (!canPostToEntity(entity)) {
+      throw new Error(`Telegram posting permission is no longer available for "${destination.title}". Sync this account before retrying.`);
+    }
+    return inputEntity;
+  };
+
   try {
-    return await client.getInputEntity(destination.telegramId);
+    return await validate(await client.getInputEntity(destination.telegramId));
   } catch {
     // Numeric IDs for users do not include the access hash. Loading dialogs
     // gives GramJS the complete entity and refreshes its session cache.
@@ -149,7 +164,7 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
 
   if (destination.username) {
     try {
-      return await client.getInputEntity(destination.username);
+      return await validate(await client.getInputEntity(destination.username));
     } catch {
       // The username may have changed; fall back to the account's dialogs.
     }
@@ -158,7 +173,7 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   for await (const dialog of client.iterDialogs({})) {
     const entity = dialog.entity as unknown as TelegramEntity;
     if (telegramId(entity) === destination.telegramId) {
-      return dialog.inputEntity;
+      return validate(dialog.inputEntity);
     }
   }
 
@@ -167,16 +182,40 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   );
 }
 
-export async function getAccountClient(accountId: string): Promise<{
+export async function getAccountClient(accountId: string, ownerUserId?: string): Promise<{
   client: TelegramClient;
   account: typeof telegramAccountsTable.$inferSelect;
 }> {
-  const [account] = await db.select().from(telegramAccountsTable).where(eq(telegramAccountsTable.id, accountId));
-  if (account?.deletedAt) throw new Error("Telegram account has been deleted");
-  if (!account?.sessionEncrypted) throw new Error("Telegram account has not completed authorization");
+  const accountFilters = [
+    eq(telegramAccountsTable.id, accountId),
+    isNull(telegramAccountsTable.deletedAt),
+  ];
+  if (ownerUserId) accountFilters.push(eq(telegramAccountsTable.ownerUserId, ownerUserId));
+  const [account] = await db.select().from(telegramAccountsTable).where(and(...accountFilters));
+  if (!account) throw new Error("Telegram account not found");
+  if (account.status !== "connected") throw new Error("Telegram account is not connected");
+  if (!account.sessionEncrypted || !account.telegramUserId) {
+    throw new Error("Telegram account has not completed authorization");
+  }
+  if (account.proxyId) {
+    const [proxy] = await db.select({ id: proxiesTable.id, status: proxiesTable.status })
+      .from(proxiesTable)
+      .where(and(eq(proxiesTable.id, account.proxyId), eq(proxiesTable.ownerUserId, account.ownerUserId)));
+    if (!proxy || proxy.status !== "active") throw new Error("The Telegram account proxy is not active");
+    throw new Error("The assigned Telegram proxy transport is not supported yet; sending was stopped to prevent a direct connection");
+  }
   const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account));
   await client.connect();
-  return { client, account };
+  try {
+    const currentUser = await getCurrentUser(client);
+    if (currentUser.id !== account.telegramUserId) {
+      throw new Error("Telegram session identity does not match the saved account");
+    }
+    return { client, account };
+  } catch (error) {
+    await disconnectQuietly(client);
+    throw error;
+  }
 }
 
 export async function syncAccountDestinations(accountId: string) {
@@ -257,12 +296,11 @@ export async function listTelegramSavedMessages(accountId: string) {
   }
 }
 
-export async function sendTelegramMessage(accountId: string, destinationId: string, content: string) {
-  const { client } = await getAccountClient(accountId);
+export async function sendTelegramMessage(accountId: string, destinationId: string, content: string, ownerUserId: string) {
+  const { client } = await getAccountClient(accountId, ownerUserId);
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
-    if (!destination.canPost) throw new Error("Telegram posting permission is not available for this destination");
     const entity = await resolveDestinationEntity(client, destination);
     const sent = await client.sendMessage(entity, { message: content });
     return String((sent as any).id ?? "");
@@ -271,15 +309,18 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
   }
 }
 
-export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string) {
-  const { client } = await getAccountClient(accountId);
+export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
+  const { client } = await getAccountClient(accountId, ownerUserId);
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
-    if (!destination.canPost) throw new Error("Telegram posting permission is not available for this destination");
     const entity = await resolveDestinationEntity(client, destination);
+    const numericSourceMessageId = Number(sourceMessageId);
+    if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
+      throw new Error("The saved Telegram message ID is invalid");
+    }
     const messages = await client.forwardMessages(entity, {
-      messages: Number(sourceMessageId),
+      messages: numericSourceMessageId,
       fromPeer: "me",
     });
     return String((messages[0] as any)?.id ?? "");
