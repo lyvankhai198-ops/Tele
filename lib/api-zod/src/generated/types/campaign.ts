@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignTargetError } from './campaignTargetError';
 import type { CampaignTemplateMode } from './campaignTemplateMode';
 
 export interface Campaign {
@@ -36,4 +37,6 @@ export interface Campaign {
   targetCount: number;
   sentCount: number;
   failedCount: number;
+  destinationIds: string[];
+  errors: CampaignTargetError[];
 }
