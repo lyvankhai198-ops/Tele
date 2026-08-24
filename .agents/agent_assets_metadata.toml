@@ -22,11 +22,3 @@ mtime_ms = 1787496360772
 storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:e50f48d9-f039-4a78-adeb-f4af7ef37b06/3f8125bc-e357-483d-a861-f828284d4ca9/1eddab5d-0aec-4516-a14d-a567c6cb4cfc"
 storage_version_token = "1787496364489599"
 content_type = "application/octet-stream"
-
-[[outputs]]
-id = "XSjvQcooP9EDHpL7rnLl6"
-uri = "file://artifacts/telecampaign-guide/public/audio/bg_music.mp3"
-type = "audio"
-title = "TeleCampaign guide background music"
-description = "Generated music: Corporate motivational instrumental background music scoring a concise B2B SaaS customer onboarding video. Warm electronic pulse, clean synth arpeggios, subtle marimba accents, 104 B…"
-logical_id = "5f0de040-a8e6-4263-af22-8a9b7ff0f9e7"

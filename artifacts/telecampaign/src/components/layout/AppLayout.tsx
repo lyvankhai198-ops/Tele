@@ -31,7 +31,6 @@ export type PageKey =
   | "campaigns"
   | "calendar"
   | "logs"
-  | "guide"
   | "settings"
   | "templates"
   | "proxy"
@@ -52,7 +51,6 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "campaigns", label: "Campaigns", icon: Megaphone, path: "/dashboard/campaigns" },
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
-  { key: "guide", label: "Hướng dẫn", icon: CircleHelp, path: "/dashboard/guide" },
   { key: "admin-overview", label: "Admin center", icon: ShieldCheck, path: "/admin", adminOnly: true },
   { key: "admin-notifications", label: "Admin notifications", icon: Bell, path: "/admin/notifications", adminOnly: true },
   { key: "admin-users", label: "User management", icon: UsersRound, path: "/admin/users", adminOnly: true },

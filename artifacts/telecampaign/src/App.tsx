@@ -33,7 +33,6 @@ import AdminUsersPage from '@/pages/admin-users';
 import AdminLicenseKeysPage from '@/pages/admin-license-keys';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
-import Guide from '@/pages/guide';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -398,7 +397,6 @@ function Router() {
         <Route path="/dashboard/proxy" component={() => <WorkspaceRoute><ProxyPage /></WorkspaceRoute>} />
         <Route path="/dashboard/calendar" component={() => <WorkspaceRoute><Calendar /></WorkspaceRoute>} />
         <Route path="/dashboard/logs" component={() => <WorkspaceRoute><Logs /></WorkspaceRoute>} />
-        <Route path="/dashboard/guide" component={() => <WorkspaceRoute><Guide /></WorkspaceRoute>} />
         <Route path="/dashboard/account" component={() => <WorkspaceRoute><Account /></WorkspaceRoute>} />
         <Route path="/dashboard/settings" component={() => <WorkspaceRoute><Settings /></WorkspaceRoute>} />
         <Route path="/upgrade" component={() => <ProtectedRoute><Upgrade /></ProtectedRoute>} />
