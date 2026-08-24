@@ -33,6 +33,12 @@ The TeleCampaign Vite production build requires both its runtime port and root b
 
 **How to apply:** Supply the dedicated API port and a root base path when building the frontend on the VPS, then build the API and restart only the TeleCampaign process.
 
+On the shared VPS, run pnpm commands with `--dir /opt/telecampaign`.
+
+**Why:** An unqualified pnpm command can discover the parent workspace and target identically named packages from unrelated projects, including their databases.
+
+**How to apply:** Prefix every TeleCampaign pnpm build or schema command with `pnpm --dir /opt/telecampaign`; stop immediately if output names another project path.
+
 The VPS API environment must include a valid `SESSION_SECRET` before account credentials or other encrypted values can be saved.
 
 **Why:** Missing encryption configuration can leave health and read-only endpoints working while credential-saving requests fail at runtime.

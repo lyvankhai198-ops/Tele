@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   CreateCampaignBody,
   CreateCampaignResponse,
@@ -454,6 +454,7 @@ router.get("/storage/admin-notifications/:notificationId/media", async (req, res
 
 router.get("/dashboard", async (req, res): Promise<void> => {
   const ownerUserId = currentUserId(req);
+  const now = new Date();
   const dayStart = sql`date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh'`;
   const [
     [telegramAccounts],
@@ -487,7 +488,15 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     db.select().from(activityLogsTable).where(eq(activityLogsTable.ownerUserId, ownerUserId))
       .orderBy(desc(activityLogsTable.createdAt)).limit(8),
     db.select().from(adminNotificationsTable)
-      .orderBy(desc(adminNotificationsTable.createdAt)).limit(30),
+      .where(and(
+        or(
+          eq(adminNotificationsTable.status, "published"),
+          and(eq(adminNotificationsTable.status, "scheduled"), lte(adminNotificationsTable.scheduledAt, now)),
+        ),
+        or(isNull(adminNotificationsTable.expiresAt), gt(adminNotificationsTable.expiresAt, now)),
+      ))
+      .orderBy(desc(sql`coalesce(${adminNotificationsTable.publishedAt}, ${adminNotificationsTable.scheduledAt}, ${adminNotificationsTable.createdAt})`))
+      .limit(8),
   ]);
 
   res.json(GetDashboardResponse.parse({
@@ -501,7 +510,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     },
     recentCampaigns: await Promise.all(recentCampaignRows.map(campaignSummary)),
     recentActivity,
-    adminNotifications: adminNotificationRows.filter((notification) => isNotificationActive(notification)).slice(0, 8).map(adminNotificationResponse),
+    adminNotifications: adminNotificationRows.filter((notification) => isNotificationActive(notification)).map(adminNotificationResponse),
   }));
 });
 

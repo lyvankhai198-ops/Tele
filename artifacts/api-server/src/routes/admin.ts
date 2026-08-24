@@ -37,7 +37,7 @@ import {
   RequestAdminNotificationUploadUrlBody,
   RequestAdminNotificationUploadUrlResponse,
 } from "@workspace/api-zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import {
   adminNotificationsTable,
   activityLogsTable,
@@ -96,13 +96,43 @@ function notificationInputError(data: {
   expiresAt?: Date | null;
 }): string | null {
   if (!data.title.trim()) return "Tiêu đề thông báo không được để trống.";
-  if (data.mediaPath && !data.mediaPath.startsWith("/objects/")) return "Đường dẫn media không hợp lệ.";
+  if (data.mediaPath && !objectStorageService.isAdminNotificationMediaPath(data.mediaPath)) return "Đường dẫn media không hợp lệ.";
   if (data.mediaType && !["image", "video"].includes(data.mediaType)) return "Loại media không được hỗ trợ.";
   if (data.mediaSize !== null && data.mediaSize !== undefined && (!Number.isInteger(data.mediaSize) || data.mediaSize < 1 || data.mediaSize > 52_428_800)) {
     return "Dung lượng media phải từ 1 byte đến 50 MB.";
   }
   if (data.scheduledAt && data.expiresAt && data.expiresAt <= data.scheduledAt) return "Thời điểm hết hạn phải sau thời điểm phát.";
   return null;
+}
+
+async function notificationMediaError(data: {
+  mediaPath?: string | null;
+  mediaType?: "image" | "video" | null;
+  mediaSize?: number | null;
+}): Promise<string | null> {
+  if (!data.mediaPath) return null;
+  if (!data.mediaType || !data.mediaSize) return "Thông tin media không đầy đủ.";
+  try {
+    const verified = await objectStorageService.verifyAdminNotificationMedia(data.mediaPath);
+    if (verified.mediaType !== data.mediaType || verified.size !== data.mediaSize) {
+      return "Media tải lên không khớp với loại hoặc dung lượng đã khai báo.";
+    }
+    return null;
+  } catch {
+    return "Không thể xác thực media đã tải lên.";
+  }
+}
+
+async function deleteUnusedNotificationMedia(mediaPath: string | null, req: any): Promise<void> {
+  if (!mediaPath || !objectStorageService.isAdminNotificationMediaPath(mediaPath)) return;
+  const [{ references }] = await db.select({ references: count() }).from(adminNotificationsTable)
+    .where(eq(adminNotificationsTable.mediaPath, mediaPath));
+  if (references !== 0) return;
+  try {
+    await objectStorageService.deleteAdminNotificationMedia(mediaPath);
+  } catch (error) {
+    req.log.warn({ err: error, mediaPath }, "Unable to delete unused notification media");
+  }
 }
 
 function notificationDbValues(data: {
@@ -139,7 +169,7 @@ router.post("/admin/notifications/upload-url", async (req, res): Promise<void> =
   const parsed = RequestAdminNotificationUploadUrlBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Ảnh/video không hợp lệ hoặc vượt quá dung lượng 50 MB.");
   try {
-    const upload = await objectStorageService.createObjectEntityUpload();
+    const upload = await objectStorageService.createAdminNotificationUpload();
     res.json(RequestAdminNotificationUploadUrlResponse.parse({
       uploadURL: upload.uploadURL,
       objectPath: upload.objectPath,
@@ -155,6 +185,8 @@ router.post("/admin/notifications", async (req, res): Promise<void> => {
   if (!parsed.success) return void sendError(res, 400, "Thông tin thông báo không hợp lệ.");
   const error = notificationInputError(parsed.data);
   if (error) return void sendError(res, 400, error);
+  const mediaError = await notificationMediaError(parsed.data);
+  if (mediaError) return void sendError(res, 400, mediaError);
   const [notification] = await db.insert(adminNotificationsTable).values(
     notificationDbValues({ ...parsed.data, createdBy: req.userId! }),
   ).returning();
@@ -172,19 +204,24 @@ router.patch("/admin/notifications/:notificationId", async (req, res): Promise<v
   const params = UpdateAdminNotificationParams.safeParse(req.params);
   const parsed = UpdateAdminNotificationBody.safeParse(req.body);
   if (!params.success || !parsed.success) return void sendError(res, 400, "Thông tin thông báo không hợp lệ.");
-  const error = notificationInputError(parsed.data);
-  if (error) return void sendError(res, 400, error);
   const [existing] = await db.select().from(adminNotificationsTable)
     .where(eq(adminNotificationsTable.id, params.data.notificationId)).limit(1);
   if (!existing) return void sendError(res, 404, "Không tìm thấy thông báo.");
+  const nextData = {
+    ...parsed.data,
+    mediaPath: parsed.data.mediaPath === undefined ? existing.mediaPath : parsed.data.mediaPath,
+    mediaType: parsed.data.mediaType === undefined ? existing.mediaType as "image" | "video" | null : parsed.data.mediaType,
+    mediaName: parsed.data.mediaName === undefined ? existing.mediaName : parsed.data.mediaName,
+    mediaSize: parsed.data.mediaSize === undefined ? existing.mediaSize : parsed.data.mediaSize,
+  };
+  const error = notificationInputError(nextData);
+  if (error) return void sendError(res, 400, error);
+  if (parsed.data.mediaPath !== undefined) {
+    const mediaError = await notificationMediaError(nextData);
+    if (mediaError) return void sendError(res, 400, mediaError);
+  }
   const [notification] = await db.update(adminNotificationsTable)
-    .set(notificationDbValues({
-      ...parsed.data,
-      mediaPath: parsed.data.mediaPath === undefined ? existing.mediaPath : parsed.data.mediaPath,
-      mediaType: parsed.data.mediaType === undefined ? existing.mediaType as "image" | "video" | null : parsed.data.mediaType,
-      mediaName: parsed.data.mediaName === undefined ? existing.mediaName : parsed.data.mediaName,
-      mediaSize: parsed.data.mediaSize === undefined ? existing.mediaSize : parsed.data.mediaSize,
-    }))
+    .set(notificationDbValues(nextData))
     .where(eq(adminNotificationsTable.id, params.data.notificationId))
     .returning();
   await recordActivity({
@@ -194,6 +231,7 @@ router.patch("/admin/notifications/:notificationId", async (req, res): Promise<v
     message: "Updated an admin notification",
     metadata: { notificationId: notification.id, status: notification.status },
   });
+  if (existing.mediaPath !== notification.mediaPath) await deleteUnusedNotificationMedia(existing.mediaPath, req);
   res.json(UpdateAdminNotificationResponse.parse(adminNotificationResponse(notification)));
 });
 
@@ -202,7 +240,7 @@ router.delete("/admin/notifications/:notificationId", async (req, res): Promise<
   if (!params.success) return void sendError(res, 400, "Thông báo không hợp lệ.");
   const [notification] = await db.delete(adminNotificationsTable)
     .where(eq(adminNotificationsTable.id, params.data.notificationId))
-    .returning({ id: adminNotificationsTable.id });
+    .returning({ id: adminNotificationsTable.id, mediaPath: adminNotificationsTable.mediaPath });
   if (!notification) return void sendError(res, 404, "Không tìm thấy thông báo.");
   await recordActivity({
     ownerUserId: req.userId!,
@@ -211,6 +249,7 @@ router.delete("/admin/notifications/:notificationId", async (req, res): Promise<
     message: "Deleted an admin notification",
     metadata: { notificationId: notification.id },
   });
+  await deleteUnusedNotificationMedia(notification.mediaPath, req);
   res.status(204).end();
 });
 
