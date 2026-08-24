@@ -94,14 +94,15 @@ export function AppLayout({
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-[#eef2f6] bg-white transition-transform duration-300 lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#eef2f6]">
-          <button onClick={() => navigate("/dashboard")} className="flex items-center gap-3 text-left">
+        <div className="flex items-center justify-between px-4 py-5 border-b border-[#eef2f6]">
+          <button onClick={() => navigate("/dashboard")} className="flex min-w-0 flex-1 items-center gap-3 text-left">
             <img src="/icon.png" alt="" className="h-10 w-10 shrink-0 object-contain" />
+            <span className="min-w-0 whitespace-nowrap text-[17px] font-bold tracking-[-0.02em] text-[#1a2b88] lg:hidden">Campaign Manager</span>
             <span className="hidden lg:block">
               <span className="block text-[15px] font-extrabold text-[#0f172a] tracking-tight">Telegram Campaign Manager</span>
             </span>
           </button>
-          <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-[#64748b] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Close sidebar')}>
+          <button onClick={() => setMobileOpen(false)} className="shrink-0 rounded-lg p-2 text-[#64748b] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Close sidebar')}>
             <X className="h-5 w-5" />
           </button>
         </div>
