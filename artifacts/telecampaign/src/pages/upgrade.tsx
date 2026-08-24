@@ -116,6 +116,19 @@ export default function Upgrade() {
   const currentPlanLevel = subscriptionExpired ? 0 : planOrder[subscription.plan] || 0;
   const isForever = !subscription.expiresAt;
   const canActivate = licenseKey.trim().length >= 8;
+  const activationErrorMessage = (() => {
+    const error = activateError as any;
+    const payload = error?.data ?? error?.response?.data;
+    const serverMessage =
+      typeof payload?.error === "string"
+        ? payload.error
+        : typeof payload?.message === "string"
+          ? payload.message
+          : null;
+    if (serverMessage) return serverMessage;
+    if (error?.status === 409) return t("Invalid or already used activation code.");
+    return localizedErrorMessage(activateError, language, t("Invalid or already used activation code."));
+  })();
 
   return (
     <AppLayout activePage="upgrade" title={t("Upgrade plan")}>
@@ -311,15 +324,7 @@ export default function Upgrade() {
                   role="alert"
                 >
                   <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                  <span>
-                    {localizedErrorMessage(
-                      ((activateError as any)?.response?.data?.error ?? (activateError as any)?.response?.data?.message)
-                        ? new Error((activateError as any).response.data.error ?? (activateError as any).response.data.message)
-                        : activateError,
-                      language,
-                      t("Invalid or already used activation code."),
-                    )}
-                  </span>
+                  <span>{activationErrorMessage}</span>
                 </div>
               )}
 
