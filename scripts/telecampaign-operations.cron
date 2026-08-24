@@ -1,0 +1,6 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# TeleCampaign only: daily protected PostgreSQL dump and frequent local health check.
+17 2 * * * root /opt/telecampaign/scripts/backup-telecampaign.sh >> /var/log/telecampaign-backup.log 2>&1
+*/5 * * * * root /opt/telecampaign/scripts/telecampaign-healthcheck.sh >> /var/log/telecampaign-health.log 2>&1

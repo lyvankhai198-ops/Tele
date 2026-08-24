@@ -4,7 +4,7 @@ umask 077
 
 ENV_FILE="/etc/telecampaign/api.env"
 BACKUP_ROOT="/var/backups/telecampaign"
-BACKUP_DIR="${TELECAMPAIGN_BACKUP_DIR:-$BACKUP_ROOT}"
+BACKUP_DIR="$BACKUP_ROOT"
 RETENTION_DAYS="${TELECAMPAIGN_BACKUP_RETENTION_DAYS:-14}"
 
 if [[ ! -r "$ENV_FILE" ]]; then

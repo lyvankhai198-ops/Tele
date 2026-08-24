@@ -379,15 +379,10 @@ export async function processNextCampaignTarget() {
       return true;
     }
     if (!leaseActive) {
-      await db.update(campaignTargetsTable).set({
-        status: "requires_review",
-        quotaReservedAt: null,
-        lastError: "Account delivery lease was lost before sending; manual review is required.",
-        updatedAt: new Date(),
-      }).where(and(
-        eq(campaignTargetsTable.id, job.target.id),
-        eq(campaignTargetsTable.status, "sending"),
-      ));
+      await markTargetForReview(
+        job.target.id,
+        "Account delivery lease was lost before sending; manual review is required.",
+      );
       return true;
     }
     const delivery = await withOwnerDeliveryLock(job.campaign.ownerUserId, async () => {

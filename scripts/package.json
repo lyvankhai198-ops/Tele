@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "test:campaign-safety": "tsx ../artifacts/api-server/src/lib/campaign-policy.test.ts",
+    "test:telegram-proxy": "tsx ../artifacts/api-server/src/lib/telegram-proxy-socket.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

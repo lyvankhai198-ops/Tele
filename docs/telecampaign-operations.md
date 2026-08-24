@@ -22,9 +22,13 @@ Create an encrypted-permission database dump owned by the current operator:
 /opt/telecampaign/scripts/backup-telecampaign.sh
 ```
 
-Backups are stored in `/var/backups/telecampaign` by default and files older than 14 days are removed. Set `TELECAMPAIGN_BACKUP_DIR` or `TELECAMPAIGN_BACKUP_RETENTION_DAYS` only for the command being run.
+Backups are stored only in `/var/backups/telecampaign` and files older than 14 days are removed. `TELECAMPAIGN_BACKUP_DIR` is intentionally ignored; `TELECAMPAIGN_BACKUP_RETENTION_DAYS` may be set only for a one-off retention adjustment.
 
 The backup and restore scripts always read `/etc/telecampaign/api.env`; they intentionally reject environment-file overrides so another VPS project's database cannot be selected by mistake.
+
+## Scheduled operations
+
+Install `/opt/telecampaign/scripts/telecampaign-operations.cron` as `/etc/cron.d/telecampaign-operations` with mode `0644`. It runs only the dedicated backup and local health-check scripts; it does not restart PM2 or operate on any other VPS project.
 
 ## Restore
 
