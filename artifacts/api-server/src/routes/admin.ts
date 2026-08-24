@@ -298,25 +298,9 @@ router.patch("/admin/campaigns/:campaignId", async (req, res): Promise<void> => 
   const params = UpdateAdminCampaignStatusParams.safeParse(req.params);
   const body = UpdateAdminCampaignStatusBody.safeParse(req.body);
   if (!params.success || !body.success) return void sendError(res, 400, "Trạng thái campaign không hợp lệ.");
-  const campaign = await db.transaction(async (tx) => {
-    const now = new Date();
-    const [updated] = await tx.update(campaignsTable).set({ status: body.data.status, updatedAt: now })
-      .where(eq(campaignsTable.id, params.data.campaignId))
-      .returning();
-    if (!updated) return undefined;
-
-    if (body.data.status === "paused") {
-      await tx.update(campaignTargetsTable).set({
-        status: "pending",
-        quotaReservedAt: null,
-        updatedAt: now,
-      }).where(and(
-        eq(campaignTargetsTable.campaignId, updated.id),
-        eq(campaignTargetsTable.status, "sending"),
-      ));
-    }
-    return updated;
-  });
+  const [campaign] = await db.update(campaignsTable).set({ status: body.data.status, updatedAt: new Date() })
+    .where(eq(campaignsTable.id, params.data.campaignId))
+    .returning();
   if (!campaign) return void sendError(res, 404, "Không tìm thấy campaign.");
   const targets = await db.select({ status: campaignTargetsTable.status }).from(campaignTargetsTable)
     .where(eq(campaignTargetsTable.campaignId, campaign.id));
