@@ -1,0 +1,29 @@
+kind = "video"
+previewPath = "/telecampaign-guide/"
+title = "TeleCampaign — Hướng dẫn sử dụng"
+description = "Video hướng dẫn tiếng Việt cho khách hàng TeleCampaign, mô tả an toàn luồng từ đăng nhập đến tạo chiến dịch đầu tiên bằng dữ liệu demo."
+version = "1.0.0"
+id = "artifacts/telecampaign-guide"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/telecampaign-guide/" ]
+localPort = 18159
+
+[services.development]
+run = "pnpm --filter @workspace/telecampaign-guide run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/telecampaign-guide", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/telecampaign-guide/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18159"
+BASE_PATH = "/telecampaign-guide/"
+videoAspectRatio = "16:9"
