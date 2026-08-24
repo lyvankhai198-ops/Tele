@@ -1,0 +1,65 @@
+Tích hợp icon app mới vào project hiện tại.
+
+ICON:
+
+* Sử dụng đúng hình icon tôi vừa cung cấp, không tự thiết kế lại.
+* Icon có nền xanh navy/blue gradient, biểu tượng campaign với các node người dùng và mũi tên ở giữa.
+* Không sử dụng icon Telegram/paper-plane của Telegram làm logo chính.
+* Không thêm chữ vào icon.
+
+YÊU CẦU TÍCH HỢP:
+
+1. Thêm icon vào project dưới dạng asset chuẩn, ví dụ:
+    * public/icon.png
+    * public/favicon.png
+    * các kích thước cần thiết cho PWA/mobile nếu project đang hỗ trợ PWA.
+2. Thay favicon hiện tại bằng icon mới.
+3. Nếu project có PWA:
+    * cập nhật manifest.json/web manifest
+    * name: Telegram Campaign Manager
+    * short_name: Campaign
+    * sử dụng icon mới cho các kích thước cần thiết
+    * đảm bảo maskable icon nếu cần
+    * theme_color phù hợp với giao diện xanh navy/blue hiện tại
+    * background_color phù hợp.
+4. Nếu project có màn hình loading/splash:
+    * sử dụng icon mới ở giữa splash screen.
+    * thiết kế splash đồng bộ với giao diện hiện tại.
+    * không làm splash quá nặng hoặc gây chậm thời gian mở app.
+5. Nếu project có sidebar/header:
+    * sử dụng icon mới làm logo ứng dụng.
+    * Desktop: hiển thị icon + tên “Telegram Campaign Manager”.
+    * Mobile: ưu tiên chỉ hiển thị icon để tiết kiệm diện tích.
+    * Không làm thay đổi bố cục responsive hiện tại.
+6. Tối ưu cho cả iPhone và Android:
+    * icon phải hiển thị sắc nét trên màn hình Retina/High DPI.
+    * đảm bảo rounded corner không bị double-rounded khi hệ điều hành tự bo góc.
+    * kiểm tra kích thước icon trên màn hình nhỏ.
+    * không để icon bị méo hoặc crop mất phần biểu tượng.
+7. Nếu project hiện tại đã có logo/icon cũ:
+    * thay thế toàn bộ nơi đang sử dụng logo cũ bằng icon mới.
+    * tìm cả favicon, manifest, navbar, sidebar, login page, loading page và các nơi liên quan.
+    * không để sót logo cũ.
+
+QUAN TRỌNG:
+
+* Không thay đổi database.
+* Không thay đổi API.
+* Không thay đổi authentication.
+* Không thay đổi campaign worker.
+* Không thay đổi Telegram logic.
+* Không thay đổi business logic.
+* Chỉ chỉnh phần branding/icon/UI cần thiết để tích hợp icon.
+* Không tạo thêm chức năng không liên quan.
+
+Sau khi hoàn thành:
+
+1. Chạy project.
+2. Kiểm tra không có lỗi build.
+3. Kiểm tra favicon.
+4. Kiểm tra responsive trên mobile width khoảng 375px và 430px.
+5. Kiểm tra desktop.
+6. Nếu có PWA thì kiểm tra manifest và icon loading.
+7. Nếu phát hiện lỗi do thay đổi icon/UI, tự sửa nhưng không được ảnh hưởng đến chức năng hiện tại.
+
+Nếu project đang dùng một framework hoặc cấu trúc asset khác, hãy tự xác định cách tích hợp phù hợp thay vì tạo cấu trúc mới không cần thiết.

@@ -28,6 +28,7 @@ import Logs from '@/pages/logs';
 import Settings from '@/pages/settings';
 import Upgrade from '@/pages/upgrade';
 import AdminDashboardPage from '@/pages/admin-dashboard';
+import AdminNotificationsPage from '@/pages/admin-notifications';
 import AdminUsersPage from '@/pages/admin-users';
 import AdminLicenseKeysPage from '@/pages/admin-license-keys';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
@@ -400,6 +401,7 @@ function Router() {
         <Route path="/dashboard/settings" component={() => <WorkspaceRoute><Settings /></WorkspaceRoute>} />
         <Route path="/upgrade" component={() => <ProtectedRoute><Upgrade /></ProtectedRoute>} />
         <Route path="/admin" component={() => <AdminRoute><AdminDashboardPage /></AdminRoute>} />
+        <Route path="/admin/notifications" component={() => <AdminRoute><AdminNotificationsPage /></AdminRoute>} />
         <Route path="/admin/users" component={() => <AdminRoute><AdminUsersPage /></AdminRoute>} />
         <Route path="/admin/license-keys" component={() => <AdminRoute><AdminLicenseKeysPage /></AdminRoute>} />
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />

@@ -36,6 +36,7 @@ export type PageKey =
   | "proxy"
   | "upgrade"
   | "admin-overview"
+  | "admin-notifications"
   | "admin-users"
   | "license-keys"
   | "admin-system-settings"
@@ -51,6 +52,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
   { key: "admin-overview", label: "Admin center", icon: ShieldCheck, path: "/admin", adminOnly: true },
+  { key: "admin-notifications", label: "Admin notifications", icon: Bell, path: "/admin/notifications", adminOnly: true },
   { key: "admin-users", label: "User management", icon: UsersRound, path: "/admin/users", adminOnly: true },
   { key: "license-keys", label: "Admin license keys", icon: ShieldCheck, path: "/admin/license-keys", adminOnly: true },
   { key: "admin-system-settings", label: "System settings", icon: Settings2, path: "/admin/system-settings", adminOnly: true },

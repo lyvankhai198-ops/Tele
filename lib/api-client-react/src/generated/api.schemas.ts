@@ -569,12 +569,125 @@ export interface DashboardMetricSummary {
   failedToday: number;
 }
 
+export type AdminNotificationStatus = typeof AdminNotificationStatus[keyof typeof AdminNotificationStatus];
+
+
+export const AdminNotificationStatus = {
+  draft: 'draft',
+  scheduled: 'scheduled',
+  published: 'published',
+  expired: 'expired',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminNotificationMediaType = typeof AdminNotificationMediaType[keyof typeof AdminNotificationMediaType] | null;
+
+
+export const AdminNotificationMediaType = {
+  image: 'image',
+  video: 'video',
+} as const;
+
 export interface AdminNotification {
   id: string;
   title: string;
   body: string;
-  publishedAt: string;
+  status: AdminNotificationStatus;
+  /** @nullable */
+  mediaUrl: string | null;
+  /** @nullable */
+  mediaType: AdminNotificationMediaType;
+  /** @nullable */
+  mediaName: string | null;
+  /** @nullable */
+  mediaSize: number | null;
+  /** @nullable */
+  scheduledAt: string | null;
+  /** @nullable */
+  publishedAt: string | null;
+  /** @nullable */
+  expiresAt: string | null;
+  /** @nullable */
+  createdBy: string | null;
   createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * @nullable
+ */
+export type AdminNotificationInputMediaType = typeof AdminNotificationInputMediaType[keyof typeof AdminNotificationInputMediaType] | null;
+
+
+export const AdminNotificationInputMediaType = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface AdminNotificationInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /** @maxLength 5000 */
+  body?: string;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  mediaPath?: string | null;
+  /** @nullable */
+  mediaType?: AdminNotificationInputMediaType;
+  /**
+     * @maxLength 255
+     * @nullable
+     */
+  mediaName?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 52428800
+     * @nullable
+     */
+  mediaSize?: number | null;
+  /** @nullable */
+  scheduledAt?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+}
+
+export type AdminNotificationUploadInputContentType = typeof AdminNotificationUploadInputContentType[keyof typeof AdminNotificationUploadInputContentType];
+
+
+export const AdminNotificationUploadInputContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+  'image/gif': 'image/gif',
+  'video/mp4': 'video/mp4',
+  'video/webm': 'video/webm',
+  'video/quicktime': 'video/quicktime',
+} as const;
+
+export interface AdminNotificationUploadInput {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 52428800
+     */
+  size: number;
+  contentType: AdminNotificationUploadInputContentType;
+}
+
+export interface AdminNotificationUpload {
+  uploadURL: string;
+  objectPath: string;
 }
 
 export interface DashboardSummary {

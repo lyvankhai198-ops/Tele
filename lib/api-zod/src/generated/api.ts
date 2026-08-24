@@ -783,8 +783,17 @@ export const GetDashboardResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
-  "publishedAt": zod.coerce.date(),
-  "createdAt": zod.coerce.date()
+  "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
+  "mediaName": zod.string().nullable(),
+  "mediaSize": zod.number().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 
@@ -1284,6 +1293,138 @@ export const GetAdminOverviewResponse = zod.object({
   "campaignsTotal": zod.number(),
   "campaignsQueued": zod.number(),
   "campaignsFailed": zod.number()
+})
+
+
+export const ListAdminNotificationsResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
+  "mediaName": zod.string().nullable(),
+  "mediaSize": zod.number().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListAdminNotificationsResponse = zod.array(ListAdminNotificationsResponseItem)
+
+
+export const createAdminNotificationBodyTitleMax = 200;
+
+export const createAdminNotificationBodyBodyDefault = ``;
+export const createAdminNotificationBodyBodyMax = 5000;
+
+export const createAdminNotificationBodyMediaPathMax = 500;
+
+export const createAdminNotificationBodyMediaNameMax = 255;
+
+export const createAdminNotificationBodyMediaSizeMax = 52428800;
+
+
+
+export const CreateAdminNotificationBody = zod.object({
+  "title": zod.string().min(1).max(createAdminNotificationBodyTitleMax),
+  "body": zod.string().max(createAdminNotificationBodyBodyMax).default(createAdminNotificationBodyBodyDefault),
+  "mediaPath": zod.string().max(createAdminNotificationBodyMediaPathMax).nullish(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullish(),
+  "mediaName": zod.string().max(createAdminNotificationBodyMediaNameMax).nullish(),
+  "mediaSize": zod.number().min(1).max(createAdminNotificationBodyMediaSizeMax).nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})
+
+export const CreateAdminNotificationResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
+  "mediaName": zod.string().nullable(),
+  "mediaSize": zod.number().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateAdminNotificationParams = zod.object({
+  "notificationId": zod.coerce.string()
+})
+
+export const updateAdminNotificationBodyTitleMax = 200;
+
+export const updateAdminNotificationBodyBodyDefault = ``;
+export const updateAdminNotificationBodyBodyMax = 5000;
+
+export const updateAdminNotificationBodyMediaPathMax = 500;
+
+export const updateAdminNotificationBodyMediaNameMax = 255;
+
+export const updateAdminNotificationBodyMediaSizeMax = 52428800;
+
+
+
+export const UpdateAdminNotificationBody = zod.object({
+  "title": zod.string().min(1).max(updateAdminNotificationBodyTitleMax),
+  "body": zod.string().max(updateAdminNotificationBodyBodyMax).default(updateAdminNotificationBodyBodyDefault),
+  "mediaPath": zod.string().max(updateAdminNotificationBodyMediaPathMax).nullish(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullish(),
+  "mediaName": zod.string().max(updateAdminNotificationBodyMediaNameMax).nullish(),
+  "mediaSize": zod.number().min(1).max(updateAdminNotificationBodyMediaSizeMax).nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})
+
+export const UpdateAdminNotificationResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
+  "mediaName": zod.string().nullable(),
+  "mediaSize": zod.number().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteAdminNotificationParams = zod.object({
+  "notificationId": zod.coerce.string()
+})
+
+export const DeleteAdminNotificationResponse = zod.void()
+
+
+export const requestAdminNotificationUploadUrlBodyNameMax = 255;
+
+export const requestAdminNotificationUploadUrlBodySizeMax = 52428800;
+
+
+
+export const RequestAdminNotificationUploadUrlBody = zod.object({
+  "name": zod.string().min(1).max(requestAdminNotificationUploadUrlBodyNameMax),
+  "size": zod.number().min(1).max(requestAdminNotificationUploadUrlBodySizeMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime'])
+})
+
+export const RequestAdminNotificationUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string()
 })
 
 

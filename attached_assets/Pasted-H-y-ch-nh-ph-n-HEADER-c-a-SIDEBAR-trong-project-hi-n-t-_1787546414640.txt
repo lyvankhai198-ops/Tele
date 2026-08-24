@@ -1,0 +1,134 @@
+Hãy chỉnh phần HEADER của SIDEBAR trong project hiện tại.
+
+MỤC TIÊU:
+Thêm tên thương hiệu “Campaign Manager” vào đúng khoảng trắng trong HEADER sidebar mobile như trong ảnh tôi gửi.
+
+VỊ TRÍ CHÍNH XÁC:
+Khoảng trắng cần chỉnh là khu vực HEADER màu trắng nằm:
+
+* Ngay bên phải ICON APP hiện tại.
+* Ngay bên trái nút “X” đóng sidebar.
+* Nằm phía trên menu “Bảng điều khiển”.
+* Đây chính là khoảng trắng lớn được tôi khoanh đỏ trong ảnh.
+
+BỐ CỤC MONG MUỐN:
+
+[ ICON APP ]    Campaign Manager                         [ X ]
+
+Tất cả phải nằm trên CÙNG MỘT HÀNG.
+
+CHI TIẾT:
+
+1. ICON APP
+
+* Giữ nguyên icon app hiện tại.
+* Không thay đổi kích thước hoặc hình ảnh icon nếu không cần thiết.
+* Icon nằm bên trái HEADER.
+
+2. CHỮ
+    Thêm chính xác:
+
+Campaign Manager
+
+Thiết kế:
+
+* Font sans-serif hiện đại.
+* Phong cách premium / modern SaaS.
+* Font-weight: 650–700.
+* Font-size khoảng 17–19px trên mobile.
+* Màu xanh navy/xanh dương đồng bộ với giao diện.
+* Có thể dùng gradient xanh rất nhẹ nếu phù hợp.
+* Không dùng font cách điệu.
+* Không in nghiêng.
+* Không thêm icon Telegram.
+* Không thêm slogan.
+* Không thêm chữ khác.
+
+3. NÚT ĐÓNG
+
+* Giữ nguyên nút X hiện tại.
+* Nút X nằm phía bên phải HEADER.
+* Không để chữ “Campaign Manager” đè lên hoặc sát nút X.
+* Nút X vẫn phải dễ bấm trên mobile.
+
+4. CĂN CHỈNH
+    HEADER phải được căn theo chiều dọc:
+
+ICON APP
+CAMPAIGN MANAGER
+NÚT X
+
+→ cả 3 thành phần nằm giữa cùng một trục dọc.
+
+Khoảng cách nên cân đối:
+
+* Icon → chữ: khoảng 12–16px.
+* Chữ → nút X: tự co giãn theo chiều rộng màn hình.
+* Header có padding trái/phải hợp lý.
+
+5. RESPONSIVE MOBILE
+    Phải kiểm tra ít nhất:
+
+* iPhone 375px.
+* iPhone 390px.
+* iPhone 430px.
+* Android khoảng 360–412px.
+
+Nếu màn hình nhỏ:
+
+* Không để “Campaign Manager” xuống dòng.
+* Không để chữ bị cắt.
+* Không để chữ đè vào nút X.
+* Có thể giảm font-size nhẹ hoặc dùng flex để tự co giãn.
+* Không làm icon bị co méo.
+
+6. DESKTOP
+    Nếu sidebar desktop cũng dùng cùng component:
+
+* Giữ bố cục desktop hiện tại.
+* Có thể hiển thị “Campaign Manager” bên cạnh icon.
+* Không làm sidebar desktop rộng thêm một cách bất thường.
+* Không phá responsive hiện tại.
+
+7. KHÔNG ĐƯỢC THAY ĐỔI
+    Chỉ chỉnh HEADER sidebar.
+
+Không thay đổi:
+
+* Dashboard.
+* Tài khoản.
+* Tài khoản Telegram.
+* Nhóm.
+* Mẫu tin nhắn.
+* Chiến dịch.
+* Proxy.
+* Nhật ký.
+* Admin center.
+* User management.
+* Language selector.
+* Database.
+* API.
+* Authentication.
+* Campaign worker.
+* Telegram logic.
+* Các chức năng backend khác.
+
+8. KIỂM TRA SAU KHI SỬA
+    Sau khi chỉnh:
+
+* Chạy project.
+* Kiểm tra build không lỗi.
+* Mở sidebar trên mobile.
+* Kiểm tra HEADER đúng bố cục:
+    [ICON] Campaign Manager [X]
+* Kiểm tra không có horizontal overflow.
+* Kiểm tra không bị che bởi Dynamic Island/notch.
+* Kiểm tra nút X vẫn hoạt động.
+* Kiểm tra sidebar mở/đóng vẫn hoạt động bình thường.
+
+QUAN TRỌNG:
+Không tự thiết kế một vị trí mới cho chữ.
+
+Hãy đặt “Campaign Manager” ĐÚNG VÀO KHOẢNG TRỐNG HEADER mà tôi đã khoanh đỏ trong ảnh tham chiếu.
+
+Nếu CSS/component hiện tại đã có cấu trúc HEADER, hãy chỉnh trực tiếp cấu trúc hiện tại thay vì tạo thêm một HEADER khác.

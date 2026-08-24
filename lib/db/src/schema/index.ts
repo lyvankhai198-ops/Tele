@@ -175,8 +175,16 @@ export const messageTemplatesTable = pgTable("message_templates", {
 export const adminNotificationsTable = pgTable("admin_notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
-  body: text("body").notNull(),
-  publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+  body: text("body").notNull().default(""),
+  mediaPath: text("media_path"),
+  mediaType: text("media_type"),
+  mediaName: text("media_name"),
+  mediaSize: integer("media_size"),
+  status: text("status").notNull().default("published"),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

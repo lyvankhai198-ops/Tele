@@ -1,4 +1,5 @@
-import { 
+import type { CSSProperties } from "react";
+import {
   Bell, 
   FileText, 
   LayoutGrid, 
@@ -11,12 +12,18 @@ import {
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
-import { useGetDashboard, useGetUpgradeSummary } from "@workspace/api-client-react";
+import { getGetDashboardQueryKey, useGetDashboard, useGetUpgradeSummary } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 
 export default function Dashboard() {
   const { language, t } = useLanguage();
-  const { data, isLoading, error } = useGetDashboard();
+  const { data, isLoading, error } = useGetDashboard({
+    query: {
+      queryKey: getGetDashboardQueryKey(),
+      refetchInterval: 60_000,
+      refetchOnWindowFocus: true,
+    },
+  });
   const { data: upgradeSummary } = useGetUpgradeSummary();
   const [, setLocation] = useLocation();
 
@@ -93,10 +100,28 @@ export default function Dashboard() {
             {adminNotifications.length > 0 ? (
               <div className="space-y-7">
                 {adminNotifications.map((notice) => (
-                  <div key={notice.id} className="text-[14px] text-[#0f172a]" data-testid={`notice-${notice.id}`}>
-                    <div className="font-extrabold mb-1.5 text-[#0f172a]">{t("Update on")} {formatNoticeDate(notice.publishedAt)} :</div>
-                    <div className="whitespace-pre-line leading-relaxed text-[#334155] font-medium">{notice.body}</div>
-                  </div>
+                  <article key={notice.id} className="overflow-hidden rounded-2xl border border-[#dbe6f0] bg-white text-[14px] text-[#0f172a] shadow-sm" data-testid={`notice-${notice.id}`}>
+                    {notice.mediaUrl && notice.mediaType === "image" && (
+                      <img src={notice.mediaUrl} alt={notice.title} className="max-h-80 w-full object-cover" />
+                    )}
+                    {notice.mediaUrl && notice.mediaType === "video" && (
+                      <video src={notice.mediaUrl} className="max-h-80 w-full bg-slate-950 object-contain" controls preload="metadata" />
+                    )}
+                    <div className="p-4 sm:p-5">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-extrabold text-[#0f172a]">{notice.title}</h3>
+                        <span className="text-[11px] font-bold text-[#64748b]">{t("Update on")} {formatNoticeDate(notice.publishedAt ?? notice.scheduledAt ?? notice.createdAt)}</span>
+                      </div>
+                      {notice.body && (
+                        <div className="overflow-hidden rounded-lg border border-[#e2e8f0] bg-[#f8fafc] py-2" tabIndex={0} aria-label={notice.body}>
+                          <div className="admin-notice-marquee flex w-max whitespace-nowrap text-[#334155] font-semibold" style={{ "--marquee-duration": `${Math.max(12, Math.min(42, notice.body.length / 4))}s` } as CSSProperties}>
+                            <span className="pr-16">{notice.body}</span>
+                            <span className="pr-16" aria-hidden="true">{notice.body}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </article>
                 ))}
               </div>
             ) : (

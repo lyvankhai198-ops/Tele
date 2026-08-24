@@ -5,11 +5,30 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminNotificationMediaType } from './adminNotificationMediaType';
+import type { AdminNotificationStatus } from './adminNotificationStatus';
 
 export interface AdminNotification {
   id: string;
   title: string;
   body: string;
-  publishedAt: Date;
+  status: AdminNotificationStatus;
+  /** @nullable */
+  mediaUrl: string | null;
+  /** @nullable */
+  mediaType: AdminNotificationMediaType;
+  /** @nullable */
+  mediaName: string | null;
+  /** @nullable */
+  mediaSize: number | null;
+  /** @nullable */
+  scheduledAt: Date | null;
+  /** @nullable */
+  publishedAt: Date | null;
+  /** @nullable */
+  expiresAt: Date | null;
+  /** @nullable */
+  createdBy: string | null;
   createdAt: Date;
+  updatedAt: Date;
 }

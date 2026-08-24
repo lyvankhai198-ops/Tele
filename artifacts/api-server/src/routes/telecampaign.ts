@@ -95,8 +95,11 @@ import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddl
 import { getSystemSettings } from "../lib/system-settings";
 import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
+import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
+import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const objectStorageService = new ObjectStorageService();
 const sendError = (res: any, status: number, error: string) => {
   res.status(status).json({ error });
 };
@@ -430,6 +433,25 @@ router.post("/upgrade/activate", async (req, res): Promise<void> => {
 
 router.use(requireActiveSubscription);
 
+router.get("/storage/admin-notifications/:notificationId/media", async (req, res): Promise<void> => {
+  const [notification] = await db.select().from(adminNotificationsTable)
+    .where(eq(adminNotificationsTable.id, req.params.notificationId)).limit(1);
+  if (!notification?.mediaPath || (!isNotificationActive(notification) && req.authUser?.role !== "admin")) {
+    sendError(res, 404, "Media không tồn tại.");
+    return;
+  }
+  try {
+    res.redirect(302, await objectStorageService.getObjectEntityDownloadURL(notification.mediaPath));
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      sendError(res, 404, "Media không tồn tại.");
+      return;
+    }
+    req.log.error({ err: error, notificationId: notification.id }, "Unable to serve notification media");
+    sendError(res, 500, "Không thể tải media.");
+  }
+});
+
 router.get("/dashboard", async (req, res): Promise<void> => {
   const ownerUserId = currentUserId(req);
   const dayStart = sql`date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh'`;
@@ -442,7 +464,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     [failedToday],
     recentCampaignRows,
     recentActivity,
-    adminNotifications,
+    adminNotificationRows,
   ] = await Promise.all([
     db.select({ value: count() }).from(telegramAccountsTable).where(and(eq(telegramAccountsTable.ownerUserId, ownerUserId), isNull(telegramAccountsTable.deletedAt))),
     db.select({ value: count() }).from(destinationsTable)
@@ -465,8 +487,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     db.select().from(activityLogsTable).where(eq(activityLogsTable.ownerUserId, ownerUserId))
       .orderBy(desc(activityLogsTable.createdAt)).limit(8),
     db.select().from(adminNotificationsTable)
-      .where(lte(adminNotificationsTable.publishedAt, new Date()))
-      .orderBy(desc(adminNotificationsTable.publishedAt)).limit(8),
+      .orderBy(desc(adminNotificationsTable.createdAt)).limit(30),
   ]);
 
   res.json(GetDashboardResponse.parse({
@@ -480,7 +501,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     },
     recentCampaigns: await Promise.all(recentCampaignRows.map(campaignSummary)),
     recentActivity,
-    adminNotifications,
+    adminNotifications: adminNotificationRows.filter((notification) => isNotificationActive(notification)).slice(0, 8).map(adminNotificationResponse),
   }));
 });
 

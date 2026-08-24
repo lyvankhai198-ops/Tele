@@ -44,3 +44,9 @@ The VPS deploys from GitHub `main`, not directly from the workspace task branch.
 **Why:** A completed workspace task can be newer than `origin/main`; the VPS will continue serving the old version until GitHub is updated.
 
 **How to apply:** Confirm the remote branch SHA before deployment. Publish the validated source changes to GitHub through the configured integration, then use a fast-forward pull, build both TeleCampaign artifacts, restart only `telecampaign-api`, and verify the public HTTPS health endpoint.
+
+For an exact checkpoint rollback, create a new rollback commit on GitHub rather than force-pushing history, then verify the checkpoint and deployed branch have identical Git tree hashes.
+
+**Why:** A workspace checkpoint rollback does not synchronize GitHub or the VPS, and generated files can differ only by byte-level line endings even when their visible source text is identical.
+
+**How to apply:** Use the checkpoint tree as the source of truth, publish a history-preserving rollback commit, compare its tree hash with the checkpoint before deployment, and fast-forward only `/opt/telecampaign` afterward.
