@@ -8,7 +8,6 @@ import {
   FileText,
   LayoutDashboard,
   Menu,
-  MessageCircle,
   Plus,
   Search,
   Settings2,
@@ -97,12 +96,9 @@ export function AppLayout({
       >
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#eef2f6]">
           <button onClick={() => navigate("/dashboard")} className="flex items-center gap-3 text-left">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eff6ff] text-[#1a2b88] shadow-sm">
-              <MessageCircle className="h-6 w-6" />
-            </span>
-            <span>
-              <span className="block text-[15px] font-extrabold text-[#0f172a] tracking-tight">Tele Campaign</span>
-              <span className="block text-[11px] font-bold text-[#64748b]">{t('Telegram Manager')}</span>
+            <img src="/icon.png" alt="" className="h-10 w-10 shrink-0 object-contain" />
+            <span className="hidden lg:block">
+              <span className="block text-[15px] font-extrabold text-[#0f172a] tracking-tight">Telegram Campaign Manager</span>
             </span>
           </button>
           <button onClick={() => setMobileOpen(false)} className="rounded-lg p-1.5 text-[#64748b] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Close sidebar')}>
@@ -156,7 +152,7 @@ export function AppLayout({
               </button>
             </div>
           </div>
-          <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Tele Campaign v2.0</div>
+          <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Telegram Campaign Manager v2.0</div>
         </div>
       </aside>
 

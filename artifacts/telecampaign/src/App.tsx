@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { KeyRound, LoaderCircle, LockKeyhole, MessageCircle, UserRound } from 'lucide-react';
+import { KeyRound, LoaderCircle, LockKeyhole, UserRound } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -43,11 +43,9 @@ function AuthShell({ children }: { children: ReactNode }) {
       <section className="mx-auto w-full max-w-[440px]">
         <div className="relative mb-7 flex items-center justify-center gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[#1888e8] text-white shadow-[0_10px_30px_rgba(24,136,232,.25)]">
-              <MessageCircle className="h-6 w-6" strokeWidth={2.4} />
-            </span>
-            <span>
-              <span className="block text-lg font-bold tracking-[-0.03em]">Tele Campaign</span>
+            <img src="/icon.png" alt="" className="h-11 w-11 shrink-0 object-contain" />
+            <span className="hidden sm:block">
+               <span className="block text-lg font-bold tracking-[-0.03em]">Telegram Campaign Manager</span>
               <span className="block text-xs text-[#66809a]">{t('Telegram Campaign Manager')}</span>
             </span>
           </div>
