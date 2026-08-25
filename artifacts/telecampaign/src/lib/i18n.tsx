@@ -482,16 +482,34 @@ export function localizedDeliveryErrorMessage(error: unknown, language: Language
 
   if (/MESSAGE_ID_INVALID|saved Telegram message ID is invalid/i.test(cleanMessage)) {
     return language === "vi"
-      ? "Tin nhắn nguồn không hợp lệ hoặc không còn tồn tại. Hãy đồng bộ lại tài khoản Telegram và chọn lại tin nhắn trong “Tin nhắn đã lưu”. (Telegram: MESSAGE_ID_INVALID)"
-      : "The source message is invalid or no longer available. Sync the Telegram account and select the message again from “Saved Messages”. (Telegram: MESSAGE_ID_INVALID)";
+      ? "Lỗi tin nhắn nguồn: tin nhắn đã chọn để Forward đã bị thay đổi hoặc không còn tồn tại trong Tin nhắn đã lưu. Hệ thống đã làm mới tin nhắn này một lần nhưng không khôi phục được. Hãy chọn lại tin nhắn hiện tại. (Telegram: MESSAGE_ID_INVALID)"
+      : "Source message error: the message selected for forwarding was changed or is no longer available in Saved Messages. The system refreshed this message once but could not recover it. Select the current message again. (Telegram: MESSAGE_ID_INVALID)";
   }
 
-  const unavailableEntity = cleanMessage.match(/Telegram entity for ["“](.+?)["”] is unavailable/i);
+  const unavailableEntity = cleanMessage.match(/Telegram (?:entity for|destination) ["“](.+?)["”] is unavailable/i);
   if (unavailableEntity) {
     const destinationTitle = unavailableEntity[1];
     return language === "vi"
-      ? `Không tìm thấy dữ liệu nhóm “${destinationTitle}” trên tài khoản Telegram đang chạy. Hãy vào Nhóm, đồng bộ lại tài khoản này và kiểm tra tài khoản vẫn còn trong nhóm trước khi thử lại.`
-      : `The group “${destinationTitle}” is not available to the Telegram account running this campaign. Open Groups, sync this account, and make sure it is still a member before retrying.`;
+      ? `Lỗi điểm đến: không tìm thấy nhóm “${destinationTitle}” trên tài khoản Telegram đang chạy. Hệ thống không tự đồng bộ nhóm cho lỗi này. Hãy kiểm tra tài khoản vẫn còn trong nhóm trước khi thử lại.`
+      : `Destination error: the group “${destinationTitle}” is not available to the Telegram account running this campaign. The system does not automatically sync groups for this error. Make sure the account is still a member before retrying.`;
+  }
+
+  if (/posting permission is no longer available|restricted or banned from posting|CHAT_WRITE_FORBIDDEN|CHAT_RESTRICTED|USER_BANNED_IN_CHANNEL|RIGHT_FORBIDDEN/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Lỗi quyền đăng: tài khoản Telegram bị hạn chế hoặc bị ban quyền gửi trong nhóm này. Hệ thống không tự đồng bộ. Hãy kiểm tra quyền đăng hoặc trạng thái thành viên trên Telegram."
+      : "Posting permission error: this Telegram account is restricted or banned from posting in this group. The system does not automatically sync. Check the account's posting permission or membership status in Telegram.";
+  }
+
+  if (/PHONE_NUMBER_BANNED|USER_DEACTIVATED|USER_BANNED|AUTH_KEY_UNREGISTERED|SESSION_REVOKED|SESSION_EXPIRED/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Lỗi tài khoản Telegram: tài khoản hoặc phiên đăng nhập đã bị ban, thu hồi hoặc hết hiệu lực. Hệ thống không tự đồng bộ. Hãy kiểm tra tài khoản và đăng nhập lại nếu cần."
+      : "Telegram account error: the account or login session was banned, revoked, or expired. The system does not automatically sync. Check the account and sign in again if needed.";
+  }
+
+  if (/destination .*is no longer the same destination|username no longer points/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Lỗi điểm đến: username hoặc nhóm đã thay đổi so với dữ liệu đã lưu. Hệ thống không tự đồng bộ nhóm. Hãy kiểm tra và chọn lại điểm đến."
+      : "Destination error: the username or group changed from the saved destination. The system does not automatically sync groups. Check and select the destination again.";
   }
 
   return language === "vi" && cleanMessage ? cleanMessage : fallback;

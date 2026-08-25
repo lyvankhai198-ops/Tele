@@ -219,10 +219,10 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   const validate = async (inputEntity: any): Promise<any> => {
     const entity = await client.getEntity(inputEntity as any) as unknown as TelegramEntity;
     if (telegramId(entity) !== destination.telegramId) {
-      throw new Error(`Telegram username no longer points to "${destination.title}". Sync this account before retrying.`);
+      throw new Error(`Telegram destination "${destination.title}" is no longer the same destination as when it was saved.`);
     }
     if (!canPostToEntity(entity)) {
-      throw new Error(`Telegram posting permission is no longer available for "${destination.title}". Sync this account before retrying.`);
+      throw new Error(`Telegram posting permission is no longer available for "${destination.title}". The account may be restricted or banned from posting.`);
     }
     return inputEntity;
   };
@@ -250,7 +250,7 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   }
 
   throw new Error(
-    `Telegram entity for "${destination.title}" is unavailable. Sync this Telegram account before retrying.`,
+    `Telegram destination "${destination.title}" is unavailable to this account. Check that the account still belongs to the group; automatic group sync is not attempted for this delivery.`,
   );
 }
 
@@ -499,22 +499,72 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
       throw new Error("The saved Telegram message ID is invalid");
     }
-    if (destination.topicId === null) {
-      const messages = await client.forwardMessages(entity, {
-        messages: numericSourceMessageId,
-        fromPeer: "me",
+    const forwardOnce = async () => {
+      if (destination.topicId === null) {
+        const messages = await client.forwardMessages(entity, {
+          messages: numericSourceMessageId,
+          fromPeer: "me",
+        });
+        return String((messages[0] as any)?.id ?? "");
+      }
+      const request = new Api.messages.ForwardMessages({
+        fromPeer: await client.getInputEntity("me"),
+        id: [numericSourceMessageId],
+        toPeer: entity,
+        topMsgId: destination.topicId,
       });
-      return String((messages[0] as any)?.id ?? "");
+      const result = await client.invoke(request);
+      const sent = await (client as any)._getResponseMessage(request, result, entity);
+      return String(sent?.id ?? "");
+    };
+    const isInvalidSavedMessage = (error: unknown) => {
+      const details = [error, (error as { errorMessage?: unknown })?.errorMessage, (error as { message?: unknown })?.message]
+        .filter((value): value is string => typeof value === "string")
+        .join(" ");
+      return /MESSAGE_ID_INVALID|saved Telegram message ID is invalid/i.test(details);
+    };
+    const refreshSavedMessage = async () => {
+      try {
+        const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
+        return messages.some((message: any) => Number(message?.id) === numericSourceMessageId);
+      } catch {
+        return false;
+      }
+    };
+    if (destination.topicId === null) {
+      try {
+        return await forwardOnce();
+      } catch (error) {
+        if (!isInvalidSavedMessage(error)) throw error;
+        if (!(await refreshSavedMessage())) {
+          throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+        }
+        try {
+          return await forwardOnce();
+        } catch (retryError) {
+          if (isInvalidSavedMessage(retryError)) {
+            throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+          }
+          throw retryError;
+        }
+      }
     }
-    const request = new Api.messages.ForwardMessages({
-      fromPeer: await client.getInputEntity("me"),
-      id: [numericSourceMessageId],
-      toPeer: entity,
-      topMsgId: destination.topicId,
-    });
-    const result = await client.invoke(request);
-    const sent = await (client as any)._getResponseMessage(request, result, entity);
-    return String(sent?.id ?? "");
+    try {
+      return await forwardOnce();
+    } catch (error) {
+      if (!isInvalidSavedMessage(error)) throw error;
+      if (!(await refreshSavedMessage())) {
+        throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+      }
+      try {
+        return await forwardOnce();
+      } catch (retryError) {
+        if (isInvalidSavedMessage(retryError)) {
+          throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+        }
+        throw retryError;
+      }
+    }
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
       await invalidateTelegramSession(account.id);
