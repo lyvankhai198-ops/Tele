@@ -467,6 +467,36 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
   return language === "vi" && cleanMessage ? cleanMessage : fallback;
 }
 
+/**
+ * Delivery errors can come directly from Telegram and are usually written in
+ * English. Keep the technical cause recognizable, but give customers a clear
+ * next action in the language they selected.
+ */
+export function localizedDeliveryErrorMessage(error: unknown, language: Language, fallback: string): string {
+  const message = typeof error === "string"
+    ? error.trim()
+    : error instanceof Error
+      ? error.message.trim()
+      : "";
+  const cleanMessage = message.replace(/^HTTP \d{3} [^:]+:\s*/, "");
+
+  if (/MESSAGE_ID_INVALID|saved Telegram message ID is invalid/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Tin nhắn nguồn không hợp lệ hoặc không còn tồn tại. Hãy đồng bộ lại tài khoản Telegram và chọn lại tin nhắn trong “Tin nhắn đã lưu”. (Telegram: MESSAGE_ID_INVALID)"
+      : "The source message is invalid or no longer available. Sync the Telegram account and select the message again from “Saved Messages”. (Telegram: MESSAGE_ID_INVALID)";
+  }
+
+  const unavailableEntity = cleanMessage.match(/Telegram entity for ["“](.+?)["”] is unavailable/i);
+  if (unavailableEntity) {
+    const destinationTitle = unavailableEntity[1];
+    return language === "vi"
+      ? `Không tìm thấy dữ liệu nhóm “${destinationTitle}” trên tài khoản Telegram đang chạy. Hãy vào Nhóm, đồng bộ lại tài khoản này và kiểm tra tài khoản vẫn còn trong nhóm trước khi thử lại.`
+      : `The group “${destinationTitle}” is not available to the Telegram account running this campaign. Open Groups, sync this account, and make sure it is still a member before retrying.`;
+  }
+
+  return language === "vi" && cleanMessage ? cleanMessage : fallback;
+}
+
 type LanguageContextValue = {
   language: Language;
   setLanguage: (language: Language) => void;

@@ -23,7 +23,7 @@ import {
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
-import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
 // Bilingual copy
@@ -739,7 +739,7 @@ export default function Campaigns() {
                                  <strong>{error.destinationTitle}</strong>
                                  <span className="shrink-0 font-bold">{error.attempts} {c.detailErrorAttempts}</span>
                                </div>
-                               <p className="mt-1 break-words font-medium">{error.lastError ?? c.genericError}</p>
+                               <p className="mt-1 break-words font-medium">{localizedDeliveryErrorMessage(error.lastError, language, c.genericError)}</p>
                                {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
                              </div>
                            ))}
