@@ -57,6 +57,7 @@ const copy = {
     lastChecked: "Last checked",
     storageHealthy: "Healthy",
     storageWarning: "Needs attention",
+    storageHigh: "Act soon",
     storageCritical: "Critical",
     storageHint: "The VPS disk is shared with other projects. Keep usage below 70% when possible.",
   },
@@ -105,6 +106,7 @@ const copy = {
     lastChecked: "Kiểm tra lần cuối",
     storageHealthy: "Bình thường",
     storageWarning: "Nên kiểm tra",
+    storageHigh: "Cần xử lý sớm",
     storageCritical: "Khẩn cấp",
     storageHint: "Ổ đĩa VPS dùng chung với dự án khác. Nên giữ mức sử dụng dưới 70%.",
   },
@@ -140,6 +142,7 @@ function formatBytes(bytes: number) {
 
 function storageLevel(usedPercent: number) {
   if (usedPercent >= 90) return "critical" as const;
+  if (usedPercent >= 80) return "high" as const;
   if (usedPercent >= 70) return "warning" as const;
   return "healthy" as const;
 }
@@ -147,12 +150,13 @@ function storageLevel(usedPercent: number) {
 type StorageText = {
   storageHealthy: string;
   storageWarning: string;
+  storageHigh: string;
   storageCritical: string;
   used: string;
 };
 
-function storageLabel(level: "healthy" | "warning" | "critical", text: StorageText) {
-  return level === "critical" ? text.storageCritical : level === "warning" ? text.storageWarning : text.storageHealthy;
+function storageLabel(level: "healthy" | "warning" | "high" | "critical", text: StorageText) {
+  return level === "critical" ? text.storageCritical : level === "high" ? text.storageHigh : level === "warning" ? text.storageWarning : text.storageHealthy;
 }
 
 function StorageMetric({
@@ -169,12 +173,13 @@ function StorageMetric({
   value: string;
   detail: string;
   percent?: number;
-  level: "healthy" | "warning" | "critical";
+  level: "healthy" | "warning" | "high" | "critical";
   text: StorageText;
 }) {
   const colors = {
     healthy: { icon: "#059669", bg: "#ecfdf5", bar: "#10b981" },
     warning: { icon: "#d97706", bg: "#fffbeb", bar: "#f59e0b" },
+    high: { icon: "#ea580c", bg: "#fff7ed", bar: "#f97316" },
     critical: { icon: "#e11d48", bg: "#fff1f2", bar: "#f43f5e" },
   }[level];
   return (
@@ -251,9 +256,9 @@ export default function AdminOperationsPage() {
             const logPercent = data.storage.logs.maxBytes ? (data.storage.logs.bytes / data.storage.logs.maxBytes) * 100 : 0;
             return <>
               <StorageMetric icon={HardDrive} title={text.serverDisk} value={`${formatBytes(data.storage.disk.freeBytes)} ${text.free}`} detail={`${formatBytes(data.storage.disk.usedBytes)} / ${formatBytes(data.storage.disk.totalBytes)}`} percent={data.storage.disk.usedPercent} level={diskLevel} text={text} />
-              <StorageMetric icon={RadioTower} title={text.mediaStorage} value={data.storage.media.available ? formatBytes(data.storage.media.bytes) : text.notAvailable} detail={data.storage.media.available ? `${data.storage.media.fileCount} ${text.files} · ${formatBytes(data.storage.media.maxBytes ?? 0)} ${text.limit}` : text.notAvailable} percent={data.storage.media.available ? mediaPercent : undefined} level={mediaPercent >= 90 ? "critical" : mediaPercent >= 70 ? "warning" : "healthy"} text={text} />
+              <StorageMetric icon={RadioTower} title={text.mediaStorage} value={data.storage.media.available ? formatBytes(data.storage.media.bytes) : text.notAvailable} detail={data.storage.media.available ? `${data.storage.media.fileCount} ${text.files} · ${formatBytes(data.storage.media.maxBytes ?? 0)} ${text.limit}` : text.notAvailable} percent={data.storage.media.available ? mediaPercent : undefined} level={storageLevel(mediaPercent)} text={text} />
               <StorageMetric icon={FileArchive} title={text.exportsStorage} value={data.storage.exports.available ? formatBytes(data.storage.exports.bytes) : text.notAvailable} detail={data.storage.exports.available ? `${data.storage.exports.fileCount} ${text.files} · ${data.storage.exports.oldFileCount} ${text.oldFiles}` : text.notAvailable} level={data.storage.exports.oldFileCount > 0 ? "warning" : "healthy"} text={text} />
-              <StorageMetric icon={ScrollText} title={text.appLogs} value={data.storage.logs.available ? formatBytes(data.storage.logs.bytes) : text.notAvailable} detail={data.storage.logs.available ? `${text.retention}: ${data.storage.logs.retentionDays} ${text.days} · ${formatBytes(data.storage.logs.maxBytes)} ${text.limit}` : text.notAvailable} percent={data.storage.logs.available ? logPercent : undefined} level={logPercent >= 90 ? "critical" : logPercent >= 70 ? "warning" : "healthy"} text={text} />
+              <StorageMetric icon={ScrollText} title={text.appLogs} value={data.storage.logs.available ? formatBytes(data.storage.logs.bytes) : text.notAvailable} detail={data.storage.logs.available ? `${text.retention}: ${data.storage.logs.retentionDays} ${text.days} · ${formatBytes(data.storage.logs.maxBytes)} ${text.limit}` : text.notAvailable} percent={data.storage.logs.available ? logPercent : undefined} level={storageLevel(logPercent)} text={text} />
             </>;
           })()}
         </div>
