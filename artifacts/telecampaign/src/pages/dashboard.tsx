@@ -175,7 +175,9 @@ export default function Dashboard() {
               </div>
               {recentActivity.map((log) => {
                 const isSuccess = log.level !== "error" && log.level !== "warn";
-                const campName = recentCampaigns.find(c => c.id === log.campaignId)?.name ?? t("Campaign (fallback)");
+                const campName = log.campaignName
+                  ?? recentCampaigns.find(c => c.id === log.campaignId)?.name
+                  ?? t("Campaign (fallback)");
                 
                 return (
                   <div key={log.id} className="grid grid-cols-[75px_1fr_85px] items-center gap-3 px-6 py-4 bg-white hover:bg-[#f8fafc] transition-colors" data-testid={`log-${log.id}`}>

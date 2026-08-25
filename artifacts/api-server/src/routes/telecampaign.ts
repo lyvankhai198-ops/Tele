@@ -500,7 +500,23 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     )),
     db.select().from(campaignsTable).where(eq(campaignsTable.ownerUserId, ownerUserId))
       .orderBy(desc(campaignsTable.createdAt)).limit(8),
-    db.select().from(activityLogsTable).where(eq(activityLogsTable.ownerUserId, ownerUserId))
+    db.select({
+      id: activityLogsTable.id,
+      level: activityLogsTable.level,
+      event: activityLogsTable.event,
+      message: activityLogsTable.message,
+      accountId: activityLogsTable.accountId,
+      campaignId: activityLogsTable.campaignId,
+      targetId: activityLogsTable.targetId,
+      metadata: activityLogsTable.metadata,
+      createdAt: activityLogsTable.createdAt,
+      campaignName: campaignsTable.name,
+    }).from(activityLogsTable)
+      .leftJoin(campaignsTable, and(
+        eq(activityLogsTable.campaignId, campaignsTable.id),
+        eq(campaignsTable.ownerUserId, ownerUserId),
+      ))
+      .where(eq(activityLogsTable.ownerUserId, ownerUserId))
       .orderBy(desc(activityLogsTable.createdAt)).limit(8),
     db.select().from(adminNotificationsTable)
       .where(and(
@@ -526,7 +542,7 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     recentCampaigns: await Promise.all(recentCampaignRows.map(campaignSummary)),
     recentActivity: recentActivity.map((log) => ({
       ...log,
-      campaignName: null,
+      campaignName: log.campaignName ?? null,
       accountName: null,
       destinationTitle: null,
       destinationUsername: null,
