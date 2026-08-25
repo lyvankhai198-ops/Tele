@@ -78,6 +78,7 @@ import {
   credentialsForAccount,
   encryptSecret,
   getTelegramProxyConfig,
+  isTelegramSessionRevoked,
   listTelegramSavedMessages,
   phoneForAccount,
   startTelegramPhoneLogin,
@@ -106,6 +107,7 @@ const sendError = (res: any, status: number, error: string) => {
 const currentUserId = (req: any): string => req.userId;
 const normalizePhone = (phone: string) => phone.trim().replace(/[\s-]/g, "");
 const maskPhone = (phone: string) => `••••${phone.slice(-4)}`;
+const revokedTelegramSessionMessage = "Phiên Telegram đã hết hiệu lực. Hãy vào mục Tài khoản Telegram và bấm Xác minh để đăng nhập lại.";
 const LOGIN_CHALLENGE_TTL_MS = 10 * 60_000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const PROXY_TEST_WINDOW_MS = 5 * 60_000;
@@ -916,7 +918,9 @@ router.post("/telegram/accounts/:accountId/sync", async (req, res): Promise<void
     res.status(202).json(SyncTelegramDestinationsResponse.parse({ count }));
   } catch (error) {
     req.log.warn({ err: error }, "Telegram destination sync failed");
-    sendError(res, 409, error instanceof Error ? error.message : "Destination sync failed");
+    sendError(res, 409, isTelegramSessionRevoked(error)
+      ? revokedTelegramSessionMessage
+      : error instanceof Error ? error.message : "Destination sync failed");
   }
 });
 
@@ -941,7 +945,9 @@ router.get("/telegram/accounts/:accountId/saved-messages", async (req, res): Pro
     res.json(ListTelegramSavedMessagesResponse.parse(await listTelegramSavedMessages(account.id)));
   } catch (error) {
     req.log.warn({ err: error }, "Telegram saved messages sync failed");
-    sendError(res, 409, error instanceof Error ? error.message : "Không thể đồng bộ Tin nhắn đã lưu.");
+    sendError(res, 409, isTelegramSessionRevoked(error)
+      ? revokedTelegramSessionMessage
+      : error instanceof Error ? error.message : "Không thể đồng bộ Tin nhắn đã lưu.");
   }
 });
 

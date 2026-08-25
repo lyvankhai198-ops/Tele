@@ -60,6 +60,27 @@ export function phoneForAccount(account: typeof telegramAccountsTable.$inferSele
 const savedSession = (client: TelegramClient) => (client.session as unknown as { save: () => string }).save();
 const requiresTwoFactor = (error: unknown) => (error as { errorMessage?: string })?.errorMessage === "SESSION_PASSWORD_NEEDED";
 
+export function isTelegramSessionRevoked(error: unknown): boolean {
+  const telegramError = error as { errorMessage?: unknown; message?: unknown } | null;
+  const details = [telegramError?.errorMessage, telegramError?.message]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toUpperCase();
+  return /SESSION_REVOKED|AUTH_KEY_UNREGISTERED|SESSION_EXPIRED|USER_DEACTIVATED/.test(details);
+}
+
+async function invalidateTelegramSession(accountId: string): Promise<void> {
+  await db.update(telegramAccountsTable).set({
+    status: "saved",
+    sessionEncrypted: null,
+    telegramUserId: null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(telegramAccountsTable.id, accountId),
+    isNull(telegramAccountsTable.deletedAt),
+  ));
+}
+
 export async function startTelegramPhoneLogin(credentials: TelegramCredentials, phone: string, proxy?: TelegramProxyConfig) {
   const client = createTelegramClient("", credentials, proxy);
   try {
@@ -250,14 +271,17 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
   }
   const proxy = await getTelegramProxyConfig(account);
   const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy);
-  await client.connect();
   try {
+    await client.connect();
     const currentUser = await getCurrentUser(client);
     if (currentUser.id !== account.telegramUserId) {
       throw new Error("Telegram session identity does not match the saved account");
     }
     return { client, account };
   } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
     await disconnectQuietly(client);
     throw error;
   }
@@ -412,13 +436,18 @@ export async function syncAccountDestinations(accountId: string) {
       metadata: { count },
     });
     return count;
+  } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
+    throw error;
   } finally {
     await client.disconnect();
   }
 }
 
 export async function listTelegramSavedMessages(accountId: string) {
-  const { client } = await getAccountClient(accountId);
+  const { client, account } = await getAccountClient(accountId);
   try {
     const messages = await client.getMessages("me", { limit: 100 });
     return messages
@@ -429,13 +458,18 @@ export async function listTelegramSavedMessages(accountId: string) {
         date: message.date ? new Date(Number(message.date) * 1000) : null,
         hasMedia: Boolean(message.media),
       }));
+  } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
+    throw error;
   } finally {
     await client.disconnect();
   }
 }
 
 export async function sendTelegramMessage(accountId: string, destinationId: string, content: string, ownerUserId: string) {
-  const { client } = await getAccountClient(accountId, ownerUserId);
+  const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
@@ -445,13 +479,18 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
       ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
     });
     return String((sent as any).id ?? "");
+  } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
+    throw error;
   } finally {
     await client.disconnect();
   }
 }
 
 export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
-  const { client } = await getAccountClient(accountId, ownerUserId);
+  const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
@@ -476,6 +515,11 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     const result = await client.invoke(request);
     const sent = await (client as any)._getResponseMessage(request, result, entity);
     return String(sent?.id ?? "");
+  } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
+    throw error;
   } finally {
     await client.disconnect();
   }
