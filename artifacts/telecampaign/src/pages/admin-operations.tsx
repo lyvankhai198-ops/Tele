@@ -7,7 +7,7 @@ import {
   useRetryAdminCampaignTarget,
   useUpdateAdminCampaignStatus,
 } from "@workspace/api-client-react";
-import { Activity, AlertTriangle, Clock3, ListRestart, RadioTower, Search, ShieldCheck } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Clock3, FileArchive, HardDrive, ListRestart, RadioTower, Search, ShieldCheck, ScrollText } from "lucide-react";
 import { AppLayout, EmptyState, Panel, SectionHeader, StatusBadge } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
 
@@ -40,6 +40,25 @@ const copy = {
     ip: "IP",
     time: "Time",
     noData: "No matching operational records.",
+    storage: "Storage & maintenance",
+    storageSubtitle: "Read-only health check for this VPS. No data is deleted from this page.",
+    serverDisk: "VPS disk",
+    mediaStorage: "Notification media",
+    exportsStorage: "Exports",
+    appLogs: "TeleCampaign logs",
+    free: "free",
+    used: "used",
+    files: "files",
+    oldFiles: "older than 30 days",
+    retention: "Configured target",
+    days: "days",
+    limit: "Limit",
+    notAvailable: "Not available in this environment",
+    lastChecked: "Last checked",
+    storageHealthy: "Healthy",
+    storageWarning: "Needs attention",
+    storageCritical: "Critical",
+    storageHint: "The VPS disk is shared with other projects. Keep usage below 70% when possible.",
   },
   vi: {
     title: "Giám sát Vận hành",
@@ -69,6 +88,25 @@ const copy = {
     ip: "IP",
     time: "Thời gian",
     noData: "Không có dữ liệu vận hành phù hợp.",
+    storage: "Dung lượng & bảo trì",
+    storageSubtitle: "Kiểm tra chỉ đọc trên VPS này. Trang này không xóa dữ liệu.",
+    serverDisk: "Ổ đĩa toàn VPS",
+    mediaStorage: "Media thông báo",
+    exportsStorage: "File export",
+    appLogs: "Log TeleCampaign",
+    free: "còn trống",
+    used: "đã dùng",
+    files: "file",
+    oldFiles: "file quá 30 ngày",
+    retention: "Mục tiêu giữ log",
+    days: "ngày",
+    limit: "Giới hạn",
+    notAvailable: "Chưa có số liệu trong môi trường này",
+    lastChecked: "Kiểm tra lần cuối",
+    storageHealthy: "Bình thường",
+    storageWarning: "Nên kiểm tra",
+    storageCritical: "Khẩn cấp",
+    storageHint: "Ổ đĩa VPS dùng chung với dự án khác. Nên giữ mức sử dụng dưới 70%.",
   },
 } as const;
 
@@ -88,10 +126,82 @@ function statusTone(status: string) {
   return "failed" as const;
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = -1;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
+}
+
+function storageLevel(usedPercent: number) {
+  if (usedPercent >= 90) return "critical" as const;
+  if (usedPercent >= 70) return "warning" as const;
+  return "healthy" as const;
+}
+
+type StorageText = {
+  storageHealthy: string;
+  storageWarning: string;
+  storageCritical: string;
+  used: string;
+};
+
+function storageLabel(level: "healthy" | "warning" | "critical", text: StorageText) {
+  return level === "critical" ? text.storageCritical : level === "warning" ? text.storageWarning : text.storageHealthy;
+}
+
+function StorageMetric({
+  icon: Icon,
+  title,
+  value,
+  detail,
+  percent,
+  level,
+  text,
+}: {
+  icon: typeof HardDrive;
+  title: string;
+  value: string;
+  detail: string;
+  percent?: number;
+  level: "healthy" | "warning" | "critical";
+  text: StorageText;
+}) {
+  const colors = {
+    healthy: { icon: "#059669", bg: "#ecfdf5", bar: "#10b981" },
+    warning: { icon: "#d97706", bg: "#fffbeb", bar: "#f59e0b" },
+    critical: { icon: "#e11d48", bg: "#fff1f2", bar: "#f43f5e" },
+  }[level];
+  return (
+    <div className="rounded-2xl border border-[#eef2f6] bg-[#fbfdff] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl" style={{ color: colors.icon, backgroundColor: colors.bg }}><Icon className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <p className="truncate text-[12px] font-extrabold text-[#334155]">{title}</p>
+            <p className="mt-1 text-[11px] font-semibold text-[#64748b]">{detail}</p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide" style={{ color: colors.icon, borderColor: `${colors.icon}33`, backgroundColor: colors.bg }}>{storageLabel(level, text)}</span>
+      </div>
+      <p className="mt-5 text-[24px] font-extrabold tracking-tight text-[#0f172a]">{value}</p>
+      {percent !== undefined && <div className="mt-3">
+        <div className="h-2 overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, percent))}%`, backgroundColor: colors.bar }} /></div>
+        <p className="mt-2 text-right text-[10px] font-bold text-[#64748b]">{percent.toFixed(1)}% {text.used}</p>
+      </div>}
+    </div>
+  );
+}
+
 export default function AdminOperationsPage() {
   const { language } = useLanguage();
   const text = copy[language];
-  const query = useGetAdminOperations();
+  const query = useGetAdminOperations({ query: { queryKey: getGetAdminOperationsQueryKey(), refetchInterval: 30_000, refetchOnWindowFocus: true } });
   const queryClient = useQueryClient();
   const updateCampaign = useUpdateAdminCampaignStatus();
   const retryTarget = useRetryAdminCampaignTarget();
@@ -131,6 +241,27 @@ export default function AdminOperationsPage() {
 
       {query.isLoading && <Panel className="p-8 text-center text-[14px] font-semibold text-[#64748b]">{text.loading}</Panel>}
       {query.error && <Panel className="p-8 text-center text-[14px] font-semibold text-[#be123c]">{text.failed}</Panel>}
+
+      {data && <Panel className="p-4 sm:p-6">
+        <SectionHeader eyebrow="Maintenance" title={text.storage} detail={text.storageSubtitle} />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {(() => {
+            const diskLevel = storageLevel(data.storage.disk.usedPercent);
+            const mediaPercent = data.storage.media.maxBytes ? (data.storage.media.bytes / data.storage.media.maxBytes) * 100 : 0;
+            const logPercent = data.storage.logs.maxBytes ? (data.storage.logs.bytes / data.storage.logs.maxBytes) * 100 : 0;
+            return <>
+              <StorageMetric icon={HardDrive} title={text.serverDisk} value={`${formatBytes(data.storage.disk.freeBytes)} ${text.free}`} detail={`${formatBytes(data.storage.disk.usedBytes)} / ${formatBytes(data.storage.disk.totalBytes)}`} percent={data.storage.disk.usedPercent} level={diskLevel} text={text} />
+              <StorageMetric icon={RadioTower} title={text.mediaStorage} value={data.storage.media.available ? formatBytes(data.storage.media.bytes) : text.notAvailable} detail={data.storage.media.available ? `${data.storage.media.fileCount} ${text.files} · ${formatBytes(data.storage.media.maxBytes ?? 0)} ${text.limit}` : text.notAvailable} percent={data.storage.media.available ? mediaPercent : undefined} level={mediaPercent >= 90 ? "critical" : mediaPercent >= 70 ? "warning" : "healthy"} text={text} />
+              <StorageMetric icon={FileArchive} title={text.exportsStorage} value={data.storage.exports.available ? formatBytes(data.storage.exports.bytes) : text.notAvailable} detail={data.storage.exports.available ? `${data.storage.exports.fileCount} ${text.files} · ${data.storage.exports.oldFileCount} ${text.oldFiles}` : text.notAvailable} level={data.storage.exports.oldFileCount > 0 ? "warning" : "healthy"} text={text} />
+              <StorageMetric icon={ScrollText} title={text.appLogs} value={data.storage.logs.available ? formatBytes(data.storage.logs.bytes) : text.notAvailable} detail={data.storage.logs.available ? `${text.retention}: ${data.storage.logs.retentionDays} ${text.days} · ${formatBytes(data.storage.logs.maxBytes)} ${text.limit}` : text.notAvailable} percent={data.storage.logs.available ? logPercent : undefined} level={logPercent >= 90 ? "critical" : logPercent >= 70 ? "warning" : "healthy"} text={text} />
+            </>;
+          })()}
+        </div>
+        <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 text-[11px] font-semibold text-[#1e40af] sm:flex-row sm:items-center sm:justify-between">
+          <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0" />{text.storageHint}</span>
+          <span className="shrink-0 text-[#64748b]">{text.lastChecked}: {dateTime(data.storage.checkedAt, language)}</span>
+        </div>
+      </Panel>}
 
       {data && tab === "accounts" && <Panel className="overflow-hidden">
         <SectionHeader eyebrow="Health" title={text.accounts} detail={`${data.accounts.length} accounts`} />

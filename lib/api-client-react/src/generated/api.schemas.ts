@@ -925,11 +925,54 @@ export interface AdminAuditLog {
   createdAt: string;
 }
 
+export interface AdminStorageDisk {
+  available: boolean;
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  usedPercent: number;
+}
+
+export interface AdminStorageArea {
+  available: boolean;
+  bytes: number;
+  fileCount: number;
+  /** @nullable */
+  maxBytes: number | null;
+  /** @nullable */
+  maxFiles: number | null;
+}
+
+export interface AdminStorageExports {
+  available: boolean;
+  bytes: number;
+  fileCount: number;
+  oldFileCount: number;
+  retentionDays: number;
+}
+
+export interface AdminStorageLogs {
+  available: boolean;
+  bytes: number;
+  fileCount: number;
+  maxBytes: number;
+  retentionDays: number;
+}
+
+export interface AdminStorageStatus {
+  checkedAt: string;
+  disk: AdminStorageDisk;
+  media: AdminStorageArea;
+  exports: AdminStorageExports;
+  logs: AdminStorageLogs;
+}
+
 export interface AdminOperations {
   accounts: AdminOperationAccount[];
   campaigns: AdminOperationCampaign[];
   targets: AdminOperationTarget[];
   auditLogs: AdminAuditLog[];
+  storage: AdminStorageStatus;
 }
 
 export interface ActivateLicenseInput {

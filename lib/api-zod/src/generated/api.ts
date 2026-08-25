@@ -1133,7 +1133,38 @@ export const GetAdminOperationsResponse = zod.object({
   "campaignId": zod.string().nullable(),
   "accountId": zod.string().nullable(),
   "createdAt": zod.coerce.date()
-}))
+})),
+  "storage": zod.object({
+  "checkedAt": zod.coerce.date(),
+  "disk": zod.object({
+  "available": zod.boolean(),
+  "totalBytes": zod.number(),
+  "usedBytes": zod.number(),
+  "freeBytes": zod.number(),
+  "usedPercent": zod.number()
+}),
+  "media": zod.object({
+  "available": zod.boolean(),
+  "bytes": zod.number(),
+  "fileCount": zod.number(),
+  "maxBytes": zod.number().nullable(),
+  "maxFiles": zod.number().nullable()
+}),
+  "exports": zod.object({
+  "available": zod.boolean(),
+  "bytes": zod.number(),
+  "fileCount": zod.number(),
+  "oldFileCount": zod.number(),
+  "retentionDays": zod.number()
+}),
+  "logs": zod.object({
+  "available": zod.boolean(),
+  "bytes": zod.number(),
+  "fileCount": zod.number(),
+  "maxBytes": zod.number(),
+  "retentionDays": zod.number()
+})
+})
 })
 
 

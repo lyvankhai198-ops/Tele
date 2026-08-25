@@ -69,6 +69,7 @@ import {
   NotificationMediaStorage,
   NotificationMediaUploadError,
 } from "../lib/notificationMediaStorage";
+import { getStorageStatus } from "../lib/storage-status";
 
 const router: IRouter = Router();
 const notificationMediaStorage = new NotificationMediaStorage();
@@ -456,6 +457,7 @@ router.get("/admin/operations", async (_req, res): Promise<void> => {
     }).from(activityLogsTable).orderBy(desc(activityLogsTable.createdAt)).limit(200),
   ]);
   const destinations = await db.select({ id: destinationsTable.id, title: destinationsTable.title }).from(destinationsTable);
+  const storage = await getStorageStatus();
   const usernames = new Map(users.map((user) => [user.id, user.username]));
   const proxyById = new Map(proxies.map((proxy) => [proxy.id, proxy]));
   const destinationTitles = new Map(destinations.map((destination) => [destination.id, destination.title]));
@@ -516,6 +518,7 @@ router.get("/admin/operations", async (_req, res): Promise<void> => {
       accountId: log.accountId,
       createdAt: log.createdAt,
     })),
+    storage,
   }));
 });
 

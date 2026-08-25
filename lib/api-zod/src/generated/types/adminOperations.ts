@@ -9,10 +9,12 @@ import type { AdminAuditLog } from './adminAuditLog';
 import type { AdminOperationAccount } from './adminOperationAccount';
 import type { AdminOperationCampaign } from './adminOperationCampaign';
 import type { AdminOperationTarget } from './adminOperationTarget';
+import type { AdminStorageStatus } from './adminStorageStatus';
 
 export interface AdminOperations {
   accounts: AdminOperationAccount[];
   campaigns: AdminOperationCampaign[];
   targets: AdminOperationTarget[];
   auditLogs: AdminAuditLog[];
+  storage: AdminStorageStatus;
 }

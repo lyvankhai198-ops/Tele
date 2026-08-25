@@ -1417,7 +1417,7 @@ components:
         createdAt: { type: string, format: date-time }
     AdminOperations:
       type: object
-      required: [accounts, campaigns, targets, auditLogs]
+      required: [accounts, campaigns, targets, auditLogs, storage]
       properties:
         accounts:
           type: array
@@ -1431,6 +1431,57 @@ components:
         auditLogs:
           type: array
           items: { $ref: "#/components/schemas/AdminAuditLog" }
+        storage:
+          $ref: "#/components/schemas/AdminStorageStatus"
+    AdminStorageStatus:
+      type: object
+      required: [checkedAt, disk, media, exports, logs]
+      properties:
+        checkedAt: { type: string, format: date-time }
+        disk:
+          $ref: "#/components/schemas/AdminStorageDisk"
+        media:
+          $ref: "#/components/schemas/AdminStorageArea"
+        exports:
+          $ref: "#/components/schemas/AdminStorageExports"
+        logs:
+          $ref: "#/components/schemas/AdminStorageLogs"
+    AdminStorageDisk:
+      type: object
+      required: [available, totalBytes, usedBytes, freeBytes, usedPercent]
+      properties:
+        available: { type: boolean }
+        totalBytes: { type: number }
+        usedBytes: { type: number }
+        freeBytes: { type: number }
+        usedPercent: { type: number }
+    AdminStorageArea:
+      type: object
+      required: [available, bytes, fileCount, maxBytes, maxFiles]
+      properties:
+        available: { type: boolean }
+        bytes: { type: number }
+        fileCount: { type: number }
+        maxBytes: { type: ["number", "null"] }
+        maxFiles: { type: ["number", "null"] }
+    AdminStorageExports:
+      type: object
+      required: [available, bytes, fileCount, oldFileCount, retentionDays]
+      properties:
+        available: { type: boolean }
+        bytes: { type: number }
+        fileCount: { type: number }
+        oldFileCount: { type: number }
+        retentionDays: { type: number }
+    AdminStorageLogs:
+      type: object
+      required: [available, bytes, fileCount, maxBytes, retentionDays]
+      properties:
+        available: { type: boolean }
+        bytes: { type: number }
+        fileCount: { type: number }
+        maxBytes: { type: number }
+        retentionDays: { type: number }
     ActivateLicenseInput:
       type: object
       required: [licenseKey]
