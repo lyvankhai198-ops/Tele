@@ -433,6 +433,7 @@ export default function Accounts() {
         setSyncingId(null);
       },
       onError: (error) => {
+        void invalidateAccounts();
         setToast(errorMessage(error, language, text.requestFailed));
         setSyncingId(null);
       },

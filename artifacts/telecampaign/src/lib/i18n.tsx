@@ -443,7 +443,8 @@ const translations: Record<string, string> = {
  */
 export function localizedErrorMessage(error: unknown, language: Language, fallback: string): string {
   const message = error instanceof Error ? error.message.trim() : "";
-  return language === "vi" && message ? message : fallback;
+  const cleanMessage = message.replace(/^HTTP \d{3} [^:]+:\s*/, "");
+  return language === "vi" && cleanMessage ? cleanMessage : fallback;
 }
 
 type LanguageContextValue = {
