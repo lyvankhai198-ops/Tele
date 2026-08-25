@@ -488,6 +488,15 @@ export interface Proxy {
   updatedAt: string;
 }
 
+export type ProxyTestResponseVerification = typeof ProxyTestResponseVerification[keyof typeof ProxyTestResponseVerification];
+
+
+export const ProxyTestResponseVerification = {
+  tunnel: 'tunnel',
+  telegram: 'telegram',
+  account: 'account',
+} as const;
+
 export type ProxyTestResponseStatus = typeof ProxyTestResponseStatus[keyof typeof ProxyTestResponseStatus];
 
 
@@ -498,6 +507,9 @@ export const ProxyTestResponseStatus = {
 
 export interface ProxyTestResponse {
   ok: boolean;
+  /** Whether the HTTP/SOCKS tunnel to Telegram is working. */
+  transportOk: boolean;
+  verification: ProxyTestResponseVerification;
   status: ProxyTestResponseStatus;
   message: string;
   checkedAt: string;

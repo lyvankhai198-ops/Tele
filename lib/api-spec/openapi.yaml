@@ -1177,9 +1177,11 @@ components:
         updatedAt: { type: string, format: date-time }
     ProxyTestResponse:
       type: object
-      required: [ok, status, message, checkedAt]
+      required: [ok, transportOk, verification, status, message, checkedAt]
       properties:
         ok: { type: boolean }
+        transportOk: { type: boolean, description: Whether the HTTP/SOCKS tunnel to Telegram is working. }
+        verification: { type: string, enum: [tunnel, telegram, account] }
         status: { type: string, enum: [connected, failed] }
         message: { type: string }
         checkedAt: { type: string, format: date-time }

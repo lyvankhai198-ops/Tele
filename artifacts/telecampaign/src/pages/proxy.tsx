@@ -36,10 +36,12 @@ export default function ProxyPage() {
     authNo: "Không",
     statusActive: "Hoạt động",
     statusPaused: "Tạm dừng",
-    test: "Test",
-    testing: "Đang test...",
-    toastProxyOk: "Proxy kết nối OK.",
-    toastProxyFailed: "Proxy không kết nối được.",
+    test: "Kiểm tra Telegram",
+    testing: "Đang kiểm tra...",
+    toastTunnelOk: "Tunnel proxy tới Telegram hoạt động. Hãy gắn một tài khoản Telegram đã xác minh để kiểm tra lưu lượng MTProto.",
+    toastTelegramOk: "Đã xác thực kết nối Telegram MTProto đang đi qua proxy này.",
+    toastAccountFailed: "Tunnel proxy hoạt động, nhưng chưa xác thực được Telegram qua tài khoản đang gắn. Kiểm tra lại phiên tài khoản rồi thử lại.",
+    toastProxyFailed: "Proxy không kết nối được tới Telegram.",
     ariaTest: (name: string) => `Test kết nối ${name}`,
     ariaDelete: (name: string) => `Xóa ${name}`,
     attachTitle: (name: string) => (
@@ -88,10 +90,12 @@ export default function ProxyPage() {
     authNo: "None",
     statusActive: "Active",
     statusPaused: "Paused",
-    test: "Test",
-    testing: "Testing...",
-    toastProxyOk: "Proxy connection is working.",
-    toastProxyFailed: "Proxy connection failed.",
+    test: "Verify Telegram",
+    testing: "Verifying...",
+    toastTunnelOk: "The proxy tunnel to Telegram works. Attach a verified Telegram account to check MTProto traffic.",
+    toastTelegramOk: "Verified: Telegram MTProto is connected through this proxy.",
+    toastAccountFailed: "The proxy tunnel works, but Telegram could not be verified through the attached account. Check that account session and try again.",
+    toastProxyFailed: "The proxy could not connect to Telegram.",
     ariaTest: (name: string) => `Test connection for ${name}`,
     ariaDelete: (name: string) => `Delete ${name}`,
     attachTitle: (name: string) => (
@@ -210,7 +214,15 @@ export default function ProxyPage() {
     try {
       const result = await testProxy(proxy.id);
       await proxies.refetch();
-      setToast(result.ok ? copy.toastProxyOk : `${copy.toastProxyFailed} ${result.message}`);
+      if (result.ok && result.verification === "telegram") {
+        setToast(copy.toastTelegramOk);
+      } else if (result.ok) {
+        setToast(copy.toastTunnelOk);
+      } else if (result.transportOk && result.verification === "account") {
+        setToast(copy.toastAccountFailed);
+      } else {
+        setToast(`${copy.toastProxyFailed} ${result.message}`);
+      }
     } catch (error) {
       setToast(errorText(error));
     } finally {

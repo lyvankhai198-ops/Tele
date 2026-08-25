@@ -6,9 +6,13 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ProxyTestResponseStatus } from './proxyTestResponseStatus';
+import type { ProxyTestResponseVerification } from './proxyTestResponseVerification';
 
 export interface ProxyTestResponse {
   ok: boolean;
+  /** Whether the HTTP/SOCKS tunnel to Telegram is working. */
+  transportOk: boolean;
+  verification: ProxyTestResponseVerification;
   status: ProxyTestResponseStatus;
   message: string;
   checkedAt: Date;

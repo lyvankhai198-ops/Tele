@@ -420,6 +420,8 @@ export const TestProxyParams = zod.object({
 
 export const TestProxyResponse = zod.object({
   "ok": zod.boolean(),
+  "transportOk": zod.boolean().describe('Whether the HTTP\/SOCKS tunnel to Telegram is working.'),
+  "verification": zod.enum(['tunnel', 'telegram', 'account']),
   "status": zod.enum(['connected', 'failed']),
   "message": zod.string(),
   "checkedAt": zod.coerce.date()

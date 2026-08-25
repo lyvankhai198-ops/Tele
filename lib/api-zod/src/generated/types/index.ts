@@ -86,6 +86,7 @@ export * from './proxyAccount';
 export * from './proxyStatus';
 export * from './proxyTestResponse';
 export * from './proxyTestResponseStatus';
+export * from './proxyTestResponseVerification';
 export * from './proxyType';
 export * from './purchaseSettings';
 export * from './purchaseSettingsInput';

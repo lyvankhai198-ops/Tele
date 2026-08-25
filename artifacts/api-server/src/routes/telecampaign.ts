@@ -78,6 +78,7 @@ import {
   confirmTelegramTwoFactorPassword,
   credentialsForAccount,
   encryptSecret,
+  getAccountClient,
   getTelegramProxyConfig,
   isTelegramSessionRevoked,
   listTelegramSavedMessages,
@@ -604,8 +605,20 @@ router.post("/proxies/:proxyId/test", async (req, res): Promise<void> => {
   if (!releaseSlot) return void sendError(res, 429, "Bạn đang test proxy quá nhanh. Vui lòng thử lại sau vài phút.");
 
   const checkedAt = new Date();
-  let ok = true;
-  let message = "Proxy connection is working.";
+  const [attachedAccount] = await db.select({
+    id: telegramAccountsTable.id,
+    name: telegramAccountsTable.name,
+  }).from(telegramAccountsTable).where(and(
+    eq(telegramAccountsTable.proxyId, existing.id),
+    eq(telegramAccountsTable.ownerUserId, ownerUserId),
+    eq(telegramAccountsTable.status, "connected"),
+    isNull(telegramAccountsTable.deletedAt),
+  )).orderBy(desc(telegramAccountsTable.updatedAt)).limit(1);
+
+  let ok = false;
+  let transportOk = false;
+  let verification: "tunnel" | "telegram" | "account" = "tunnel";
+  let message = "Could not connect through the proxy. Check the host, port, and credentials.";
   try {
     await testProxyConnection({
       type: existing.type === "socks5" ? "socks5" : "http",
@@ -614,8 +627,31 @@ router.post("/proxies/:proxyId/test", async (req, res): Promise<void> => {
       username: existing.usernameEncrypted ? decryptSecret(existing.usernameEncrypted) : undefined,
       password: existing.passwordEncrypted ? decryptSecret(existing.passwordEncrypted) : undefined,
     });
+    transportOk = true;
+    await db.update(proxiesTable).set({
+      status: "active",
+      lastCheckedAt: checkedAt,
+      updatedAt: checkedAt,
+    }).where(eq(proxiesTable.id, existing.id));
+
+    if (!attachedAccount) {
+      ok = true;
+      message = "Proxy tunnel to Telegram is working. Attach a connected Telegram account to verify MTProto traffic.";
+    } else {
+      verification = "telegram";
+      try {
+        const { client } = await getAccountClient(attachedAccount.id, ownerUserId);
+        await client.disconnect();
+        ok = true;
+        message = "Telegram MTProto connected through the attached proxy.";
+      } catch (error) {
+        verification = "account";
+        message = isTelegramSessionRevoked(error)
+          ? revokedTelegramSessionMessage
+          : "The proxy tunnel is working, but Telegram could not authenticate the attached account through it.";
+      }
+    }
   } catch (error) {
-    ok = false;
     message = error instanceof Error && error.name === "ProxyTestError"
       ? error.message
       : "Could not connect through the proxy. Check the host, port, and credentials.";
@@ -624,20 +660,22 @@ router.post("/proxies/:proxyId/test", async (req, res): Promise<void> => {
   }
 
   await db.update(proxiesTable).set({
-    status: ok ? "active" : "inactive",
+    status: transportOk ? "active" : "inactive",
     lastCheckedAt: checkedAt,
     updatedAt: checkedAt,
   }).where(eq(proxiesTable.id, existing.id));
   await recordActivity({
     ownerUserId,
     event: ok ? "proxy.tested" : "proxy.test_failed",
-    message: `${ok ? "Proxy test succeeded" : "Proxy test failed"}: ${existing.name}`,
+    message: `${ok ? "Proxy test succeeded" : "Proxy test could not verify Telegram"}: ${existing.name}`,
     level: ok ? "success" : "warning",
-    metadata: { type: existing.type, host: existing.host, port: existing.port },
+    metadata: { type: existing.type, host: existing.host, port: existing.port, transportOk, verification },
   });
 
   res.json(ProxyTestResponseSchema.parse({
     ok,
+    transportOk,
+    verification,
     status: ok ? "connected" : "failed",
     message,
     checkedAt,
