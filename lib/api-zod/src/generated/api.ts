@@ -723,7 +723,15 @@ export const ListActivityResponseItem = zod.object({
   "campaignId": zod.string().nullable(),
   "targetId": zod.string().nullable(),
   "metadata": zod.record(zod.string(), zod.unknown()).nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "campaignName": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
+  "destinationTitle": zod.string().nullable(),
+  "destinationUsername": zod.string().nullable(),
+  "targetStatus": zod.string().nullable(),
+  "targetAttempts": zod.number().nullable(),
+  "targetLastError": zod.string().nullable(),
+  "targetNextAttemptAt": zod.coerce.date().nullable()
 })
 export const ListActivityResponse = zod.array(ListActivityResponseItem)
 
@@ -777,7 +785,15 @@ export const GetDashboardResponse = zod.object({
   "campaignId": zod.string().nullable(),
   "targetId": zod.string().nullable(),
   "metadata": zod.record(zod.string(), zod.unknown()).nullable(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "campaignName": zod.string().nullable(),
+  "accountName": zod.string().nullable(),
+  "destinationTitle": zod.string().nullable(),
+  "destinationUsername": zod.string().nullable(),
+  "targetStatus": zod.string().nullable(),
+  "targetAttempts": zod.number().nullable(),
+  "targetLastError": zod.string().nullable(),
+  "targetNextAttemptAt": zod.coerce.date().nullable()
 })),
   "adminNotifications": zod.array(zod.object({
   "id": zod.string(),

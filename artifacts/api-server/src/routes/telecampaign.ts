@@ -522,7 +522,17 @@ router.get("/dashboard", async (req, res): Promise<void> => {
       failedToday: failedToday.value,
     },
     recentCampaigns: await Promise.all(recentCampaignRows.map(campaignSummary)),
-    recentActivity,
+    recentActivity: recentActivity.map((log) => ({
+      ...log,
+      campaignName: null,
+      accountName: null,
+      destinationTitle: null,
+      destinationUsername: null,
+      targetStatus: null,
+      targetAttempts: null,
+      targetLastError: null,
+      targetNextAttemptAt: null,
+    })),
     adminNotifications: adminNotificationRows.filter((notification) => isNotificationActive(notification)).map(adminNotificationResponse),
   }));
 });
@@ -1361,7 +1371,42 @@ router.get("/calendar", async (req, res): Promise<void> => {
 router.get("/activity", async (req, res): Promise<void> => {
   const parsed = ListActivityQueryParams.safeParse(req.query);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
-  const logs = await db.select().from(activityLogsTable).where(eq(activityLogsTable.ownerUserId, currentUserId(req)))
+  const logs = await db.select({
+    id: activityLogsTable.id,
+    level: activityLogsTable.level,
+    event: activityLogsTable.event,
+    message: activityLogsTable.message,
+    accountId: activityLogsTable.accountId,
+    campaignId: activityLogsTable.campaignId,
+    targetId: activityLogsTable.targetId,
+    metadata: activityLogsTable.metadata,
+    createdAt: activityLogsTable.createdAt,
+    campaignName: campaignsTable.name,
+    accountName: telegramAccountsTable.name,
+    destinationTitle: destinationsTable.title,
+    destinationUsername: destinationsTable.username,
+    targetStatus: campaignTargetsTable.status,
+    targetAttempts: campaignTargetsTable.attempts,
+    targetLastError: campaignTargetsTable.lastError,
+    targetNextAttemptAt: campaignTargetsTable.nextAttemptAt,
+  }).from(activityLogsTable)
+    .leftJoin(campaignsTable, and(
+      eq(activityLogsTable.campaignId, campaignsTable.id),
+      eq(campaignsTable.ownerUserId, currentUserId(req)),
+    ))
+    .leftJoin(telegramAccountsTable, and(
+      eq(activityLogsTable.accountId, telegramAccountsTable.id),
+      eq(telegramAccountsTable.ownerUserId, currentUserId(req)),
+    ))
+    .leftJoin(campaignTargetsTable, and(
+      eq(activityLogsTable.targetId, campaignTargetsTable.id),
+      eq(campaignTargetsTable.campaignId, campaignsTable.id),
+    ))
+    .leftJoin(destinationsTable, and(
+      eq(campaignTargetsTable.destinationId, destinationsTable.id),
+      eq(destinationsTable.accountId, telegramAccountsTable.id),
+    ))
+    .where(eq(activityLogsTable.ownerUserId, currentUserId(req)))
     .orderBy(desc(activityLogsTable.createdAt)).limit(parsed.data.limit);
   res.json(ListActivityResponse.parse(logs));
 });

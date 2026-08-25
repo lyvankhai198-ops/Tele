@@ -1131,7 +1131,7 @@ components:
         targetCount: { type: number }
     ActivityLog:
       type: object
-      required: [id, level, event, message, accountId, campaignId, targetId, metadata, createdAt]
+      required: [id, level, event, message, accountId, campaignId, targetId, metadata, createdAt, campaignName, accountName, destinationTitle, destinationUsername, targetStatus, targetAttempts, targetLastError, targetNextAttemptAt]
       properties:
         id: { type: string }
         level: { type: string }
@@ -1142,6 +1142,14 @@ components:
         targetId: { type: ["string", "null"] }
         metadata: { type: ["object", "null"], additionalProperties: true }
         createdAt: { type: string, format: date-time }
+        campaignName: { type: ["string", "null"] }
+        accountName: { type: ["string", "null"] }
+        destinationTitle: { type: ["string", "null"] }
+        destinationUsername: { type: ["string", "null"] }
+        targetStatus: { type: ["string", "null"] }
+        targetAttempts: { type: ["number", "null"] }
+        targetLastError: { type: ["string", "null"] }
+        targetNextAttemptAt: { type: ["string", "null"], format: date-time }
     ProxyAccount:
       type: object
       required: [id, name, phone]

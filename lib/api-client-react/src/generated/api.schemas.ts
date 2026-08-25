@@ -431,6 +431,22 @@ export interface ActivityLog {
   /** @nullable */
   metadata: ActivityLogMetadata;
   createdAt: string;
+  /** @nullable */
+  campaignName: string | null;
+  /** @nullable */
+  accountName: string | null;
+  /** @nullable */
+  destinationTitle: string | null;
+  /** @nullable */
+  destinationUsername: string | null;
+  /** @nullable */
+  targetStatus: string | null;
+  /** @nullable */
+  targetAttempts: number | null;
+  /** @nullable */
+  targetLastError: string | null;
+  /** @nullable */
+  targetNextAttemptAt: string | null;
 }
 
 export interface ProxyAccount {
