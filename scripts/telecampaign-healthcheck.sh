@@ -5,9 +5,18 @@ PORT="${TELECAMPAIGN_PORT:-3004}"
 HEALTH_URL="${TELECAMPAIGN_HEALTH_URL:-http://127.0.0.1:${PORT}/api/healthz}"
 TIMEOUT_SECONDS="${TELECAMPAIGN_HEALTH_TIMEOUT_SECONDS:-10}"
 
-response="$(curl --fail --silent --show-error --max-time "$TIMEOUT_SECONDS" "$HEALTH_URL")"
+deadline=$((SECONDS + TIMEOUT_SECONDS))
+response=""
+while (( SECONDS < deadline )); do
+  if response="$(curl --fail --silent --show-error --max-time 2 "$HEALTH_URL" 2>/dev/null)" \
+    && grep -Fq '"status":"ok"' <<<"$response"; then
+    break
+  fi
+  sleep 1
+done
+
 if ! grep -Fq '"status":"ok"' <<<"$response"; then
-  echo "TeleCampaign health endpoint returned an unexpected response." >&2
+  echo "TeleCampaign health endpoint did not become ready within ${TIMEOUT_SECONDS}s." >&2
   exit 1
 fi
 
