@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import {
   Activity,
   Bell,
-  CircleHelp,
   Command,
   FileText,
   LayoutDashboard,
@@ -34,7 +33,6 @@ export type PageKey =
   | "settings"
   | "templates"
   | "proxy"
-  | "tutorial"
   | "upgrade"
   | "admin"
   | "admin-overview"
@@ -53,7 +51,6 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "campaigns", label: "Campaigns", icon: Megaphone, path: "/dashboard/campaigns" },
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
-  { key: "tutorial", label: "Tutorial", icon: CircleHelp, path: "/dashboard/tutorial" },
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
 ];
 
