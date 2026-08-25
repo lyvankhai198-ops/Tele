@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
   CreateCampaignResponse,
@@ -100,6 +101,7 @@ import { adminNotificationResponse, isNotificationActive } from "../lib/admin-no
 import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
 
 const router: IRouter = Router();
+const activityDestinationAccounts = alias(telegramAccountsTable, "activity_destination_accounts");
 const notificationMediaStorage = new NotificationMediaStorage();
 const sendError = (res: any, status: number, error: string) => {
   res.status(status).json({ error });
@@ -1382,9 +1384,9 @@ router.get("/activity", async (req, res): Promise<void> => {
     metadata: activityLogsTable.metadata,
     createdAt: activityLogsTable.createdAt,
     campaignName: campaignsTable.name,
-    accountName: telegramAccountsTable.name,
-    destinationTitle: destinationsTable.title,
-    destinationUsername: destinationsTable.username,
+    accountName: sql<string | null>`coalesce(${telegramAccountsTable.name}, ${activityDestinationAccounts.name})`,
+    destinationTitle: sql<string | null>`case when ${activityDestinationAccounts.id} is not null then ${destinationsTable.title} else null end`,
+    destinationUsername: sql<string | null>`case when ${activityDestinationAccounts.id} is not null then ${destinationsTable.username} else null end`,
     targetStatus: campaignTargetsTable.status,
     targetAttempts: campaignTargetsTable.attempts,
     targetLastError: campaignTargetsTable.lastError,
@@ -1402,9 +1404,10 @@ router.get("/activity", async (req, res): Promise<void> => {
       eq(activityLogsTable.targetId, campaignTargetsTable.id),
       eq(campaignTargetsTable.campaignId, campaignsTable.id),
     ))
-    .leftJoin(destinationsTable, and(
-      eq(campaignTargetsTable.destinationId, destinationsTable.id),
-      eq(destinationsTable.accountId, telegramAccountsTable.id),
+    .leftJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+    .leftJoin(activityDestinationAccounts, and(
+      eq(destinationsTable.accountId, activityDestinationAccounts.id),
+      eq(activityDestinationAccounts.ownerUserId, currentUserId(req)),
     ))
     .where(eq(activityLogsTable.ownerUserId, currentUserId(req)))
     .orderBy(desc(activityLogsTable.createdAt)).limit(parsed.data.limit);
