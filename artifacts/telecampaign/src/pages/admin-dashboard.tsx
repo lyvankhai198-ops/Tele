@@ -1,25 +1,16 @@
-import { useGetAdminOverview } from "@workspace/api-client-react";
-import { useLanguage } from "@/lib/i18n";
+import { useLocation } from "wouter";
 import {
   AppLayout,
-  Panel,
   SectionHeader,
-  MetricCard,
 } from "@/components/layout/AppLayout";
 import {
-  Users,
-  UserPlus,
+  Activity,
+  Bell,
+  ChevronRight,
+  KeyRound,
+  Settings2,
   ShieldCheck,
-  CreditCard,
-  Ticket,
-  Key,
-  XCircle,
-  Network,
-  Link2,
-  PlayCircle,
-  Clock,
-  AlertTriangle,
-    Activity,
+  UsersRound,
 } from "lucide-react";
 
 const copy = {
@@ -50,205 +41,69 @@ const copy = {
     campFailed: "Failed Campaigns",
   },
   vi: {
-    pageTitle: "Tổng quan Hệ thống",
-    eyebrow: "Trung tâm Quản trị",
-    pageDetail: "Các chỉ số trực tiếp và tình trạng hệ thống của toàn bộ không gian làm việc.",
-    loadError: "Không thể tải dữ liệu tổng quan",
-    loadErrorDetail: "Kiểm tra quyền truy cập hoặc thử lại sau.",
-    usersSection: "Người dùng",
-    usersTotal: "Tổng số",
-    usersNew: "Mới (30 ngày)",
-    usersAdmins: "Quản trị viên",
-    subscriptionsSection: "Trạng thái Gói dịch vụ",
-    subsUnlimited: "Unlimited",
-    subsPro: "Pro",
-    subsPlus: "Plus",
-    subsExpired: "Hết hạn",
-    licensesSection: "Mã bản quyền",
-    licAvailable: "Khả dụng",
-    licClaimed: "Đã kích hoạt",
-    licRevoked: "Đã thu hồi",
-    platformSection: "Lưu lượng Nền tảng",
-    tgTotal: "Danh tính Telegram",
-    tgConnected: "Đang kết nối",
-    campTotal: "Tổng số Chiến dịch",
-    campQueued: "Đang chờ chạy",
-    campFailed: "Chiến dịch lỗi",
+    pageTitle: "Quản trị",
+    eyebrow: "Khu vực quản trị",
+    pageDetail: "Chọn một chức năng để quản lý và theo dõi toàn bộ hệ thống.",
+    notifications: "Thông báo quản trị",
+    notificationsDetail: "Tạo và quản lý thông báo hiển thị trên dashboard người dùng.",
+    users: "Quản lý người dùng",
+    usersDetail: "Xem tài khoản, vai trò, giới hạn và gói dịch vụ.",
+    keys: "Quản trị key",
+    keysDetail: "Tạo, theo dõi và thu hồi key kích hoạt gói dịch vụ.",
+    settings: "Cài đặt hệ thống",
+    settingsDetail: "Thiết lập giới hạn, gửi tin và quyền truy cập toàn hệ thống.",
+    operations: "Giám sát vận hành",
+    operationsDetail: "Theo dõi Telegram, campaign, queue và dung lượng VPS.",
   }
 } as const;
 
 export default function AdminDashboardPage() {
-  const { language } = useLanguage();
-  const text = copy[language];
-
-  const { data: overview, isLoading, error } = useGetAdminOverview();
-
-  if (error) {
-    return (
-      <AppLayout activePage="admin-overview" title={text.pageTitle}>
-        <Panel className="p-8 text-center text-[#e11d48]">
-          <Activity className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <h2 className="mb-2 text-lg font-bold">{text.loadError}</h2>
-          <p className="text-sm font-medium opacity-80">
-            {text.loadErrorDetail}
-          </p>
-        </Panel>
-      </AppLayout>
-    );
-  }
+  const [, navigate] = useLocation();
+  const text = copy.vi;
+  const cards = [
+    { path: "/admin/notifications", title: text.notifications, detail: text.notificationsDetail, icon: Bell, tone: "blue" },
+    { path: "/admin/users", title: text.users, detail: text.usersDetail, icon: UsersRound, tone: "green" },
+    { path: "/admin/license-keys", title: text.keys, detail: text.keysDetail, icon: KeyRound, tone: "warm" },
+    { path: "/admin/system-settings", title: text.settings, detail: text.settingsDetail, icon: Settings2, tone: "purple" },
+    { path: "/admin/operations", title: text.operations, detail: text.operationsDetail, icon: Activity, tone: "red" },
+  ] as const;
 
   return (
-    <AppLayout activePage="admin-overview" title={text.pageTitle}>
+    <AppLayout activePage="admin" title={text.pageTitle}>
       <SectionHeader
         eyebrow={text.eyebrow}
         title={text.pageTitle}
         detail={text.pageDetail}
       />
-
-      {isLoading || !overview ? (
-        <div className="flex h-64 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#eef2f6] border-t-[#1a2b88]" />
-        </div>
-      ) : (
-        <div className="space-y-10">
-          <section>
-            <h3 className="mb-4 text-[14px] font-extrabold uppercase tracking-wider text-[#64748b]">
-              {text.usersSection}
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <MetricCard
-                label={text.usersTotal}
-                value={overview.usersTotal.toString()}
-                change=""
-                icon={Users}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.usersNew}
-                value={overview.usersNewLast30Days.toString()}
-                change=""
-                icon={UserPlus}
-                tone="green"
-              />
-              <MetricCard
-                label={text.usersAdmins}
-                value={overview.usersAdmins.toString()}
-                change=""
-                icon={ShieldCheck}
-                tone="warm"
-              />
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-4 text-[14px] font-extrabold uppercase tracking-wider text-[#64748b]">
-              {text.subscriptionsSection}
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <MetricCard
-                label={text.subsUnlimited}
-                value={overview.subscriptions.unlimited.toString()}
-                change=""
-                icon={CreditCard}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.subsPro}
-                value={overview.subscriptions.pro.toString()}
-                change=""
-                icon={CreditCard}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.subsPlus}
-                value={overview.subscriptions.plus.toString()}
-                change=""
-                icon={CreditCard}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.subsExpired}
-                value={overview.subscriptions.expired.toString()}
-                change=""
-                icon={XCircle}
-                tone="red"
-              />
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-4 text-[14px] font-extrabold uppercase tracking-wider text-[#64748b]">
-              {text.licensesSection}
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <MetricCard
-                label={text.licAvailable}
-                value={overview.licenses.available.toString()}
-                change=""
-                icon={Key}
-                tone="green"
-              />
-              <MetricCard
-                label={text.licClaimed}
-                value={overview.licenses.claimed.toString()}
-                change=""
-                icon={Ticket}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.licRevoked}
-                value={overview.licenses.revoked.toString()}
-                change=""
-                icon={XCircle}
-                tone="red"
-              />
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-4 text-[14px] font-extrabold uppercase tracking-wider text-[#64748b]">
-              {text.platformSection}
-            </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricCard
-                label={text.tgTotal}
-                value={overview.telegramAccountsTotal.toString()}
-                change=""
-                icon={Network}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.tgConnected}
-                value={overview.telegramAccountsConnected.toString()}
-                change=""
-                icon={Link2}
-                tone="green"
-              />
-              <MetricCard
-                label={text.campTotal}
-                value={overview.campaignsTotal.toString()}
-                change=""
-                icon={PlayCircle}
-                tone="blue"
-              />
-              <MetricCard
-                label={text.campQueued}
-                value={overview.campaignsQueued.toString()}
-                change=""
-                icon={Clock}
-                tone="warm"
-              />
-              <MetricCard
-                label={text.campFailed}
-                value={overview.campaignsFailed.toString()}
-                change=""
-                icon={AlertTriangle}
-                tone="red"
-              />
-            </div>
-          </section>
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        {cards.map(({ path, title, detail, icon: Icon, tone }) => {
+          const styles = {
+            blue: { icon: "#2563eb", bg: "#eff6ff", hover: "hover:border-[#93c5fd]" },
+            green: { icon: "#059669", bg: "#ecfdf5", hover: "hover:border-[#86efac]" },
+            warm: { icon: "#ea580c", bg: "#fff7ed", hover: "hover:border-[#fdba74]" },
+            purple: { icon: "#7c3aed", bg: "#f5f3ff", hover: "hover:border-[#c4b5fd]" },
+            red: { icon: "#e11d48", bg: "#fff1f2", hover: "hover:border-[#fda4af]" },
+          }[tone];
+          return (
+            <button
+              key={path}
+              type="button"
+              onClick={() => navigate(path)}
+              className={`group flex min-h-[148px] items-center gap-5 rounded-3xl border border-[#eef2f6] bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${styles.hover}`}
+              data-testid={`admin-card-${path.split("/").pop()}`}
+            >
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl" style={{ color: styles.icon, backgroundColor: styles.bg }}>
+                <Icon className="h-6 w-6" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <strong className="block text-[17px] font-extrabold tracking-tight text-[#0f172a]">{title}</strong>
+                <span className="mt-2 block text-[13px] font-medium leading-relaxed text-[#64748b]">{detail}</span>
+              </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-1 group-hover:text-[#1a2b88]" />
+            </button>
+          );
+        })}
+      </div>
     </AppLayout>
   );
 }

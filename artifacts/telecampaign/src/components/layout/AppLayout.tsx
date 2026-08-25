@@ -35,6 +35,7 @@ export type PageKey =
   | "templates"
   | "proxy"
   | "upgrade"
+  | "admin"
   | "admin-overview"
   | "admin-notifications"
   | "admin-users"
@@ -51,12 +52,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "campaigns", label: "Campaigns", icon: Megaphone, path: "/dashboard/campaigns" },
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
-  { key: "admin-overview", label: "Admin center", icon: ShieldCheck, path: "/admin", adminOnly: true },
-  { key: "admin-notifications", label: "Admin notifications", icon: Bell, path: "/admin/notifications", adminOnly: true },
-  { key: "admin-users", label: "User management", icon: UsersRound, path: "/admin/users", adminOnly: true },
-  { key: "license-keys", label: "Admin license keys", icon: ShieldCheck, path: "/admin/license-keys", adminOnly: true },
-  { key: "admin-system-settings", label: "System settings", icon: Settings2, path: "/admin/system-settings", adminOnly: true },
-  { key: "admin-operations", label: "Operations monitoring", icon: Activity, path: "/admin/operations", adminOnly: true },
+  { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
 ];
 
 export function AppLayout({
@@ -77,9 +73,10 @@ export function AppLayout({
   hideUpgrade?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
+  const isAdminSection = location === "/admin" || location.startsWith("/admin/");
 
   function navigate(path: string) {
     setLocation(path);
@@ -112,7 +109,9 @@ export function AppLayout({
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
           {navigation.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
             const Icon = item.icon;
-            const selected = activePage === item.key;
+            const selected = item.key === "admin"
+              ? activePage === "admin" || activePage.startsWith("admin") || activePage === "license-keys"
+              : activePage === item.key;
             return (
               <button
                 key={item.key}
@@ -134,26 +133,33 @@ export function AppLayout({
             <div className="flex items-center gap-2 px-2 pb-2.5 text-[11px] font-extrabold text-[#64748b] uppercase tracking-wider">
               {t("Language")}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setLanguage("vi")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                  language === "vi" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
-                }`}
-                data-testid="language-vi"
-              >
-                VI
-              </button>
-              <button
-                onClick={() => setLanguage("en")}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                  language === "en" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
-                }`}
-                data-testid="language-en"
-              >
-                EN
-              </button>
-            </div>
+            {isAdminSection ? (
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white py-2 text-xs font-extrabold text-[#1a2b88]" data-testid="admin-language-vi">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Tiếng Việt
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setLanguage("vi")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                    language === "vi" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
+                  }`}
+                  data-testid="language-vi"
+                >
+                  VI
+                </button>
+                <button
+                  onClick={() => setLanguage("en")}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                    language === "en" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
+                  }`}
+                  data-testid="language-en"
+                >
+                  EN
+                </button>
+              </div>
+            )}
           </div>
           <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Telegram Campaign Manager v2.0</div>
         </div>

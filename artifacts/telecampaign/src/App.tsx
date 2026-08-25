@@ -5,7 +5,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
-import { LanguageProvider, localizedErrorMessage, useLanguage } from '@/lib/i18n';
+import { LanguageOverride, LanguageProvider, localizedErrorMessage, useLanguage } from '@/lib/i18n';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import {
   Route,
@@ -377,7 +377,7 @@ function AdminRoute({ children }: { children: ReactNode }) {
         <LoaderCircle className="h-6 w-6 animate-spin text-[#65b8f8]" />
       </main>
     );
-  return user?.role === 'admin' ? <>{children}</> : <Redirect to="/dashboard" replace />;
+  return user?.role === 'admin' ? <LanguageOverride language="vi">{children}</LanguageOverride> : <Redirect to="/dashboard" replace />;
 }
 
 function Router() {

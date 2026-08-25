@@ -486,6 +486,21 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
+export function LanguageOverride({ language, children }: { language: Language; children: ReactNode }) {
+  const parent = useLanguage();
+  const value = useMemo<LanguageContextValue>(() => ({
+    ...parent,
+    language,
+    t: (text: string) => language === "vi" ? (translations[text] ?? text) : text,
+    ti: (text: string, vars: Record<string, string | number>) => {
+      const translated = language === "vi" ? (translations[text] ?? text) : text;
+      return interpolate(translated, vars);
+    },
+  }), [language, parent]);
+
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+}
+
 export function useLanguage() {
   const context = useContext(LanguageContext);
   if (!context) throw new Error("useLanguage must be used inside LanguageProvider");
