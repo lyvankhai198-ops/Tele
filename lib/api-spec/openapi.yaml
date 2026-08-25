@@ -780,7 +780,7 @@ paths:
             schema: { $ref: "#/components/schemas/AdminNotificationUploadInput" }
       responses:
         "200":
-          description: Presigned URL for direct App Storage upload
+          description: Short-lived authenticated URL for direct TeleCampaign media upload
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminNotificationUpload" }

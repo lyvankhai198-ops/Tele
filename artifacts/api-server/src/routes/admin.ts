@@ -64,10 +64,14 @@ import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } fr
 import { recordActivity } from "../lib/activity";
 import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
 import { adminNotificationResponse } from "../lib/admin-notifications";
-import { ObjectStorageService } from "../lib/objectStorage";
+import {
+  NotificationMediaNotFoundError,
+  NotificationMediaStorage,
+  NotificationMediaUploadError,
+} from "../lib/notificationMediaStorage";
 
 const router: IRouter = Router();
-const objectStorageService = new ObjectStorageService();
+const notificationMediaStorage = new NotificationMediaStorage();
 
 function sendError(res: any, status: number, error: string): void {
   res.status(status).json({ error });
@@ -96,7 +100,7 @@ function notificationInputError(data: {
   expiresAt?: Date | null;
 }): string | null {
   if (!data.title.trim()) return "Tiêu đề thông báo không được để trống.";
-  if (data.mediaPath && !objectStorageService.isAdminNotificationMediaPath(data.mediaPath)) return "Đường dẫn media không hợp lệ.";
+  if (data.mediaPath && !notificationMediaStorage.isAdminNotificationMediaPath(data.mediaPath)) return "Đường dẫn media không hợp lệ.";
   if (data.mediaType && !["image", "video"].includes(data.mediaType)) return "Loại media không được hỗ trợ.";
   if (data.mediaSize !== null && data.mediaSize !== undefined && (!Number.isInteger(data.mediaSize) || data.mediaSize < 1 || data.mediaSize > 52_428_800)) {
     return "Dung lượng media phải từ 1 byte đến 50 MB.";
@@ -113,7 +117,7 @@ async function notificationMediaError(data: {
   if (!data.mediaPath) return null;
   if (!data.mediaType || !data.mediaSize) return "Thông tin media không đầy đủ.";
   try {
-    const verified = await objectStorageService.verifyAdminNotificationMedia(data.mediaPath);
+    const verified = await notificationMediaStorage.verifyAdminNotificationMedia(data.mediaPath);
     if (verified.mediaType !== data.mediaType || verified.size !== data.mediaSize) {
       return "Media tải lên không khớp với loại hoặc dung lượng đã khai báo.";
     }
@@ -124,14 +128,26 @@ async function notificationMediaError(data: {
 }
 
 async function deleteUnusedNotificationMedia(mediaPath: string | null, req: any): Promise<void> {
-  if (!mediaPath || !objectStorageService.isAdminNotificationMediaPath(mediaPath)) return;
+  if (!mediaPath || !notificationMediaStorage.isAdminNotificationMediaPath(mediaPath)) return;
   const [{ references }] = await db.select({ references: count() }).from(adminNotificationsTable)
     .where(eq(adminNotificationsTable.mediaPath, mediaPath));
   if (references !== 0) return;
   try {
-    await objectStorageService.deleteAdminNotificationMedia(mediaPath);
+    await notificationMediaStorage.deleteAdminNotificationMedia(mediaPath);
   } catch (error) {
     req.log.warn({ err: error, mediaPath }, "Unable to delete unused notification media");
+  }
+}
+
+async function cleanupOrphanedNotificationMedia(req: any): Promise<void> {
+  try {
+    await notificationMediaStorage.cleanupUnreferencedAdminNotificationMedia(async (mediaPath) => {
+      const reference = await db.select({ id: adminNotificationsTable.id }).from(adminNotificationsTable)
+        .where(eq(adminNotificationsTable.mediaPath, mediaPath)).limit(1);
+      return reference.length > 0;
+    });
+  } catch (error) {
+    req.log.warn({ err: error }, "Unable to clean orphaned notification media");
   }
 }
 
@@ -169,7 +185,12 @@ router.post("/admin/notifications/upload-url", async (req, res): Promise<void> =
   const parsed = RequestAdminNotificationUploadUrlBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Ảnh/video không hợp lệ hoặc vượt quá dung lượng 50 MB.");
   try {
-    const upload = await objectStorageService.createAdminNotificationUpload();
+    await cleanupOrphanedNotificationMedia(req);
+    const upload = await notificationMediaStorage.prepareAdminNotificationUpload({
+      ownerUserId: req.userId!,
+      contentType: parsed.data.contentType,
+      size: parsed.data.size,
+    });
     res.json(RequestAdminNotificationUploadUrlResponse.parse({
       uploadURL: upload.uploadURL,
       objectPath: upload.objectPath,
@@ -177,6 +198,23 @@ router.post("/admin/notifications/upload-url", async (req, res): Promise<void> =
   } catch (error) {
     req.log.error({ err: error }, "Unable to generate notification media upload URL");
     sendError(res, 500, "Không thể chuẩn bị nơi tải media lên.");
+  }
+});
+
+router.put("/admin/notifications/uploads/:uploadId", async (req, res): Promise<void> => {
+  try {
+    await notificationMediaStorage.storeAdminNotificationUpload({
+      uploadId: req.params.uploadId,
+      ownerUserId: req.userId!,
+      contentType: req.get("content-type") ?? "",
+      body: req,
+    });
+    res.status(204).end();
+  } catch (error) {
+    if (error instanceof NotificationMediaNotFoundError) return void sendError(res, 404, "Phiên tải media đã hết hạn.");
+    if (error instanceof NotificationMediaUploadError) return void sendError(res, 400, "Media tải lên không hợp lệ.");
+    req.log.error({ err: error }, "Unable to store notification media");
+    sendError(res, 500, "Không thể tải media lên.");
   }
 });
 

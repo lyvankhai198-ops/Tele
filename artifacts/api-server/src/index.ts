@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { getUnmappedLegacyOwnerCount } from "./lib/auth";
 import { rebaseLegacyPastScheduleCampaigns, startCampaignWorker } from "./lib/campaigns";
+import { startNotificationMediaCleanup } from "./lib/notificationMediaCleanup";
 
 const rawPort = process.env["PORT"];
 
@@ -26,6 +27,7 @@ void getUnmappedLegacyOwnerCount().then(async (unmappedOwners) => {
   }
 
   logger.info({ port }, "Server listening");
+  startNotificationMediaCleanup();
   if (unmappedOwners === 0) {
     startCampaignWorker();
   } else {

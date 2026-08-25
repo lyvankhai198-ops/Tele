@@ -96,10 +96,10 @@ import { getSystemSettings } from "../lib/system-settings";
 import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
-import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
+import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
 
 const router: IRouter = Router();
-const objectStorageService = new ObjectStorageService();
+const notificationMediaStorage = new NotificationMediaStorage();
 const sendError = (res: any, status: number, error: string) => {
   res.status(status).json({ error });
 };
@@ -441,9 +441,20 @@ router.get("/storage/admin-notifications/:notificationId/media", async (req, res
     return;
   }
   try {
-    res.redirect(302, await objectStorageService.getObjectEntityDownloadURL(notification.mediaPath));
+    const media = await notificationMediaStorage.readAdminNotificationMedia(notification.mediaPath);
+    res.sendFile(media.filePath, {
+      headers: {
+        "Cache-Control": "private, max-age=300",
+        "Content-Type": media.contentType,
+        "X-Content-Type-Options": "nosniff",
+      },
+    }, (error) => {
+      if (!error || res.headersSent) return;
+      req.log.error({ err: error, notificationId: notification.id }, "Unable to stream notification media");
+      sendError(res, 500, "Không thể tải media.");
+    });
   } catch (error) {
-    if (error instanceof ObjectNotFoundError) {
+    if (error instanceof NotificationMediaNotFoundError) {
       sendError(res, 404, "Media không tồn tại.");
       return;
     }
