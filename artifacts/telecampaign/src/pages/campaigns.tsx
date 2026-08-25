@@ -11,7 +11,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import type { Campaign, Destination } from "@workspace/api-client-react";
+import type { Campaign, Destination, MessageTemplate } from "@workspace/api-client-react";
 import {
   deleteCampaign,
   useCreateCampaign,
@@ -95,6 +95,9 @@ const copy = {
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
+    detailViewTemplate: "View template",
+    detailTemplateContent: "Template content",
+    detailForwardContent: "This template forwards the original saved message.",
     detailWaitingTitle: "Waiting to send",
     detailWaitingStatus: "Waiting",
     detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
@@ -171,6 +174,9 @@ const copy = {
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
+    detailViewTemplate: "Xem mẫu",
+    detailTemplateContent: "Nội dung mẫu",
+    detailForwardContent: "Mẫu này sẽ chuyển tiếp đúng tin nhắn gốc đã lưu.",
     detailWaitingTitle: "Đang chờ gửi",
     detailWaitingStatus: "Đang chờ",
     detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
@@ -299,6 +305,7 @@ export default function Campaigns() {
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
+  const [templatePreview, setTemplatePreview] = useState<MessageTemplate | null>(null);
   const [form, setForm] = useState<CampaignForm>(emptyForm);
   const [groupSearch, setGroupSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -328,6 +335,9 @@ export default function Campaigns() {
     template.mode !== "forward" || template.sourceAccountId === form.accountId,
   ), [templates.data, form.accountId]);
   const selectedTemplate = (templates.data ?? []).find((template) => template.id === form.templateId);
+  const detailTemplate = details?.templateId
+    ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
+    : null;
 
   function openNew() {
     const defaults = systemDefaults.data;
@@ -658,7 +668,7 @@ export default function Campaigns() {
         </Modal>
       )}
 
-      {details && (
+       {details && (
         <Modal title={details.name} description={`${c.detailStatusPrefix} ${statusLabel(details.status, c)}`} onClose={() => setDetails(null)}>
           <div className="space-y-4 text-[14px]">
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -671,9 +681,30 @@ export default function Campaigns() {
               <p className="mt-1"><b>{c.detailDelayRound}</b> {details.roundDelayMinSeconds}–{details.roundDelayMaxSeconds}s</p>
               <p className="mt-1"><b>{c.detailSchedule}</b> {formatSchedule(details.scheduledAt, language)}</p>
             </div>
-            <p className="whitespace-pre-wrap rounded-xl border border-[#e2e8f0] p-4 font-medium text-[#334155]">
-              {details.templateMode === "forward" ? c.detailForwardNote : details.content}
-            </p>
+             {details.templateMode === "forward" ? (
+               <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e2e8f0] p-4 text-[#334155]">
+                 <span className="font-medium">{c.detailForwardNote}</span>
+                 {detailTemplate && (
+                   <button
+                     type="button"
+                     onClick={() => {
+                       setDetails(null);
+                       setTemplatePreview(detailTemplate);
+                     }}
+                     className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-extrabold text-[#1d3bb8] transition-colors hover:bg-[#eff6ff]"
+                     aria-label={`${c.detailViewTemplate}: ${detailTemplate.name}`}
+                     title={c.detailViewTemplate}
+                   >
+                     <Eye className="h-4 w-4" />
+                     <span className="hidden sm:inline">{c.detailViewTemplate}</span>
+                   </button>
+                 )}
+               </div>
+             ) : (
+               <p className="whitespace-pre-wrap rounded-xl border border-[#e2e8f0] p-4 font-medium text-[#334155]">
+                 {details.content}
+               </p>
+             )}
              <div>
                {(() => {
                  const waiting = details.errors.filter(isWaitingRetry);
@@ -724,6 +755,18 @@ export default function Campaigns() {
           </div>
         </Modal>
       )}
+
+       {templatePreview && (
+         <Modal
+           title={templatePreview.name}
+           description={templatePreview.mode === "forward" ? c.detailForwardNote : c.detailTemplateContent}
+           onClose={() => setTemplatePreview(null)}
+         >
+           <p className="whitespace-pre-wrap rounded-xl bg-[#f8fafc] p-4 text-[14px] font-medium leading-relaxed text-[#334155]">
+             {templatePreview.content || (templatePreview.mode === "forward" ? c.detailForwardContent : c.genericError)}
+           </p>
+         </Modal>
+       )}
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </AppLayout>
