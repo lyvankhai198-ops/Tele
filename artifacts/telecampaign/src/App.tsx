@@ -27,6 +27,7 @@ import Calendar from '@/pages/calendar';
 import Logs from '@/pages/logs';
 import Settings from '@/pages/settings';
 import Upgrade from '@/pages/upgrade';
+import TutorialPage from '@/pages/tutorial';
 import AdminDashboardPage from '@/pages/admin-dashboard';
 import AdminNotificationsPage from '@/pages/admin-notifications';
 import AdminUsersPage from '@/pages/admin-users';
@@ -399,6 +400,7 @@ function Router() {
         <Route path="/dashboard/logs" component={() => <WorkspaceRoute><Logs /></WorkspaceRoute>} />
         <Route path="/dashboard/account" component={() => <WorkspaceRoute><Account /></WorkspaceRoute>} />
         <Route path="/dashboard/settings" component={() => <WorkspaceRoute><Settings /></WorkspaceRoute>} />
+        <Route path="/dashboard/tutorial" component={() => <WorkspaceRoute><TutorialPage /></WorkspaceRoute>} />
         <Route path="/upgrade" component={() => <ProtectedRoute><Upgrade /></ProtectedRoute>} />
         <Route path="/admin" component={() => <AdminRoute><AdminDashboardPage /></AdminRoute>} />
         <Route path="/admin/notifications" component={() => <AdminRoute><AdminNotificationsPage /></AdminRoute>} />
