@@ -5,6 +5,9 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
   CreateCampaignResponse,
+  CloneCampaignParams,
+  CloneCampaignBody,
+  CloneCampaignResponse,
   ActivateLicenseBody,
   ActivateLicenseResponse,
   GetAccountSummaryResponse,
@@ -72,7 +75,7 @@ import {
   proxiesTable,
   telegramAccountsTable,
 } from "@workspace/db";
-import { campaignSummary } from "../lib/campaigns";
+import { campaignCloneMode, campaignSummary } from "../lib/campaigns";
 import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration } from "../lib/telegram-config";
@@ -1214,16 +1217,20 @@ router.patch("/message-templates/:templateId", async (req, res): Promise<void> =
   const sourceMessageId = parsed.data.sourceMessageId === undefined ? existing.sourceMessageId : parsed.data.sourceMessageId;
   const clonedCampaignsUsingTemplate = await db.select({
     id: campaignsTable.id,
+    ownerUserId: campaignsTable.ownerUserId,
     telegramAccountId: campaignsTable.telegramAccountId,
+    clonedFromCampaignId: campaignsTable.clonedFromCampaignId,
+    clonedFromUserId: campaignsTable.clonedFromUserId,
   }).from(campaignsTable).where(and(
     eq(campaignsTable.templateId, existing.id),
     isNotNull(campaignsTable.clonedFromCampaignId),
   ));
-  if (clonedCampaignsUsingTemplate.length) {
+  const adminClonesUsingTemplate = clonedCampaignsUsingTemplate.filter((campaign) => campaignCloneMode(campaign) === "admin");
+  if (adminClonesUsingTemplate.length) {
     if (mode !== "forward") {
       return void sendError(res, 409, "A cloned campaign must keep its forward message template.");
     }
-    if (clonedCampaignsUsingTemplate.some((campaign) => campaign.telegramAccountId !== sourceAccountId)) {
+    if (adminClonesUsingTemplate.some((campaign) => campaign.telegramAccountId !== sourceAccountId)) {
       return void sendError(res, 409, "A cloned campaign must forward a Saved Message from its assigned Telegram account.");
     }
   }
@@ -1383,6 +1390,136 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   res.status(201).json(CreateCampaignResponse.parse(await campaignSummary(campaign)));
 });
 
+router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
+  const params = CloneCampaignParams.safeParse(req.params);
+  const body = CloneCampaignBody.safeParse(req.body);
+  if (!params.success || !body.success) return void sendError(res, 400, "Thông tin nhân bản campaign không hợp lệ.");
+
+  const ownerUserId = currentUserId(req);
+  const campaignAllowance = await getCampaignAllowance(ownerUserId);
+  if (campaignAllowance.campaignLimit !== null && campaignAllowance.used >= campaignAllowance.campaignLimit) {
+    return void sendError(res, 409, `Campaign limit reached for your ${campaignAllowance.plan.toUpperCase()} plan`);
+  }
+
+  const outcome = await db.transaction(async (tx) => {
+    const [sourceCandidate] = await tx.select().from(campaignsTable).where(and(
+      eq(campaignsTable.id, params.data.campaignId),
+      eq(campaignsTable.ownerUserId, ownerUserId),
+    ));
+    if (!sourceCandidate) return { kind: "error" as const, status: 404, message: "Không tìm thấy campaign nguồn." };
+
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${sourceCandidate.id} FOR UPDATE`);
+    const [sourceCampaign] = await tx.select().from(campaignsTable).where(and(
+      eq(campaignsTable.id, sourceCandidate.id),
+      eq(campaignsTable.ownerUserId, ownerUserId),
+    ));
+    if (!sourceCampaign) return { kind: "error" as const, status: 404, message: "Campaign nguồn không còn tồn tại." };
+
+    const [targetAccount] = await tx.select().from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.id, body.data.telegramAccountId),
+      eq(telegramAccountsTable.ownerUserId, ownerUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    ));
+    if (!targetAccount) return { kind: "error" as const, status: 404, message: "Không tìm thấy tài khoản Telegram đã chọn." };
+    if (!targetAccount.sessionEncrypted || targetAccount.status !== "connected") {
+      return { kind: "error" as const, status: 409, message: "Tài khoản Telegram đã chọn cần được kết nối trước khi nhân bản." };
+    }
+
+    const sourceTargets = await tx.select({ destinationId: campaignTargetsTable.destinationId })
+      .from(campaignTargetsTable)
+      .where(eq(campaignTargetsTable.campaignId, sourceCampaign.id));
+    const sourceDestinationIds = [...new Set(sourceTargets.map((target) => target.destinationId))];
+    const sourceDestinations = sourceDestinationIds.length
+      ? await tx.select().from(destinationsTable).where(inArray(destinationsTable.id, sourceDestinationIds))
+      : [];
+    const targetDestinations = await tx.select().from(destinationsTable)
+      .where(eq(destinationsTable.accountId, targetAccount.id));
+    const targetDestinationByKey = new Map(targetDestinations.map((destination) => [
+      `${destination.telegramId}:${destination.topicId ?? "chat"}`,
+      destination,
+    ]));
+    const clonedDestinationIds = sourceDestinations.flatMap((destination) => {
+      if (destination.accountId === targetAccount.id) return [destination.id];
+      const matchingDestination = targetDestinationByKey.get(`${destination.telegramId}:${destination.topicId ?? "chat"}`);
+      return matchingDestination ? [matchingDestination.id] : [];
+    });
+
+    const sourceTemplate = sourceCampaign.templateId
+      ? (await tx.select().from(messageTemplatesTable).where(and(
+        eq(messageTemplatesTable.id, sourceCampaign.templateId),
+        eq(messageTemplatesTable.ownerUserId, ownerUserId),
+      )))[0]
+      : undefined;
+    const keepTemplate = Boolean(sourceTemplate && (
+      sourceTemplate.mode === "text"
+      || sourceTemplate.sourceAccountId === targetAccount.id
+    ));
+    const templateId = keepTemplate ? sourceTemplate!.id : null;
+    const templateMode = keepTemplate && sourceTemplate!.mode === "forward" ? "forward" : "text";
+    const templateSourceAccountId = keepTemplate ? sourceTemplate!.sourceAccountId : null;
+    const templateSourceMessageId = keepTemplate ? sourceTemplate!.sourceMessageId : null;
+    const content = keepTemplate ? sourceTemplate!.content : templateMode === "text" ? sourceCampaign.content : "";
+
+    const [clone] = await tx.insert(campaignsTable).values({
+      ownerUserId,
+      name: `${sourceCampaign.name} (Bản sao)`,
+      content,
+      telegramAccountId: targetAccount.id,
+      templateId,
+      templateMode,
+      templateSourceAccountId,
+      templateSourceMessageId,
+      clonedFromCampaignId: sourceCampaign.id,
+      clonedFromUserId: ownerUserId,
+      mediaUrl: null,
+      status: "draft",
+      scheduledAt: sourceCampaign.scheduledAt,
+      timezone: sourceCampaign.timezone,
+      maxRetries: sourceCampaign.maxRetries,
+      repeatCount: sourceCampaign.repeatCount,
+      delayMinSeconds: sourceCampaign.delayMinSeconds,
+      delayMaxSeconds: sourceCampaign.delayMaxSeconds,
+      roundDelayMinSeconds: sourceCampaign.roundDelayMinSeconds,
+      roundDelayMaxSeconds: sourceCampaign.roundDelayMaxSeconds,
+    }).returning();
+    if (clonedDestinationIds.length) {
+      await tx.insert(campaignTargetsTable).values(Array.from(
+        { length: sourceCampaign.repeatCount },
+        () => clonedDestinationIds.map((destinationId) => ({
+          campaignId: clone.id,
+          destinationId,
+          status: "pending" as const,
+          attempts: 0,
+          quotaReservedAt: null,
+          nextAttemptAt: null,
+          lastError: null,
+          sentMessageId: null,
+          sentAt: null,
+        })),
+      ).flat());
+    }
+    await tx.insert(activityLogsTable).values({
+      ownerUserId,
+      event: "campaign.cloned_by_user",
+      message: `Cloned campaign "${sourceCampaign.name}" into a draft.`,
+      campaignId: clone.id,
+      accountId: targetAccount.id,
+      level: "success",
+      metadata: {
+        sourceCampaignId: sourceCampaign.id,
+        sourceAccountId: sourceCampaign.telegramAccountId,
+        targetAccountId: targetAccount.id,
+        destinationCount: clonedDestinationIds.length,
+        templateReused: keepTemplate,
+      },
+    });
+    return { kind: "success" as const, campaign: clone };
+  });
+
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.status(201).json(CloneCampaignResponse.parse(await campaignSummary(outcome.campaign)));
+});
+
 router.get("/campaigns/:campaignId/clone-readiness", async (req, res): Promise<void> => {
   const params = GetCampaignCloneReadinessParams.safeParse(req.params);
   if (!params.success) return void sendError(res, 400, params.error.message);
@@ -1457,7 +1594,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   if (editing && !["draft", "paused"].includes(existing.status)) {
     return void sendError(res, 409, "Only draft or paused campaigns can be edited");
   }
-  if (existing.clonedFromCampaignId && (
+  const isAdminClone = campaignCloneMode(existing) === "admin";
+  if (isAdminClone && (
     (parsed.data.telegramAccountId !== undefined && parsed.data.telegramAccountId !== existing.telegramAccountId)
     || (parsed.data.templateId !== undefined && parsed.data.templateId !== existing.templateId)
   )) {
@@ -1514,14 +1652,14 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         eq(messageTemplatesTable.ownerUserId, ownerUserId),
       ));
       if (!template) return { kind: "error" as const, status: 404, message: "Message template not found" };
-      if (!lockedCampaign.clonedFromCampaignId && template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
+       if (campaignCloneMode(lockedCampaign) !== "admin" && template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
         return { kind: "error" as const, status: 409, message: "Forward templates must use the Telegram account that owns the saved message" };
       }
       const destinations = await tx.select().from(destinationsTable).where(and(
         inArray(destinationsTable.id, destinationIds),
         eq(destinationsTable.accountId, telegramAccountId),
       ));
-      if (destinations.length !== destinationIds.length || (!lockedCampaign.clonedFromCampaignId && destinations.some((destination) => !destination.canPost))) {
+       if (destinations.length !== destinationIds.length || (campaignCloneMode(lockedCampaign) !== "admin" && destinations.some((destination) => !destination.canPost))) {
         return { kind: "error" as const, status: 409, message: "Every campaign destination must exist and have verified posting permission" };
       }
 
@@ -1632,7 +1770,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       eq(messageTemplatesTable.ownerUserId, ownerUserId),
     ));
     if (!template) return void sendError(res, 409, "The campaign message template is unavailable.");
-    if (existing.clonedFromCampaignId && template.mode !== "forward") {
+     if (campaignCloneMode(existing) === "admin" && template.mode !== "forward") {
       return void sendError(res, 409, "A cloned campaign must use a Saved Message forward template.");
     }
     if (template.mode === "forward" && (

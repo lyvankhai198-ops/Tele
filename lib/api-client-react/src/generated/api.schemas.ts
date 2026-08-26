@@ -284,6 +284,17 @@ export const CampaignTemplateMode = {
   forward: 'forward',
 } as const;
 
+/**
+ * @nullable
+ */
+export type CampaignCloneMode = typeof CampaignCloneMode[keyof typeof CampaignCloneMode] | null;
+
+
+export const CampaignCloneMode = {
+  admin: 'admin',
+  user: 'user',
+} as const;
+
 export interface CampaignTargetError {
   destinationId: string;
   destinationTitle: string;
@@ -312,6 +323,8 @@ export interface Campaign {
   clonedFromCampaignId: string | null;
   /** @nullable */
   clonedFromUserId: string | null;
+  /** @nullable */
+  cloneMode: CampaignCloneMode;
   /** @nullable */
   mediaUrl: string | null;
   status: string;
@@ -364,6 +377,10 @@ export interface CampaignInput {
      * @maximum 259200
      */
   roundDelayMaxSeconds?: number;
+}
+
+export interface CloneCampaignInput {
+  telegramAccountId: string;
 }
 
 export type CampaignUpdateInputStatus = typeof CampaignUpdateInputStatus[keyof typeof CampaignUpdateInputStatus];

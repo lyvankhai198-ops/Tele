@@ -435,6 +435,26 @@ paths:
         - { $ref: "#/components/parameters/CampaignId" }
       responses:
         "204": { description: Deleted }
+  /campaigns/{campaignId}/clone:
+    post:
+      operationId: cloneCampaign
+      tags: [campaigns]
+      parameters:
+        - { $ref: "#/components/parameters/CampaignId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloneCampaignInput" }
+      responses:
+        "201":
+          description: Campaign cloned into a draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "400": { description: Invalid clone input }
+        "404": { description: Campaign or Telegram account not found }
+        "409": { description: Campaign limit reached or Telegram account is not connected }
   /calendar:
     get:
       operationId: listCalendarItems
@@ -1186,7 +1206,7 @@ components:
         sourceMessageId: { type: ["string", "null"] }
     Campaign:
       type: object
-      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, destinationIds, errors]
+      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, cloneMode, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, destinationIds, errors]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1198,6 +1218,7 @@ components:
         templateSourceMessageId: { type: ["string", "null"] }
         clonedFromCampaignId: { type: ["string", "null"] }
         clonedFromUserId: { type: ["string", "null"] }
+        cloneMode: { type: ["string", "null"], enum: [admin, user, null] }
         mediaUrl: { type: ["string", "null"] }
         status: { type: string }
         scheduledAt: { type: ["string", "null"], format: date-time }
@@ -1234,6 +1255,11 @@ components:
         repeatCount: { type: number, minimum: 1, maximum: 300, default: 1 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200, default: 1 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200, default: 3 }
+    CloneCampaignInput:
+      type: object
+      required: [telegramAccountId]
+      properties:
+        telegramAccountId: { type: string }
     CampaignTargetError:
       type: object
       required: [destinationId, destinationTitle, status, attempts, lastError, nextAttemptAt]

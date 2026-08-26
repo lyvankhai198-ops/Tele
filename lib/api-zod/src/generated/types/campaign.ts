@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignCloneMode } from './campaignCloneMode';
 import type { CampaignTargetError } from './campaignTargetError';
 import type { CampaignTemplateMode } from './campaignTemplateMode';
 
@@ -25,6 +26,8 @@ export interface Campaign {
   clonedFromCampaignId: string | null;
   /** @nullable */
   clonedFromUserId: string | null;
+  /** @nullable */
+  cloneMode: CampaignCloneMode;
   /** @nullable */
   mediaUrl: string | null;
   status: string;

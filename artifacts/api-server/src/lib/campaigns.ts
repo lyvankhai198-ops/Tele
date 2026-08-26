@@ -374,6 +374,13 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(input: {
   return resumedCount;
 }
 
+export type CampaignCloneMode = "admin" | "user" | null;
+
+export function campaignCloneMode(campaign: Pick<typeof campaignsTable.$inferSelect, "ownerUserId" | "clonedFromCampaignId" | "clonedFromUserId">): CampaignCloneMode {
+  if (!campaign.clonedFromCampaignId) return null;
+  return campaign.clonedFromUserId === campaign.ownerUserId ? "user" : "admin";
+}
+
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
   const targets = await db.select({
     target: campaignTargetsTable,
@@ -393,6 +400,7 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
   const waitingTargets = [...nextPendingByDestination.values()];
   return {
     ...campaign,
+    cloneMode: campaignCloneMode(campaign),
     targetCount: targets.length,
     destinationIds: [...new Set(targets.map(({ target }) => target.destinationId))],
     sentCount: targets.filter(({ target }) => target.status === "sent").length,

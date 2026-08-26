@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   CheckSquare,
+  Copy,
   Eye,
   LoaderCircle,
   CirclePause,
@@ -15,6 +16,7 @@ import type { Campaign, Destination, MessageTemplate } from "@workspace/api-clie
 import {
   deleteCampaign,
   useCreateCampaign,
+  useCloneCampaign,
   useGetSystemDefaults,
   useGetCampaignCloneReadiness,
   useListCampaigns,
@@ -50,6 +52,7 @@ const copy = {
     pauseBtn: "Pause",
     resumeBtn: "Resume",
     editBtn: "Edit",
+    cloneBtn: "Clone",
     deleteBtn: "Delete",
     errorsLabel: "Errors",
     emptyFilterTitle: "No campaigns found",
@@ -88,6 +91,7 @@ const copy = {
     toastResumed: "Campaign resumed.",
     automaticResume: "Will resume automatically on a new day",
     toastDeleted: "Campaign deleted.",
+    toastCloned: "Campaign copied as a draft. Review it before running.",
     toastError: (msg: string) => msg,
     confirmDelete: (name: string) => `Delete campaign "${name}"?`,
     detailStatusPrefix: "Status:",
@@ -103,6 +107,15 @@ const copy = {
     detailTemplateContent: "Template content",
     detailForwardContent: "This template forwards the original saved message.",
     clonedDraft: "This cloned draft is waiting for a Saved Message before it can run.",
+    userClonedDraft: "This copy is a draft. You can change its account, message template, and destinations before running it.",
+    cloneTitle: "Clone campaign",
+    cloneDetail: "Create a separate draft without delivery history, retries, sent counts, or quota reservations.",
+    cloneSource: "Source campaign",
+    cloneTargetAccount: "Send with Telegram account",
+    cloneTargetAccountPlaceholder: "Choose a connected account",
+    cloneNoConnectedAccounts: "Connect a Telegram account before cloning this campaign.",
+    cloneSubmit: "Create draft copy",
+    cloneCancel: "Cancel",
     cloneRunTitle: "Choose Saved Message",
     cloneRunDetail: "The message will be forwarded from this admin Telegram account after you confirm.",
     cloneRunAccount: "Telegram account",
@@ -140,6 +153,7 @@ const copy = {
     pauseBtn: "Dừng",
     resumeBtn: "Tiếp tục",
     editBtn: "Chỉnh sửa",
+    cloneBtn: "Nhân bản",
     deleteBtn: "Xóa",
     errorsLabel: "Lỗi",
     emptyFilterTitle: "Không tìm thấy chiến dịch",
@@ -178,6 +192,7 @@ const copy = {
     toastResumed: "Chiến dịch đã tiếp tục.",
     automaticResume: "Tự động chạy lại vào ngày mới",
     toastDeleted: "Đã xóa chiến dịch.",
+    toastCloned: "Đã tạo bản sao ở dạng nháp. Hãy kiểm tra trước khi chạy.",
     toastError: (msg: string) => msg,
     confirmDelete: (name: string) => `Xóa chiến dịch "${name}"?`,
     detailStatusPrefix: "Trạng thái:",
@@ -193,6 +208,15 @@ const copy = {
     detailTemplateContent: "Nội dung mẫu",
     detailForwardContent: "Mẫu này sẽ chuyển tiếp đúng tin nhắn gốc đã lưu.",
     clonedDraft: "Bản clone này đang chờ chọn Tin nhắn đã lưu trước khi có thể chạy.",
+    userClonedDraft: "Bản sao này đang là nháp. Bạn có thể đổi tài khoản, mẫu tin và nhóm gửi trước khi chạy.",
+    cloneTitle: "Nhân bản chiến dịch",
+    cloneDetail: "Tạo bản nháp độc lập, không sao chép lịch sử gửi, retry, số lượng đã gửi hoặc quota đã giữ chỗ.",
+    cloneSource: "Chiến dịch nguồn",
+    cloneTargetAccount: "Gửi bằng tài khoản Telegram",
+    cloneTargetAccountPlaceholder: "Chọn tài khoản đã kết nối",
+    cloneNoConnectedAccounts: "Hãy kết nối tài khoản Telegram trước khi nhân bản chiến dịch.",
+    cloneSubmit: "Tạo bản nháp",
+    cloneCancel: "Hủy",
     cloneRunTitle: "Chọn Tin nhắn đã lưu",
     cloneRunDetail: "Tin nhắn sẽ được forward từ tài khoản Telegram admin này sau khi bạn xác nhận.",
     cloneRunAccount: "Tài khoản Telegram",
@@ -329,6 +353,7 @@ export default function Campaigns() {
   const destinations = useListDestinations();
   const templates = useListMessageTemplates();
   const createCampaign = useCreateCampaign();
+  const cloneCampaign = useCloneCampaign();
   const systemDefaults = useGetSystemDefaults();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
@@ -344,6 +369,9 @@ export default function Campaigns() {
   const [toast, setToast] = useState<string | null>(null);
   const [forwardCampaign, setForwardCampaign] = useState<Campaign | null>(null);
   const [forwardSourceMessageId, setForwardSourceMessageId] = useState("");
+  const [cloneSourceCampaign, setCloneSourceCampaign] = useState<Campaign | null>(null);
+  const [cloneTargetAccountId, setCloneTargetAccountId] = useState("");
+  const [cloneError, setCloneError] = useState<string | null>(null);
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
     query: { enabled: Boolean(forwardCampaign?.id) } as any,
   });
@@ -416,6 +444,13 @@ export default function Campaigns() {
     setShowForm(true);
   }
 
+  function openClone(campaign: Campaign) {
+    const preferredAccount = connectedAccounts.find((account) => account.id === campaign.telegramAccountId) ?? connectedAccounts[0];
+    setCloneSourceCampaign(campaign);
+    setCloneTargetAccountId(preferredAccount?.id ?? "");
+    setCloneError(null);
+  }
+
   function changeAccount(accountId: string) {
     setForm((current) => ({ ...current, accountId, templateId: "", destinationIds: [] }));
   }
@@ -471,12 +506,12 @@ export default function Campaigns() {
     }
     try {
       if (editingCampaign) {
-        const isClonedCampaign = Boolean(editingCampaign.clonedFromCampaignId);
+        const isAdminClonedCampaign = editingCampaign.cloneMode === "admin";
         await updateStatus.mutateAsync({
           campaignId: editingCampaign.id,
           data: {
             name: form.name.trim(),
-            ...(isClonedCampaign ? {} : {
+            ...(isAdminClonedCampaign ? {} : {
               telegramAccountId: form.accountId,
               templateId: form.templateId,
             }),
@@ -527,12 +562,33 @@ export default function Campaigns() {
   }
 
   function requestQueue(campaign: Campaign) {
-    if (campaign.clonedFromCampaignId) {
+    if (campaign.cloneMode === "admin") {
       setForwardCampaign(campaign);
       setForwardSourceMessageId("");
       return;
     }
     void changeCampaignStatus(campaign, "queued");
+  }
+
+  async function submitClone() {
+    if (!cloneSourceCampaign || !cloneTargetAccountId) {
+      setCloneError(c.cloneNoConnectedAccounts);
+      return;
+    }
+    setCloneError(null);
+    try {
+      const clonedCampaign = await cloneCampaign.mutateAsync({
+        campaignId: cloneSourceCampaign.id,
+        data: { telegramAccountId: cloneTargetAccountId },
+      });
+      await campaigns.refetch();
+      setCloneSourceCampaign(null);
+      setCloneTargetAccountId("");
+      setToast(c.toastCloned);
+      openEdit(clonedCampaign);
+    } catch (error) {
+      setCloneError(localizedErrorMessage(error, language, c.genericError));
+    }
   }
 
   async function confirmClonedCampaignRun() {
@@ -653,11 +709,20 @@ export default function Campaigns() {
                               </div>
                             : <span className="h-10" />}
                       </div>
-                      {campaign.clonedFromCampaignId && campaign.status === "draft" && (
+                       <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
+                         {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
+                         {c.cloneBtn}
+                       </button>
+                       {campaign.cloneMode === "admin" && campaign.status === "draft" && (
                         <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
                           {c.clonedDraft}
                         </p>
                       )}
+                       {campaign.cloneMode === "user" && campaign.status === "draft" && (
+                         <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
+                           {c.userClonedDraft}
+                         </p>
+                       )}
                       <button onClick={() => void remove(campaign)} disabled={updateStatus.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#f99a9d] text-[14px] font-extrabold text-white hover:bg-[#f57c80]"><Trash2 className="h-[17px] w-[17px]" />{c.deleteBtn}</button>
                     </article>
                   );
@@ -681,7 +746,7 @@ export default function Campaigns() {
 
             <label className="block">
               <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldAccount}</span>
-              <select value={form.accountId} onChange={(event) => changeAccount(event.target.value)} disabled={Boolean(editingCampaign?.clonedFromCampaignId)} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-account">
+              <select value={form.accountId} onChange={(event) => changeAccount(event.target.value)} disabled={editingCampaign?.cloneMode === "admin"} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-account">
                 <option value="">{c.fieldAccountPlaceholder}</option>
                 {connectedAccounts.map((account) => <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>)}
               </select>
@@ -689,11 +754,11 @@ export default function Campaigns() {
 
             <label className="block">
               <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldTemplate}</span>
-              <select value={form.templateId} onChange={(event) => setForm({ ...form, templateId: event.target.value })} disabled={!form.accountId || Boolean(editingCampaign?.clonedFromCampaignId)} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-template">
+              <select value={form.templateId} onChange={(event) => setForm({ ...form, templateId: event.target.value })} disabled={!form.accountId || editingCampaign?.cloneMode === "admin"} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-template">
                 <option value="">{c.fieldTemplatePlaceholder}</option>
                 {accountTemplates.map((template) => <option value={template.id} key={template.id}>{template.name}{template.mode === "forward" ? " · Forward" : ""}</option>)}
               </select>
-              {editingCampaign?.clonedFromCampaignId && <span className="mt-2 block text-[12px] font-medium leading-relaxed text-[#64748b]">{c.clonedFieldsFixed}</span>}
+              {editingCampaign?.cloneMode === "admin" && <span className="mt-2 block text-[12px] font-medium leading-relaxed text-[#64748b]">{c.clonedFieldsFixed}</span>}
             </label>
 
             <div>
@@ -762,6 +827,53 @@ export default function Campaigns() {
               {editingCampaign ? c.editBtn : c.createCampaignBtn}
             </PrimaryButton>
           </form>
+        </Modal>
+      )}
+
+      {cloneSourceCampaign && (
+        <Modal
+          title={c.cloneTitle}
+          description={c.cloneDetail}
+          onClose={() => {
+            if (!cloneCampaign.isPending) {
+              setCloneSourceCampaign(null);
+              setCloneTargetAccountId("");
+              setCloneError(null);
+            }
+          }}
+        >
+          <div className="space-y-5">
+            <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-[13px] text-[#1e3a8a]">
+              <span className="block text-[10px] font-black uppercase tracking-wide text-[#1d4ed8]">{c.cloneSource}</span>
+              <span className="mt-1 block break-words font-extrabold">{cloneSourceCampaign.name}</span>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.cloneTargetAccount}</span>
+              <select
+                value={cloneTargetAccountId}
+                onChange={(event) => setCloneTargetAccountId(event.target.value)}
+                disabled={cloneCampaign.isPending || connectedAccounts.length === 0}
+                className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]"
+                data-testid="clone-campaign-account"
+              >
+                <option value="">{c.cloneTargetAccountPlaceholder}</option>
+                {connectedAccounts.map((account) => (
+                  <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>
+                ))}
+              </select>
+              {connectedAccounts.length === 0 && <span className="mt-2 block text-[12px] font-medium text-[#be123c]">{c.cloneNoConnectedAccounts}</span>}
+            </label>
+            {cloneError && <p className="rounded-xl bg-[#fff1f2] px-3.5 py-3 text-[13px] font-semibold text-[#be123c]">{cloneError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setCloneSourceCampaign(null)} disabled={cloneCampaign.isPending} className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50">
+                {c.cloneCancel}
+              </button>
+              <PrimaryButton type="button" onClick={() => void submitClone()} disabled={!cloneTargetAccountId || cloneCampaign.isPending}>
+                {cloneCampaign.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {c.cloneSubmit}
+              </PrimaryButton>
+            </div>
+          </div>
         </Modal>
       )}
 

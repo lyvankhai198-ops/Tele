@@ -50,6 +50,7 @@ import type {
   CampaignCloneReadiness,
   CampaignInput,
   CampaignUpdateInput,
+  CloneCampaignInput,
   CreateAdminLicenseKeyInput,
   CreateAdminLicenseKeyResult,
   CreateProxyInput,
@@ -2199,6 +2200,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteCampaignMutationOptions(options));
+    }
+
+export const getCloneCampaignUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/clone`
+}
+
+export const cloneCampaign = async (campaignId: string,
+    cloneCampaignInput: CloneCampaignInput, options?: Parameters<typeof customFetch>[1]): Promise<Campaign> => {
+
+  return customFetch<Campaign>(getCloneCampaignUrl(campaignId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(cloneCampaignInput)
+  }
+);}
+
+
+
+
+
+export const getCloneCampaignMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneCampaign>>, TError,{campaignId: string;data: BodyType<CloneCampaignInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cloneCampaign>>, TError,{campaignId: string;data: BodyType<CloneCampaignInput>}, TContext> => {
+
+const mutationKey = ['cloneCampaign'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cloneCampaign>>, {campaignId: string;data: BodyType<CloneCampaignInput>}> = (props) => {
+          const {campaignId,data} = props ?? {};
+
+          return  cloneCampaign(campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloneCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof cloneCampaign>>>
+    export type CloneCampaignMutationBody = BodyType<CloneCampaignInput>
+    export type CloneCampaignMutationError = ErrorType<void>
+
+    export const useCloneCampaign = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneCampaign>>, TError,{campaignId: string;data: BodyType<CloneCampaignInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cloneCampaign>>,
+        TError,
+        {campaignId: string;data: BodyType<CloneCampaignInput>},
+        TContext
+      > => {
+      return useMutation(getCloneCampaignMutationOptions(options));
     }
 
 export const getListCalendarItemsUrl = (params?: ListCalendarItemsParams,) => {
