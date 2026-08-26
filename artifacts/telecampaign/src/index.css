@@ -151,3 +151,80 @@
   }
 }
 
+@keyframes admin-notices-border-shift {
+  0%, 100% {
+    background-position: 0 0, 0% 50%;
+  }
+  50% {
+    background-position: 0 0, 100% 50%;
+  }
+}
+
+@keyframes admin-notices-glow {
+  0%, 100% {
+    box-shadow: 0 10px 30px rgba(30, 64, 175, 0.05);
+  }
+  50% {
+    box-shadow: 0 14px 34px rgba(79, 70, 229, 0.11);
+  }
+}
+
+@keyframes admin-notices-bell-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+  32% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.1), 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+  62% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0), 0 1px 3px rgba(15, 23, 42, 0.08);
+  }
+}
+
+.admin-notices-panel {
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(#f8fafc, #f8fafc),
+    linear-gradient(135deg, #cbd5e1, #a5b4fc, #bae6fd, #cbd5e1);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 100% 100%, 220% 220%;
+  animation:
+    admin-notices-border-shift 12s ease-in-out infinite,
+    admin-notices-glow 5s ease-in-out infinite;
+}
+
+.admin-notices-bell {
+  animation: admin-notices-bell-pulse 1.8s ease-out 1 both;
+}
+
+.admin-notice-card {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.admin-notice-card:hover,
+.admin-notice-card:focus-within {
+  transform: translateY(-2px);
+  border-color: #c7d2fe;
+  box-shadow: 0 10px 24px rgba(30, 64, 175, 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-notices-panel,
+  .admin-notices-bell {
+    animation: none;
+  }
+
+  .admin-notice-card {
+    transition: none;
+  }
+
+  .admin-notice-card:hover,
+  .admin-notice-card:focus-within {
+    transform: none;
+  }
+}
+

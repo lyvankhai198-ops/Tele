@@ -94,9 +94,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-8">
         <div className="space-y-8">
           {/* Admin Notifications */}
-          <div className="bg-[#f8fafc] border border-[#cbd5e1] rounded-3xl p-6" data-testid="admin-notices">
+          <div className="admin-notices-panel rounded-3xl p-6" data-testid="admin-notices">
             <div className="flex items-center gap-3.5 mb-6">
-              <span className="h-12 w-12 bg-[#e0e7ff] text-[#1d4ed8] rounded-2xl flex items-center justify-center shadow-sm">
+              <span className="admin-notices-bell h-12 w-12 bg-[#e0e7ff] text-[#1d4ed8] rounded-2xl flex items-center justify-center shadow-sm">
                 <Bell className="h-6 w-6" />
               </span>
               <h2 className="text-[19px] font-extrabold text-[#0f172a] uppercase tracking-wide">{t("ADMIN Notifications")}</h2>
@@ -105,7 +105,7 @@ export default function Dashboard() {
             {adminNotifications.length > 0 ? (
               <div className="space-y-7">
                 {adminNotifications.map((notice) => (
-                  <article key={notice.id} className="overflow-hidden rounded-2xl border border-[#dbe6f0] bg-white text-[14px] text-[#0f172a] shadow-sm" data-testid={`notice-${notice.id}`}>
+                  <article key={notice.id} className="admin-notice-card overflow-hidden rounded-2xl border border-[#dbe6f0] bg-white text-[14px] text-[#0f172a] shadow-sm" data-testid={`notice-${notice.id}`}>
                     {(() => {
                       const localizedTitle = language === "en" && notice.titleEn?.trim() ? notice.titleEn : notice.title;
                       return (
