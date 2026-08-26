@@ -12,6 +12,10 @@ export interface AdminNotification {
   id: string;
   title: string;
   body: string;
+  /** @nullable */
+  titleEn: string | null;
+  /** @nullable */
+  bodyEn: string | null;
   status: AdminNotificationStatus;
   /** @nullable */
   mediaUrl: string | null;

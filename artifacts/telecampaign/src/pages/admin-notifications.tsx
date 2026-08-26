@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-client-react";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, QuietButton, SectionHeader, Toast } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 
 type MediaState = {
   path: string | null;
@@ -75,6 +76,11 @@ const copy = {
     hide: "Remove from dashboard",
     restore: "Show on dashboard",
     pinError: "Could not update dashboard placement.",
+    preview: "Preview",
+    englishSection: "English version",
+    englishHint: "Optional copy shown automatically when the user selects EN.",
+    englishTitle: "English title",
+    englishBody: "English scrolling message",
   },
   vi: {
     pageTitle: "Thông báo Admin",
@@ -122,6 +128,11 @@ const copy = {
     hide: "Gỡ khỏi dashboard",
     restore: "Phát lại trên dashboard",
     pinError: "Không thể cập nhật vị trí hiển thị.",
+    preview: "Xem chi tiết",
+    englishSection: "Phiên bản tiếng Anh",
+    englishHint: "Không bắt buộc. Bản này sẽ tự hiển thị khi người dùng chọn EN.",
+    englishTitle: "Tiêu đề tiếng Anh",
+    englishBody: "Nội dung chữ chạy tiếng Anh",
   },
 } as const;
 
@@ -152,6 +163,7 @@ export default function AdminNotificationsPage() {
   const pinMutation = useSetAdminNotificationPinned();
   const visibilityMutation = useSetAdminNotificationVisibility();
   const [editing, setEditing] = useState<AdminNotification | null>(null);
+  const [previewing, setPreviewing] = useState<AdminNotification | null>(null);
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; isError?: boolean } | null>(null);
 
@@ -206,7 +218,7 @@ export default function AdminNotificationsPage() {
       ) : (
         <div className="grid gap-5">
           {notifications.map((notification) => (
-            <NotificationCard key={notification.id} notification={notification} text={text} language={language} onEdit={() => { setEditing(notification); setOpen(true); }} onDelete={() => onDelete(notification)} onPin={() => onPin(notification)} onVisibility={() => onVisibility(notification)} />
+             <NotificationCard key={notification.id} notification={notification} text={text} language={language} onPreview={() => setPreviewing(notification)} onEdit={() => { setEditing(notification); setOpen(true); }} onDelete={() => onDelete(notification)} onPin={() => onPin(notification)} onVisibility={() => onVisibility(notification)} />
           ))}
         </div>
       )}
@@ -242,15 +254,17 @@ export default function AdminNotificationsPage() {
           }}
         />
       )}
+      {previewing && <NotificationDetailModal notification={previewing} onClose={() => setPreviewing(null)} showTranslations />}
       {toast && <Toast message={toast.text} onDismiss={() => setToast(null)} />}
     </AppLayout>
   );
 }
 
-function NotificationCard({ notification, text, language, onEdit, onDelete, onPin, onVisibility }: {
+function NotificationCard({ notification, text, language, onPreview, onEdit, onDelete, onPin, onVisibility }: {
   notification: AdminNotification;
   text: NotificationCopy;
   language: string;
+  onPreview: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onPin: () => void;
@@ -286,7 +300,8 @@ function NotificationCard({ notification, text, language, onEdit, onDelete, onPi
           </div>
         </div>
          <div className="flex shrink-0 gap-2">
-           <button type="button" onClick={onPin} className={`rounded-xl border p-2.5 transition ${notification.pinned ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "border-[#cbd5e1] text-[#475569] hover:bg-[#f8fafc] hover:text-[#1a2b88]"}`} aria-label={notification.pinned ? text.unpin : text.pin} title={notification.pinned ? text.unpin : text.pin}>{notification.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}</button>
+            <button type="button" onClick={onPreview} className="rounded-xl border border-[#cbd5e1] p-2.5 text-[#475569] transition hover:bg-[#f8fafc] hover:text-[#1a2b88]" aria-label={text.preview} title={text.preview}><Eye className="h-4 w-4" /></button>
+            <button type="button" onClick={onPin} className={`rounded-xl border p-2.5 transition ${notification.pinned ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "border-[#cbd5e1] text-[#475569] hover:bg-[#f8fafc] hover:text-[#1a2b88]"}`} aria-label={notification.pinned ? text.unpin : text.pin} title={notification.pinned ? text.unpin : text.pin}>{notification.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}</button>
            <button type="button" onClick={onVisibility} className={`rounded-xl border p-2.5 transition ${notification.dashboardVisible ? "border-[#cbd5e1] text-[#475569] hover:bg-[#f8fafc] hover:text-[#1a2b88]" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`} aria-label={notification.dashboardVisible ? text.hide : text.restore} title={notification.dashboardVisible ? text.hide : text.restore}>{notification.dashboardVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
           <button type="button" onClick={onEdit} className="rounded-xl border border-[#cbd5e1] p-2.5 text-[#475569] transition hover:bg-[#f8fafc] hover:text-[#1a2b88]" aria-label={text.edit}><Pencil className="h-4 w-4" /></button>
           <button type="button" onClick={onDelete} className="rounded-xl border border-[#fecdd3] p-2.5 text-[#e11d48] transition hover:bg-[#fff1f2]" aria-label={text.delete}><Trash2 className="h-4 w-4" /></button>
@@ -323,6 +338,8 @@ function NotificationForm({ notification, text, language, busy, requestUpload, o
     previewUrl: notification.mediaUrl,
     unchanged: true,
   } : emptyMedia);
+  const [titleEn, setTitleEn] = useState(notification?.titleEn ?? "");
+  const [bodyEn, setBodyEn] = useState(notification?.bodyEn ?? "");
   const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const mediaInputId = useMemo(() => `notification-media-${notification?.id ?? "new"}`, [notification?.id]);
@@ -359,9 +376,11 @@ function NotificationForm({ notification, text, language, busy, requestUpload, o
       mediaName: media.name,
       mediaSize: media.size,
     };
-    onSubmit({
+       onSubmit({
       title: title.trim(),
       body,
+         titleEn: titleEn.trim() || null,
+         bodyEn: bodyEn.trim() || null,
       ...mediaPayload,
       scheduledAt: mode === "schedule" ? new Date(scheduledAt).toISOString() : null,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
@@ -373,6 +392,16 @@ function NotificationForm({ notification, text, language, busy, requestUpload, o
       <div className="space-y-5">
         <label className="block"><span className="mb-2 block text-sm font-bold text-[#475569]">{text.title}</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={text.titleHint} maxLength={200} className="w-full rounded-xl border border-[#cbd5e1] px-4 py-3 text-sm font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" /></label>
         <label className="block"><span className="mb-2 block text-sm font-bold text-[#475569]">{text.body}</span><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder={text.bodyHint} maxLength={5000} rows={4} className="w-full resize-y rounded-xl border border-[#cbd5e1] px-4 py-3 text-sm font-medium leading-6 outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" /></label>
+         <div className="rounded-2xl border border-[#bfdbfe] bg-[#f8fbff] p-4">
+           <div className="mb-4 flex items-start gap-3">
+             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#dbeafe] text-[#1d4ed8]"><span className="text-sm font-black">EN</span></span>
+             <div><p className="text-sm font-extrabold text-[#1e3a8a]">{text.englishSection}</p><p className="mt-1 text-xs font-medium leading-5 text-[#64748b]">{text.englishHint}</p></div>
+           </div>
+           <div className="space-y-4">
+             <label className="block"><span className="mb-2 block text-sm font-bold text-[#475569]">{text.englishTitle}</span><input value={titleEn} onChange={(event) => setTitleEn(event.target.value)} placeholder={text.titleHint} maxLength={200} className="w-full rounded-xl border border-[#bfdbfe] bg-white px-4 py-3 text-sm font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" /></label>
+             <label className="block"><span className="mb-2 block text-sm font-bold text-[#475569]">{text.englishBody}</span><textarea value={bodyEn} onChange={(event) => setBodyEn(event.target.value)} placeholder={text.bodyHint} maxLength={5000} rows={4} className="w-full resize-y rounded-xl border border-[#bfdbfe] bg-white px-4 py-3 text-sm font-medium leading-6 outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" /></label>
+           </div>
+         </div>
         <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
           <div className="mb-3 flex flex-wrap gap-2">
             <button type="button" onClick={() => setMode("now")} className={`rounded-xl px-4 py-2 text-sm font-extrabold ${mode === "now" ? "bg-[#1a2b88] text-white" : "bg-white text-[#475569] border border-[#cbd5e1]"}`}>{text.publishNow}</button>

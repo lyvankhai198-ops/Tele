@@ -182,6 +182,8 @@ async function cleanupOrphanedNotificationMedia(req: any): Promise<void> {
 function notificationDbValues(data: {
   title: string;
   body?: string;
+  titleEn?: string | null;
+  bodyEn?: string | null;
   mediaPath?: string | null;
   mediaType?: "image" | "video" | null;
   mediaName?: string | null;
@@ -196,6 +198,8 @@ function notificationDbValues(data: {
   return {
     title: data.title.trim(),
     body: data.body?.trim() ?? "",
+    titleEn: data.titleEn?.trim() || null,
+    bodyEn: data.bodyEn?.trim() || null,
     mediaPath: data.mediaPath ?? null,
     mediaType: data.mediaType ?? null,
     mediaName: data.mediaName ?? null,
@@ -275,6 +279,8 @@ router.patch("/admin/notifications/:notificationId", async (req, res): Promise<v
   if (!existing) return void sendError(res, 404, "Không tìm thấy thông báo.");
   const nextData = {
     ...parsed.data,
+    titleEn: parsed.data.titleEn === undefined ? existing.titleEn : parsed.data.titleEn,
+    bodyEn: parsed.data.bodyEn === undefined ? existing.bodyEn : parsed.data.bodyEn,
     mediaPath: parsed.data.mediaPath === undefined ? existing.mediaPath : parsed.data.mediaPath,
     mediaType: parsed.data.mediaType === undefined ? existing.mediaType as "image" | "video" | null : parsed.data.mediaType,
     mediaName: parsed.data.mediaName === undefined ? existing.mediaName : parsed.data.mediaName,

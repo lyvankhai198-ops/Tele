@@ -9,12 +9,16 @@ import {
   Users, 
   XCircle,
   LoaderCircle,
-  AlertCircle
+  AlertCircle,
+  Eye,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
+import { useState } from "react";
 import { getGetDashboardQueryKey, useGetDashboard, useGetUpgradeSummary } from "@workspace/api-client-react";
+import type { AdminNotification } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
+import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 
 export default function Dashboard() {
   const { language, t } = useLanguage();
@@ -27,6 +31,7 @@ export default function Dashboard() {
   });
   const { data: upgradeSummary } = useGetUpgradeSummary();
   const [, setLocation] = useLocation();
+  const [selectedNotice, setSelectedNotice] = useState<AdminNotification | null>(null);
 
   if (isLoading) {
     return (
@@ -102,8 +107,13 @@ export default function Dashboard() {
               <div className="space-y-7">
                 {adminNotifications.map((notice) => (
                   <article key={notice.id} className="overflow-hidden rounded-2xl border border-[#dbe6f0] bg-white text-[14px] text-[#0f172a] shadow-sm" data-testid={`notice-${notice.id}`}>
+                    {(() => {
+                      const localizedTitle = language === "en" && notice.titleEn?.trim() ? notice.titleEn : notice.title;
+                      const localizedBody = language === "en" && notice.bodyEn?.trim() ? notice.bodyEn : notice.body;
+                      return (
+                        <>
                     {notice.mediaUrl && notice.mediaType === "image" && (
-                      <img src={notice.mediaUrl} alt={notice.title} className="max-h-80 w-full object-cover" />
+                      <img src={notice.mediaUrl} alt={localizedTitle} className="max-h-80 w-full object-cover" />
                     )}
                     {notice.mediaUrl && notice.mediaType === "video" && (
                       <video src={notice.mediaUrl} className="max-h-80 w-full bg-slate-950 object-contain" controls preload="metadata" />
@@ -112,19 +122,25 @@ export default function Dashboard() {
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           {notice.pinned && <Pin className="h-4 w-4 text-[#1d4ed8]" aria-label={t("Pinned")} />}
-                          <h3 className="font-extrabold text-[#0f172a]">{notice.title}</h3>
+                           <h3 className="font-extrabold text-[#0f172a]">{localizedTitle}</h3>
                         </div>
-                        <span className="text-[11px] font-bold text-[#64748b]">{t("Update on")} {formatNoticeDate(notice.publishedAt ?? notice.scheduledAt ?? notice.createdAt)}</span>
+                         <div className="flex items-center gap-2">
+                           <button type="button" onClick={() => setSelectedNotice(notice)} className="rounded-lg p-1.5 text-[#64748b] transition hover:bg-[#eef2ff] hover:text-[#1a2b88]" aria-label={t("View notification details")} title={t("View notification details")}><Eye className="h-4 w-4" /></button>
+                           <span className="text-[11px] font-bold text-[#64748b]">{t("Update on")} {formatNoticeDate(notice.publishedAt ?? notice.scheduledAt ?? notice.createdAt)}</span>
+                         </div>
                       </div>
-                      {notice.body && (
-                        <div className="overflow-hidden rounded-lg border border-[#e2e8f0] bg-[#f8fafc] py-2" tabIndex={0} aria-label={notice.body}>
-                          <div className="admin-notice-marquee flex w-max whitespace-nowrap text-[#334155] font-semibold" style={{ "--marquee-duration": `${Math.max(12, Math.min(42, notice.body.length / 4))}s` } as CSSProperties}>
-                            <span className="pr-16">{notice.body}</span>
-                            <span className="pr-16" aria-hidden="true">{notice.body}</span>
+                       {localizedBody && (
+                         <div className="overflow-hidden rounded-lg border border-[#e2e8f0] bg-[#f8fafc] py-2" tabIndex={0} aria-label={localizedBody}>
+                           <div className="admin-notice-marquee flex w-max whitespace-nowrap text-[#334155] font-semibold" style={{ "--marquee-duration": `${Math.max(12, Math.min(42, localizedBody.length / 4))}s` } as CSSProperties}>
+                             <span className="pr-16">{localizedBody}</span>
+                             <span className="pr-16" aria-hidden="true">{localizedBody}</span>
                           </div>
                         </div>
                       )}
                     </div>
+                        </>
+                      );
+                    })()}
                   </article>
                 ))}
               </div>
@@ -209,6 +225,7 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+      {selectedNotice && <NotificationDetailModal notification={selectedNotice} onClose={() => setSelectedNotice(null)} />}
     </AppLayout>
   );
 }

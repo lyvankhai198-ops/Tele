@@ -892,6 +892,8 @@ export const GetDashboardResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
+  "titleEn": zod.string().nullable(),
+  "bodyEn": zod.string().nullable(),
   "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
   "mediaUrl": zod.string().nullable(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
@@ -1496,6 +1498,8 @@ export const ListAdminNotificationsResponseItem = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
+  "titleEn": zod.string().nullable(),
+  "bodyEn": zod.string().nullable(),
   "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
   "mediaUrl": zod.string().nullable(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
@@ -1518,6 +1522,10 @@ export const createAdminNotificationBodyTitleMax = 200;
 export const createAdminNotificationBodyBodyDefault = ``;
 export const createAdminNotificationBodyBodyMax = 5000;
 
+export const createAdminNotificationBodyTitleEnMax = 200;
+
+export const createAdminNotificationBodyBodyEnMax = 5000;
+
 export const createAdminNotificationBodyMediaPathMax = 500;
 
 export const createAdminNotificationBodyMediaNameMax = 255;
@@ -1529,6 +1537,8 @@ export const createAdminNotificationBodyMediaSizeMax = 52428800;
 export const CreateAdminNotificationBody = zod.object({
   "title": zod.string().min(1).max(createAdminNotificationBodyTitleMax),
   "body": zod.string().max(createAdminNotificationBodyBodyMax).default(createAdminNotificationBodyBodyDefault),
+  "titleEn": zod.string().max(createAdminNotificationBodyTitleEnMax).nullish(),
+  "bodyEn": zod.string().max(createAdminNotificationBodyBodyEnMax).nullish(),
   "mediaPath": zod.string().max(createAdminNotificationBodyMediaPathMax).nullish(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullish(),
   "mediaName": zod.string().max(createAdminNotificationBodyMediaNameMax).nullish(),
@@ -1541,6 +1551,8 @@ export const CreateAdminNotificationResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
+  "titleEn": zod.string().nullable(),
+  "bodyEn": zod.string().nullable(),
   "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
   "mediaUrl": zod.string().nullable(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
@@ -1566,6 +1578,10 @@ export const updateAdminNotificationBodyTitleMax = 200;
 export const updateAdminNotificationBodyBodyDefault = ``;
 export const updateAdminNotificationBodyBodyMax = 5000;
 
+export const updateAdminNotificationBodyTitleEnMax = 200;
+
+export const updateAdminNotificationBodyBodyEnMax = 5000;
+
 export const updateAdminNotificationBodyMediaPathMax = 500;
 
 export const updateAdminNotificationBodyMediaNameMax = 255;
@@ -1577,6 +1593,8 @@ export const updateAdminNotificationBodyMediaSizeMax = 52428800;
 export const UpdateAdminNotificationBody = zod.object({
   "title": zod.string().min(1).max(updateAdminNotificationBodyTitleMax),
   "body": zod.string().max(updateAdminNotificationBodyBodyMax).default(updateAdminNotificationBodyBodyDefault),
+  "titleEn": zod.string().max(updateAdminNotificationBodyTitleEnMax).nullish(),
+  "bodyEn": zod.string().max(updateAdminNotificationBodyBodyEnMax).nullish(),
   "mediaPath": zod.string().max(updateAdminNotificationBodyMediaPathMax).nullish(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullish(),
   "mediaName": zod.string().max(updateAdminNotificationBodyMediaNameMax).nullish(),
@@ -1589,6 +1607,8 @@ export const UpdateAdminNotificationResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
+  "titleEn": zod.string().nullable(),
+  "bodyEn": zod.string().nullable(),
   "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
   "mediaUrl": zod.string().nullable(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
@@ -1624,6 +1644,8 @@ export const SetAdminNotificationPinnedResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
+  "titleEn": zod.string().nullable(),
+  "bodyEn": zod.string().nullable(),
   "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
   "mediaUrl": zod.string().nullable(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
@@ -1652,6 +1674,8 @@ export const SetAdminNotificationVisibilityResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
   "body": zod.string(),
+  "titleEn": zod.string().nullable(),
+  "bodyEn": zod.string().nullable(),
   "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
   "mediaUrl": zod.string().nullable(),
   "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),

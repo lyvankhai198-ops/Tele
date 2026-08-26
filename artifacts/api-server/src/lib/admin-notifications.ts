@@ -24,6 +24,8 @@ export function adminNotificationResponse(notification: AdminNotification) {
     id: notification.id,
     title: notification.title,
     body: notification.body,
+    titleEn: notification.titleEn,
+    bodyEn: notification.bodyEn,
     status: notificationLifecycle(notification),
     mediaUrl: notification.mediaPath ? `/api/storage/admin-notifications/${notification.id}/media` : null,
     mediaType: notification.mediaType === "video" ? "video" as const : notification.mediaType === "image" ? "image" as const : null,

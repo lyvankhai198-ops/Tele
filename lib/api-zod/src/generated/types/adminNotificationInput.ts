@@ -16,6 +16,16 @@ export interface AdminNotificationInput {
   /** @maxLength 5000 */
   body?: string;
   /**
+     * @maxLength 200
+     * @nullable
+     */
+  titleEn?: string | null;
+  /**
+     * @maxLength 5000
+     * @nullable
+     */
+  bodyEn?: string | null;
+  /**
      * @maxLength 500
      * @nullable
      */

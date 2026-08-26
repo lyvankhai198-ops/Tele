@@ -191,6 +191,8 @@ export const adminNotificationsTable = pgTable("admin_notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
   body: text("body").notNull().default(""),
+  titleEn: text("title_en"),
+  bodyEn: text("body_en"),
   mediaPath: text("media_path"),
   mediaType: text("media_type"),
   mediaName: text("media_name"),

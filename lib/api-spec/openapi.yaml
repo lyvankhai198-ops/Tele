@@ -1417,11 +1417,13 @@ components:
         failedToday: { type: number }
     AdminNotification:
       type: object
-      required: [id, title, body, status, mediaUrl, mediaType, mediaName, mediaSize, scheduledAt, publishedAt, expiresAt, pinned, dashboardVisible, createdBy, createdAt, updatedAt]
+      required: [id, title, body, titleEn, bodyEn, status, mediaUrl, mediaType, mediaName, mediaSize, scheduledAt, publishedAt, expiresAt, pinned, dashboardVisible, createdBy, createdAt, updatedAt]
       properties:
         id: { type: string }
         title: { type: string }
         body: { type: string }
+        titleEn: { type: ["string", "null"] }
+        bodyEn: { type: ["string", "null"] }
         status: { type: string, enum: [draft, scheduled, published, expired] }
         mediaUrl: { type: ["string", "null"] }
         mediaType: { type: ["string", "null"], enum: [image, video, null] }
@@ -1441,6 +1443,8 @@ components:
       properties:
         title: { type: string, minLength: 1, maxLength: 200 }
         body: { type: string, maxLength: 5000, default: "" }
+        titleEn: { type: ["string", "null"], maxLength: 200 }
+        bodyEn: { type: ["string", "null"], maxLength: 5000 }
         mediaPath: { type: ["string", "null"], maxLength: 500 }
         mediaType: { type: ["string", "null"], enum: [image, video, null] }
         mediaName: { type: ["string", "null"], maxLength: 255 }

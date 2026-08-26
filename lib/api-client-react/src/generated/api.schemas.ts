@@ -672,6 +672,10 @@ export interface AdminNotification {
   id: string;
   title: string;
   body: string;
+  /** @nullable */
+  titleEn: string | null;
+  /** @nullable */
+  bodyEn: string | null;
   status: AdminNotificationStatus;
   /** @nullable */
   mediaUrl: string | null;
@@ -714,6 +718,16 @@ export interface AdminNotificationInput {
   title: string;
   /** @maxLength 5000 */
   body?: string;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  titleEn?: string | null;
+  /**
+     * @maxLength 5000
+     * @nullable
+     */
+  bodyEn?: string | null;
   /**
      * @maxLength 500
      * @nullable
