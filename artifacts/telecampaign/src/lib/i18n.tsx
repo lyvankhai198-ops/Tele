@@ -370,6 +370,7 @@ const translations: Record<string, string> = {
   "Read the full announcement and its display settings.": "Xem đầy đủ nội dung và cài đặt hiển thị của thông báo.",
   "Preview": "Xem trước",
   "View notification details": "Xem chi tiết thông báo",
+  "View now": "Xem ngay",
   "No English translation added yet.": "Chưa thêm bản dịch tiếng Anh.",
   "Update on": "Update ngày",
   "No notifications.": "Không có thông báo nào.",

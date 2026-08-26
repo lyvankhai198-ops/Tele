@@ -108,7 +108,6 @@ export default function Dashboard() {
                   <article key={notice.id} className="overflow-hidden rounded-2xl border border-[#dbe6f0] bg-white text-[14px] text-[#0f172a] shadow-sm" data-testid={`notice-${notice.id}`}>
                     {(() => {
                       const localizedTitle = language === "en" && notice.titleEn?.trim() ? notice.titleEn : notice.title;
-                      const localizedBody = language === "en" && notice.bodyEn?.trim() ? notice.bodyEn : notice.body;
                       return (
                         <>
                     {notice.mediaUrl && notice.mediaType === "image" && (
@@ -118,21 +117,26 @@ export default function Dashboard() {
                       <video src={notice.mediaUrl} className="max-h-80 w-full bg-slate-950 object-contain" controls preload="metadata" />
                     )}
                     <div className="p-4 sm:p-5">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-2">
                           {notice.pinned && <Pin className="h-4 w-4 text-[#1d4ed8]" aria-label={t("Pinned")} />}
-                           <h3 className="font-extrabold text-[#0f172a]">{localizedTitle}</h3>
+                          <h3 className="break-words font-extrabold text-[#0f172a]">{localizedTitle}</h3>
                         </div>
-                         <div className="flex items-center gap-2">
-                           <button type="button" onClick={() => setSelectedNotice(notice)} className="rounded-lg p-1.5 text-[#64748b] transition hover:bg-[#eef2ff] hover:text-[#1a2b88]" aria-label={t("View notification details")} title={t("View notification details")}><Eye className="h-4 w-4" /></button>
-                           <span className="text-[11px] font-bold text-[#64748b]">{t("Update on")} {formatNoticeDate(notice.publishedAt ?? notice.scheduledAt ?? notice.createdAt)}</span>
-                         </div>
+                        <div className="flex items-center justify-between gap-3 sm:shrink-0">
+                          <span className="text-[11px] font-bold text-[#64748b]">{t("Update on")} {formatNoticeDate(notice.publishedAt ?? notice.scheduledAt ?? notice.createdAt)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedNotice(notice)}
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#eef2ff] px-2.5 py-1.5 text-[12px] font-extrabold text-[#1a2b88] transition hover:bg-[#e0e7ff] hover:text-[#172554]"
+                            aria-label={t("View notification details")}
+                            title={t("View notification details")}
+                            data-testid={`notice-view-${notice.id}`}
+                          >
+                            <Eye className="h-4 w-4" />
+                            {t("View now")}
+                          </button>
+                        </div>
                       </div>
-                       {localizedBody && (
-                          <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[#334155] font-semibold leading-relaxed" tabIndex={0} aria-label={localizedBody}>
-                            {localizedBody}
-                        </div>
-                      )}
                     </div>
                         </>
                       );
