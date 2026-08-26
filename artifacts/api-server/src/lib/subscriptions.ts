@@ -452,7 +452,7 @@ export async function updateSubscriptionByAdmin(input: {
     const [user] = await tx.select({ id: appUsersTable.id }).from(appUsersTable)
       .where(eq(appUsersTable.id, input.userId)).limit(1);
     if (!user) return { ok: false as const, reason: "not_found" as const };
-    if (input.plan === "plus" || !Number.isInteger(input.durationDays) || input.durationDays < 1 || input.durationDays > 3660) {
+    if (!Number.isInteger(input.durationDays) || input.durationDays < 1 || input.durationDays > 3660) {
       return { ok: false as const, reason: "invalid_plan" as const };
     }
     const [current] = await tx.select().from(subscriptionsTable)

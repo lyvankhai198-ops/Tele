@@ -70,7 +70,7 @@ const copy = {
     durationValidationError: "Duration must be between 1 and 3660 days.",
     warningTitle: "Important limitations",
     warningDetail: "Downgrades are not supported. An active paid plan keeps its remaining time and the new duration is added. Please ensure payment has been confirmed out-of-band.",
-    confirmLabel: "I confirm this upgrade is authorized.",
+    confirmLabel: "I confirm this plan change is authorized.",
     cancel: "Cancel",
     saving: "Applying...",
     saveSuccess: "Subscription updated successfully.",
@@ -118,7 +118,7 @@ const copy = {
     durationValidationError: "Thời hạn phải từ 1 đến 3660 ngày.",
     warningTitle: "Lưu ý quan trọng",
     warningDetail: "Hệ thống không hỗ trợ hạ cấp. Gói trả phí còn hiệu lực sẽ giữ thời gian còn lại và cộng thêm thời hạn mới. Vui lòng đảm bảo đã nhận thanh toán trước khi thực hiện.",
-    confirmLabel: "Tôi xác nhận đã cấp quyền nâng cấp này.",
+    confirmLabel: "Tôi xác nhận đã cấp quyền thay đổi gói này.",
     cancel: "Hủy",
     saving: "Đang áp dụng...",
     saveSuccess: "Đã cập nhật gói dịch vụ.",
@@ -149,7 +149,7 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
 
   // Form State
-  const [formPlan, setFormPlan] = useState<PlanCode>("pro");
+  const [formPlan, setFormPlan] = useState<PlanCode>("plus");
   const [formDuration, setFormDuration] = useState("30");
   const [formConfirmed, setFormConfirmed] = useState(false);
 
@@ -185,8 +185,7 @@ export default function AdminUsersPage() {
 
   const handleOpenEdit = (user: AdminUser) => {
     setEditingUser(user);
-    // Only offer pro and unlimited for manual updates per requirements
-    setFormPlan(user.storedPlan === "unlimited" ? "unlimited" : "pro");
+    setFormPlan(user.storedPlan);
     setFormDuration("30");
     setFormConfirmed(false);
     setFormQuotaExemptFrom(user.subscription.dailyQuotaExemptFrom ?? "");
@@ -444,8 +443,8 @@ export default function AdminUsersPage() {
 
             <div>
               <label className="mb-2.5 block text-[13px] font-bold text-[#475569]">{text.planLabel}</label>
-              <div className="grid grid-cols-2 gap-3">
-                {((modalUser.storedPlan === "unlimited" ? ["unlimited"] : ["pro", "unlimited"]) as PlanCode[]).map((plan) => (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {(["plus", "pro", "unlimited"] as PlanCode[]).map((plan) => (
                   <label
                     key={plan}
                     className={`flex cursor-pointer items-center justify-center rounded-xl border-2 px-4 py-3 font-bold uppercase tracking-wider text-[13px] transition-all ${
