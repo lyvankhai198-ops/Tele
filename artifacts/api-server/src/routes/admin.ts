@@ -67,6 +67,7 @@ import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
 import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
+import { resumeQuotaPausedCampaignsAfterSettingsUpdate } from "../lib/campaigns";
 import { adminNotificationResponse } from "../lib/admin-notifications";
 import {
   NotificationMediaNotFoundError,
@@ -77,6 +78,12 @@ import { getStorageStatus } from "../lib/storage-status";
 
 const router: IRouter = Router();
 const notificationMediaStorage = new NotificationMediaStorage();
+const PLAN_LIMIT_MAXIMUMS = {
+  accountLimit: 100_000,
+  campaignLimit: 100_000,
+  messageDailyLimit: 10_000_000,
+  userMessageDailyLimit: 100_000_000,
+} as const;
 
 function sendError(res: any, status: number, error: string): void {
   res.status(status).json({ error });
@@ -424,10 +431,14 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const parsed = UpdateAdminSystemSettingsBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Cấu hình hệ thống không hợp lệ.");
   const settings = parsed.data;
+  const previousSettings = await getSystemSettings();
   const allLimits = Object.values(settings.planLimits);
   const allIntegerLimits = allLimits.every((limit) => (
-    [limit.accountLimit, limit.campaignLimit, limit.messageDailyLimit, limit.userMessageDailyLimit]
-      .every((value) => value === null || Number.isInteger(value))
+    (Object.entries(PLAN_LIMIT_MAXIMUMS) as Array<[keyof typeof PLAN_LIMIT_MAXIMUMS, number]>)
+      .every(([field, maximum]) => {
+        const value = limit[field];
+        return value === null || (Number.isInteger(value) && value >= 0 && value <= maximum);
+      })
   ));
   const defaults = settings.campaignDefaults;
   const validDefaults = [
@@ -444,6 +455,16 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   }
   if (!allIntegerLimits || !validDefaults) return void sendError(res, 400, "Cấu hình giới hạn hoặc delay không hợp lệ.");
   const updated = await updateSystemSettings(settings, req.userId!);
+  const quotaWasIncreased = (Object.keys(updated.planLimits) as Array<keyof typeof updated.planLimits>).some((plan) => {
+    const previous = previousSettings.planLimits[plan];
+    const next = updated.planLimits[plan];
+    const increased = (before: number | null, after: number | null) => before !== null && (after === null || after > before);
+    return increased(previous.messageDailyLimit, next.messageDailyLimit)
+      || increased(previous.userMessageDailyLimit, next.userMessageDailyLimit);
+  });
+  if (quotaWasIncreased) {
+    await resumeQuotaPausedCampaignsAfterSettingsUpdate();
+  }
   await recordActivity({
     ownerUserId: req.userId!,
     event: "system_settings.updated",
