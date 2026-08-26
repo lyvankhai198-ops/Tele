@@ -13,5 +13,6 @@ export interface AdminOperationCampaign {
   status: string;
   pendingTargets: number;
   failedTargets: number;
+  reviewTargets: number;
   sentTargets: number;
 }

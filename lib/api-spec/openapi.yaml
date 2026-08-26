@@ -1442,7 +1442,7 @@ components:
         failedTargets: { type: number }
     AdminOperationCampaign:
       type: object
-      required: [id, ownerUsername, name, status, pendingTargets, failedTargets, sentTargets]
+      required: [id, ownerUsername, name, status, pendingTargets, failedTargets, reviewTargets, sentTargets]
       properties:
         id: { type: string }
         ownerUsername: { type: string }
@@ -1450,6 +1450,7 @@ components:
         status: { type: string }
         pendingTargets: { type: number }
         failedTargets: { type: number }
+        reviewTargets: { type: number }
         sentTargets: { type: number }
     AdminCampaignStatusInput:
       type: object

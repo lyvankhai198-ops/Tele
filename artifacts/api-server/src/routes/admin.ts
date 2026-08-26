@@ -553,6 +553,7 @@ router.get("/admin/operations", async (_req, res): Promise<void> => {
         status: campaign.status,
         pendingTargets: campaignTargets.filter((target) => ["pending", "sending"].includes(target.status)).length,
         failedTargets: campaignTargets.filter((target) => target.status === "failed").length,
+        reviewTargets: campaignTargets.filter((target) => target.status === "requires_review").length,
         sentTargets: campaignTargets.filter((target) => target.status === "sent").length,
       };
     }),

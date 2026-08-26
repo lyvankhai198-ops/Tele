@@ -1160,6 +1160,7 @@ export const GetAdminOperationsResponse = zod.object({
   "status": zod.string(),
   "pendingTargets": zod.number(),
   "failedTargets": zod.number(),
+  "reviewTargets": zod.number(),
   "sentTargets": zod.number()
 })),
   "targets": zod.array(zod.object({
@@ -1233,6 +1234,7 @@ export const UpdateAdminCampaignStatusResponse = zod.object({
   "status": zod.string(),
   "pendingTargets": zod.number(),
   "failedTargets": zod.number(),
+  "reviewTargets": zod.number(),
   "sentTargets": zod.number()
 })
 
