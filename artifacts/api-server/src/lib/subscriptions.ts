@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   appUsersTable,
   activityLogsTable,
@@ -465,11 +465,21 @@ export async function updateSubscriptionByAdmin(input: {
       : nextIndex > currentIndex
         ? "upgrade" as const
         : "downgrade" as const;
-    const retainedUntil = current?.expiresAt && current.expiresAt > now ? current.expiresAt.getTime() : now.getTime();
+    const [claimedLicense] = await tx.select({ id: licenseKeysTable.id })
+      .from(licenseKeysTable)
+      .where(and(
+        eq(licenseKeysTable.claimedBy, input.userId),
+        isNotNull(licenseKeysTable.claimedAt),
+      ))
+      .limit(1);
+    const resetsTrialDuration = currentPlan === "plus" && !claimedLicense;
+    const retainedUntil = !resetsTrialDuration && current?.expiresAt && current.expiresAt > now
+      ? current.expiresAt.getTime()
+      : now.getTime();
     const nextExpiresAt = new Date(retainedUntil + input.durationDays * DAY_MS);
     const values = {
       plan: input.plan,
-      startedAt: current?.startedAt ?? now,
+      startedAt: resetsTrialDuration ? now : current?.startedAt ?? now,
       expiresAt: nextExpiresAt,
       updatedAt: now,
     };
@@ -488,6 +498,7 @@ export async function updateSubscriptionByAdmin(input: {
         nextPlan: input.plan,
         durationDays: input.durationDays,
         action,
+        durationMode: resetsTrialDuration ? "reset_trial" : "extend_active",
       },
     });
     return { ok: true as const, subscription: toSubscriptionSummary(next, now, catalog), action };
