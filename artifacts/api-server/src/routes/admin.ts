@@ -412,6 +412,13 @@ router.patch("/admin/users/:userId/quota", async (req, res): Promise<void> => {
     sendError(res, 404, "Không tìm thấy người dùng.");
     return;
   }
+  if (body.data.dailyQuotaExempt) {
+    await resumeQuotaPausedCampaignsAfterSettingsUpdate({
+      ownerUserId: params.data.userId,
+      pauseReasons: ["Daily user message limit reached. Campaign paused and will resume automatically on a new day."],
+      trigger: "admin_quota_exemption",
+    });
+  }
   res.json(UpdateAdminUserQuotaResponse.parse(outcome.subscription));
 });
 

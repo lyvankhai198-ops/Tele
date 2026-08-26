@@ -317,7 +317,13 @@ async function resumeDailyQuotaPausedCampaigns() {
   }
 }
 
-export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(): Promise<number> {
+export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(input: {
+  ownerUserId?: string;
+  pauseReasons?: readonly string[];
+  trigger?: "system_settings_updated" | "admin_quota_exemption";
+} = {}): Promise<number> {
+  const pauseReasons = input.pauseReasons ?? DAILY_QUOTA_PAUSE_REASONS;
+  const trigger = input.trigger ?? "system_settings_updated";
   const candidates = await db.select({
     id: campaignsTable.id,
     ownerUserId: campaignsTable.ownerUserId,
@@ -326,7 +332,8 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(): Promise<n
     .where(and(
       eq(campaignsTable.status, "paused"),
       eq(campaignTargetsTable.status, "pending"),
-      inArray(campaignTargetsTable.lastError, DAILY_QUOTA_PAUSE_REASONS),
+      inArray(campaignTargetsTable.lastError, pauseReasons),
+      ...(input.ownerUserId ? [eq(campaignsTable.ownerUserId, input.ownerUserId)] : []),
     ));
 
   const uniqueCandidates = new Map(candidates.map((campaign) => [campaign.id, campaign]));
@@ -350,15 +357,17 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(): Promise<n
     }).where(and(
       eq(campaignTargetsTable.campaignId, candidate.id),
       eq(campaignTargetsTable.status, "pending"),
-      inArray(campaignTargetsTable.lastError, DAILY_QUOTA_PAUSE_REASONS),
+      inArray(campaignTargetsTable.lastError, pauseReasons),
     ));
     await recordActivity({
       ownerUserId: candidate.ownerUserId,
       event: "campaign.resumed.daily_quota_settings_updated",
       level: "info",
       campaignId: candidate.id,
-      message: "Campaign resumed after the daily message limit was increased.",
-      metadata: { automaticResume: true, trigger: "system_settings_updated" },
+      message: trigger === "admin_quota_exemption"
+        ? "Campaign resumed after an administrator removed the daily user message limit."
+        : "Campaign resumed after the daily message limit was increased.",
+      metadata: { automaticResume: true, trigger },
     });
     resumedCount += 1;
   }

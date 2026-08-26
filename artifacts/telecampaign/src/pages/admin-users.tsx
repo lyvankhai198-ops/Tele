@@ -472,12 +472,13 @@ export default function AdminUsersPage() {
                 </span>
               </label>
               <div className="mt-3 flex justify-end">
-                <QuietButton
+                <button
                   onClick={handleUpdateQuota}
                   disabled={quotaMutation.isPending || formQuotaExempt === modalUser.subscription.dailyQuotaExempt}
+                  className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-[13px] font-bold text-[#475569] transition-colors hover:border-[#94a3b8] hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {quotaMutation.isPending ? text.quotaSaving : text.saveQuota}
-                </QuietButton>
+                </button>
               </div>
             </div>
 
