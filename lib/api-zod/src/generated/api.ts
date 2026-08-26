@@ -809,6 +809,8 @@ export const GetDashboardResponse = zod.object({
   "scheduledAt": zod.coerce.date().nullable(),
   "publishedAt": zod.coerce.date().nullable(),
   "expiresAt": zod.coerce.date().nullable(),
+  "pinned": zod.boolean(),
+  "dashboardVisible": zod.boolean(),
   "createdBy": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -829,7 +831,8 @@ export const GetAccountSummaryResponse = zod.object({
   "status": zod.enum(['active', 'expired']),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
-  "messageDailyLimit": zod.number().nullable()
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
 }),
   "usage": zod.object({
   "telegramAccounts": zod.object({
@@ -888,6 +891,7 @@ export const GetUpgradeSummaryResponse = zod.object({
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable(),
   "durationDays": zod.number()
 })),
   "subscription": zod.object({
@@ -897,7 +901,8 @@ export const GetUpgradeSummaryResponse = zod.object({
   "status": zod.enum(['active', 'expired']),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
-  "messageDailyLimit": zod.number().nullable()
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
 }),
   "telegramPurchaseUrl": zod.string().nullable()
 })
@@ -927,17 +932,23 @@ export const getAdminSystemSettingsResponsePlanLimitsPlusCampaignLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsPlusMessageDailyLimitMin = 0;
 
+export const getAdminSystemSettingsResponsePlanLimitsPlusUserMessageDailyLimitMin = 0;
+
 export const getAdminSystemSettingsResponsePlanLimitsProAccountLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsProCampaignLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsProMessageDailyLimitMin = 0;
 
+export const getAdminSystemSettingsResponsePlanLimitsProUserMessageDailyLimitMin = 0;
+
 export const getAdminSystemSettingsResponsePlanLimitsUnlimitedAccountLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsUnlimitedCampaignLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin = 0;
+
+export const getAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin = 0;
 
 export const getAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
@@ -959,17 +970,20 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "plus": zod.object({
   "accountLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsPlusCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsPlusMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsPlusMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsPlusUserMessageDailyLimitMin).nullable()
 }),
   "pro": zod.object({
   "accountLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsProAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsProCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsProMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsProMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsProUserMessageDailyLimitMin).nullable()
 }),
   "unlimited": zod.object({
   "accountLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
   "defaultAccountDailyLimit": zod.number().min(1).max(getAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
@@ -990,17 +1004,23 @@ export const updateAdminSystemSettingsBodyPlanLimitsPlusCampaignLimitMin = 0;
 
 export const updateAdminSystemSettingsBodyPlanLimitsPlusMessageDailyLimitMin = 0;
 
+export const updateAdminSystemSettingsBodyPlanLimitsPlusUserMessageDailyLimitMin = 0;
+
 export const updateAdminSystemSettingsBodyPlanLimitsProAccountLimitMin = 0;
 
 export const updateAdminSystemSettingsBodyPlanLimitsProCampaignLimitMin = 0;
 
 export const updateAdminSystemSettingsBodyPlanLimitsProMessageDailyLimitMin = 0;
 
+export const updateAdminSystemSettingsBodyPlanLimitsProUserMessageDailyLimitMin = 0;
+
 export const updateAdminSystemSettingsBodyPlanLimitsUnlimitedAccountLimitMin = 0;
 
 export const updateAdminSystemSettingsBodyPlanLimitsUnlimitedCampaignLimitMin = 0;
 
 export const updateAdminSystemSettingsBodyPlanLimitsUnlimitedMessageDailyLimitMin = 0;
+
+export const updateAdminSystemSettingsBodyPlanLimitsUnlimitedUserMessageDailyLimitMin = 0;
 
 export const updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax = 100000;
 
@@ -1022,17 +1042,20 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "plus": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsPlusAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsPlusCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsPlusMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsPlusMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsPlusUserMessageDailyLimitMin).nullable()
 }),
   "pro": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsProAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsProCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsProMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsProMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsProUserMessageDailyLimitMin).nullable()
 }),
   "unlimited": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
@@ -1052,17 +1075,23 @@ export const updateAdminSystemSettingsResponsePlanLimitsPlusCampaignLimitMin = 0
 
 export const updateAdminSystemSettingsResponsePlanLimitsPlusMessageDailyLimitMin = 0;
 
+export const updateAdminSystemSettingsResponsePlanLimitsPlusUserMessageDailyLimitMin = 0;
+
 export const updateAdminSystemSettingsResponsePlanLimitsProAccountLimitMin = 0;
 
 export const updateAdminSystemSettingsResponsePlanLimitsProCampaignLimitMin = 0;
 
 export const updateAdminSystemSettingsResponsePlanLimitsProMessageDailyLimitMin = 0;
 
+export const updateAdminSystemSettingsResponsePlanLimitsProUserMessageDailyLimitMin = 0;
+
 export const updateAdminSystemSettingsResponsePlanLimitsUnlimitedAccountLimitMin = 0;
 
 export const updateAdminSystemSettingsResponsePlanLimitsUnlimitedCampaignLimitMin = 0;
 
 export const updateAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin = 0;
+
+export const updateAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin = 0;
 
 export const updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
@@ -1084,17 +1113,20 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "plus": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsPlusCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsPlusMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsPlusMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsPlusUserMessageDailyLimitMin).nullable()
 }),
   "pro": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsProAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsProCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsProMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsProMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsProUserMessageDailyLimitMin).nullable()
 }),
   "unlimited": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedAccountLimitMin).nullable(),
   "campaignLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedCampaignLimitMin).nullable(),
-  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin).nullable()
+  "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin).nullable(),
+  "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
@@ -1240,7 +1272,8 @@ export const ActivateLicenseResponse = zod.object({
   "status": zod.enum(['active', 'expired']),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
-  "messageDailyLimit": zod.number().nullable()
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
 })
 })
 
@@ -1357,6 +1390,8 @@ export const ListAdminNotificationsResponseItem = zod.object({
   "scheduledAt": zod.coerce.date().nullable(),
   "publishedAt": zod.coerce.date().nullable(),
   "expiresAt": zod.coerce.date().nullable(),
+  "pinned": zod.boolean(),
+  "dashboardVisible": zod.boolean(),
   "createdBy": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1400,6 +1435,8 @@ export const CreateAdminNotificationResponse = zod.object({
   "scheduledAt": zod.coerce.date().nullable(),
   "publishedAt": zod.coerce.date().nullable(),
   "expiresAt": zod.coerce.date().nullable(),
+  "pinned": zod.boolean(),
+  "dashboardVisible": zod.boolean(),
   "createdBy": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1446,6 +1483,8 @@ export const UpdateAdminNotificationResponse = zod.object({
   "scheduledAt": zod.coerce.date().nullable(),
   "publishedAt": zod.coerce.date().nullable(),
   "expiresAt": zod.coerce.date().nullable(),
+  "pinned": zod.boolean(),
+  "dashboardVisible": zod.boolean(),
   "createdBy": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -1457,6 +1496,62 @@ export const DeleteAdminNotificationParams = zod.object({
 })
 
 export const DeleteAdminNotificationResponse = zod.void()
+
+
+export const SetAdminNotificationPinnedParams = zod.object({
+  "notificationId": zod.coerce.string()
+})
+
+export const SetAdminNotificationPinnedBody = zod.object({
+  "pinned": zod.boolean()
+})
+
+export const SetAdminNotificationPinnedResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
+  "mediaName": zod.string().nullable(),
+  "mediaSize": zod.number().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "pinned": zod.boolean(),
+  "dashboardVisible": zod.boolean(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const SetAdminNotificationVisibilityParams = zod.object({
+  "notificationId": zod.coerce.string()
+})
+
+export const SetAdminNotificationVisibilityBody = zod.object({
+  "dashboardVisible": zod.boolean()
+})
+
+export const SetAdminNotificationVisibilityResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'scheduled', 'published', 'expired']),
+  "mediaUrl": zod.string().nullable(),
+  "mediaType": zod.union([zod.literal('image'),zod.literal('video'),zod.literal(null)]).nullable(),
+  "mediaName": zod.string().nullable(),
+  "mediaSize": zod.number().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "publishedAt": zod.coerce.date().nullable(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "pinned": zod.boolean(),
+  "dashboardVisible": zod.boolean(),
+  "createdBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
 
 
 export const requestAdminNotificationUploadUrlBodyNameMax = 255;
@@ -1500,7 +1595,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "status": zod.enum(['active', 'expired']),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
-  "messageDailyLimit": zod.number().nullable()
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
 }),
   "usage": zod.object({
   "telegramAccounts": zod.number(),
@@ -1528,7 +1624,8 @@ export const GetAdminUserResponse = zod.object({
   "status": zod.enum(['active', 'expired']),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
-  "messageDailyLimit": zod.number().nullable()
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
 }),
   "usage": zod.object({
   "telegramAccounts": zod.number(),
@@ -1557,7 +1654,8 @@ export const UpdateAdminUserSubscriptionResponse = zod.object({
   "status": zod.enum(['active', 'expired']),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
-  "messageDailyLimit": zod.number().nullable()
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
 })
 
 

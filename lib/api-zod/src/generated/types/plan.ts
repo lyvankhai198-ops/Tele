@@ -17,5 +17,7 @@ export interface Plan {
   campaignLimit: number | null;
   /** @nullable */
   messageDailyLimit: number | null;
+  /** @nullable */
+  userMessageDailyLimit: number | null;
   durationDays: number;
 }

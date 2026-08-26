@@ -26,6 +26,8 @@ const eventLabels: Record<string, { vi: string; en: string }> = {
   "campaign.target.failed": { vi: "Chưa xác nhận được lượt gửi", en: "Delivery needs attention" },
   "campaign.target.rate_limited": { vi: "Telegram yêu cầu chờ", en: "Telegram requested a delay" },
   "campaign.paused.subscription_expired": { vi: "Chiến dịch đã tạm dừng", en: "Campaign paused" },
+  "campaign.paused.daily_quota_reached": { vi: "Đã đạt giới hạn gửi trong ngày", en: "Daily message limit reached" },
+  "campaign.resumed.daily_quota_reset": { vi: "Đã tự động chạy lại chiến dịch", en: "Campaign resumed automatically" },
   "campaign.created": { vi: "Đã tạo chiến dịch", en: "Campaign created" },
   "campaign.updated": { vi: "Đã cập nhật chiến dịch", en: "Campaign updated" },
   "campaign.deleted": { vi: "Đã xóa chiến dịch", en: "Campaign deleted" },
@@ -107,6 +109,12 @@ function userMessage(log: ActivityLog, language: "vi" | "en") {
   }
   if (log.event === "campaign.paused.subscription_expired") {
     return "Chiến dịch được tạm dừng vì gói dùng thử hoặc gói dịch vụ đã hết hạn.";
+  }
+  if (log.event === "campaign.paused.daily_quota_reached") {
+    return "Đã đạt giới hạn gửi trong ngày của chiến dịch hoặc ngân sách tổng. Chiến dịch sẽ tự động chạy lại vào ngày mới.";
+  }
+  if (log.event === "campaign.resumed.daily_quota_reset") {
+    return "Ngày mới đã bắt đầu. Chiến dịch tự động tiếp tục gửi các lượt còn lại.";
   }
   if (log.event === "campaign.target.sent" && log.destinationTitle) {
     return `Đã gửi tin nhắn đến “${log.destinationTitle}”.`;

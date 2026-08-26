@@ -22,4 +22,9 @@ export interface PlanLimitSettings {
      * @nullable
      */
   messageDailyLimit: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  userMessageDailyLimit: number | null;
 }

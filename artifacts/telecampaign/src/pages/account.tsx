@@ -40,7 +40,7 @@ const copy = {
     noSystemLimit: "No system limit",
     telegramAccountsCard: "Telegram Accounts",
     campaignsCard: "Campaigns",
-    messagesTodayCard: "Messages / Day",
+    messagesTodayCard: "Daily message budget used",
   },
   vi: {
     title: "Tài khoản",
@@ -76,7 +76,7 @@ const copy = {
     noSystemLimit: "Không giới hạn hệ thống",
     telegramAccountsCard: "Tài khoản Telegram",
     campaignsCard: "Chiến dịch",
-    messagesTodayCard: "Tin nhắn / Ngày",
+    messagesTodayCard: "Ngân sách gửi đã dùng hôm nay",
   },
 } as const;
 

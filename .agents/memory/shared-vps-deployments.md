@@ -51,6 +51,24 @@ The VPS deploys from GitHub `main`, not directly from the workspace task branch.
 
 **How to apply:** Confirm the remote branch SHA before deployment. Publish the validated source changes to GitHub through the configured integration, then use a fast-forward pull, build both TeleCampaign artifacts, restart only `telecampaign-api`, and verify the public HTTPS health endpoint.
 
+The API process may need a short readiness window after PM2 confirms a restart.
+
+**Why:** PM2 reports the restart before the Node process has necessarily opened its HTTP socket, so a one-shot health request can fail even though the service is starting normally.
+
+**How to apply:** Keep the TeleCampaign healthcheck bounded, but retry its local health request briefly after a restart before declaring deployment failure.
+
+On a shared VPS, disk cleanup must separate global historical logs from application data and use exact service-owned paths.
+
+**Why:** The largest disk consumers can be system journal/cache rather than a single project, while broad deletion of project directories or shared runtime caches can break unrelated services.
+
+**How to apply:** Cap and vacuum old journal entries, rotate only TeleCampaign's PM2 logs, clean only identified package/build caches, and preserve databases, media, source, and ambiguous shared caches.
+
+Storage monitoring on the shared VPS must use bounded, cached read-only scans limited to TeleCampaign-owned roots.
+
+**Why:** Recursive, uncached scans can compete with campaign delivery and unrelated services; an incorrect “healthy” signal is worse than explicitly unavailable data.
+
+**How to apply:** Canonicalize approved paths, skip symlinks, cap depth and file count, single-flight/cache the result for the UI polling interval, and mark inaccessible or oversized paths unavailable rather than guessing.
+
 For an exact checkpoint rollback, create a new rollback commit on GitHub rather than force-pushing history, then verify the checkpoint and deployed branch have identical Git tree hashes.
 
 **Why:** A workspace checkpoint rollback does not synchronize GitHub or the VPS, and generated files can differ only by byte-level line endings even when their visible source text is identical.

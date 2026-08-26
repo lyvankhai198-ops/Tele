@@ -34,6 +34,10 @@ import {
   UpdateAdminNotificationBody,
   UpdateAdminNotificationResponse,
   DeleteAdminNotificationParams,
+  SetAdminNotificationPinnedParams,
+  SetAdminNotificationPinnedBody,
+  SetAdminNotificationVisibilityParams,
+  SetAdminNotificationVisibilityBody,
   RequestAdminNotificationUploadUrlBody,
   RequestAdminNotificationUploadUrlResponse,
 } from "@workspace/api-zod";
@@ -292,6 +296,44 @@ router.delete("/admin/notifications/:notificationId", async (req, res): Promise<
   res.status(204).end();
 });
 
+router.patch("/admin/notifications/:notificationId/pin", async (req, res): Promise<void> => {
+  const params = SetAdminNotificationPinnedParams.safeParse(req.params);
+  const parsed = SetAdminNotificationPinnedBody.safeParse(req.body);
+  if (!params.success || !parsed.success) return void sendError(res, 400, "Trạng thái ghim không hợp lệ.");
+  const [notification] = await db.update(adminNotificationsTable)
+    .set({ pinned: parsed.data.pinned, updatedAt: new Date() })
+    .where(eq(adminNotificationsTable.id, params.data.notificationId))
+    .returning();
+  if (!notification) return void sendError(res, 404, "Không tìm thấy thông báo.");
+  await recordActivity({
+    ownerUserId: req.userId!,
+    event: parsed.data.pinned ? "admin_notification.pinned" : "admin_notification.unpinned",
+    level: "success",
+    message: parsed.data.pinned ? "Pinned an admin notification" : "Unpinned an admin notification",
+    metadata: { notificationId: notification.id },
+  });
+  res.json(adminNotificationResponse(notification));
+});
+
+router.patch("/admin/notifications/:notificationId/visibility", async (req, res): Promise<void> => {
+  const params = SetAdminNotificationVisibilityParams.safeParse(req.params);
+  const parsed = SetAdminNotificationVisibilityBody.safeParse(req.body);
+  if (!params.success || !parsed.success) return void sendError(res, 400, "Trạng thái hiển thị không hợp lệ.");
+  const [notification] = await db.update(adminNotificationsTable)
+    .set({ dashboardVisible: parsed.data.dashboardVisible, updatedAt: new Date() })
+    .where(eq(adminNotificationsTable.id, params.data.notificationId))
+    .returning();
+  if (!notification) return void sendError(res, 404, "Không tìm thấy thông báo.");
+  await recordActivity({
+    ownerUserId: req.userId!,
+    event: parsed.data.dashboardVisible ? "admin_notification.restored" : "admin_notification.hidden",
+    level: "success",
+    message: parsed.data.dashboardVisible ? "Restored an admin notification" : "Removed an admin notification from dashboards",
+    metadata: { notificationId: notification.id },
+  });
+  res.json(adminNotificationResponse(notification));
+});
+
 router.get("/admin/users", async (req, res): Promise<void> => {
   const parsed = ListAdminUsersQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -384,7 +426,7 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const settings = parsed.data;
   const allLimits = Object.values(settings.planLimits);
   const allIntegerLimits = allLimits.every((limit) => (
-    [limit.accountLimit, limit.campaignLimit, limit.messageDailyLimit]
+    [limit.accountLimit, limit.campaignLimit, limit.messageDailyLimit, limit.userMessageDailyLimit]
       .every((value) => value === null || Number.isInteger(value))
   ));
   const defaults = settings.campaignDefaults;
@@ -564,13 +606,18 @@ router.post("/admin/targets/:targetId/retry", async (req, res): Promise<void> =>
     updatedAt: new Date(),
   }).where(and(
     eq(campaignTargetsTable.id, params.data.targetId),
-    inArray(campaignTargetsTable.status, ["failed", "requires_review"]),
+    eq(campaignTargetsTable.status, "failed"),
   )).returning();
   if (!target) {
-    const [existing] = await db.select({ id: campaignTargetsTable.id }).from(campaignTargetsTable)
+    const [existing] = await db.select({
+      id: campaignTargetsTable.id,
+      status: campaignTargetsTable.status,
+    }).from(campaignTargetsTable)
       .where(eq(campaignTargetsTable.id, params.data.targetId)).limit(1);
     return void sendError(res, existing ? 409 : 404, existing
-      ? "Chỉ có thể retry target đang lỗi hoặc cần xem xét."
+      ? existing.status === "requires_review"
+        ? "Target cần xác minh kết quả gửi trước khi có thể retry để tránh gửi trùng và giữ quota chính xác."
+        : "Chỉ có thể retry target đang lỗi."
       : "Không tìm thấy target.");
   }
   const [campaign] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, target.campaignId)).limit(1);

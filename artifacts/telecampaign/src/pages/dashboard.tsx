@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import {
-  Bell, 
+  Bell,
   FileText, 
   LayoutGrid, 
   Megaphone, 
+  Pin,
   Send, 
   Users, 
   XCircle,
@@ -109,7 +110,10 @@ export default function Dashboard() {
                     )}
                     <div className="p-4 sm:p-5">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="font-extrabold text-[#0f172a]">{notice.title}</h3>
+                        <div className="flex items-center gap-2">
+                          {notice.pinned && <Pin className="h-4 w-4 text-[#1d4ed8]" aria-label={t("Pinned")} />}
+                          <h3 className="font-extrabold text-[#0f172a]">{notice.title}</h3>
+                        </div>
                         <span className="text-[11px] font-bold text-[#64748b]">{t("Update on")} {formatNoticeDate(notice.publishedAt ?? notice.scheduledAt ?? notice.createdAt)}</span>
                       </div>
                       {notice.body && (

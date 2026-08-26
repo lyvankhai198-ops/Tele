@@ -637,6 +637,8 @@ export interface AdminNotification {
   publishedAt: string | null;
   /** @nullable */
   expiresAt: string | null;
+  pinned: boolean;
+  dashboardVisible: boolean;
   /** @nullable */
   createdBy: string | null;
   createdAt: string;
@@ -684,6 +686,14 @@ export interface AdminNotificationInput {
   scheduledAt?: string | null;
   /** @nullable */
   expiresAt?: string | null;
+}
+
+export interface AdminNotificationPinInput {
+  pinned: boolean;
+}
+
+export interface AdminNotificationVisibilityInput {
+  dashboardVisible: boolean;
 }
 
 export type AdminNotificationUploadInputContentType = typeof AdminNotificationUploadInputContentType[keyof typeof AdminNotificationUploadInputContentType];
@@ -744,6 +754,8 @@ export interface Plan {
   campaignLimit: number | null;
   /** @nullable */
   messageDailyLimit: number | null;
+  /** @nullable */
+  userMessageDailyLimit: number | null;
   durationDays: number;
 }
 
@@ -767,6 +779,8 @@ export interface Subscription {
   campaignLimit: number | null;
   /** @nullable */
   messageDailyLimit: number | null;
+  /** @nullable */
+  userMessageDailyLimit: number | null;
 }
 
 export interface UpgradeSummary {
@@ -805,6 +819,11 @@ export interface PlanLimitSettings {
      * @nullable
      */
   messageDailyLimit: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  userMessageDailyLimit: number | null;
 }
 
 export interface CampaignDefaults {

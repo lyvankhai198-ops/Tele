@@ -1,0 +1,35 @@
+1
+00:00:00,000 --> 00:00:03,000
+Đăng ký tài khoản demo nhanh chóng
+
+2
+00:00:03,000 --> 00:00:06,000
+Đăng nhập vào hệ thống quản trị
+
+3
+00:00:06,000 --> 00:00:09,000
+Bắt đầu kết nối tài khoản Telegram
+
+4
+00:00:09,000 --> 00:00:12,000
+Nhập API ID và API Hash để xác minh
+
+5
+00:00:12,000 --> 00:00:15,000
+Tạo mẫu tin nhắn tự động
+
+6
+00:00:15,000 --> 00:00:18,000
+Thiết lập chiến dịch gửi tin
+
+7
+00:00:18,000 --> 00:00:21,000
+Chiến dịch đang chạy tự động
+
+8
+00:00:21,000 --> 00:00:24,000
+Xem nhật ký hoạt động chi tiết
+
+9
+00:00:24,000 --> 00:00:27,000
+Hoàn tất và theo dõi trên Bảng điều khiển

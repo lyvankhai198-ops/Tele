@@ -20,7 +20,8 @@ const copy = {
     planDetail: "These values immediately apply to the active entitlement of every plan.",
     accountLimit: "Telegram accounts",
     campaignLimit: "Campaigns",
-    messageLimit: "Messages / day",
+    messageLimit: "Messages / campaign / day",
+    userMessageLimit: "Messages / user / day",
     unlimited: "Unlimited",
     dailyDefault: "Default account daily limit",
     delivery: "Delivery defaults",
@@ -48,7 +49,8 @@ const copy = {
     planDetail: "Các giá trị này áp dụng ngay cho entitlement đang hoạt động của từng gói.",
     accountLimit: "Tài khoản Telegram",
     campaignLimit: "Chiến dịch",
-    messageLimit: "Tin nhắn / ngày",
+    messageLimit: "Tin nhắn / chiến dịch / ngày",
+    userMessageLimit: "Tổng tin nhắn / user / ngày",
     unlimited: "Không giới hạn",
     dailyDefault: "Giới hạn gửi/ngày mặc định cho tài khoản",
     delivery: "Mặc định gửi tin",
@@ -133,7 +135,7 @@ export default function AdminSystemSettingsPage() {
       defaults.maxRetries,
       defaults.roundDelayMinSeconds,
       defaults.roundDelayMaxSeconds,
-      ...Object.values(form.planLimits).flatMap((limits) => [limits.accountLimit, limits.campaignLimit, limits.messageDailyLimit].filter((value): value is number => value !== null)),
+      ...Object.values(form.planLimits).flatMap((limits) => [limits.accountLimit, limits.campaignLimit, limits.messageDailyLimit, limits.userMessageDailyLimit].filter((value): value is number => value !== null)),
     ];
     if (!numericValues.every((value) => Number.isInteger(value) && value >= 0) || form.defaultAccountDailyLimit < 1 || defaults.roundDelayMinSeconds > defaults.roundDelayMaxSeconds) {
       setToast({ message: text.invalid, error: true });
@@ -168,6 +170,7 @@ export default function AdminSystemSettingsPage() {
                 <LimitControl label={text.accountLimit} value={form.planLimits[plan].accountLimit} onChange={(value) => updatePlanLimit(plan, "accountLimit", value)} unlimitedLabel={text.unlimited} />
                 <LimitControl label={text.campaignLimit} value={form.planLimits[plan].campaignLimit} onChange={(value) => updatePlanLimit(plan, "campaignLimit", value)} unlimitedLabel={text.unlimited} />
                 <LimitControl label={text.messageLimit} value={form.planLimits[plan].messageDailyLimit} onChange={(value) => updatePlanLimit(plan, "messageDailyLimit", value)} unlimitedLabel={text.unlimited} />
+                <LimitControl label={text.userMessageLimit} value={form.planLimits[plan].userMessageDailyLimit} onChange={(value) => updatePlanLimit(plan, "userMessageDailyLimit", value)} unlimitedLabel={text.unlimited} />
               </div>
             </div>
           ))}

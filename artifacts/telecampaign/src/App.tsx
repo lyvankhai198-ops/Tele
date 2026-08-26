@@ -35,6 +35,7 @@ import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
 
 const queryClient = new QueryClient();
+
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function AuthShell({ children }: { children: ReactNode }) {
@@ -140,8 +141,8 @@ function LoginPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { language, t } = useLanguage();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState(typeof window !== 'undefined' && window.location.search.includes('step=2') ? "demo_admin" : "");
+  const [password, setPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=2') ? "••••••••••" : "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -211,9 +212,9 @@ function RegisterPage() {
   const [, setLocation] = useLocation();
   const { register } = useAuth();
   const { language, t } = useLanguage();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [username, setUsername] = useState(typeof window !== 'undefined' && window.location.search.includes('step=1') ? "demo_admin" : "");
+  const [password, setPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=1') ? "••••••••••" : "");
+  const [confirmPassword, setConfirmPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=1') ? "••••••••••" : "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const trialMessage = language === 'vi'

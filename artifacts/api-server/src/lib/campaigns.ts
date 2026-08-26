@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   campaignTargetsTable,
@@ -9,12 +9,21 @@ import {
   telegramAccountsTable,
 } from "@workspace/db";
 import { recordActivity } from "./activity";
-import { forwardTelegramSavedMessage, sendTelegramMessage } from "./telegram";
+import {
+  forwardTelegramSavedMessage,
+  isDevelopmentDemoTelegramAccount,
+  sendTelegramMessage,
+} from "./telegram";
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
 import { legacyScheduleOffsetMs } from "./campaign-schedule";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
+import {
+  releaseUserDailyQuota,
+  reserveUserDailyQuota,
+  type UserDailyQuotaReservation,
+} from "./user-daily-quota";
 
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
@@ -106,76 +115,181 @@ async function withOwnerDeliveryLock<T>(ownerUserId: string, action: () => Promi
   }
 }
 
-async function deferForDailyQuota(campaign: typeof campaignsTable.$inferSelect, targetId: string) {
+const DAILY_QUOTA_PAUSE_REASON = "Daily message limit reached. Campaign paused and will resume automatically on a new day.";
+const LEGACY_DAILY_QUOTA_PAUSE_REASON = "Daily message limit reached. Campaign paused until you resume it on a new day.";
+const USER_DAILY_QUOTA_PAUSE_REASON = "Daily user message limit reached. Campaign paused and will resume automatically on a new day.";
+const DAILY_QUOTA_PAUSE_REASONS = [
+  DAILY_QUOTA_PAUSE_REASON,
+  LEGACY_DAILY_QUOTA_PAUSE_REASON,
+  USER_DAILY_QUOTA_PAUSE_REASON,
+];
+
+type DailyQuotaResult =
+  | { pausedForQuota: true }
+  | { pausedForQuota: false; userQuotaReservation?: UserDailyQuotaReservation };
+
+async function pauseForDailyQuota(
+  campaign: typeof campaignsTable.$inferSelect,
+  targetId: string,
+  previousAttempts: number,
+): Promise<DailyQuotaResult> {
   const [subscription, settings] = await Promise.all([
     getSubscription(campaign.ownerUserId),
     getSystemSettings(),
   ]);
-  // UNLIMITED must never be deferred by the daily quota guard, even if an
-  // older queued target still has a stale quota retry timestamp.
-  if (subscription.plan === "unlimited" || subscription.messageDailyLimit === null) return false;
   const timezone = settings.defaultTimezone.replace(/'/g, "");
-  const dayStart = sql`date_trunc('day', now() AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
-  const nextDayStart = sql`(date_trunc('day', now() AT TIME ZONE ${timezone}) + interval '1 day') AT TIME ZONE ${timezone}`;
-  const [sentUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
-    .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
-    .where(and(
-      eq(campaignsTable.ownerUserId, campaign.ownerUserId),
-      eq(campaignTargetsTable.status, "sent"),
-      gte(campaignTargetsTable.sentAt, dayStart),
-  ));
-  const [reservedUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
-    .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
-    .where(and(
-      eq(campaignsTable.ownerUserId, campaign.ownerUserId),
-      eq(campaignTargetsTable.status, "sending"),
-      gte(campaignTargetsTable.quotaReservedAt, dayStart),
-  ));
-  const state = {
-    sentToday: sentUsage?.value ?? 0,
-    reservedToday: reservedUsage?.value ?? 0,
-  };
-  if (canReserveDailyQuota(state, subscription.messageDailyLimit)) {
-    const [reserved] = await db.update(campaignTargetsTable).set({
-      quotaReservedAt: new Date(),
-      updatedAt: new Date(),
+  let quotaScope: "campaign" | "user" | null = null;
+  const reservationTime = new Date();
+  const dayStart = sql`date_trunc('day', ${reservationTime}::timestamptz AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
+  if (subscription.messageDailyLimit !== null) {
+    const [sentUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
+      .where(and(
+        eq(campaignTargetsTable.campaignId, campaign.id),
+        eq(campaignTargetsTable.status, "sent"),
+        or(
+          gte(campaignTargetsTable.quotaReservedAt, dayStart),
+          and(
+            isNull(campaignTargetsTable.quotaReservedAt),
+            gte(campaignTargetsTable.sentAt, dayStart),
+          ),
+        ),
+    ));
+    const [reservedUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
+      .where(and(
+        eq(campaignTargetsTable.campaignId, campaign.id),
+        inArray(campaignTargetsTable.status, ["sending", "requires_review"]),
+        gte(campaignTargetsTable.quotaReservedAt, dayStart),
+      ));
+    const state = {
+      sentToday: sentUsage?.value ?? 0,
+      reservedToday: reservedUsage?.value ?? 0,
+    };
+    if (canReserveDailyQuota(state, subscription.messageDailyLimit)) {
+      const [reserved] = await db.update(campaignTargetsTable).set({
+        quotaReservedAt: reservationTime,
+        updatedAt: reservationTime,
+      }).where(and(
+        eq(campaignTargetsTable.id, targetId),
+        eq(campaignTargetsTable.status, "sending"),
+        isNull(campaignTargetsTable.quotaReservedAt),
+      )).returning({ id: campaignTargetsTable.id });
+      if (!reserved) throw new Error("Delivery quota reservation could not be persisted; manual review is required.");
+      const [reservedAfterClaim] = await db.select({ value: count() }).from(campaignTargetsTable)
+        .where(and(
+          eq(campaignTargetsTable.campaignId, campaign.id),
+          inArray(campaignTargetsTable.status, ["sending", "requires_review"]),
+          gte(campaignTargetsTable.quotaReservedAt, dayStart),
+        ));
+      if (!isWithinDailyQuota(
+        { ...state, reservedToday: reservedAfterClaim?.value ?? state.reservedToday + 1 },
+        subscription.messageDailyLimit,
+      )) quotaScope = "campaign";
+    } else {
+      quotaScope = "campaign";
+    }
+  }
+
+  if (!quotaScope && subscription.userMessageDailyLimit !== null) {
+    const userQuotaReservation = await reserveUserDailyQuota({
+      ownerUserId: campaign.ownerUserId,
+      limit: subscription.userMessageDailyLimit,
+      timezone,
+      reservedAt: reservationTime,
+    });
+    if (userQuotaReservation) {
+      return { pausedForQuota: false, userQuotaReservation };
+    }
+    quotaScope = "user";
+  }
+
+  if (!quotaScope) return { pausedForQuota: false };
+
+  const now = new Date();
+  const pauseResult = await db.transaction(async (tx) => {
+    const [target] = await tx.update(campaignTargetsTable).set({
+      status: "pending",
+      attempts: previousAttempts,
+      quotaReservedAt: null,
+      nextAttemptAt: null,
+      lastError: DAILY_QUOTA_PAUSE_REASON,
+      updatedAt: now,
     }).where(and(
       eq(campaignTargetsTable.id, targetId),
       eq(campaignTargetsTable.status, "sending"),
-      isNull(campaignTargetsTable.quotaReservedAt),
     )).returning({ id: campaignTargetsTable.id });
-    if (!reserved) throw new Error("Delivery quota reservation could not be persisted; manual review is required.");
-    const [reservedAfterClaim] = await db.select({ value: count() }).from(campaignTargetsTable)
-      .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
-      .where(and(
-        eq(campaignsTable.ownerUserId, campaign.ownerUserId),
-        eq(campaignTargetsTable.status, "sending"),
-        gte(campaignTargetsTable.quotaReservedAt, dayStart),
-      ));
-    if (isWithinDailyQuota(
-      { ...state, reservedToday: reservedAfterClaim?.value ?? state.reservedToday + 1 },
-      subscription.messageDailyLimit,
-    )) return false;
-  }
-  const [nextAttempt] = await db.select({ at: nextDayStart }).from(campaignsTable)
-    .where(eq(campaignsTable.id, campaign.id)).limit(1);
-  await db.update(campaignTargetsTable).set({
-    status: "pending",
-    quotaReservedAt: null,
-    nextAttemptAt: nextAttempt?.at instanceof Date ? nextAttempt.at : new Date(Date.now() + 24 * 60 * 60_000),
-    lastError: "Daily message quota reached; delivery is scheduled for the next quota window.",
-    updatedAt: new Date(),
-  }).where(and(eq(campaignTargetsTable.id, targetId), eq(campaignTargetsTable.status, "sending")));
-  await recordActivity({
-    ownerUserId: campaign.ownerUserId,
-    event: "campaign.target.daily_quota_deferred",
-    level: "warning",
-    campaignId: campaign.id,
-    targetId,
-    message: "Delivery deferred because the subscription daily message quota was reached.",
-    metadata: { messageDailyLimit: subscription.messageDailyLimit },
+    if (!target) return false;
+
+    const [pausedCampaign] = await tx.update(campaignsTable).set({
+      status: "paused",
+      updatedAt: now,
+    }).where(and(
+      eq(campaignsTable.id, campaign.id),
+      inArray(campaignsTable.status, ["queued", "running"]),
+    )).returning({ id: campaignsTable.id });
+    return Boolean(pausedCampaign);
   });
-  return true;
+  if (pauseResult) {
+    const isUserQuota = quotaScope === "user";
+    const messageDailyLimit = isUserQuota
+      ? subscription.userMessageDailyLimit
+      : subscription.messageDailyLimit;
+    await recordActivity({
+      ownerUserId: campaign.ownerUserId,
+      event: "campaign.paused.daily_quota_reached",
+      level: "warning",
+      campaignId: campaign.id,
+      targetId,
+      message: isUserQuota
+        ? `Daily user message limit of ${messageDailyLimit} reached. Campaign will resume automatically on a new day.`
+        : `Daily message limit of ${messageDailyLimit} reached. Campaign will resume automatically on a new day.`,
+      metadata: {
+        quotaScope,
+        campaignDailyMessageLimit: subscription.messageDailyLimit,
+        userMessageDailyLimit: subscription.userMessageDailyLimit,
+        automaticResume: true,
+      },
+    });
+  }
+  return { pausedForQuota: true };
+}
+
+async function resumeDailyQuotaPausedCampaigns() {
+  const settings = await getSystemSettings();
+  const timezone = settings.defaultTimezone.replace(/'/g, "");
+  const dayStart = sql`date_trunc('day', now() AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
+  const candidates = await db.select({
+    id: campaignsTable.id,
+    ownerUserId: campaignsTable.ownerUserId,
+  }).from(campaignsTable)
+    .innerJoin(campaignTargetsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+    .where(and(
+      eq(campaignsTable.status, "paused"),
+      eq(campaignTargetsTable.status, "pending"),
+      inArray(campaignTargetsTable.lastError, DAILY_QUOTA_PAUSE_REASONS),
+      lt(campaignTargetsTable.updatedAt, dayStart),
+    ));
+
+  const uniqueCandidates = new Map(candidates.map((campaign) => [campaign.id, campaign]));
+  for (const candidate of uniqueCandidates.values()) {
+    const subscription = await getSubscription(candidate.ownerUserId);
+    if (subscription.status !== "active") continue;
+    const [resumed] = await db.update(campaignsTable).set({
+      status: "queued",
+      updatedAt: new Date(),
+    }).where(and(
+      eq(campaignsTable.id, candidate.id),
+      eq(campaignsTable.status, "paused"),
+    )).returning({ id: campaignsTable.id });
+    if (!resumed) continue;
+    await recordActivity({
+      ownerUserId: candidate.ownerUserId,
+      event: "campaign.resumed.daily_quota_reset",
+      level: "info",
+      campaignId: candidate.id,
+      message: "Campaign resumed automatically after the daily message limit reset.",
+      metadata: { automaticResume: true },
+    });
+  }
 }
 
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
@@ -238,7 +352,6 @@ async function markTargetForReview(targetId: string, reason: string) {
     try {
       const [target] = await db.update(campaignTargetsTable).set({
         status: "requires_review",
-        quotaReservedAt: null,
         nextAttemptAt: null,
         lastError: reason,
         updatedAt: new Date(),
@@ -328,6 +441,7 @@ export async function processNextCampaignTarget() {
     .where(and(eq(campaignsTable.id, job.campaign.id), inArray(campaignsTable.status, ["queued", "running"])));
 
   let telegramAcceptedDelivery = false;
+  let userQuotaReservation: UserDailyQuotaReservation | undefined;
   let leaseActive = true;
   const heartbeat = setInterval(() => {
     void db.update(telegramAccountsTable).set({
@@ -386,14 +500,17 @@ export async function processNextCampaignTarget() {
       return true;
     }
     const delivery = await withOwnerDeliveryLock(job.campaign.ownerUserId, async () => {
-      if (await deferForDailyQuota(job.campaign, job.target.id)) return { deferred: true as const };
-      const messageId = job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
-        ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
-        : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
+      const quota = await pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts);
+      if (quota.pausedForQuota) return quota;
+      userQuotaReservation = quota.userQuotaReservation;
+      const messageId = isDevelopmentDemoTelegramAccount(job.account)
+        ? `development-demo-${job.target.id}`
+        : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
+          ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
+          : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
       telegramAcceptedDelivery = true;
       const [persisted] = await db.update(campaignTargetsTable).set({
         status: "sent",
-        quotaReservedAt: null,
         sentMessageId: messageId,
         sentAt: new Date(),
         nextAttemptAt: null,
@@ -403,9 +520,9 @@ export async function processNextCampaignTarget() {
         eq(campaignTargetsTable.id, job.target.id),
         eq(campaignTargetsTable.status, "sending"),
       )).returning({ id: campaignTargetsTable.id });
-      return { deferred: false as const, persisted: Boolean(persisted) };
+      return { pausedForQuota: false as const, persisted: Boolean(persisted) };
     });
-    if (delivery.deferred) return true;
+    if (delivery.pausedForQuota) return true;
     if (!delivery.persisted) {
       await markTargetForReview(
         job.target.id,
@@ -417,7 +534,9 @@ export async function processNextCampaignTarget() {
     try {
       await recordActivity({
         event: "campaign.target.sent",
-        message: `Sent campaign "${job.campaign.name}" to "${job.destination.title}"`,
+        message: isDevelopmentDemoTelegramAccount(job.account)
+          ? `Recorded development demo delivery for campaign "${job.campaign.name}" to "${job.destination.title}"`
+          : `Sent campaign "${job.campaign.name}" to "${job.destination.title}"`,
         level: "success",
         campaignId: job.campaign.id,
         targetId: job.target.id,
@@ -439,6 +558,19 @@ export async function processNextCampaignTarget() {
     const message = error instanceof Error ? error.message : "Telegram delivery failed";
     const floodSeconds = Number((error as { seconds?: number }).seconds);
     const hasSupportedFloodWait = Number.isFinite(floodSeconds) && floodSeconds > 0 && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
+    // FLOOD_WAIT is a known Telegram pre-send rejection. Other errors may
+    // have accepted the message before the client lost its response, so their
+    // reservations remain until a human resolves the target.
+    const knownPreSendRejection = hasSupportedFloodWait;
+    if (knownPreSendRejection && userQuotaReservation) {
+      await releaseUserDailyQuota({
+        ownerUserId: job.campaign.ownerUserId,
+        quotaDate: userQuotaReservation.quotaDate,
+      }).catch((releaseError) => {
+        logger.warn({ err: releaseError, targetId: job.target.id }, "Could not release daily user quota after a rejected delivery");
+      });
+      userQuotaReservation = undefined;
+    }
     const retryAt = hasSupportedFloodWait
       ? new Date(Date.now() + floodSeconds * 1000)
       : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
@@ -449,13 +581,14 @@ export async function processNextCampaignTarget() {
         updatedAt: new Date(),
       }).where(eq(telegramAccountsTable.id, job.destination.accountId));
     }
-    await db.update(campaignTargetsTable).set({
-      status: canRetry ? "pending" : "requires_review",
-      quotaReservedAt: null,
-      nextAttemptAt: canRetry ? retryAt : null,
+    const targetUpdate = {
+      status: knownPreSendRejection && canRetry ? "pending" : "requires_review",
+      ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
+      nextAttemptAt: knownPreSendRejection && canRetry ? retryAt : null,
       lastError: message.slice(0, 500),
       updatedAt: new Date(),
-    }).where(and(
+    };
+    await db.update(campaignTargetsTable).set(targetUpdate).where(and(
       eq(campaignTargetsTable.id, job.target.id),
       eq(campaignTargetsTable.status, "sending"),
     ));
@@ -469,7 +602,10 @@ export async function processNextCampaignTarget() {
       targetId: job.target.id,
       accountId: job.destination.accountId,
       ownerUserId: job.campaign.ownerUserId,
-      metadata: { retryAt: canRetry ? retryAt.toISOString() : null },
+      metadata: {
+        retryAt: knownPreSendRejection && canRetry ? retryAt.toISOString() : null,
+        quotaReservationRetained: !knownPreSendRejection,
+      },
     });
   } finally {
     clearInterval(heartbeat);
@@ -491,7 +627,6 @@ export function startCampaignWorker() {
     try {
       const stalled = await db.update(campaignTargetsTable).set({
         status: "requires_review",
-        quotaReservedAt: null,
         nextAttemptAt: null,
         lastError: "Delivery state is unknown after an interrupted worker; manual review is required to avoid duplicate sends.",
         updatedAt: new Date(),
@@ -500,6 +635,7 @@ export function startCampaignWorker() {
         lte(campaignTargetsTable.updatedAt, new Date(Date.now() - 10 * 60_000)),
       )).returning({ campaignId: campaignTargetsTable.campaignId });
       await Promise.all([...new Set(stalled.map((target) => target.campaignId))].map(finalizeCampaignIfTerminal));
+      await resumeDailyQuotaPausedCampaigns();
       while (await processNextCampaignTarget()) {
         // Process one delivery at a time to honor Telegram limits.
       }

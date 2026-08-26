@@ -32,6 +32,7 @@ type TelegramEntity = {
 
 export type TelegramCredentials = { apiId: number; apiHash: string };
 export type TelegramLoginUser = { id: string; username: string | null; phone: string | null; name: string | null };
+export const DEVELOPMENT_DEMO_TELEGRAM_PHONE = "+84987654321";
 
 export function createTelegramClient(session = "", credentials?: TelegramCredentials, proxy?: TelegramProxyConfig) {
   const { apiId, apiHash } = credentials ?? requireTelegramConfiguration();
@@ -55,6 +56,10 @@ export function credentialsForAccount(account: typeof telegramAccountsTable.$inf
 export function phoneForAccount(account: typeof telegramAccountsTable.$inferSelect): string {
   if (!account.phoneEncrypted) throw new Error("Telegram account is missing its phone number");
   return decryptSecret(account.phoneEncrypted);
+}
+
+export function isDevelopmentDemoTelegramAccount(account: typeof telegramAccountsTable.$inferSelect): boolean {
+  return process.env.NODE_ENV !== "production" && phoneForAccount(account) === DEVELOPMENT_DEMO_TELEGRAM_PHONE;
 }
 
 const savedSession = (client: TelegramClient) => (client.session as unknown as { save: () => string }).save();

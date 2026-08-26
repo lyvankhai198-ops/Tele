@@ -769,6 +769,48 @@ paths:
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
         "404": { description: Notification not found }
+  /admin/notifications/{notificationId}/pin:
+    patch:
+      operationId: setAdminNotificationPinned
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminNotificationId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminNotificationPinInput" }
+      responses:
+        "200":
+          description: Notification pin state updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminNotification" }
+        "400": { description: Invalid pin state }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Notification not found }
+  /admin/notifications/{notificationId}/visibility:
+    patch:
+      operationId: setAdminNotificationVisibility
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminNotificationId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminNotificationVisibilityInput" }
+      responses:
+        "200":
+          description: Notification dashboard visibility updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminNotification" }
+        "400": { description: Invalid visibility state }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Notification not found }
   /admin/notifications/upload-url:
     post:
       operationId: requestAdminNotificationUploadUrl
@@ -1218,7 +1260,7 @@ components:
         failedToday: { type: number }
     AdminNotification:
       type: object
-      required: [id, title, body, status, mediaUrl, mediaType, mediaName, mediaSize, scheduledAt, publishedAt, expiresAt, createdBy, createdAt, updatedAt]
+      required: [id, title, body, status, mediaUrl, mediaType, mediaName, mediaSize, scheduledAt, publishedAt, expiresAt, pinned, dashboardVisible, createdBy, createdAt, updatedAt]
       properties:
         id: { type: string }
         title: { type: string }
@@ -1231,6 +1273,8 @@ components:
         scheduledAt: { type: ["string", "null"], format: date-time }
         publishedAt: { type: ["string", "null"], format: date-time }
         expiresAt: { type: ["string", "null"], format: date-time }
+        pinned: { type: boolean }
+        dashboardVisible: { type: boolean }
         createdBy: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -1246,6 +1290,16 @@ components:
         mediaSize: { type: ["number", "null"], minimum: 1, maximum: 52428800 }
         scheduledAt: { type: ["string", "null"], format: date-time }
         expiresAt: { type: ["string", "null"], format: date-time }
+    AdminNotificationPinInput:
+      type: object
+      required: [pinned]
+      properties:
+        pinned: { type: boolean }
+    AdminNotificationVisibilityInput:
+      type: object
+      required: [dashboardVisible]
+      properties:
+        dashboardVisible: { type: boolean }
     AdminNotificationUploadInput:
       type: object
       required: [name, size, contentType]
@@ -1278,7 +1332,7 @@ components:
       enum: [plus, pro, unlimited]
     Plan:
       type: object
-      required: [code, name, tagline, accountLimit, campaignLimit, messageDailyLimit, durationDays]
+      required: [code, name, tagline, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit, durationDays]
       properties:
         code: { $ref: "#/components/schemas/PlanCode" }
         name: { type: string }
@@ -1286,10 +1340,11 @@ components:
         accountLimit: { type: ["number", "null"] }
         campaignLimit: { type: ["number", "null"] }
         messageDailyLimit: { type: ["number", "null"] }
+        userMessageDailyLimit: { type: ["number", "null"] }
         durationDays: { type: number }
     Subscription:
       type: object
-      required: [plan, startedAt, expiresAt, status, accountLimit, campaignLimit, messageDailyLimit]
+      required: [plan, startedAt, expiresAt, status, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]
       properties:
         plan: { $ref: "#/components/schemas/PlanCode" }
         startedAt: { type: string, format: date-time }
@@ -1298,6 +1353,7 @@ components:
         accountLimit: { type: ["number", "null"] }
         campaignLimit: { type: ["number", "null"] }
         messageDailyLimit: { type: ["number", "null"] }
+        userMessageDailyLimit: { type: ["number", "null"] }
     UpgradeSummary:
       type: object
       required: [plans, subscription, telegramPurchaseUrl]
@@ -1319,11 +1375,12 @@ components:
         telegramPurchaseUrl: { type: string, minLength: 1, maxLength: 512 }
     PlanLimitSettings:
       type: object
-      required: [accountLimit, campaignLimit, messageDailyLimit]
+      required: [accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]
       properties:
         accountLimit: { type: ["number", "null"], minimum: 0 }
         campaignLimit: { type: ["number", "null"], minimum: 0 }
         messageDailyLimit: { type: ["number", "null"], minimum: 0 }
+        userMessageDailyLimit: { type: ["number", "null"], minimum: 0 }
     CampaignDefaults:
       type: object
       required: [maxRetries, roundDelayMinSeconds, roundDelayMaxSeconds]

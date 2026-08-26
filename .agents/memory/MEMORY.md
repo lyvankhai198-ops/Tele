@@ -1,10 +1,16 @@
 - [Subscription access policy](subscription-upgrade-policy.md) — new users receive a one-day PLUS trial; expiry locks the workspace until any paid plan key is redeemed.
 - [Telegram account verification](telegram-account-verification.md) — saving API credentials and a phone never proves a Telegram session; keep unverified accounts out of sync/send paths.
+- [Delivery error recovery](delivery-error-recovery.md) — refresh only an invalid Forward source message; never auto-sync a banned account or a group with restricted posting.
 - [OpenAPI numeric validation](openapi-numeric-validation.md) — use `number` plus route-level integer validation; generated `integer` schemas are incompatible with this Zod toolchain.
 - [Telegram proxy transport](telegram-proxy-transport.md) — HTTP/SOCKS5 assignments are stored per account; GramJS needs a socket adapter before they can carry MTProto traffic.
 - [Concurrent delivery quotas](concurrent-delivery-quotas.md) — daily delivery quotas need an atomic reservation before sending when more than one worker can run.
+- [Daily campaign quota policy](daily-quota-pause-policy.md) — each campaign has its own plan allowance and resumes automatically after the local daily reset.
 - [Campaign scheduling semantics](campaign-scheduling-semantics.md) — repeat count means full destination rounds; delays are measured in seconds between scheduled deliveries.
 - [Paused campaign edits](paused-campaign-edits.md) — editing a paused campaign preserves confirmed sends and rebuilds only its remaining deliveries.
 - [Shared VPS deployments](shared-vps-deployments.md) — publish workspace changes to GitHub main before the VPS pulls and rebuilds TeleCampaign.
 - [GitHub tree file modes](github-tree-file-modes.md) — Git data-tree publishing must set executable script modes explicitly or deployment hooks can silently lose permission.
 - [App Storage upload paths](app-storage-upload-paths.md) — derive the internal object path at allocation time; signed upload URLs are not a stable source for reconstructing it.
+- [VPS SSH authentication](vps-ssh-authentication.md) — validate the configured SSH key before deployment and use the secure password fallback only when key parsing fails.
+- [Stale Vite build assets](stale-vite-build-assets.md) — remove deleted public subdirectories from the production dist before serving the next build.
+- [Playwright tutorial capture](playwright-tutorial-capture.md) — close the recording context before awaiting a video path, and reject incomplete recordings before conversion.
+- [Dashboard video delivery](notification-video-delivery.md) — use byte-range streaming and a WebM fallback when preview Chromium cannot decode an otherwise valid H.264 MP4.

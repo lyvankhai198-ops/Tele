@@ -32,6 +32,8 @@ export function adminNotificationResponse(notification: AdminNotification) {
     scheduledAt: notification.scheduledAt,
     publishedAt: notification.publishedAt,
     expiresAt: notification.expiresAt,
+    pinned: notification.pinned,
+    dashboardVisible: notification.dashboardVisible,
     createdBy: notification.createdBy,
     createdAt: notification.createdAt,
     updatedAt: notification.updatedAt,

@@ -28,8 +28,10 @@ import type {
   AdminLicenseKeySecret,
   AdminNotification,
   AdminNotificationInput,
+  AdminNotificationPinInput,
   AdminNotificationUpload,
   AdminNotificationUploadInput,
+  AdminNotificationVisibilityInput,
   AdminOperationCampaign,
   AdminOperationTarget,
   AdminOperations,
@@ -3787,6 +3789,138 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteAdminNotificationMutationOptions(options));
+    }
+
+export const getSetAdminNotificationPinnedUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/admin/notifications/${notificationId}/pin`
+}
+
+export const setAdminNotificationPinned = async (notificationId: string,
+    adminNotificationPinInput: AdminNotificationPinInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotification> => {
+
+  return customFetch<AdminNotification>(getSetAdminNotificationPinnedUrl(notificationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminNotificationPinInput)
+  }
+);}
+
+
+
+
+
+export const getSetAdminNotificationPinnedMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAdminNotificationPinned>>, TError,{notificationId: string;data: BodyType<AdminNotificationPinInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setAdminNotificationPinned>>, TError,{notificationId: string;data: BodyType<AdminNotificationPinInput>}, TContext> => {
+
+const mutationKey = ['setAdminNotificationPinned'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setAdminNotificationPinned>>, {notificationId: string;data: BodyType<AdminNotificationPinInput>}> = (props) => {
+          const {notificationId,data} = props ?? {};
+
+          return  setAdminNotificationPinned(notificationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetAdminNotificationPinnedMutationResult = NonNullable<Awaited<ReturnType<typeof setAdminNotificationPinned>>>
+    export type SetAdminNotificationPinnedMutationBody = BodyType<AdminNotificationPinInput>
+    export type SetAdminNotificationPinnedMutationError = ErrorType<void>
+
+    export const useSetAdminNotificationPinned = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAdminNotificationPinned>>, TError,{notificationId: string;data: BodyType<AdminNotificationPinInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setAdminNotificationPinned>>,
+        TError,
+        {notificationId: string;data: BodyType<AdminNotificationPinInput>},
+        TContext
+      > => {
+      return useMutation(getSetAdminNotificationPinnedMutationOptions(options));
+    }
+
+export const getSetAdminNotificationVisibilityUrl = (notificationId: string,) => {
+
+
+
+
+  return `/api/admin/notifications/${notificationId}/visibility`
+}
+
+export const setAdminNotificationVisibility = async (notificationId: string,
+    adminNotificationVisibilityInput: AdminNotificationVisibilityInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminNotification> => {
+
+  return customFetch<AdminNotification>(getSetAdminNotificationVisibilityUrl(notificationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminNotificationVisibilityInput)
+  }
+);}
+
+
+
+
+
+export const getSetAdminNotificationVisibilityMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAdminNotificationVisibility>>, TError,{notificationId: string;data: BodyType<AdminNotificationVisibilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setAdminNotificationVisibility>>, TError,{notificationId: string;data: BodyType<AdminNotificationVisibilityInput>}, TContext> => {
+
+const mutationKey = ['setAdminNotificationVisibility'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setAdminNotificationVisibility>>, {notificationId: string;data: BodyType<AdminNotificationVisibilityInput>}> = (props) => {
+          const {notificationId,data} = props ?? {};
+
+          return  setAdminNotificationVisibility(notificationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetAdminNotificationVisibilityMutationResult = NonNullable<Awaited<ReturnType<typeof setAdminNotificationVisibility>>>
+    export type SetAdminNotificationVisibilityMutationBody = BodyType<AdminNotificationVisibilityInput>
+    export type SetAdminNotificationVisibilityMutationError = ErrorType<void>
+
+    export const useSetAdminNotificationVisibility = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setAdminNotificationVisibility>>, TError,{notificationId: string;data: BodyType<AdminNotificationVisibilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setAdminNotificationVisibility>>,
+        TError,
+        {notificationId: string;data: BodyType<AdminNotificationVisibilityInput>},
+        TContext
+      > => {
+      return useMutation(getSetAdminNotificationVisibilityMutationOptions(options));
     }
 
 export const getRequestAdminNotificationUploadUrlUrl = () => {

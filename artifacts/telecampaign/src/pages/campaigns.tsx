@@ -83,6 +83,7 @@ const copy = {
     toastUpdated: "Campaign updated.",
     toastPaused: "Campaign paused.",
     toastResumed: "Campaign resumed.",
+    automaticResume: "Will resume automatically on a new day",
     toastDeleted: "Campaign deleted.",
     toastError: (msg: string) => msg,
     confirmDelete: (name: string) => `Delete campaign "${name}"?`,
@@ -162,6 +163,7 @@ const copy = {
     toastUpdated: "Đã cập nhật chiến dịch.",
     toastPaused: "Đã dừng chiến dịch.",
     toastResumed: "Chiến dịch đã tiếp tục.",
+    automaticResume: "Tự động chạy lại vào ngày mới",
     toastDeleted: "Đã xóa chiến dịch.",
     toastError: (msg: string) => msg,
     confirmDelete: (name: string) => `Xóa chiến dịch "${name}"?`,
@@ -271,6 +273,12 @@ function statusLabel(status: string, c: (typeof copy)["en"] | (typeof copy)["vi"
 
 function isActive(status: string) {
   return status === "queued" || status === "running";
+}
+
+function resumesAfterDailyQuota(campaign: Campaign) {
+  return campaign.status === "paused" && campaign.errors.some((error) => (
+    /Daily (?:user )?message limit reached\. Campaign (?:paused (?:until you resume it|and will resume automatically)|will resume automatically) on a new day\./i.test(error.lastError ?? "")
+  ));
 }
 
 function destinationLabel(
@@ -529,6 +537,7 @@ export default function Campaigns() {
               ? <div className="divide-y divide-[#eef2f6]">{listedCampaigns.map((campaign) => {
                   const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
                   const complete = campaign.targetCount ? Math.round((campaign.sentCount / campaign.targetCount) * 100) : 0;
+                  const autoResumes = resumesAfterDailyQuota(campaign);
                   return (
                     <article key={campaign.id} className="p-4 sm:p-5" data-testid={`campaign-row-${campaign.id}`}>
                       <div className="flex items-start justify-between gap-3">
@@ -559,7 +568,9 @@ export default function Campaigns() {
                             : campaign.status === "paused"
                               ? <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
-                                <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
+                                 {autoResumes
+                                   ? <span className="inline-flex h-10 items-center justify-center rounded-xl bg-[#eff6ff] px-3 text-center text-[12px] font-extrabold text-[#1d4ed8]">{c.automaticResume}</span>
+                                   : <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>}
                               </div>
                             : <span className="h-10" />}
                       </div>

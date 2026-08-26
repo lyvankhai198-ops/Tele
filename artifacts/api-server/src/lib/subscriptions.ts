@@ -16,9 +16,9 @@ export const PLAN_ORDER = ["plus", "pro", "unlimited"] as const;
 export type PlanCode = SystemPlanCode;
 
 export const PLAN_CATALOG = [
-  { code: "plus", name: "PLUS", tagline: "Gọn gàng cho một tài khoản vận hành", accountLimit: 1, campaignLimit: 10, messageDailyLimit: 200, durationDays: 30 },
-  { code: "pro", name: "PRO", tagline: "Nhiều không gian hơn cho đội nhóm", accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, durationDays: 30 },
-  { code: "unlimited", name: "UNLIMITED", tagline: "Không giới hạn tài khoản Telegram", accountLimit: null, campaignLimit: null, messageDailyLimit: null, durationDays: 30 },
+  { code: "plus", name: "PLUS", tagline: "Gọn gàng cho một tài khoản vận hành", accountLimit: 1, campaignLimit: 10, messageDailyLimit: 300, userMessageDailyLimit: 3000, durationDays: 30 },
+  { code: "pro", name: "PRO", tagline: "Nhiều không gian hơn cho đội nhóm", accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, userMessageDailyLimit: 30000, durationDays: 30 },
+  { code: "unlimited", name: "UNLIMITED", tagline: "Không giới hạn tài khoản Telegram", accountLimit: null, campaignLimit: null, messageDailyLimit: null, userMessageDailyLimit: null, durationDays: 30 },
 ] as const;
 
 type PlanCatalog = ReadonlyArray<{
@@ -28,6 +28,7 @@ type PlanCatalog = ReadonlyArray<{
   accountLimit: number | null;
   campaignLimit: number | null;
   messageDailyLimit: number | null;
+  userMessageDailyLimit: number | null;
   durationDays: number;
 }>;
 
@@ -49,11 +50,13 @@ function planLimits(plan: PlanCode, catalog: PlanCatalog = PLAN_CATALOG) {
     return {
       campaignLimit: 10,
       messageDailyLimit: 200,
+        userMessageDailyLimit: 2000,
     };
   }
   return {
     campaignLimit: item.campaignLimit,
     messageDailyLimit: item.messageDailyLimit,
+    userMessageDailyLimit: item.userMessageDailyLimit,
   };
 }
 

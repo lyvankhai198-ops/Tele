@@ -480,6 +480,17 @@ export function localizedDeliveryErrorMessage(error: unknown, language: Language
       : "";
   const cleanMessage = message.replace(/^HTTP \d{3} [^:]+:\s*/, "");
 
+  if (/Daily user message limit(?: of \d+)? reached\. Campaign (?:paused (?:until you resume it|until resumed|and will resume automatically) on a new day|will resume automatically on a new day)\./i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Đã đạt ngân sách gửi tổng trong ngày. Chiến dịch sẽ tự động chạy lại vào ngày mới."
+      : "Your workspace reached its daily message budget and this campaign will resume automatically on a new day.";
+  }
+  if (/Daily message limit(?: of \d+)? reached\. Campaign (?:paused (?:until you resume it|until resumed|and will resume automatically) on a new day|will resume automatically on a new day)\./i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Đã đạt giới hạn gửi của chiến dịch trong ngày. Chiến dịch sẽ tự động chạy lại vào ngày mới."
+      : "This campaign reached its daily message limit and will resume automatically on a new day.";
+  }
+
   if (/MESSAGE_ID_INVALID|saved Telegram message ID is invalid/i.test(cleanMessage)) {
     return language === "vi"
       ? "Lỗi tin nhắn nguồn: tin nhắn đã chọn để Forward đã bị thay đổi hoặc không còn tồn tại trong Tin nhắn đã lưu. Hệ thống đã làm mới tin nhắn này một lần nhưng không khôi phục được. Hãy chọn lại tin nhắn hiện tại. (Telegram: MESSAGE_ID_INVALID)"

@@ -5,6 +5,7 @@ description = "A responsive dark dashboard for safely managing Telegram accounts
 version = "1.0.0"
 id = "artifacts/telecampaign"
 router = "path"
+videoAspectRatio = "16:9"
 
 [[services]]
 name = "web"

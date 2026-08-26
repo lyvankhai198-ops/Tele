@@ -5,7 +5,7 @@ export type DailyQuotaState = {
 
 /**
  * A delivery slot is available only when sent and in-flight reservations are
- * both included in the owner's daily allowance.
+ * both included in a campaign's daily allowance.
  */
 export function canReserveDailyQuota(
   state: DailyQuotaState,

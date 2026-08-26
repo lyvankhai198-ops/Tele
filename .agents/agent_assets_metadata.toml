@@ -22,3 +22,17 @@ mtime_ms = 1787496360772
 storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:e50f48d9-f039-4a78-adeb-f4af7ef37b06/3f8125bc-e357-483d-a861-f828284d4ca9/1eddab5d-0aec-4516-a14d-a567c6cb4cfc"
 storage_version_token = "1787496364489599"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "_IkR7MCVrhWBPVGZCpulJ"
+uri = "file://tutorial_video/output.mp4"
+type = "video"
+title = "Video hướng dẫn TeleCampaign"
+description = "Video hướng dẫn tiếng Việt 16:9, 1280×720, khoảng 30 giây. Bản MP4 dùng để tải về/chia sẻ; Dashboard đang dùng bản WebM tương thích để phát ổn định trong preview."
+logical_id = "c20bb4d6-4e7b-4f68-8db9-bbbd4ed20ddb"
+content_hash = "sha256:77f6111debfd43fd3a0d0b93e81613bc9223329d965f276c551992b609f97318"
+size = 291319
+mtime_ms = 1787720331698
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:ef90d1db-3ccc-4ed6-8149-b5f683caf9b9/c20bb4d6-4e7b-4f68-8db9-bbbd4ed20ddb/febdfb40-79d4-42c6-8e02-456fd6b940f5"
+storage_version_token = "1787720643567191"
+content_type = "video/mp4"

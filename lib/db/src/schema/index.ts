@@ -9,6 +9,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+export * from "./user-daily-message-quotas";
 
 export const proxiesTable = pgTable("proxies", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -184,6 +185,8 @@ export const adminNotificationsTable = pgTable("admin_notifications", {
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  pinned: boolean("pinned").notNull().default(false),
+  dashboardVisible: boolean("dashboard_visible").notNull().default(true),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Runtime notification uploads
+artifacts/api-server/.telecampaign-media/

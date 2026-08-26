@@ -27,6 +27,8 @@ export interface AdminNotification {
   publishedAt: Date | null;
   /** @nullable */
   expiresAt: Date | null;
+  pinned: boolean;
+  dashboardVisible: boolean;
   /** @nullable */
   createdBy: string | null;
   createdAt: Date;

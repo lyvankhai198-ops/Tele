@@ -1,12 +1,14 @@
 import { ChangeEvent, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, ImagePlus, Megaphone, Pencil, Plus, Trash2, UploadCloud, Video } from "lucide-react";
+import { CalendarClock, Eye, EyeOff, ImagePlus, Megaphone, Pencil, Pin, PinOff, Plus, Trash2, UploadCloud, Video } from "lucide-react";
 import {
   getListAdminNotificationsQueryKey,
   useCreateAdminNotification,
   useDeleteAdminNotification,
   useListAdminNotifications,
   useRequestAdminNotificationUploadUrl,
+  useSetAdminNotificationPinned,
+  useSetAdminNotificationVisibility,
   useUpdateAdminNotification,
   type AdminNotification,
   type AdminNotificationInput,
@@ -68,6 +70,11 @@ const copy = {
     uploadError: "Could not upload the media.",
     formError: "Enter a title and use a future time when scheduling.",
     loadError: "Could not load notifications.",
+    pin: "Pin to dashboard",
+    unpin: "Unpin",
+    hide: "Remove from dashboard",
+    restore: "Show on dashboard",
+    pinError: "Could not update dashboard placement.",
   },
   vi: {
     pageTitle: "Thông báo Admin",
@@ -110,6 +117,11 @@ const copy = {
     uploadError: "Không thể tải media lên.",
     formError: "Hãy nhập tiêu đề và chọn thời gian trong tương lai khi hẹn giờ.",
     loadError: "Không thể tải thông báo.",
+    pin: "Ghim lên dashboard",
+    unpin: "Bỏ ghim",
+    hide: "Gỡ khỏi dashboard",
+    restore: "Phát lại trên dashboard",
+    pinError: "Không thể cập nhật vị trí hiển thị.",
   },
 } as const;
 
@@ -137,6 +149,8 @@ export default function AdminNotificationsPage() {
   const updateMutation = useUpdateAdminNotification();
   const deleteMutation = useDeleteAdminNotification();
   const requestUploadMutation = useRequestAdminNotificationUploadUrl();
+  const pinMutation = useSetAdminNotificationPinned();
+  const visibilityMutation = useSetAdminNotificationVisibility();
   const [editing, setEditing] = useState<AdminNotification | null>(null);
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; isError?: boolean } | null>(null);
@@ -161,6 +175,20 @@ export default function AdminNotificationsPage() {
     });
   };
 
+  const onPin = (notification: AdminNotification) => {
+    pinMutation.mutate({ notificationId: notification.id, data: { pinned: !notification.pinned } }, {
+      onSuccess: invalidate,
+      onError: (cause) => setToast({ text: localizedErrorMessage(cause, language, text.pinError), isError: true }),
+    });
+  };
+
+  const onVisibility = (notification: AdminNotification) => {
+    visibilityMutation.mutate({ notificationId: notification.id, data: { dashboardVisible: !notification.dashboardVisible } }, {
+      onSuccess: invalidate,
+      onError: (cause) => setToast({ text: localizedErrorMessage(cause, language, text.pinError), isError: true }),
+    });
+  };
+
   return (
     <AppLayout activePage="admin-notifications" title={text.pageTitle} hideUpgrade>
       <SectionHeader
@@ -178,7 +206,7 @@ export default function AdminNotificationsPage() {
       ) : (
         <div className="grid gap-5">
           {notifications.map((notification) => (
-            <NotificationCard key={notification.id} notification={notification} text={text} language={language} onEdit={() => { setEditing(notification); setOpen(true); }} onDelete={() => onDelete(notification)} />
+            <NotificationCard key={notification.id} notification={notification} text={text} language={language} onEdit={() => { setEditing(notification); setOpen(true); }} onDelete={() => onDelete(notification)} onPin={() => onPin(notification)} onVisibility={() => onVisibility(notification)} />
           ))}
         </div>
       )}
@@ -219,12 +247,14 @@ export default function AdminNotificationsPage() {
   );
 }
 
-function NotificationCard({ notification, text, language, onEdit, onDelete }: {
+function NotificationCard({ notification, text, language, onEdit, onDelete, onPin, onVisibility }: {
   notification: AdminNotification;
   text: NotificationCopy;
   language: string;
   onEdit: () => void;
   onDelete: () => void;
+  onPin: () => void;
+  onVisibility: () => void;
 }) {
   const statusLabel = {
     published: text.statusPublished,
@@ -242,8 +272,10 @@ function NotificationCard({ notification, text, language, onEdit, onDelete }: {
     <Panel className="overflow-hidden">
       <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-3">
+           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-lg font-extrabold text-[#0f172a]">{notification.title}</h2>
+             {notification.pinned && <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-indigo-700"><Pin className="h-3 w-3" />{text.pin}</span>}
+             {!notification.dashboardVisible && <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-slate-600"><EyeOff className="h-3 w-3" />{text.hide}</span>}
             <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] ${statusColor}`}>{statusLabel}</span>
           </div>
           {notification.body && <p className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-[#475569]">{notification.body}</p>}
@@ -253,7 +285,9 @@ function NotificationCard({ notification, text, language, onEdit, onDelete }: {
             {notification.expiresAt && <span>{text.expires}: {formatDate(notification.expiresAt, language)}</span>}
           </div>
         </div>
-        <div className="flex shrink-0 gap-2">
+         <div className="flex shrink-0 gap-2">
+           <button type="button" onClick={onPin} className={`rounded-xl border p-2.5 transition ${notification.pinned ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "border-[#cbd5e1] text-[#475569] hover:bg-[#f8fafc] hover:text-[#1a2b88]"}`} aria-label={notification.pinned ? text.unpin : text.pin} title={notification.pinned ? text.unpin : text.pin}>{notification.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}</button>
+           <button type="button" onClick={onVisibility} className={`rounded-xl border p-2.5 transition ${notification.dashboardVisible ? "border-[#cbd5e1] text-[#475569] hover:bg-[#f8fafc] hover:text-[#1a2b88]" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`} aria-label={notification.dashboardVisible ? text.hide : text.restore} title={notification.dashboardVisible ? text.hide : text.restore}>{notification.dashboardVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
           <button type="button" onClick={onEdit} className="rounded-xl border border-[#cbd5e1] p-2.5 text-[#475569] transition hover:bg-[#f8fafc] hover:text-[#1a2b88]" aria-label={text.edit}><Pencil className="h-4 w-4" /></button>
           <button type="button" onClick={onDelete} className="rounded-xl border border-[#fecdd3] p-2.5 text-[#e11d48] transition hover:bg-[#fff1f2]" aria-label={text.delete}><Trash2 className="h-4 w-4" /></button>
         </div>

@@ -9,6 +9,7 @@ export type ConfiguredPlanLimits = {
   accountLimit: number | null;
   campaignLimit: number | null;
   messageDailyLimit: number | null;
+  userMessageDailyLimit: number | null;
 };
 
 export type SystemSettings = {
@@ -35,9 +36,9 @@ type StoredSystemSettings = {
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   planLimits: {
-    plus: { accountLimit: 1, campaignLimit: 10, messageDailyLimit: 200 },
-    pro: { accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600 },
-    unlimited: { accountLimit: null, campaignLimit: null, messageDailyLimit: null },
+    plus: { accountLimit: 1, campaignLimit: 10, messageDailyLimit: 300, userMessageDailyLimit: 3000 },
+    pro: { accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, userMessageDailyLimit: 30000 },
+    unlimited: { accountLimit: null, campaignLimit: null, messageDailyLimit: null, userMessageDailyLimit: null },
   },
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
@@ -58,6 +59,40 @@ function nullableLimit(value: unknown, max: number): number | null {
   return value === null || isFiniteInteger(value, 0, max) ? value : 0;
 }
 
+function userDailyLimit(
+  value: unknown,
+  campaignLimit: number | null,
+  messageDailyLimit: number | null,
+): number | null {
+  if (value === null) return null;
+  if (isFiniteInteger(value, 0, 100000000)) return value;
+  if (campaignLimit === null || messageDailyLimit === null) return null;
+  return campaignLimit * messageDailyLimit;
+}
+
+function normalizedPlanLimits(
+  stored: Partial<ConfiguredPlanLimits> | undefined,
+  fallback: ConfiguredPlanLimits,
+): ConfiguredPlanLimits {
+  const accountLimit = stored?.accountLimit === undefined
+    ? fallback.accountLimit
+    : nullableLimit(stored.accountLimit, 100000);
+  const campaignLimit = stored?.campaignLimit === undefined
+    ? fallback.campaignLimit
+    : nullableLimit(stored.campaignLimit, 100000);
+  const messageDailyLimit = stored?.messageDailyLimit === undefined
+    ? fallback.messageDailyLimit
+    : nullableLimit(stored.messageDailyLimit, 10000000);
+  return {
+    accountLimit,
+    campaignLimit,
+    messageDailyLimit,
+    userMessageDailyLimit: stored?.userMessageDailyLimit === undefined
+      ? userDailyLimit(undefined, campaignLimit, messageDailyLimit)
+      : userDailyLimit(stored.userMessageDailyLimit, campaignLimit, messageDailyLimit),
+  };
+}
+
 function parseSettings(value: string | undefined): SystemSettings {
   if (!value) return structuredClone(DEFAULT_SYSTEM_SETTINGS);
   try {
@@ -66,21 +101,9 @@ function parseSettings(value: string | undefined): SystemSettings {
     const campaignDefaults = raw.campaignDefaults ?? {};
     return {
       planLimits: {
-        plus: {
-          accountLimit: nullableLimit(planLimits.plus?.accountLimit, 100000),
-          campaignLimit: nullableLimit(planLimits.plus?.campaignLimit, 100000),
-          messageDailyLimit: nullableLimit(planLimits.plus?.messageDailyLimit, 10000000),
-        },
-        pro: {
-          accountLimit: nullableLimit(planLimits.pro?.accountLimit, 100000),
-          campaignLimit: nullableLimit(planLimits.pro?.campaignLimit, 100000),
-          messageDailyLimit: nullableLimit(planLimits.pro?.messageDailyLimit, 10000000),
-        },
-        unlimited: {
-          accountLimit: nullableLimit(planLimits.unlimited?.accountLimit, 100000),
-          campaignLimit: nullableLimit(planLimits.unlimited?.campaignLimit, 100000),
-          messageDailyLimit: nullableLimit(planLimits.unlimited?.messageDailyLimit, 10000000),
-        },
+        plus: normalizedPlanLimits(planLimits.plus, DEFAULT_SYSTEM_SETTINGS.planLimits.plus),
+        pro: normalizedPlanLimits(planLimits.pro, DEFAULT_SYSTEM_SETTINGS.planLimits.pro),
+        unlimited: normalizedPlanLimits(planLimits.unlimited, DEFAULT_SYSTEM_SETTINGS.planLimits.unlimited),
       },
       defaultAccountDailyLimit: isFiniteInteger(raw.defaultAccountDailyLimit, 1, 100000)
         ? raw.defaultAccountDailyLimit

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createReadStream } from "node:fs";
 import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -70,6 +71,7 @@ import {
   telegramAccountsTable,
 } from "@workspace/db";
 import { campaignSummary } from "../lib/campaigns";
+import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
@@ -80,6 +82,7 @@ import {
   encryptSecret,
   getAccountClient,
   getTelegramProxyConfig,
+  isDevelopmentDemoTelegramAccount,
   isTelegramSessionRevoked,
   listTelegramSavedMessages,
   phoneForAccount,
@@ -250,6 +253,31 @@ async function startLoginChallenge(account: typeof telegramAccountsTable.$inferS
   };
 }
 
+async function startDevelopmentDemoLoginChallenge(account: typeof telegramAccountsTable.$inferSelect) {
+  const expiresAt = new Date(Date.now() + LOGIN_CHALLENGE_TTL_MS);
+  await db.update(authChallengesTable).set({ status: "expired" })
+    .where(and(
+      eq(authChallengesTable.accountId, account.id),
+      inArray(authChallengesTable.status, ["waiting_code", "waiting_password", "processing_code", "processing_password"]),
+    ));
+  const [challenge] = await db.insert(authChallengesTable).values({
+    accountId: account.id,
+    ownerUserId: account.ownerUserId,
+    status: "waiting_code",
+    phoneCodeHashEncrypted: encryptSecret("development-demo-code"),
+    sessionEncrypted: encryptSecret("development-demo-session"),
+    expiresAt,
+  }).returning();
+  const [authorizingAccount] = await db.update(telegramAccountsTable).set({
+    status: "authorizing",
+    updatedAt: new Date(),
+  }).where(eq(telegramAccountsTable.id, account.id)).returning();
+  return {
+    account: authorizingAccount,
+    challenge: { id: challenge.id, expiresAt: challenge.expiresAt, delivery: "app" as const },
+  };
+}
+
 async function activeLoginChallenge(input: {
   accountId: string;
   ownerUserId: string;
@@ -350,6 +378,43 @@ async function completeTelegramLogin(input: {
   return account;
 }
 
+async function completeDevelopmentDemoLogin(input: {
+  account: typeof telegramAccountsTable.$inferSelect;
+  challengeId: string;
+  challengeStatus: ProcessingLoginStatus;
+}) {
+  const account = await completeTelegramLogin({
+    account: input.account,
+    challengeId: input.challengeId,
+    challengeStatus: input.challengeStatus,
+    session: "development-demo-session",
+    user: {
+      id: `development-demo-${input.account.id}`,
+      username: "telecampaign_demo",
+      name: "TeleCampaign Demo",
+    },
+  });
+  await db.insert(destinationsTable).values({
+    accountId: account.id,
+    telegramId: "development-demo-group",
+    title: "Nhóm demo TeleCampaign",
+    username: "telecampaign_demo_group",
+    kind: "group",
+    memberCount: 42,
+    canPost: true,
+    permissionReason: null,
+    permissionCheckedAt: new Date(),
+  });
+  await recordActivity({
+    ownerUserId: account.ownerUserId,
+    event: "account.demo_connected",
+    message: "Development demo account verified without contacting Telegram.",
+    accountId: account.id,
+    level: "info",
+  });
+  return account;
+}
+
 router.use(requireAuth);
 
 router.get("/upgrade", async (req, res): Promise<void> => {
@@ -376,20 +441,18 @@ router.get("/system-defaults", async (_req, res): Promise<void> => {
 
 router.get("/account", async (req, res): Promise<void> => {
   const ownerUserId = currentUserId(req);
-  const dayStart = sql`date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh'`;
-  const [[profile], subscription, [telegramAccounts], [campaigns], [messagesToday]] = await Promise.all([
+  const [subscription, settings] = await Promise.all([
+    getSubscription(ownerUserId),
+    getSystemSettings(),
+  ]);
+  const [[profile], [telegramAccounts], [campaigns], messagesToday] = await Promise.all([
     db.select({
       username: appUsersTable.username,
       joinedAt: appUsersTable.createdAt,
     }).from(appUsersTable).where(eq(appUsersTable.id, ownerUserId)).limit(1),
-    getSubscription(ownerUserId),
     db.select({ value: count() }).from(telegramAccountsTable).where(and(eq(telegramAccountsTable.ownerUserId, ownerUserId), isNull(telegramAccountsTable.deletedAt))),
     db.select({ value: count() }).from(campaignsTable).where(eq(campaignsTable.ownerUserId, ownerUserId)),
-    db.select({ value: count() }).from(activityLogsTable).where(and(
-      eq(activityLogsTable.ownerUserId, ownerUserId),
-      eq(activityLogsTable.event, "campaign.target.sent"),
-      gte(activityLogsTable.createdAt, dayStart),
-    )),
+    getUserDailyQuotaUsage({ ownerUserId, timezone: settings.defaultTimezone }),
   ]);
 
   if (!profile) return void sendError(res, 404, "Không tìm thấy tài khoản");
@@ -406,7 +469,7 @@ router.get("/account", async (req, res): Promise<void> => {
     usage: {
       telegramAccounts: usage(telegramAccounts.value, subscription.accountLimit),
       campaigns: usage(campaigns.value, subscription.campaignLimit),
-      messagesToday: usage(messagesToday.value, subscription.messageDailyLimit),
+      messagesToday: usage(messagesToday, subscription.userMessageDailyLimit),
     },
   }));
 });
@@ -447,17 +510,57 @@ router.get("/storage/admin-notifications/:notificationId/media", async (req, res
   }
   try {
     const media = await notificationMediaStorage.readAdminNotificationMedia(notification.mediaPath);
-    res.sendFile(media.filePath, {
-      headers: {
-        "Cache-Control": "private, max-age=300",
-        "Content-Type": media.contentType,
-        "X-Content-Type-Options": "nosniff",
-      },
-    }, (error) => {
-      if (!error || res.headersSent) return;
+    const commonHeaders = {
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "private, max-age=300",
+      "Content-Type": media.contentType,
+      "X-Content-Type-Options": "nosniff",
+    };
+    const requestedRange = req.headers.range;
+    let start = 0;
+    let end = media.size - 1;
+    if (requestedRange) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(requestedRange);
+      if (!match) {
+        res.status(416).set({ ...commonHeaders, "Content-Range": `bytes */${media.size}` }).end();
+        return;
+      }
+      if (!match[1] && !match[2]) {
+        res.status(416).set({ ...commonHeaders, "Content-Range": `bytes */${media.size}` }).end();
+        return;
+      }
+      if (!match[1]) {
+        const suffixLength = Number(match[2]);
+        if (!Number.isSafeInteger(suffixLength) || suffixLength < 1) {
+          res.status(416).set({ ...commonHeaders, "Content-Range": `bytes */${media.size}` }).end();
+          return;
+        }
+        start = Math.max(media.size - suffixLength, 0);
+        end = media.size - 1;
+      } else {
+        start = Number(match[1]);
+        end = match[2] ? Math.min(Number(match[2]), media.size - 1) : media.size - 1;
+      }
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= media.size) {
+        res.status(416).set({ ...commonHeaders, "Content-Range": `bytes */${media.size}` }).end();
+        return;
+      }
+      res.status(206).set({
+        ...commonHeaders,
+        "Content-Length": String(end - start + 1),
+        "Content-Range": `bytes ${start}-${end}/${media.size}`,
+      });
+    } else {
+      res.status(200).set({ ...commonHeaders, "Content-Length": String(media.size) });
+    }
+
+    const stream = createReadStream(media.filePath, { start, end });
+    stream.once("error", (error) => {
       req.log.error({ err: error, notificationId: notification.id }, "Unable to stream notification media");
-      sendError(res, 500, "Không thể tải media.");
+      if (res.headersSent) res.destroy(error);
+      else sendError(res, 500, "Không thể tải media.");
     });
+    stream.pipe(res);
   } catch (error) {
     if (error instanceof NotificationMediaNotFoundError) {
       sendError(res, 404, "Media không tồn tại.");
@@ -525,9 +628,10 @@ router.get("/dashboard", async (req, res): Promise<void> => {
           eq(adminNotificationsTable.status, "published"),
           and(eq(adminNotificationsTable.status, "scheduled"), lte(adminNotificationsTable.scheduledAt, now)),
         ),
+        eq(adminNotificationsTable.dashboardVisible, true),
         or(isNull(adminNotificationsTable.expiresAt), gt(adminNotificationsTable.expiresAt, now)),
       ))
-      .orderBy(desc(sql`coalesce(${adminNotificationsTable.publishedAt}, ${adminNotificationsTable.scheduledAt}, ${adminNotificationsTable.createdAt})`))
+      .orderBy(desc(adminNotificationsTable.pinned), desc(sql`coalesce(${adminNotificationsTable.publishedAt}, ${adminNotificationsTable.scheduledAt}, ${adminNotificationsTable.createdAt})`))
       .limit(8),
   ]);
 
@@ -764,9 +868,10 @@ router.post("/telegram/accounts", async (req, res): Promise<void> => {
   }
   let createdAccountId: string | null = null;
   try {
+    const isDemo = process.env.NODE_ENV !== "production" && phone === "+84987654321";
     const [account] = await db.insert(telegramAccountsTable).values({
       ownerUserId: currentUserId(req),
-      name: `Telegram ${phone}`,
+      name: isDemo ? "TeleCampaign Demo" : `Telegram ${phone}`,
       phoneMasked: maskPhone(phone),
       phoneEncrypted: encryptSecret(phone),
       apiId: parsed.data.api_id,
@@ -776,7 +881,9 @@ router.post("/telegram/accounts", async (req, res): Promise<void> => {
     }).returning();
     createdAccountId = account.id;
 
-    const loginStart = await startLoginChallenge(account);
+    const loginStart = isDemo
+      ? await startDevelopmentDemoLoginChallenge(account)
+      : await startLoginChallenge(account);
     await recordActivity({
       ownerUserId: currentUserId(req),
       event: "account.login_started",
@@ -806,7 +913,9 @@ router.post("/telegram/accounts/:accountId/login", async (req, res): Promise<voi
   if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
   if (account.sessionEncrypted) return void sendError(res, 409, "Tài khoản này đã đăng nhập.");
   try {
-    const loginStart = await startLoginChallenge(account);
+    const loginStart = isDevelopmentDemoTelegramAccount(account)
+      ? await startDevelopmentDemoLoginChallenge(account)
+      : await startLoginChallenge(account);
     res.status(201).json(StartTelegramLoginResponse.parse({
       account: telegramAccountResponse(loginStart.account),
       challenge: loginStart.challenge,
@@ -834,6 +943,26 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
   });
   if (!reservation?.challenge.phoneCodeHashEncrypted || !reservation.challenge.sessionEncrypted) {
     return void sendError(res, 409, "Mã xác minh đã hết hạn hoặc không còn hợp lệ. Hãy gửi lại mã.");
+  }
+  if (isDevelopmentDemoTelegramAccount(account)) {
+    if (code !== "12345") {
+      await recordLoginAttemptFailure({
+        challenge: reservation.challenge,
+        accountId: account.id,
+        processingStatus: reservation.processingStatus,
+        retryStatus: reservation.retryStatus,
+      });
+      return void sendError(res, 401, "Mã xác minh không đúng hoặc đã hết hạn.");
+    }
+    const connectedAccount = await completeDevelopmentDemoLogin({
+      account,
+      challengeId: reservation.challenge.id,
+      challengeStatus: reservation.processingStatus,
+    });
+    return void res.json(ConfirmTelegramLoginCodeResponse.parse({
+      status: "connected",
+      account: telegramAccountResponse(connectedAccount),
+    }));
   }
   try {
     const result = await confirmTelegramPhoneCode({
@@ -980,6 +1109,22 @@ router.post("/telegram/accounts/:accountId/sync", async (req, res): Promise<void
     .where(and(eq(telegramAccountsTable.id, params.data.accountId), eq(telegramAccountsTable.ownerUserId, currentUserId(req)), isNull(telegramAccountsTable.deletedAt)));
   if (!account) return void sendError(res, 404, "Telegram account not found");
   try {
+    if (isDevelopmentDemoTelegramAccount(account)) {
+      await db.update(telegramAccountsTable).set({
+        lastSyncAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(telegramAccountsTable.id, account.id));
+      const destinations = await db.select({ id: destinationsTable.id }).from(destinationsTable)
+        .where(eq(destinationsTable.accountId, account.id));
+      await recordActivity({
+        ownerUserId: account.ownerUserId,
+        event: "account.demo_synced",
+        message: "Development demo destinations refreshed without contacting Telegram.",
+        accountId: account.id,
+        level: "info",
+      });
+      return void res.status(202).json(SyncTelegramDestinationsResponse.parse({ count: destinations.length }));
+    }
     const count = await syncAccountDestinations(params.data.accountId);
     res.status(202).json(SyncTelegramDestinationsResponse.parse({ count }));
   } catch (error) {
