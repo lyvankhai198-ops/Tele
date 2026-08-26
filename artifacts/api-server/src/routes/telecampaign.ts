@@ -1458,7 +1458,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     return void sendError(res, 409, "Only draft or paused campaigns can be edited");
   }
   if (existing.clonedFromCampaignId && (
-    parsed.data.telegramAccountId !== undefined || parsed.data.templateId !== undefined
+    (parsed.data.telegramAccountId !== undefined && parsed.data.telegramAccountId !== existing.telegramAccountId)
+    || (parsed.data.templateId !== undefined && parsed.data.templateId !== existing.templateId)
   )) {
     return void sendError(res, 409, "A cloned campaign keeps its assigned Telegram account and forward template. Select a Saved Message when running it.");
   }
@@ -1513,14 +1514,14 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         eq(messageTemplatesTable.ownerUserId, ownerUserId),
       ));
       if (!template) return { kind: "error" as const, status: 404, message: "Message template not found" };
-      if (template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
+      if (!lockedCampaign.clonedFromCampaignId && template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
         return { kind: "error" as const, status: 409, message: "Forward templates must use the Telegram account that owns the saved message" };
       }
       const destinations = await tx.select().from(destinationsTable).where(and(
         inArray(destinationsTable.id, destinationIds),
         eq(destinationsTable.accountId, telegramAccountId),
       ));
-      if (destinations.length !== destinationIds.length || destinations.some((destination) => !destination.canPost)) {
+      if (destinations.length !== destinationIds.length || (!lockedCampaign.clonedFromCampaignId && destinations.some((destination) => !destination.canPost))) {
         return { kind: "error" as const, status: 409, message: "Every campaign destination must exist and have verified posting permission" };
       }
 

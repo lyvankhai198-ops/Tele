@@ -56,6 +56,7 @@ const copy = {
     statErrors: "Campaigns w/ Errors",
     statAccounts: "Telegram Accounts (Connected / Total)",
     statDeliveries: "Failed / Review Deliveries",
+    statSentToday: "Total messages sent today",
     sectionAccounts: "Telegram Accounts",
     sectionCampaigns: "Recent Campaigns",
     sectionErrors: "Recent Delivery Errors",
@@ -117,6 +118,7 @@ const copy = {
     statErrors: "Chiến dịch có lỗi",
     statAccounts: "Tài khoản Telegram (Đã kết nối / Tổng)",
     statDeliveries: "Gửi lỗi / Cần xem xét",
+    statSentToday: "Tổng tin nhắn gửi hôm nay",
     sectionAccounts: "Tài khoản Telegram",
     sectionCampaigns: "Chiến dịch gần đây",
     sectionErrors: "Lỗi gửi gần đây",
@@ -487,6 +489,18 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
           </div>
           <div className="text-[32px] font-black text-[#e11d48] leading-none">
             {overview.campaignsWithErrors}
+          </div>
+        </Panel>
+
+        <Panel className="p-5 border-l-4 border-l-[#0891b2]">
+          <div className="flex items-start justify-between mb-4">
+            <span className="text-[12px] font-black uppercase tracking-wider text-[#64748b]">
+              {text.statSentToday}
+            </span>
+            <Send className="h-4 w-4 text-[#0891b2]" />
+          </div>
+          <div className="text-[32px] font-black text-[#0891b2] leading-none">
+            {overview.sentToday}
           </div>
         </Panel>
       </div>

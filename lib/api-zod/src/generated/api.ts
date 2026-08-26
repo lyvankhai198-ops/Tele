@@ -1717,6 +1717,7 @@ export const GetAdminUserSupportResponse = zod.object({
   "activeCampaigns": zod.number(),
   "pausedCampaigns": zod.number(),
   "campaignsWithErrors": zod.number(),
+  "sentToday": zod.number(),
   "totalCampaigns": zod.number(),
   "telegramAccountsTotal": zod.number(),
   "telegramAccountsConnected": zod.number(),

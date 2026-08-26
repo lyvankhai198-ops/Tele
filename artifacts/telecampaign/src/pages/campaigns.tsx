@@ -111,6 +111,7 @@ const copy = {
     cloneRunConfirm: "Confirm & run campaign",
     cloneRunCancel: "Cancel",
     cloneRunMissing: "Choose a Saved Message before running this campaign.",
+    clonedFieldsFixed: "The Telegram account and forward template are fixed for this cloned campaign. Choose the Saved Message when you run it.",
     detailWaitingTitle: "Waiting to send",
     detailWaitingStatus: "Waiting",
     detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
@@ -200,6 +201,7 @@ const copy = {
     cloneRunConfirm: "Xác nhận & chạy chiến dịch",
     cloneRunCancel: "Hủy",
     cloneRunMissing: "Hãy chọn Tin nhắn đã lưu trước khi chạy chiến dịch này.",
+    clonedFieldsFixed: "Tài khoản Telegram và mẫu forward được cố định cho bản clone này. Hãy chọn Tin nhắn đã lưu khi chạy chiến dịch.",
     detailWaitingTitle: "Đang chờ gửi",
     detailWaitingStatus: "Đang chờ",
     detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
@@ -359,7 +361,7 @@ export default function Campaigns() {
     return (destinations.data ?? [])
       .filter((destination) =>
         destination.accountId === form.accountId
-        && destination.canPost
+        && (destination.canPost || Boolean(editingCampaign?.clonedFromCampaignId && form.destinationIds.includes(destination.id)))
         && (!needle
           || destination.title.toLowerCase().includes(needle)
           || (destination.parentTitle ?? "").toLowerCase().includes(needle)
@@ -368,10 +370,12 @@ export default function Campaigns() {
       .sort((left, right) =>
         destinationLabel(left, c).localeCompare(destinationLabel(right, c), language === "vi" ? "vi" : "en"),
       );
-  }, [destinations.data, form.accountId, groupSearch, language, c]);
+  }, [destinations.data, form.accountId, form.destinationIds, groupSearch, language, c, editingCampaign?.clonedFromCampaignId]);
   const accountTemplates = useMemo(() => (templates.data ?? []).filter((template) =>
-    template.mode !== "forward" || template.sourceAccountId === form.accountId,
-  ), [templates.data, form.accountId]);
+    template.mode !== "forward"
+    || template.sourceAccountId === form.accountId
+    || Boolean(editingCampaign?.clonedFromCampaignId && template.id === form.templateId),
+  ), [templates.data, form.accountId, form.templateId, editingCampaign?.clonedFromCampaignId]);
   const selectedTemplate = (templates.data ?? []).find((template) => template.id === form.templateId);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
@@ -398,7 +402,8 @@ export default function Campaigns() {
       accountId: campaign.telegramAccountId ?? "",
       templateId: campaign.templateId ?? "",
       destinationIds: (destinations.data ?? [])
-        .filter((destination) => campaign.destinationIds.includes(destination.id) && destination.canPost)
+        .filter((destination) => campaign.destinationIds.includes(destination.id)
+          && (destination.canPost || Boolean(campaign.clonedFromCampaignId)))
         .map((destination) => destination.id),
       repeatCount: String(campaign.repeatCount),
       roundDelayMinSeconds: String(campaign.roundDelayMinSeconds),
@@ -466,12 +471,15 @@ export default function Campaigns() {
     }
     try {
       if (editingCampaign) {
+        const isClonedCampaign = Boolean(editingCampaign.clonedFromCampaignId);
         await updateStatus.mutateAsync({
           campaignId: editingCampaign.id,
           data: {
             name: form.name.trim(),
-            telegramAccountId: form.accountId,
-            templateId: form.templateId,
+            ...(isClonedCampaign ? {} : {
+              telegramAccountId: form.accountId,
+              templateId: form.templateId,
+            }),
             destinationIds: form.destinationIds,
             scheduledAt,
             timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
@@ -673,7 +681,7 @@ export default function Campaigns() {
 
             <label className="block">
               <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldAccount}</span>
-              <select value={form.accountId} onChange={(event) => changeAccount(event.target.value)} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="campaign-account">
+              <select value={form.accountId} onChange={(event) => changeAccount(event.target.value)} disabled={Boolean(editingCampaign?.clonedFromCampaignId)} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-account">
                 <option value="">{c.fieldAccountPlaceholder}</option>
                 {connectedAccounts.map((account) => <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>)}
               </select>
@@ -681,10 +689,11 @@ export default function Campaigns() {
 
             <label className="block">
               <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldTemplate}</span>
-              <select value={form.templateId} onChange={(event) => setForm({ ...form, templateId: event.target.value })} disabled={!form.accountId} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-template">
+              <select value={form.templateId} onChange={(event) => setForm({ ...form, templateId: event.target.value })} disabled={!form.accountId || Boolean(editingCampaign?.clonedFromCampaignId)} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-template">
                 <option value="">{c.fieldTemplatePlaceholder}</option>
                 {accountTemplates.map((template) => <option value={template.id} key={template.id}>{template.name}{template.mode === "forward" ? " · Forward" : ""}</option>)}
               </select>
+              {editingCampaign?.clonedFromCampaignId && <span className="mt-2 block text-[12px] font-medium leading-relaxed text-[#64748b]">{c.clonedFieldsFixed}</span>}
             </label>
 
             <div>
@@ -710,6 +719,7 @@ export default function Campaigns() {
                               <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
                               <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c)}</span>
                               {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
+                               {!destination.canPost && editingCampaign?.clonedFromCampaignId && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]">Chưa xác minh</span>}
                             </button>
                           ))
                         : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">{c.noGroupsHint}</p>}

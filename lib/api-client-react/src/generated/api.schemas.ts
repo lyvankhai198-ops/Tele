@@ -1185,6 +1185,7 @@ export interface AdminUserSupportOverview {
   activeCampaigns: number;
   pausedCampaigns: number;
   campaignsWithErrors: number;
+  sentToday: number;
   totalCampaigns: number;
   telegramAccountsTotal: number;
   telegramAccountsConnected: number;

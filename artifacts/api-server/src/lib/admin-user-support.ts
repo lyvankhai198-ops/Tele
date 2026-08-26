@@ -50,6 +50,7 @@ export type AdminUserSupportRecord = {
     activeCampaigns: number;
     pausedCampaigns: number;
     campaignsWithErrors: number;
+    sentToday: number;
     totalCampaigns: number;
     telegramAccountsTotal: number;
     telegramAccountsConnected: number;
@@ -130,6 +131,7 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       .orderBy(desc(activityLogsTable.createdAt))
       .limit(1),
   ]);
+  const dayStart = sql`date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh'`;
   const user: AdminUserRecord = {
     id: appUser.id,
     username: appUser.username,
@@ -144,7 +146,7 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
     },
   };
 
-  const [accounts, destinationCounts, campaignAccountCounts, campaigns, campaignStatusCounts, targetStatusCounts, failingCampaignCount, activity, recentErrorRows] = await Promise.all([
+  const [accounts, destinationCounts, campaignAccountCounts, campaigns, campaignStatusCounts, targetStatusCounts, failingCampaignCount, sentTodayCount, activity, recentErrorRows] = await Promise.all([
     db.select({
       id: telegramAccountsTable.id,
       name: telegramAccountsTable.name,
@@ -205,6 +207,12 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       .where(and(
         eq(campaignsTable.ownerUserId, userId),
         inArray(campaignTargetsTable.status, ["failed", "requires_review"]),
+      )),
+    db.select({ value: count() }).from(activityLogsTable)
+      .where(and(
+        eq(activityLogsTable.ownerUserId, userId),
+        eq(activityLogsTable.event, "campaign.target.sent"),
+        sql`${activityLogsTable.createdAt} >= ${dayStart}`,
       )),
     db.select({
       id: activityLogsTable.id,
@@ -338,6 +346,7 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       activeCampaigns: (campaignStatusCount.get("queued") ?? 0) + (campaignStatusCount.get("running") ?? 0),
       pausedCampaigns: campaignStatusCount.get("paused") ?? 0,
       campaignsWithErrors,
+      sentToday: sentTodayCount[0]?.value ?? 0,
       totalCampaigns: user.usage.campaigns,
       telegramAccountsTotal: accounts.length,
       telegramAccountsConnected: accounts.filter((account) => connectedStatuses.has(account.status)).length,

@@ -1777,11 +1777,12 @@ components:
         usage: { $ref: "#/components/schemas/AdminUserUsage" }
     AdminUserSupportOverview:
       type: object
-      required: [activeCampaigns, pausedCampaigns, campaignsWithErrors, totalCampaigns, telegramAccountsTotal, telegramAccountsConnected, failedDeliveries, reviewDeliveries, destinationsTotal]
+      required: [activeCampaigns, pausedCampaigns, campaignsWithErrors, sentToday, totalCampaigns, telegramAccountsTotal, telegramAccountsConnected, failedDeliveries, reviewDeliveries, destinationsTotal]
       properties:
         activeCampaigns: { type: number }
         pausedCampaigns: { type: number }
         campaignsWithErrors: { type: number }
+        sentToday: { type: number }
         totalCampaigns: { type: number }
         telegramAccountsTotal: { type: number }
         telegramAccountsConnected: { type: number }
