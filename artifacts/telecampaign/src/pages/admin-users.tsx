@@ -65,7 +65,7 @@ const copy = {
     modalTitle: "Update Subscription",
     modalDetail: (username: string) => `Safely extend or change the plan for @${username}.`,
     planLabel: "Select Plan",
-    durationLabel: "Duration (Days)",
+    durationLabel: "Duration (Days — editable)",
     durationPlaceholder: "E.g. 30",
     durationValidationError: "Duration must be between 1 and 3660 days.",
     warningTitle: "Important limitations",
@@ -113,7 +113,7 @@ const copy = {
     modalTitle: "Cập nhật Gói dịch vụ",
     modalDetail: (username: string) => `Thay đổi hoặc gia hạn gói an toàn cho @${username}.`,
     planLabel: "Chọn gói",
-    durationLabel: "Thời hạn (Ngày)",
+    durationLabel: "Thời hạn (Ngày — có thể chỉnh sửa)",
     durationPlaceholder: "VD: 30",
     durationValidationError: "Thời hạn phải từ 1 đến 3660 ngày.",
     warningTitle: "Lưu ý quan trọng",
@@ -468,6 +468,7 @@ export default function AdminUsersPage() {
             <Input
               label={text.durationLabel}
               type="number"
+              inputMode="numeric"
               value={formDuration}
               onChange={setFormDuration}
               placeholder={text.durationPlaceholder}
