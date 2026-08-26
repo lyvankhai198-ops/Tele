@@ -21,7 +21,9 @@ const copy = {
     accountLimit: "Telegram accounts",
     campaignLimit: "Campaigns",
     messageLimit: "Messages / campaign / day",
+    userQuotaTitle: "Daily user budget",
     userMessageLimit: "Messages / user / day",
+    userQuotaHint: "Shared across every campaign owned by this user.",
     unlimited: "Unlimited",
     dailyDefault: "Default account daily limit",
     delivery: "Delivery defaults",
@@ -50,7 +52,9 @@ const copy = {
     accountLimit: "Tài khoản Telegram",
     campaignLimit: "Chiến dịch",
     messageLimit: "Tin nhắn / chiến dịch / ngày",
+    userQuotaTitle: "Ngân sách tổng theo user",
     userMessageLimit: "Tổng tin nhắn / user / ngày",
+    userQuotaHint: "Dùng chung cho tất cả campaign của user này trong ngày.",
     unlimited: "Không giới hạn",
     dailyDefault: "Giới hạn gửi/ngày mặc định cho tài khoản",
     delivery: "Mặc định gửi tin",
@@ -170,7 +174,11 @@ export default function AdminSystemSettingsPage() {
                 <LimitControl label={text.accountLimit} value={form.planLimits[plan].accountLimit} onChange={(value) => updatePlanLimit(plan, "accountLimit", value)} unlimitedLabel={text.unlimited} />
                 <LimitControl label={text.campaignLimit} value={form.planLimits[plan].campaignLimit} onChange={(value) => updatePlanLimit(plan, "campaignLimit", value)} unlimitedLabel={text.unlimited} />
                 <LimitControl label={text.messageLimit} value={form.planLimits[plan].messageDailyLimit} onChange={(value) => updatePlanLimit(plan, "messageDailyLimit", value)} unlimitedLabel={text.unlimited} />
-                <LimitControl label={text.userMessageLimit} value={form.planLimits[plan].userMessageDailyLimit} onChange={(value) => updatePlanLimit(plan, "userMessageDailyLimit", value)} unlimitedLabel={text.unlimited} />
+                <div className="border-t border-dashed border-[#cbd5e1] pt-3">
+                  <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1a2b88]">{text.userQuotaTitle}</p>
+                  <p className="mb-3 text-[11px] font-medium leading-4 text-[#64748b]">{text.userQuotaHint}</p>
+                  <LimitControl label={text.userMessageLimit} value={form.planLimits[plan].userMessageDailyLimit} onChange={(value) => updatePlanLimit(plan, "userMessageDailyLimit", value)} unlimitedLabel={text.unlimited} />
+                </div>
               </div>
             </div>
           ))}
