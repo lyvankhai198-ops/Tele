@@ -1159,6 +1159,117 @@ export interface AdminUser {
   usage: AdminUserUsage;
 }
 
+export interface AdminUserSupportOverview {
+  activeCampaigns: number;
+  pausedCampaigns: number;
+  campaignsWithErrors: number;
+  totalCampaigns: number;
+  telegramAccountsTotal: number;
+  telegramAccountsConnected: number;
+  failedDeliveries: number;
+  reviewDeliveries: number;
+  destinationsTotal: number;
+}
+
+export interface AdminUserSupportAccount {
+  id: string;
+  name: string;
+  /** @nullable */
+  username: string | null;
+  /** @nullable */
+  phoneMasked: string | null;
+  status: string;
+  /** @nullable */
+  proxyName: string | null;
+  /** @nullable */
+  proxyStatus: string | null;
+  /** @nullable */
+  lastSyncAt: string | null;
+  /** @nullable */
+  cooldownUntil: string | null;
+  destinationCount: number;
+  campaignCount: number;
+}
+
+export interface AdminUserSupportTarget {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  destinationId: string;
+  destinationTitle: string;
+  /** @nullable */
+  destinationUsername: string | null;
+  /** @nullable */
+  destinationLink: string | null;
+  destinationKind: string;
+  /** @nullable */
+  topicId: number | null;
+  status: string;
+  attempts: number;
+  /** @nullable */
+  lastError: string | null;
+  /** @nullable */
+  nextAttemptAt: string | null;
+  /** @nullable */
+  sentAt: string | null;
+  updatedAt: string;
+}
+
+export interface AdminUserSupportCampaign {
+  id: string;
+  name: string;
+  status: string;
+  content: string;
+  templateMode: string;
+  /** @nullable */
+  templateSourceAccountName: string | null;
+  /** @nullable */
+  templateSourceMessageId: string | null;
+  /** @nullable */
+  telegramAccountId: string | null;
+  /** @nullable */
+  telegramAccountName: string | null;
+  /** @nullable */
+  scheduledAt: string | null;
+  timezone: string;
+  repeatCount: number;
+  destinationCount: number;
+  deliveryCount: number;
+  pendingCount: number;
+  sendingCount: number;
+  sentCount: number;
+  failedCount: number;
+  reviewCount: number;
+}
+
+export interface AdminUserSupportCampaignTargets {
+  totalTargets: number;
+  hasMore: boolean;
+  targets: AdminUserSupportTarget[];
+}
+
+export interface AdminUserSupportActivity {
+  id: string;
+  level: string;
+  event: string;
+  message: string;
+  /** @nullable */
+  campaignId: string | null;
+  /** @nullable */
+  accountId: string | null;
+  createdAt: string;
+}
+
+export interface AdminUserSupport {
+  user: AdminUser;
+  overview: AdminUserSupportOverview;
+  telegramAccounts: AdminUserSupportAccount[];
+  campaigns: AdminUserSupportCampaign[];
+  campaignsTruncated: boolean;
+  recentErrors: AdminUserSupportTarget[];
+  activity: AdminUserSupportActivity[];
+}
+
 export interface AdminSubscriptionUpdateInput {
   plan: PlanCode;
   /**
@@ -1233,5 +1344,19 @@ export type ListAdminUsersParams = {
  */
 search?: string;
 plan?: PlanCode;
+};
+
+export type GetAdminUserSupportCampaignTargetsParams = {
+userId: string;
+campaignId: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
 };
 

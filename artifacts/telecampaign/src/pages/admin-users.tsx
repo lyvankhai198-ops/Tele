@@ -27,6 +27,7 @@ import {
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { Users, Search, Filter, ShieldAlert, CheckCircle2, ChevronRight, Activity, AlertTriangle } from "lucide-react";
+import { useLocation } from "wouter";
 
 const copy = {
   en: {
@@ -76,6 +77,7 @@ const copy = {
     saveSuccess: "Subscription updated successfully.",
     saveError: "Could not update subscription.",
     confirmAction: "Apply Update",
+    supportAction: "Workspace",
   },
   vi: {
     pageTitle: "Quản lý Người dùng",
@@ -124,6 +126,7 @@ const copy = {
     saveSuccess: "Đã cập nhật gói dịch vụ.",
     saveError: "Không thể cập nhật gói dịch vụ.",
     confirmAction: "Áp dụng",
+    supportAction: "Không gian hỗ trợ",
   }
 } as const;
 
@@ -138,6 +141,7 @@ function formatDate(dateStr: string, language: string): string {
 
 export default function AdminUsersPage() {
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const { language } = useLanguage();
   const text = copy[language];
 
@@ -388,13 +392,23 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleOpenEdit(user)}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#cbd5e1] bg-white px-3 py-1.5 text-[12px] font-extrabold text-[#1a2b88] hover:border-[#1a2b88] hover:bg-[#f8fafc] transition-all"
-                    >
-                      {text.updateAction}
-                      <ChevronRight className="h-3.5 w-3.5 opacity-50" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleOpenEdit(user)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#cbd5e1] bg-white px-3 py-1.5 text-[12px] font-extrabold text-[#475569] hover:text-[#0f172a] hover:bg-[#f8fafc] transition-all"
+                        data-testid={`btn-update-plan-${user.id}`}
+                      >
+                        {text.updateAction}
+                      </button>
+                      <button
+                        onClick={() => setLocation(`/admin/users/${user.id}/support`)}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border-transparent bg-[#1a2b88] px-3 py-1.5 text-[12px] font-extrabold text-white hover:bg-[#152473] transition-all shadow-sm"
+                        data-testid={`btn-support-${user.id}`}
+                      >
+                        {text.supportAction}
+                        <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -138,20 +139,26 @@ export const campaignsTable = pgTable("campaigns", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const campaignTargetsTable = pgTable("campaign_targets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  campaignId: uuid("campaign_id").notNull().references(() => campaignsTable.id, { onDelete: "cascade" }),
-  destinationId: uuid("destination_id").notNull().references(() => destinationsTable.id, { onDelete: "restrict" }),
-  status: text("status").notNull().default("pending"),
-  attempts: integer("attempts").notNull().default(0),
-  quotaReservedAt: timestamp("quota_reserved_at", { withTimezone: true }),
-  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
-  lastError: text("last_error"),
-  sentMessageId: text("sent_message_id"),
-  sentAt: timestamp("sent_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const campaignTargetsTable = pgTable(
+  "campaign_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id").notNull().references(() => campaignsTable.id, { onDelete: "cascade" }),
+    destinationId: uuid("destination_id").notNull().references(() => destinationsTable.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    quotaReservedAt: timestamp("quota_reserved_at", { withTimezone: true }),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    sentMessageId: text("sent_message_id"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("campaign_targets_campaign_updated_idx").on(table.campaignId, table.updatedAt),
+  ],
+);
 
 export const activityLogsTable = pgTable("activity_logs", {
   id: uuid("id").primaryKey().defaultRandom(),

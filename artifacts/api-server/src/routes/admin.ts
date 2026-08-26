@@ -13,6 +13,9 @@ import {
   ListAdminUsersResponse,
   GetAdminUserParams,
   GetAdminUserResponse,
+  GetAdminUserSupportResponse,
+  GetAdminUserSupportCampaignTargetsQueryParams,
+  GetAdminUserSupportCampaignTargetsResponse,
   UpdateAdminUserSubscriptionParams,
   UpdateAdminUserSubscriptionBody,
   UpdateAdminUserSubscriptionResponse,
@@ -67,6 +70,7 @@ import {
   updateUserDailyQuotaExemption,
   revealAdminLicenseKey,
 } from "../lib/subscriptions";
+import { getAdminUserSupport, getAdminUserSupportCampaignTargets } from "../lib/admin-user-support";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
@@ -366,6 +370,34 @@ router.get("/admin/users/:userId", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetAdminUserResponse.parse(user));
+});
+
+router.get("/admin/users/:userId/support", async (req, res): Promise<void> => {
+  const parsed = GetAdminUserParams.safeParse(req.params);
+  if (!parsed.success) {
+    sendError(res, 400, "Người dùng không hợp lệ.");
+    return;
+  }
+  const support = await getAdminUserSupport(parsed.data.userId);
+  if (!support) {
+    sendError(res, 404, "Không tìm thấy người dùng.");
+    return;
+  }
+  res.json(GetAdminUserSupportResponse.parse(support));
+});
+
+router.get("/admin/user-support/campaign-targets", async (req, res): Promise<void> => {
+  const parsed = GetAdminUserSupportCampaignTargetsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    sendError(res, 400, "Tham số campaign không hợp lệ.");
+    return;
+  }
+  const targetPage = await getAdminUserSupportCampaignTargets(parsed.data);
+  if (!targetPage) {
+    sendError(res, 404, "Không tìm thấy campaign của người dùng.");
+    return;
+  }
+  res.json(GetAdminUserSupportCampaignTargetsResponse.parse(targetPage));
 });
 
 router.patch("/admin/users/:userId/subscription", async (req, res): Promise<void> => {

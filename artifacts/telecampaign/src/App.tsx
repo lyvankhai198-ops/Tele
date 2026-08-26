@@ -30,6 +30,7 @@ import Upgrade from '@/pages/upgrade';
 import AdminDashboardPage from '@/pages/admin-dashboard';
 import AdminNotificationsPage from '@/pages/admin-notifications';
 import AdminUsersPage from '@/pages/admin-users';
+import AdminUserSupportPage from '@/pages/admin-user-support';
 import AdminLicenseKeysPage from '@/pages/admin-license-keys';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
@@ -404,6 +405,9 @@ function Router() {
         <Route path="/admin" component={() => <AdminRoute><AdminDashboardPage /></AdminRoute>} />
         <Route path="/admin/notifications" component={() => <AdminRoute><AdminNotificationsPage /></AdminRoute>} />
         <Route path="/admin/users" component={() => <AdminRoute><AdminUsersPage /></AdminRoute>} />
+        <Route path="/admin/users/:id/support">
+          {(params) => <AdminRoute><AdminUserSupportPage userId={params.id} /></AdminRoute>}
+        </Route>
         <Route path="/admin/license-keys" component={() => <AdminRoute><AdminLicenseKeysPage /></AdminRoute>} />
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />

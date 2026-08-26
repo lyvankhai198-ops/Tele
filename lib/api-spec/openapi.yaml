@@ -587,7 +587,7 @@ paths:
       operationId: updateAdminCampaignStatus
       tags: [admin]
       parameters:
-        - { name: campaignId, in: path, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/AdminCampaignId" }
       requestBody:
         required: true
         content:
@@ -861,6 +861,41 @@ paths:
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
         "404": { description: User not found }
+  /admin/users/{userId}/support:
+    get:
+      operationId: getAdminUserSupport
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+      responses:
+        "200":
+          description: Aggregated user support workspace data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserSupport" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: User not found }
+        "400": { description: Invalid user identifier }
+  /admin/user-support/campaign-targets:
+    get:
+      operationId: getAdminUserSupportCampaignTargets
+      tags: [admin]
+      parameters:
+        - { name: userId, in: query, required: true, schema: { type: string } }
+        - { name: campaignId, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: number, minimum: 1, maximum: 100, default: 100 } }
+        - { name: offset, in: query, required: false, schema: { type: number, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: One bounded page of delivery targets for an owned campaign
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserSupportCampaignTargets" }
+        "400": { description: Invalid identifier or pagination query }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: User or campaign not found }
   /admin/users/{userId}/subscription:
     patch:
       operationId: updateAdminUserSubscription
@@ -932,6 +967,11 @@ components:
       schema: { type: string }
     AdminUserId:
       name: userId
+      in: path
+      required: true
+      schema: { type: string }
+    AdminCampaignId:
+      name: campaignId
       in: path
       required: true
       schema: { type: string }
@@ -1674,6 +1714,115 @@ components:
         storedPlan: { $ref: "#/components/schemas/PlanCode" }
         subscription: { $ref: "#/components/schemas/Subscription" }
         usage: { $ref: "#/components/schemas/AdminUserUsage" }
+    AdminUserSupportOverview:
+      type: object
+      required: [activeCampaigns, pausedCampaigns, campaignsWithErrors, totalCampaigns, telegramAccountsTotal, telegramAccountsConnected, failedDeliveries, reviewDeliveries, destinationsTotal]
+      properties:
+        activeCampaigns: { type: number }
+        pausedCampaigns: { type: number }
+        campaignsWithErrors: { type: number }
+        totalCampaigns: { type: number }
+        telegramAccountsTotal: { type: number }
+        telegramAccountsConnected: { type: number }
+        failedDeliveries: { type: number }
+        reviewDeliveries: { type: number }
+        destinationsTotal: { type: number }
+    AdminUserSupportAccount:
+      type: object
+      required: [id, name, username, phoneMasked, status, proxyName, proxyStatus, lastSyncAt, cooldownUntil, destinationCount, campaignCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: ["string", "null"] }
+        phoneMasked: { type: ["string", "null"] }
+        status: { type: string }
+        proxyName: { type: ["string", "null"] }
+        proxyStatus: { type: ["string", "null"] }
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+        cooldownUntil: { type: ["string", "null"], format: date-time }
+        destinationCount: { type: number }
+        campaignCount: { type: number }
+    AdminUserSupportTarget:
+      type: object
+      required: [id, campaignId, campaignName, destinationId, destinationTitle, destinationUsername, destinationLink, destinationKind, topicId, status, attempts, lastError, nextAttemptAt, sentAt, updatedAt]
+      properties:
+        id: { type: string }
+        campaignId: { type: string }
+        campaignName: { type: string }
+        destinationId: { type: string }
+        destinationTitle: { type: string }
+        destinationUsername: { type: ["string", "null"] }
+        destinationLink: { type: ["string", "null"] }
+        destinationKind: { type: string }
+        topicId: { type: ["number", "null"] }
+        status: { type: string }
+        attempts: { type: number }
+        lastError: { type: ["string", "null"] }
+        nextAttemptAt: { type: ["string", "null"], format: date-time }
+        sentAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AdminUserSupportCampaign:
+      type: object
+      required: [id, name, status, content, templateMode, templateSourceAccountName, templateSourceMessageId, telegramAccountId, telegramAccountName, scheduledAt, timezone, repeatCount, destinationCount, deliveryCount, pendingCount, sendingCount, sentCount, failedCount, reviewCount]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string }
+        content: { type: string }
+        templateMode: { type: string }
+        templateSourceAccountName: { type: ["string", "null"] }
+        templateSourceMessageId: { type: ["string", "null"] }
+        telegramAccountId: { type: ["string", "null"] }
+        telegramAccountName: { type: ["string", "null"] }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        timezone: { type: string }
+        repeatCount: { type: number }
+        destinationCount: { type: number }
+        deliveryCount: { type: number }
+        pendingCount: { type: number }
+        sendingCount: { type: number }
+        sentCount: { type: number }
+        failedCount: { type: number }
+        reviewCount: { type: number }
+    AdminUserSupportCampaignTargets:
+      type: object
+      required: [totalTargets, hasMore, targets]
+      properties:
+        totalTargets: { type: number }
+        hasMore: { type: boolean }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserSupportTarget" }
+    AdminUserSupportActivity:
+      type: object
+      required: [id, level, event, message, campaignId, accountId, createdAt]
+      properties:
+        id: { type: string }
+        level: { type: string }
+        event: { type: string }
+        message: { type: string }
+        campaignId: { type: ["string", "null"] }
+        accountId: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    AdminUserSupport:
+      type: object
+      required: [user, overview, telegramAccounts, campaigns, campaignsTruncated, recentErrors, activity]
+      properties:
+        user: { $ref: "#/components/schemas/AdminUser" }
+        overview: { $ref: "#/components/schemas/AdminUserSupportOverview" }
+        telegramAccounts:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserSupportAccount" }
+        campaigns:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserSupportCampaign" }
+        campaignsTruncated: { type: boolean }
+        recentErrors:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserSupportTarget" }
+        activity:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserSupportActivity" }
     AdminSubscriptionUpdateInput:
       type: object
       required: [plan, durationDays]

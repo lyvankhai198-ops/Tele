@@ -41,6 +41,8 @@ import type {
   AdminSystemSettingsInput,
   AdminUser,
   AdminUserQuotaUpdateInput,
+  AdminUserSupport,
+  AdminUserSupportCampaignTargets,
   AuthUser,
   CalendarItem,
   Campaign,
@@ -51,6 +53,7 @@ import type {
   CreateProxyInput,
   DashboardSummary,
   Destination,
+  GetAdminUserSupportCampaignTargetsParams,
   HealthStatus,
   LegacyOwnerMappingInput,
   LegacyOwnerMigrationResult,
@@ -4126,6 +4129,155 @@ export function useGetAdminUser<TData = Awaited<ReturnType<typeof getAdminUser>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminUserQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminUserSupportUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/support`
+}
+
+export const getAdminUserSupport = async (userId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminUserSupport> => {
+
+  return customFetch<AdminUserSupport>(getGetAdminUserSupportUrl(userId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminUserSupportQueryKey = (userId: string,) => {
+    return [
+    `/api/admin/users/${userId}/support`
+    ] as const;
+    }
+
+
+export const getGetAdminUserSupportQueryOptions = <TData = Awaited<ReturnType<typeof getAdminUserSupport>>, TError = ErrorType<void>>(userId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminUserSupport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminUserSupportQueryKey(userId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminUserSupport>>> = ({ signal }) => getAdminUserSupport(userId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: userId !== null && userId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminUserSupport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminUserSupportQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminUserSupport>>>
+export type GetAdminUserSupportQueryError = ErrorType<void>
+
+
+
+export function useGetAdminUserSupport<TData = Awaited<ReturnType<typeof getAdminUserSupport>>, TError = ErrorType<void>>(
+ userId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminUserSupport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminUserSupportQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminUserSupportCampaignTargetsUrl = (params: GetAdminUserSupportCampaignTargetsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/user-support/campaign-targets?${stringifiedParams}` : `/api/admin/user-support/campaign-targets`
+}
+
+export const getAdminUserSupportCampaignTargets = async (params: GetAdminUserSupportCampaignTargetsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminUserSupportCampaignTargets> => {
+
+  return customFetch<AdminUserSupportCampaignTargets>(getGetAdminUserSupportCampaignTargetsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminUserSupportCampaignTargetsQueryKey = (params?: GetAdminUserSupportCampaignTargetsParams,) => {
+    return [
+    `/api/admin/user-support/campaign-targets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAdminUserSupportCampaignTargetsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>, TError = ErrorType<void>>(params: GetAdminUserSupportCampaignTargetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminUserSupportCampaignTargetsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>> = ({ signal }) => getAdminUserSupportCampaignTargets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminUserSupportCampaignTargetsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>>
+export type GetAdminUserSupportCampaignTargetsQueryError = ErrorType<void>
+
+
+
+export function useGetAdminUserSupportCampaignTargets<TData = Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>, TError = ErrorType<void>>(
+ params: GetAdminUserSupportCampaignTargetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminUserSupportCampaignTargets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminUserSupportCampaignTargetsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

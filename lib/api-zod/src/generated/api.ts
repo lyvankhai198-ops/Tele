@@ -1671,6 +1671,153 @@ export const GetAdminUserResponse = zod.object({
 })
 
 
+export const GetAdminUserSupportParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const getAdminUserSupportResponseUserSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getAdminUserSupportResponseUserSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
+export const GetAdminUserSupportResponse = zod.object({
+  "user": zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "role": zod.enum(['user', 'admin']),
+  "joinedAt": zod.coerce.date(),
+  "lastActiveAt": zod.coerce.date().nullable(),
+  "storedPlan": zod.enum(['plus', 'pro', 'unlimited']),
+  "subscription": zod.object({
+  "plan": zod.enum(['plus', 'pro', 'unlimited']),
+  "startedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(getAdminUserSupportResponseUserSubscriptionDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(getAdminUserSupportResponseUserSubscriptionDailyQuotaExemptUntilRegExp).nullable(),
+  "accountLimit": zod.number().nullable(),
+  "campaignLimit": zod.number().nullable(),
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
+}),
+  "usage": zod.object({
+  "telegramAccounts": zod.number(),
+  "campaigns": zod.number()
+})
+}),
+  "overview": zod.object({
+  "activeCampaigns": zod.number(),
+  "pausedCampaigns": zod.number(),
+  "campaignsWithErrors": zod.number(),
+  "totalCampaigns": zod.number(),
+  "telegramAccountsTotal": zod.number(),
+  "telegramAccountsConnected": zod.number(),
+  "failedDeliveries": zod.number(),
+  "reviewDeliveries": zod.number(),
+  "destinationsTotal": zod.number()
+}),
+  "telegramAccounts": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "username": zod.string().nullable(),
+  "phoneMasked": zod.string().nullable(),
+  "status": zod.string(),
+  "proxyName": zod.string().nullable(),
+  "proxyStatus": zod.string().nullable(),
+  "lastSyncAt": zod.coerce.date().nullable(),
+  "cooldownUntil": zod.coerce.date().nullable(),
+  "destinationCount": zod.number(),
+  "campaignCount": zod.number()
+})),
+  "campaigns": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "content": zod.string(),
+  "templateMode": zod.string(),
+  "templateSourceAccountName": zod.string().nullable(),
+  "templateSourceMessageId": zod.string().nullable(),
+  "telegramAccountId": zod.string().nullable(),
+  "telegramAccountName": zod.string().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "timezone": zod.string(),
+  "repeatCount": zod.number(),
+  "destinationCount": zod.number(),
+  "deliveryCount": zod.number(),
+  "pendingCount": zod.number(),
+  "sendingCount": zod.number(),
+  "sentCount": zod.number(),
+  "failedCount": zod.number(),
+  "reviewCount": zod.number()
+})),
+  "campaignsTruncated": zod.boolean(),
+  "recentErrors": zod.array(zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "campaignName": zod.string(),
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "destinationUsername": zod.string().nullable(),
+  "destinationLink": zod.string().nullable(),
+  "destinationKind": zod.string(),
+  "topicId": zod.number().nullable(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "sentAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
+})),
+  "activity": zod.array(zod.object({
+  "id": zod.string(),
+  "level": zod.string(),
+  "event": zod.string(),
+  "message": zod.string(),
+  "campaignId": zod.string().nullable(),
+  "accountId": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+export const getAdminUserSupportCampaignTargetsQueryLimitDefault = 100;
+export const getAdminUserSupportCampaignTargetsQueryLimitMax = 100;
+
+export const getAdminUserSupportCampaignTargetsQueryOffsetDefault = 0;
+export const getAdminUserSupportCampaignTargetsQueryOffsetMin = 0;
+
+
+
+export const GetAdminUserSupportCampaignTargetsQueryParams = zod.object({
+  "userId": zod.coerce.string(),
+  "campaignId": zod.coerce.string(),
+  "limit": zod.coerce.number().min(1).max(getAdminUserSupportCampaignTargetsQueryLimitMax).default(getAdminUserSupportCampaignTargetsQueryLimitDefault),
+  "offset": zod.coerce.number().min(getAdminUserSupportCampaignTargetsQueryOffsetMin).default(getAdminUserSupportCampaignTargetsQueryOffsetDefault)
+})
+
+export const GetAdminUserSupportCampaignTargetsResponse = zod.object({
+  "totalTargets": zod.number(),
+  "hasMore": zod.boolean(),
+  "targets": zod.array(zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "campaignName": zod.string(),
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "destinationUsername": zod.string().nullable(),
+  "destinationLink": zod.string().nullable(),
+  "destinationKind": zod.string(),
+  "topicId": zod.number().nullable(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "sentAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+
+
 export const UpdateAdminUserSubscriptionParams = zod.object({
   "userId": zod.coerce.string()
 })
