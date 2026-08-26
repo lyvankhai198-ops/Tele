@@ -385,12 +385,8 @@ router.patch("/admin/users/:userId/subscription", async (req, res): Promise<void
     sendError(res, 404, "Không tìm thấy người dùng.");
     return;
   }
-  if (!outcome.ok && outcome.reason === "downgrade") {
-    sendError(res, 409, "Không thể hạ cấp gói đăng ký.");
-    return;
-  }
   if (!outcome.ok) {
-    sendError(res, 400, "Chỉ có thể nâng cấp hoặc gia hạn các gói trả phí.");
+    sendError(res, 400, "Thông tin thời hạn gói đăng ký không hợp lệ.");
     return;
   }
   res.json(UpdateAdminUserSubscriptionResponse.parse(outcome.subscription));

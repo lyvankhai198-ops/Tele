@@ -882,7 +882,6 @@ paths:
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
         "404": { description: User not found }
-        "409": { description: Subscription cannot be downgraded }
   /admin/users/{userId}/quota:
     patch:
       operationId: updateAdminUserQuota

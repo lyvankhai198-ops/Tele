@@ -436,8 +436,8 @@ export async function getAdminOverview() {
 }
 
 export type AdminSubscriptionUpdateResult =
-  | { ok: true; subscription: ReturnType<typeof toSubscriptionSummary>; action: "extension" | "upgrade" }
-  | { ok: false; reason: "not_found" | "invalid_plan" | "downgrade" };
+  | { ok: true; subscription: ReturnType<typeof toSubscriptionSummary>; action: "extension" | "upgrade" | "downgrade" }
+  | { ok: false; reason: "not_found" | "invalid_plan" };
 
 export async function updateSubscriptionByAdmin(input: {
   userId: string;
@@ -460,8 +460,11 @@ export async function updateSubscriptionByAdmin(input: {
     const currentPlan = current ? (isPlanCode(current.plan) ? current.plan : "plus") : "plus";
     const currentIndex = PLAN_ORDER.indexOf(currentPlan);
     const nextIndex = PLAN_ORDER.indexOf(input.plan);
-    if (nextIndex < currentIndex) return { ok: false as const, reason: "downgrade" as const };
-    const action = nextIndex === currentIndex ? "extension" as const : "upgrade" as const;
+    const action = nextIndex === currentIndex
+      ? "extension" as const
+      : nextIndex > currentIndex
+        ? "upgrade" as const
+        : "downgrade" as const;
     const retainedUntil = current?.expiresAt && current.expiresAt > now ? current.expiresAt.getTime() : now.getTime();
     const nextExpiresAt = new Date(retainedUntil + input.durationDays * DAY_MS);
     const values = {
@@ -478,7 +481,7 @@ export async function updateSubscriptionByAdmin(input: {
       ownerUserId: input.adminUserId,
       event: "subscription.admin_updated",
       level: "success",
-      message: `${action === "upgrade" ? "Upgraded" : "Extended"} subscription for user ${input.userId}`,
+      message: `${action === "upgrade" ? "Upgraded" : action === "downgrade" ? "Downgraded" : "Extended"} subscription for user ${input.userId}`,
       metadata: {
         targetUserId: input.userId,
         previousPlan: currentPlan,
