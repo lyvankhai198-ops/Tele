@@ -16,6 +16,9 @@ import {
   GetAdminUserSupportResponse,
   GetAdminUserSupportCampaignTargetsQueryParams,
   GetAdminUserSupportCampaignTargetsResponse,
+  CloneAdminUserCampaignParams,
+  CloneAdminUserCampaignBody,
+  CloneAdminUserCampaignResponse,
   UpdateAdminUserSubscriptionParams,
   UpdateAdminUserSubscriptionBody,
   UpdateAdminUserSubscriptionResponse,
@@ -47,7 +50,7 @@ import {
   RequestAdminNotificationUploadUrlBody,
   RequestAdminNotificationUploadUrlResponse,
 } from "@workspace/api-zod";
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   adminNotificationsTable,
   activityLogsTable,
@@ -55,6 +58,7 @@ import {
   campaignTargetsTable,
   campaignsTable,
   destinationsTable,
+  messageTemplatesTable,
   proxiesTable,
   telegramAccountsTable,
   db,
@@ -76,6 +80,7 @@ import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } fr
 import { recordActivity } from "../lib/activity";
 import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
 import { resumeQuotaPausedCampaignsAfterSettingsUpdate } from "../lib/campaigns";
+import { campaignSummary } from "../lib/campaigns";
 import { adminNotificationResponse } from "../lib/admin-notifications";
 import {
   NotificationMediaNotFoundError,
@@ -384,6 +389,144 @@ router.get("/admin/users/:userId/support", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetAdminUserSupportResponse.parse(support));
+});
+
+router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
+  const params = CloneAdminUserCampaignParams.safeParse(req.params);
+  const body = CloneAdminUserCampaignBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    sendError(res, 400, "Thông tin clone campaign không hợp lệ.");
+    return;
+  }
+  const adminUserId = req.userId!;
+  const outcome = await db.transaction(async (tx) => {
+    const [sourceCampaignCandidate] = await tx.select().from(campaignsTable).where(and(
+      eq(campaignsTable.id, params.data.campaignId),
+      eq(campaignsTable.ownerUserId, params.data.userId),
+    ));
+    if (!sourceCampaignCandidate) return { kind: "error" as const, status: 404, message: "Không tìm thấy campaign nguồn của người dùng." };
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${sourceCampaignCandidate.id} FOR UPDATE`);
+    const [sourceCampaign] = await tx.select().from(campaignsTable).where(and(
+      eq(campaignsTable.id, sourceCampaignCandidate.id),
+      eq(campaignsTable.ownerUserId, params.data.userId),
+    ));
+    if (!sourceCampaign) return { kind: "error" as const, status: 404, message: "Campaign nguồn không còn tồn tại." };
+    await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${sourceCampaign.id} FOR SHARE`);
+    const [adminAccount] = await tx.select().from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.id, body.data.telegramAccountId),
+      eq(telegramAccountsTable.ownerUserId, adminUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    ));
+    if (!adminAccount) return { kind: "error" as const, status: 404, message: "Không tìm thấy tài khoản Telegram của admin." };
+    await tx.execute(sql`SELECT 1 FROM ${telegramAccountsTable} WHERE ${telegramAccountsTable.id} = ${adminAccount.id} FOR UPDATE`);
+    if (!adminAccount.sessionEncrypted || adminAccount.status !== "connected") {
+      return { kind: "error" as const, status: 409, message: "Tài khoản Telegram của admin cần đăng nhập trước khi clone." };
+    }
+    const sourceTargetRows = await tx.select({ destinationId: campaignTargetsTable.destinationId })
+      .from(campaignTargetsTable)
+      .where(eq(campaignTargetsTable.campaignId, sourceCampaign.id));
+    const sourceDestinationIds = [...new Set(sourceTargetRows.map((row) => row.destinationId))];
+    const sourceDestinations = sourceDestinationIds.length
+      ? await tx.select().from(destinationsTable).where(inArray(destinationsTable.id, sourceDestinationIds))
+      : [];
+    const [placeholderTemplate] = await tx.insert(messageTemplatesTable).values({
+      ownerUserId: adminUserId,
+      name: `Chờ forward · ${sourceCampaign.name}`,
+      mode: "forward",
+      content: "",
+      sourceAccountId: null,
+      sourceMessageId: null,
+    }).returning();
+    const [clone] = await tx.insert(campaignsTable).values({
+      ownerUserId: adminUserId,
+      name: `${sourceCampaign.name} (Clone admin)`,
+      content: "",
+      telegramAccountId: adminAccount.id,
+      templateId: placeholderTemplate.id,
+      templateMode: "forward",
+      templateSourceAccountId: null,
+      templateSourceMessageId: null,
+      clonedFromCampaignId: sourceCampaign.id,
+      clonedFromUserId: sourceCampaign.ownerUserId,
+      mediaUrl: null,
+      status: "draft",
+      scheduledAt: sourceCampaign.scheduledAt,
+      timezone: sourceCampaign.timezone,
+      maxRetries: sourceCampaign.maxRetries,
+      repeatCount: sourceCampaign.repeatCount,
+      delayMinSeconds: sourceCampaign.delayMinSeconds,
+      delayMaxSeconds: sourceCampaign.delayMaxSeconds,
+      roundDelayMinSeconds: sourceCampaign.roundDelayMinSeconds,
+      roundDelayMaxSeconds: sourceCampaign.roundDelayMaxSeconds,
+    }).returning();
+    const existingAdminDestinations = await tx.select().from(destinationsTable)
+      .where(eq(destinationsTable.accountId, adminAccount.id));
+    const byTelegramDestination = new Map(existingAdminDestinations.map((destination) => [
+      `${destination.telegramId}:${destination.topicId ?? "chat"}`,
+      destination,
+    ]));
+    const clonedDestinationIds: string[] = [];
+    for (const sourceDestination of sourceDestinations) {
+      const key = `${sourceDestination.telegramId}:${sourceDestination.topicId ?? "chat"}`;
+      let destination = byTelegramDestination.get(key);
+      if (!destination) {
+        const [created] = await tx.insert(destinationsTable).values({
+          accountId: adminAccount.id,
+          telegramId: sourceDestination.telegramId,
+          topicId: sourceDestination.topicId,
+          parentTitle: sourceDestination.parentTitle,
+          title: sourceDestination.title,
+          username: sourceDestination.username,
+          kind: sourceDestination.kind,
+          memberCount: sourceDestination.memberCount,
+          canPost: false,
+          permissionReason: "Cần xác nhận quyền gửi bằng tài khoản Telegram của admin trước khi chạy.",
+          permissionCheckedAt: null,
+        }).returning();
+        destination = created;
+        byTelegramDestination.set(key, created);
+      }
+      clonedDestinationIds.push(destination.id);
+    }
+    if (clonedDestinationIds.length) {
+      await tx.insert(campaignTargetsTable).values(Array.from(
+        { length: sourceCampaign.repeatCount },
+        () => clonedDestinationIds.map((destinationId) => ({
+          campaignId: clone.id,
+          destinationId,
+          status: "pending" as const,
+          attempts: 0,
+          quotaReservedAt: null,
+          nextAttemptAt: null,
+          lastError: null,
+          sentMessageId: null,
+          sentAt: null,
+        })),
+      ).flat());
+    }
+    await tx.insert(activityLogsTable).values([
+      {
+        ownerUserId: adminUserId,
+        event: "campaign.cloned",
+        message: `Cloned "${sourceCampaign.name}" into a draft waiting for a Saved Message.`,
+        campaignId: clone.id,
+        accountId: adminAccount.id,
+        level: "success",
+        metadata: { sourceCampaignId: sourceCampaign.id, sourceUserId: sourceCampaign.ownerUserId },
+      },
+      {
+        ownerUserId: sourceCampaign.ownerUserId,
+        event: "campaign.cloned_by_admin",
+        message: `An administrator cloned "${sourceCampaign.name}" for support.`,
+        campaignId: sourceCampaign.id,
+        level: "info",
+        metadata: { clonedCampaignId: clone.id, adminUserId },
+      },
+    ]);
+    return { kind: "success" as const, campaign: clone };
+  });
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.status(201).json(CloneAdminUserCampaignResponse.parse(await campaignSummary(outcome.campaign)));
 });
 
 router.get("/admin/user-support/campaign-targets", async (req, res): Promise<void> => {

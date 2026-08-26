@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createReadStream } from "node:fs";
-import { and, count, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
@@ -17,6 +17,8 @@ import {
   ListCalendarItemsQueryParams,
   ListCalendarItemsResponse,
   ListCampaignsResponse,
+  GetCampaignCloneReadinessParams,
+  GetCampaignCloneReadinessResponse,
   ListDestinationsResponse,
   ListMessageTemplatesResponse,
   ListTelegramSavedMessagesParams,
@@ -1210,6 +1212,21 @@ router.patch("/message-templates/:templateId", async (req, res): Promise<void> =
   const content = parsed.data.content === undefined ? existing.content : parsed.data.content.trim();
   const sourceAccountId = parsed.data.sourceAccountId === undefined ? existing.sourceAccountId : parsed.data.sourceAccountId;
   const sourceMessageId = parsed.data.sourceMessageId === undefined ? existing.sourceMessageId : parsed.data.sourceMessageId;
+  const clonedCampaignsUsingTemplate = await db.select({
+    id: campaignsTable.id,
+    telegramAccountId: campaignsTable.telegramAccountId,
+  }).from(campaignsTable).where(and(
+    eq(campaignsTable.templateId, existing.id),
+    isNotNull(campaignsTable.clonedFromCampaignId),
+  ));
+  if (clonedCampaignsUsingTemplate.length) {
+    if (mode !== "forward") {
+      return void sendError(res, 409, "A cloned campaign must keep its forward message template.");
+    }
+    if (clonedCampaignsUsingTemplate.some((campaign) => campaign.telegramAccountId !== sourceAccountId)) {
+      return void sendError(res, 409, "A cloned campaign must forward a Saved Message from its assigned Telegram account.");
+    }
+  }
   if (!name) return void sendError(res, 400, "Tên mẫu không được để trống.");
   if (mode === "text" && !content) return void sendError(res, 400, "Nội dung mẫu không được để trống.");
   if (mode === "forward") {
@@ -1224,6 +1241,16 @@ router.patch("/message-templates/:templateId", async (req, res): Promise<void> =
     sourceMessageId: mode === "forward" ? sourceMessageId : null,
     updatedAt: new Date(),
   }).where(eq(messageTemplatesTable.id, existing.id)).returning();
+  await db.update(campaignsTable).set({
+    content: updated.content,
+    templateMode: updated.mode,
+    templateSourceAccountId: updated.mode === "forward" ? updated.sourceAccountId : null,
+    templateSourceMessageId: updated.mode === "forward" ? updated.sourceMessageId : null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(campaignsTable.templateId, updated.id),
+    inArray(campaignsTable.status, ["draft", "paused"]),
+  ));
   await recordActivity({ ownerUserId, event: "template.updated", message: `Updated message template: ${updated.name}`, level: "success" });
   res.json(UpdateMessageTemplateResponse.parse(templateResponse(updated)));
 });
@@ -1356,6 +1383,58 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   res.status(201).json(CreateCampaignResponse.parse(await campaignSummary(campaign)));
 });
 
+router.get("/campaigns/:campaignId/clone-readiness", async (req, res): Promise<void> => {
+  const params = GetCampaignCloneReadinessParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const ownerUserId = currentUserId(req);
+  const [campaign] = await db.select().from(campaignsTable).where(and(
+    eq(campaignsTable.id, params.data.campaignId),
+    eq(campaignsTable.ownerUserId, ownerUserId),
+  ));
+  if (!campaign || !campaign.clonedFromCampaignId) {
+    return void sendError(res, 404, "Cloned campaign not found");
+  }
+  const [account] = campaign.telegramAccountId
+    ? await db.select().from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.id, campaign.telegramAccountId),
+      eq(telegramAccountsTable.ownerUserId, ownerUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    ))
+    : [];
+  const [template] = campaign.templateId
+    ? await db.select().from(messageTemplatesTable).where(and(
+      eq(messageTemplatesTable.id, campaign.templateId),
+      eq(messageTemplatesTable.ownerUserId, ownerUserId),
+    ))
+    : [];
+  const targets = await db.select({ destination: destinationsTable }).from(campaignTargetsTable)
+    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+    .where(eq(campaignTargetsTable.campaignId, campaign.id));
+  const seenDestinationIds = new Set<string>();
+  const destinations = targets.flatMap(({ destination }) => {
+    if (seenDestinationIds.has(destination.id)) return [];
+    seenDestinationIds.add(destination.id);
+    const ready = Boolean(account && destination.accountId === account.id && destination.canPost);
+    return [{
+      id: destination.id,
+      title: destination.title,
+      ready,
+      reason: ready
+        ? null
+        : destination.permissionReason || "Hãy đồng bộ tài khoản Telegram admin để kiểm tra quyền gửi.",
+    }];
+  });
+  res.json(GetCampaignCloneReadinessResponse.parse({
+    accountReady: Boolean(account?.sessionEncrypted && account.status === "connected"),
+    messageReady: Boolean(
+      template?.mode === "forward"
+      && template.sourceAccountId === campaign.telegramAccountId
+      && template.sourceMessageId,
+    ),
+    destinations,
+  }));
+});
+
 router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   const params = UpdateCampaignStatusParams.safeParse(req.params);
   const parsed = UpdateCampaignStatusBody.safeParse(req.body);
@@ -1377,6 +1456,11 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   }
   if (editing && !["draft", "paused"].includes(existing.status)) {
     return void sendError(res, 409, "Only draft or paused campaigns can be edited");
+  }
+  if (existing.clonedFromCampaignId && (
+    parsed.data.telegramAccountId !== undefined || parsed.data.templateId !== undefined
+  )) {
+    return void sendError(res, 409, "A cloned campaign keeps its assigned Telegram account and forward template. Select a Saved Message when running it.");
   }
 
   if (editing) {
@@ -1530,6 +1614,73 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
 
   const nextStatus = parsed.data.status;
   if (!nextStatus) return void sendError(res, 400, "No campaign status was provided");
+  if (nextStatus === "queued") {
+    if (!existing.telegramAccountId || !existing.templateId) {
+      return void sendError(res, 409, "Campaign needs a Telegram account and a message template before it can run.");
+    }
+    const [account] = await db.select().from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.id, existing.telegramAccountId),
+      eq(telegramAccountsTable.ownerUserId, ownerUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    ));
+    if (!account || !account.sessionEncrypted || account.status !== "connected") {
+      return void sendError(res, 409, "The campaign Telegram account must be connected before it can run.");
+    }
+    const [template] = await db.select().from(messageTemplatesTable).where(and(
+      eq(messageTemplatesTable.id, existing.templateId),
+      eq(messageTemplatesTable.ownerUserId, ownerUserId),
+    ));
+    if (!template) return void sendError(res, 409, "The campaign message template is unavailable.");
+    if (existing.clonedFromCampaignId && template.mode !== "forward") {
+      return void sendError(res, 409, "A cloned campaign must use a Saved Message forward template.");
+    }
+    if (template.mode === "forward" && (
+      template.sourceAccountId !== existing.telegramAccountId || !template.sourceMessageId
+    )) {
+      return void sendError(res, 409, "Select a Saved Message from this campaign's Telegram account before running.");
+    }
+    const targetDestinations = await db.select({ destination: destinationsTable }).from(campaignTargetsTable)
+      .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .where(eq(campaignTargetsTable.campaignId, existing.id));
+    if (!targetDestinations.length || targetDestinations.some(({ destination }) => (
+      destination.accountId !== existing.telegramAccountId || !destination.canPost
+    ))) {
+      return void sendError(res, 409, "Every destination must be synced and have verified posting permission before running.");
+    }
+    if (existing.clonedFromCampaignId && existing.status === "draft") {
+      const pendingTargets = await db.select({
+        id: campaignTargetsTable.id,
+        destinationId: campaignTargetsTable.destinationId,
+      }).from(campaignTargetsTable).where(and(
+        eq(campaignTargetsTable.campaignId, existing.id),
+        eq(campaignTargetsTable.status, "pending"),
+      ));
+      const targetsByDestination = new Map<string, string[]>();
+      for (const target of pendingTargets) {
+        const rows = targetsByDestination.get(target.destinationId) ?? [];
+        rows.push(target.id);
+        targetsByDestination.set(target.destinationId, rows);
+      }
+      const { roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(existing.scheduledAt, new Date());
+      let roundStartAt = initialRoundStartAt.getTime();
+      const destinationIds = [...targetsByDestination.keys()];
+      for (let round = 0; round < existing.repeatCount; round += 1) {
+        await Promise.all(destinationIds.map(async (destinationId) => {
+          const targetId = targetsByDestination.get(destinationId)?.shift();
+          if (!targetId) return;
+          await db.update(campaignTargetsTable).set({
+            nextAttemptAt: new Date(roundStartAt),
+            updatedAt: new Date(),
+          }).where(eq(campaignTargetsTable.id, targetId));
+        }));
+        if (round < existing.repeatCount - 1) {
+          roundStartAt += (existing.roundDelayMinSeconds + Math.floor(
+            Math.random() * (existing.roundDelayMaxSeconds - existing.roundDelayMinSeconds + 1),
+          )) * 1000;
+        }
+      }
+    }
+  }
   const [campaign] = await db.update(campaignsTable).set({ status: nextStatus, updatedAt: new Date() })
     .where(eq(campaignsTable.id, existing.id)).returning();
   if (nextStatus === "cancelled") {
@@ -1537,10 +1688,15 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       .where(and(eq(campaignTargetsTable.campaignId, campaign.id), inArray(campaignTargetsTable.status, ["pending", "sending"])));
   }
   await recordActivity({
-    event: `campaign.${nextStatus}`,
-    message: `${nextStatus[0].toUpperCase()}${nextStatus.slice(1)} campaign "${campaign.name}"`,
+    event: nextStatus === "queued" && Boolean(existing.clonedFromCampaignId)
+      ? "campaign.clone.queued"
+      : `campaign.${nextStatus}`,
+    message: nextStatus === "queued" && existing.clonedFromCampaignId
+      ? `Confirmed and queued cloned campaign "${campaign.name}".`
+      : `${nextStatus[0].toUpperCase()}${nextStatus.slice(1)} campaign "${campaign.name}"`,
     ownerUserId: currentUserId(req),
     campaignId: campaign.id,
+    metadata: existing.clonedFromCampaignId ? { clonedFromCampaignId: existing.clonedFromCampaignId } : undefined,
   });
   res.json(UpdateCampaignStatusResponse.parse(await campaignSummary(campaign)));
 });

@@ -8,10 +8,15 @@ import {
   SectionHeader,
   StatusBadge,
   EmptyState,
+  Modal,
+  PrimaryButton,
+  Toast,
 } from "@/components/layout/AppLayout";
 import {
+  useCloneAdminUserCampaign,
   useGetAdminUserSupport,
   useGetAdminUserSupportCampaignTargets,
+  useListTelegramAccounts,
   getGetAdminUserSupportQueryKey,
   getGetAdminUserSupportCampaignTargetsQueryKey,
   type AdminUserSupportCampaign,
@@ -35,6 +40,8 @@ import {
   ChevronUp,
   ExternalLink,
   FileText,
+  Copy,
+  LoaderCircle,
 } from "lucide-react";
 
 const copy = {
@@ -87,6 +94,17 @@ const copy = {
     previousTargets: "Previous",
     nextTargets: "Next",
     recentCampaignsOnly: "Showing the 50 most recently updated campaigns.",
+    cloneQuick: "Quick clone",
+    cloneTitle: "Clone campaign to admin draft",
+    cloneDetail: "The original campaign stays unchanged. This creates a draft under your admin account without delivery history or quota usage.",
+    cloneAccount: "Admin Telegram account",
+    cloneAccountPlaceholder: "Choose a connected admin account",
+    cloneWaiting: "The draft will wait for a Saved Message. You will choose and preview it when running the campaign.",
+    cloneConfirm: "Create draft clone",
+    cloneCancel: "Cancel",
+    cloneNoAccounts: "Connect an admin Telegram account before cloning.",
+    cloneMissingAccount: "Choose an admin Telegram account.",
+    cloneSuccess: "Draft clone created. Continue in Campaigns to select the Saved Message and run it.",
   },
   vi: {
     back: "Quay lại danh sách",
@@ -137,6 +155,17 @@ const copy = {
     previousTargets: "Trước",
     nextTargets: "Tiếp",
     recentCampaignsOnly: "Đang hiển thị 50 chiến dịch được cập nhật gần nhất.",
+    cloneQuick: "Clone nhanh",
+    cloneTitle: "Clone campaign thành nháp admin",
+    cloneDetail: "Campaign gốc không bị thay đổi. Hệ thống tạo một bản nháp của admin, không mang theo lịch sử gửi hoặc quota đã dùng.",
+    cloneAccount: "Tài khoản Telegram admin",
+    cloneAccountPlaceholder: "Chọn tài khoản admin đang kết nối",
+    cloneWaiting: "Bản nháp sẽ chờ Tin nhắn đã lưu. Khi chạy chiến dịch, bạn sẽ chọn và xem trước tin nhắn đó.",
+    cloneConfirm: "Tạo bản nháp clone",
+    cloneCancel: "Hủy",
+    cloneNoAccounts: "Hãy kết nối một tài khoản Telegram admin trước khi clone.",
+    cloneMissingAccount: "Hãy chọn tài khoản Telegram admin.",
+    cloneSuccess: "Đã tạo bản nháp clone. Tiếp tục ở trang Chiến dịch để chọn Tin nhắn đã lưu và chạy.",
   },
 } as const;
 
@@ -280,6 +309,12 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
   const { language } = useLanguage();
   const text = copy[language];
   const [expandedCampaignIds, setExpandedCampaignIds] = useState<Set<string>>(() => new Set());
+  const [cloneCampaign, setCloneCampaign] = useState<AdminUserSupportCampaign | null>(null);
+  const [cloneAccountId, setCloneAccountId] = useState("");
+  const [cloneError, setCloneError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const adminAccounts = useListTelegramAccounts();
+  const cloneMutation = useCloneAdminUserCampaign();
 
   const { data, isLoading, error } = useGetAdminUserSupport(userId, {
     query: {
@@ -322,6 +357,7 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
   }
 
   const { user, overview, telegramAccounts, campaigns, recentErrors, activity } = data;
+  const connectedAdminAccounts = (adminAccounts.data ?? []).filter((account) => account.status === "connected");
   const accountNameById = new Map(telegramAccounts.map((account) => [account.id, account.name]));
   const campaignNameById = new Map(campaigns.map((campaign) => [campaign.id, campaign.name]));
   const toggleCampaignDetails = (campaignId: string) => {
@@ -331,6 +367,31 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
       else next.add(campaignId);
       return next;
     });
+  };
+  const openClone = (campaign: AdminUserSupportCampaign) => {
+    setCloneCampaign(campaign);
+    setCloneAccountId("");
+    setCloneError(null);
+  };
+  const submitClone = async () => {
+    if (!cloneCampaign) return;
+    if (!cloneAccountId) {
+      setCloneError(text.cloneMissingAccount);
+      return;
+    }
+    try {
+      await cloneMutation.mutateAsync({
+        userId,
+        campaignId: cloneCampaign.id,
+        data: { telegramAccountId: cloneAccountId },
+      });
+      setCloneCampaign(null);
+      setCloneAccountId("");
+      setToast(text.cloneSuccess);
+      setLocation("/dashboard/campaigns");
+    } catch (cause) {
+      setCloneError(cause instanceof Error ? cause.message : text.loadError);
+    }
   };
 
   return (
@@ -520,15 +581,26 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                         <div className="text-[14px] text-[#c2410c] mt-0.5">{camp.reviewCount}</div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => toggleCampaignDetails(camp.id)}
-                      data-testid={`button-campaign-details-${camp.id}`}
-                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa]"
-                    >
-                      {isExpanded ? text.hideDetails : text.viewDetails}
-                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                    </button>
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleCampaignDetails(camp.id)}
+                        data-testid={`button-campaign-details-${camp.id}`}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa]"
+                      >
+                        {isExpanded ? text.hideDetails : text.viewDetails}
+                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openClone(camp)}
+                        data-testid={`button-clone-campaign-${camp.id}`}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#1a2b88] px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-white transition hover:bg-[#152473]"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {text.cloneQuick}
+                      </button>
+                    </div>
                     {isExpanded && (
                       <CampaignDetails campaign={camp} userId={userId} language={language} text={text} />
                     )}
@@ -631,6 +703,50 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
           </Panel>
         </div>
       </div>
+      {cloneCampaign && (
+        <Modal
+          title={text.cloneTitle}
+          description={text.cloneDetail}
+          onClose={() => {
+            setCloneCampaign(null);
+            setCloneAccountId("");
+            setCloneError(null);
+          }}
+        >
+          <div className="space-y-5">
+            <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4">
+              <p className="text-[11px] font-black uppercase tracking-wide text-[#1d4ed8]">Campaign nguồn</p>
+              <p className="mt-1 text-[14px] font-extrabold text-[#1e3a8a]">{cloneCampaign.name}</p>
+              <p className="mt-1 text-[12px] font-medium text-[#1e40af]">{cloneCampaign.destinationCount} {text.destinations.toLowerCase()} · {cloneCampaign.repeatCount} vòng lặp</p>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-[13px] font-bold text-[#334155]">{text.cloneAccount}</span>
+              <select
+                value={cloneAccountId}
+                onChange={(event) => setCloneAccountId(event.target.value)}
+                className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]"
+                data-testid="clone-admin-account"
+              >
+                <option value="">{text.cloneAccountPlaceholder}</option>
+                {connectedAdminAccounts.map((account) => (
+                  <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>
+                ))}
+              </select>
+            </label>
+            {!connectedAdminAccounts.length && <p className="rounded-xl bg-[#fff7ed] px-3 py-2 text-[12px] font-semibold text-[#9a3412]">{text.cloneNoAccounts}</p>}
+            <p className="rounded-xl bg-[#f8fafc] px-3 py-3 text-[12px] font-medium leading-relaxed text-[#475569]">{text.cloneWaiting}</p>
+            {cloneError && <p className="rounded-xl bg-[#fff1f2] px-3 py-3 text-[12px] font-semibold text-[#be123c]">{cloneError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setCloneCampaign(null)} className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc]">{text.cloneCancel}</button>
+              <PrimaryButton type="button" onClick={() => void submitClone()} disabled={!connectedAdminAccounts.length || cloneMutation.isPending}>
+                {cloneMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {text.cloneConfirm}
+              </PrimaryButton>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </AppLayout>
   );
 }

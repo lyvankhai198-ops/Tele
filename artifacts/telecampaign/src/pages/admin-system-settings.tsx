@@ -78,6 +78,13 @@ const copy = {
 
 const PLAN_NAMES = { plus: "PLUS", pro: "PRO", unlimited: "UNLIMITED" } as const;
 
+const PLAN_LIMIT_MAXIMUMS = {
+  accountLimit: 100_000,
+  campaignLimit: 100_000,
+  messageDailyLimit: 10_000_000,
+  userMessageDailyLimit: 100_000_000,
+} as const;
+
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
   return <button type="button" onClick={onChange} aria-label={label} className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#1a2b88]" : "bg-[#cbd5e1]"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${checked ? "left-6" : "left-1"}`} /></button>;
 }
@@ -87,11 +94,13 @@ function LimitControl({
   value,
   onChange,
   unlimitedLabel,
+  maximum,
 }: {
   label: string;
   value: number | null;
   onChange: (value: number | null) => void;
   unlimitedLabel: string;
+  maximum: number;
 }) {
   return <label className="block">
     <span className="mb-2 block text-[12px] font-bold text-[#475569]">{label}</span>
@@ -99,6 +108,7 @@ function LimitControl({
       <input
         type="number"
         min="0"
+        max={maximum}
         disabled={value === null}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value === "" ? 0 : Number(event.target.value))}
@@ -141,7 +151,11 @@ export default function AdminSystemSettingsPage() {
       defaults.roundDelayMaxSeconds,
       ...Object.values(form.planLimits).flatMap((limits) => [limits.accountLimit, limits.campaignLimit, limits.messageDailyLimit, limits.userMessageDailyLimit].filter((value): value is number => value !== null)),
     ];
-    if (!numericValues.every((value) => Number.isInteger(value) && value >= 0) || form.defaultAccountDailyLimit < 1 || defaults.roundDelayMinSeconds > defaults.roundDelayMaxSeconds) {
+    const validPlanLimits = Object.values(form.planLimits).every((limits) => (
+      (Object.entries(PLAN_LIMIT_MAXIMUMS) as Array<[keyof typeof PLAN_LIMIT_MAXIMUMS, number]>)
+        .every(([field, maximum]) => limits[field] === null || limits[field] <= maximum)
+    ));
+    if (!numericValues.every((value) => Number.isInteger(value) && value >= 0) || !validPlanLimits || form.defaultAccountDailyLimit < 1 || defaults.roundDelayMinSeconds > defaults.roundDelayMaxSeconds) {
       setToast({ message: text.invalid, error: true });
       return;
     }
@@ -171,13 +185,13 @@ export default function AdminSystemSettingsPage() {
             <div key={plan} className="rounded-2xl border border-[#e7edf4] bg-[#f8fafc] p-4">
               <p className="mb-4 font-extrabold tracking-wide text-[#1a2b88]">{PLAN_NAMES[plan]}</p>
               <div className="space-y-3">
-                <LimitControl label={text.accountLimit} value={form.planLimits[plan].accountLimit} onChange={(value) => updatePlanLimit(plan, "accountLimit", value)} unlimitedLabel={text.unlimited} />
-                <LimitControl label={text.campaignLimit} value={form.planLimits[plan].campaignLimit} onChange={(value) => updatePlanLimit(plan, "campaignLimit", value)} unlimitedLabel={text.unlimited} />
-                <LimitControl label={text.messageLimit} value={form.planLimits[plan].messageDailyLimit} onChange={(value) => updatePlanLimit(plan, "messageDailyLimit", value)} unlimitedLabel={text.unlimited} />
+                <LimitControl label={text.accountLimit} value={form.planLimits[plan].accountLimit} onChange={(value) => updatePlanLimit(plan, "accountLimit", value)} unlimitedLabel={text.unlimited} maximum={PLAN_LIMIT_MAXIMUMS.accountLimit} />
+                <LimitControl label={text.campaignLimit} value={form.planLimits[plan].campaignLimit} onChange={(value) => updatePlanLimit(plan, "campaignLimit", value)} unlimitedLabel={text.unlimited} maximum={PLAN_LIMIT_MAXIMUMS.campaignLimit} />
+                <LimitControl label={text.messageLimit} value={form.planLimits[plan].messageDailyLimit} onChange={(value) => updatePlanLimit(plan, "messageDailyLimit", value)} unlimitedLabel={text.unlimited} maximum={PLAN_LIMIT_MAXIMUMS.messageDailyLimit} />
                 <div className="border-t border-dashed border-[#cbd5e1] pt-3">
                   <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1a2b88]">{text.userQuotaTitle}</p>
                   <p className="mb-3 text-[11px] font-medium leading-4 text-[#64748b]">{text.userQuotaHint}</p>
-                  <LimitControl label={text.userMessageLimit} value={form.planLimits[plan].userMessageDailyLimit} onChange={(value) => updatePlanLimit(plan, "userMessageDailyLimit", value)} unlimitedLabel={text.unlimited} />
+                  <LimitControl label={text.userMessageLimit} value={form.planLimits[plan].userMessageDailyLimit} onChange={(value) => updatePlanLimit(plan, "userMessageDailyLimit", value)} unlimitedLabel={text.unlimited} maximum={PLAN_LIMIT_MAXIMUMS.userMessageDailyLimit} />
                 </div>
               </div>
             </div>

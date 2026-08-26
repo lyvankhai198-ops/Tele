@@ -41,11 +41,11 @@ export async function reserveUserDailyQuota(input: {
   const quotaDate = localQuotaDate(input.timezone, input.reservedAt);
   const result = await db.execute(sql`
     INSERT INTO ${userDailyMessageQuotasTable} (
-      ${userDailyMessageQuotasTable.ownerUserId},
-      ${userDailyMessageQuotasTable.quotaDate},
-      ${userDailyMessageQuotasTable.reservedCount},
-      ${userDailyMessageQuotasTable.createdAt},
-      ${userDailyMessageQuotasTable.updatedAt}
+      owner_user_id,
+      quota_date,
+      reserved_count,
+      created_at,
+      updated_at
     )
     SELECT
       ${input.ownerUserId},
@@ -58,12 +58,12 @@ export async function reserveUserDailyQuota(input: {
       AND ${activityLogsTable.event} = 'campaign.target.sent'
       AND (${activityLogsTable.createdAt} AT TIME ZONE ${input.timezone})::date = ${quotaDate}::date
     HAVING COUNT(*) < ${input.limit}
-    ON CONFLICT (${userDailyMessageQuotasTable.ownerUserId}, ${userDailyMessageQuotasTable.quotaDate})
+    ON CONFLICT (owner_user_id, quota_date)
     DO UPDATE SET
-      ${userDailyMessageQuotasTable.reservedCount} = ${userDailyMessageQuotasTable.reservedCount} + 1,
-      ${userDailyMessageQuotasTable.updatedAt} = NOW()
+      reserved_count = ${userDailyMessageQuotasTable.reservedCount} + 1,
+      updated_at = NOW()
     WHERE ${userDailyMessageQuotasTable.reservedCount} < ${input.limit}
-    RETURNING ${userDailyMessageQuotasTable.quotaDate}
+    RETURNING quota_date
   `);
   return result.rows.length > 0 ? { quotaDate } : null;
 }

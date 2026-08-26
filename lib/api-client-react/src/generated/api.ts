@@ -23,6 +23,7 @@ import type {
   AccountSummary,
   ActivateLicenseInput,
   ActivityLog,
+  AdminCampaignCloneInput,
   AdminCampaignStatusInput,
   AdminLicenseKey,
   AdminLicenseKeySecret,
@@ -46,6 +47,7 @@ import type {
   AuthUser,
   CalendarItem,
   Campaign,
+  CampaignCloneReadiness,
   CampaignInput,
   CampaignUpdateInput,
   CreateAdminLicenseKeyInput,
@@ -4200,6 +4202,145 @@ export function useGetAdminUserSupport<TData = Awaited<ReturnType<typeof getAdmi
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminUserSupportQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCloneAdminUserCampaignUrl = (userId: string,
+    campaignId: string,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/campaigns/${campaignId}/clone`
+}
+
+export const cloneAdminUserCampaign = async (userId: string,
+    campaignId: string,
+    adminCampaignCloneInput: AdminCampaignCloneInput, options?: Parameters<typeof customFetch>[1]): Promise<Campaign> => {
+
+  return customFetch<Campaign>(getCloneAdminUserCampaignUrl(userId,campaignId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminCampaignCloneInput)
+  }
+);}
+
+
+
+
+
+export const getCloneAdminUserCampaignMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneAdminUserCampaign>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignCloneInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cloneAdminUserCampaign>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignCloneInput>}, TContext> => {
+
+const mutationKey = ['cloneAdminUserCampaign'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cloneAdminUserCampaign>>, {userId: string;campaignId: string;data: BodyType<AdminCampaignCloneInput>}> = (props) => {
+          const {userId,campaignId,data} = props ?? {};
+
+          return  cloneAdminUserCampaign(userId,campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloneAdminUserCampaignMutationResult = NonNullable<Awaited<ReturnType<typeof cloneAdminUserCampaign>>>
+    export type CloneAdminUserCampaignMutationBody = BodyType<AdminCampaignCloneInput>
+    export type CloneAdminUserCampaignMutationError = ErrorType<void>
+
+    export const useCloneAdminUserCampaign = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cloneAdminUserCampaign>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignCloneInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cloneAdminUserCampaign>>,
+        TError,
+        {userId: string;campaignId: string;data: BodyType<AdminCampaignCloneInput>},
+        TContext
+      > => {
+      return useMutation(getCloneAdminUserCampaignMutationOptions(options));
+    }
+
+export const getGetCampaignCloneReadinessUrl = (campaignId: string,) => {
+
+
+
+
+  return `/api/campaigns/${campaignId}/clone-readiness`
+}
+
+export const getCampaignCloneReadiness = async (campaignId: string, options?: Parameters<typeof customFetch>[1]): Promise<CampaignCloneReadiness> => {
+
+  return customFetch<CampaignCloneReadiness>(getGetCampaignCloneReadinessUrl(campaignId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignCloneReadinessQueryKey = (campaignId: string,) => {
+    return [
+    `/api/campaigns/${campaignId}/clone-readiness`
+    ] as const;
+    }
+
+
+export const getGetCampaignCloneReadinessQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignCloneReadiness>>, TError = ErrorType<void>>(campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignCloneReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignCloneReadinessQueryKey(campaignId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignCloneReadiness>>> = ({ signal }) => getCampaignCloneReadiness(campaignId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: campaignId !== null && campaignId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignCloneReadiness>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignCloneReadinessQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignCloneReadiness>>>
+export type GetCampaignCloneReadinessQueryError = ErrorType<void>
+
+
+
+export function useGetCampaignCloneReadiness<TData = Awaited<ReturnType<typeof getCampaignCloneReadiness>>, TError = ErrorType<void>>(
+ campaignId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignCloneReadiness>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignCloneReadinessQueryOptions(campaignId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

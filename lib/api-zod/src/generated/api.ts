@@ -529,6 +529,8 @@ export const ListCampaignsResponseItem = zod.object({
   "templateMode": zod.enum(['text', 'forward']),
   "templateSourceAccountId": zod.string().nullable(),
   "templateSourceMessageId": zod.string().nullable(),
+  "clonedFromCampaignId": zod.string().nullable(),
+  "clonedFromUserId": zod.string().nullable(),
   "mediaUrl": zod.string().nullable(),
   "status": zod.string(),
   "scheduledAt": zod.coerce.date().nullable(),
@@ -597,6 +599,8 @@ export const CreateCampaignResponse = zod.object({
   "templateMode": zod.enum(['text', 'forward']),
   "templateSourceAccountId": zod.string().nullable(),
   "templateSourceMessageId": zod.string().nullable(),
+  "clonedFromCampaignId": zod.string().nullable(),
+  "clonedFromUserId": zod.string().nullable(),
   "mediaUrl": zod.string().nullable(),
   "status": zod.string(),
   "scheduledAt": zod.coerce.date().nullable(),
@@ -660,6 +664,8 @@ export const UpdateCampaignStatusResponse = zod.object({
   "templateMode": zod.enum(['text', 'forward']),
   "templateSourceAccountId": zod.string().nullable(),
   "templateSourceMessageId": zod.string().nullable(),
+  "clonedFromCampaignId": zod.string().nullable(),
+  "clonedFromUserId": zod.string().nullable(),
   "mediaUrl": zod.string().nullable(),
   "status": zod.string(),
   "scheduledAt": zod.coerce.date().nullable(),
@@ -756,6 +762,8 @@ export const GetDashboardResponse = zod.object({
   "templateMode": zod.enum(['text', 'forward']),
   "templateSourceAccountId": zod.string().nullable(),
   "templateSourceMessageId": zod.string().nullable(),
+  "clonedFromCampaignId": zod.string().nullable(),
+  "clonedFromUserId": zod.string().nullable(),
   "mediaUrl": zod.string().nullable(),
   "status": zod.string(),
   "scheduledAt": zod.coerce.date().nullable(),
@@ -1776,6 +1784,66 @@ export const GetAdminUserSupportResponse = zod.object({
   "campaignId": zod.string().nullable(),
   "accountId": zod.string().nullable(),
   "createdAt": zod.coerce.date()
+}))
+})
+
+
+export const CloneAdminUserCampaignParams = zod.object({
+  "userId": zod.coerce.string(),
+  "campaignId": zod.coerce.string()
+})
+
+export const CloneAdminUserCampaignBody = zod.object({
+  "telegramAccountId": zod.string()
+})
+
+export const CloneAdminUserCampaignResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "content": zod.string(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string().nullable(),
+  "templateMode": zod.enum(['text', 'forward']),
+  "templateSourceAccountId": zod.string().nullable(),
+  "templateSourceMessageId": zod.string().nullable(),
+  "clonedFromCampaignId": zod.string().nullable(),
+  "clonedFromUserId": zod.string().nullable(),
+  "mediaUrl": zod.string().nullable(),
+  "status": zod.string(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "timezone": zod.string(),
+  "maxRetries": zod.number(),
+  "repeatCount": zod.number(),
+  "roundDelayMinSeconds": zod.number(),
+  "roundDelayMaxSeconds": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "targetCount": zod.number(),
+  "sentCount": zod.number(),
+  "failedCount": zod.number(),
+  "destinationIds": zod.array(zod.string()),
+  "errors": zod.array(zod.object({
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable()
+}))
+})
+
+
+export const GetCampaignCloneReadinessParams = zod.object({
+  "campaignId": zod.coerce.string()
+})
+
+export const GetCampaignCloneReadinessResponse = zod.object({
+  "accountReady": zod.boolean(),
+  "messageReady": zod.boolean(),
+  "destinations": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "ready": zod.boolean(),
+  "reason": zod.string().nullable()
 }))
 })
 

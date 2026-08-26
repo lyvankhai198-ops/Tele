@@ -96,6 +96,21 @@ function targetStatusLabel(status: string, language: "vi" | "en") {
   return labels[status]?.[language] ?? status;
 }
 
+function isUserDailyQuotaLog(log: ActivityLog) {
+  return log.metadata?.quotaScope === "user"
+    || /Daily user message limit/i.test(log.message);
+}
+
+function activityTitle(log: ActivityLog, language: "vi" | "en") {
+  if (log.event === "campaign.paused.daily_quota_reached") {
+    if (isUserDailyQuotaLog(log)) {
+      return language === "vi" ? "Đã đạt ngân sách gửi tổng trong ngày" : "Daily user message budget reached";
+    }
+    return language === "vi" ? "Đã đạt giới hạn gửi của chiến dịch" : "Campaign daily message limit reached";
+  }
+  return eventLabels[log.event]?.[language] ?? log.event.replace(/[._]/g, " ");
+}
+
 function userMessage(log: ActivityLog, language: "vi" | "en") {
   if (language === "en") return log.message;
 
@@ -111,7 +126,9 @@ function userMessage(log: ActivityLog, language: "vi" | "en") {
     return "Chiến dịch được tạm dừng vì gói dùng thử hoặc gói dịch vụ đã hết hạn.";
   }
   if (log.event === "campaign.paused.daily_quota_reached") {
-    return "Đã đạt giới hạn gửi trong ngày của chiến dịch hoặc ngân sách tổng. Chiến dịch sẽ tự động chạy lại vào ngày mới.";
+    return isUserDailyQuotaLog(log)
+      ? "Đã đạt ngân sách gửi tổng trong ngày của tài khoản. Chiến dịch sẽ tự động chạy lại vào ngày mới."
+      : "Đã đạt giới hạn gửi trong ngày của chiến dịch. Chiến dịch sẽ tự động chạy lại vào ngày mới.";
   }
   if (log.event === "campaign.resumed.daily_quota_reset") {
     return "Ngày mới đã bắt đầu. Chiến dịch tự động tiếp tục gửi các lượt còn lại.";
@@ -212,7 +229,7 @@ export default function Logs() {
               const Icon = status.icon;
               const isExpanded = expandedId === log.id;
               const needsReview = log.targetStatus === "requires_review" || log.event.includes("review");
-              const title = eventLabels[log.event]?.[language] ?? log.event.replace(/[._]/g, " ");
+              const title = activityTitle(log, language);
               const metadata = Object.entries(log.metadata ?? {});
               const context = [
                 log.campaignName && { icon: Megaphone, label: t("Campaign"), value: log.campaignName },

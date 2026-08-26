@@ -125,6 +125,8 @@ export const campaignsTable = pgTable("campaigns", {
   templateMode: text("template_mode").notNull().default("text"),
   templateSourceAccountId: uuid("template_source_account_id").references(() => telegramAccountsTable.id, { onDelete: "set null" }),
   templateSourceMessageId: text("template_source_message_id"),
+  clonedFromCampaignId: uuid("cloned_from_campaign_id"),
+  clonedFromUserId: text("cloned_from_user_id"),
   mediaUrl: text("media_url"),
   status: text("status").notNull().default("draft"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),

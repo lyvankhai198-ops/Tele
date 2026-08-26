@@ -309,6 +309,10 @@ export interface Campaign {
   /** @nullable */
   templateSourceMessageId: string | null;
   /** @nullable */
+  clonedFromCampaignId: string | null;
+  /** @nullable */
+  clonedFromUserId: string | null;
+  /** @nullable */
   mediaUrl: string | null;
   status: string;
   /** @nullable */
@@ -401,6 +405,24 @@ export interface CampaignUpdateInput {
      * @maximum 259200
      */
   roundDelayMaxSeconds?: number;
+}
+
+export interface AdminCampaignCloneInput {
+  telegramAccountId: string;
+}
+
+export interface CampaignCloneDestinationReadiness {
+  id: string;
+  title: string;
+  ready: boolean;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface CampaignCloneReadiness {
+  accountReady: boolean;
+  messageReady: boolean;
+  destinations: CampaignCloneDestinationReadiness[];
 }
 
 export interface CalendarItem {

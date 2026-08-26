@@ -877,6 +877,43 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: User not found }
         "400": { description: Invalid user identifier }
+  /admin/users/{userId}/campaigns/{campaignId}/clone:
+    post:
+      operationId: cloneAdminUserCampaign
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+        - { $ref: "#/components/parameters/CampaignId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminCampaignCloneInput" }
+      responses:
+        "201":
+          description: A draft campaign owned by the administrator
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "400": { description: Invalid clone request }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: "User, campaign, or Telegram account not found" }
+        "409": { description: Administrator Telegram account is not connected }
+  /campaigns/{campaignId}/clone-readiness:
+    get:
+      operationId: getCampaignCloneReadiness
+      tags: [campaigns]
+      parameters:
+        - { $ref: "#/components/parameters/CampaignId" }
+      responses:
+        "200":
+          description: Readiness for an administrator-owned cloned campaign
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignCloneReadiness" }
+        "401": { description: Authentication is required }
+        "404": { description: Cloned campaign not found }
   /admin/user-support/campaign-targets:
     get:
       operationId: getAdminUserSupportCampaignTargets
@@ -1149,7 +1186,7 @@ components:
         sourceMessageId: { type: ["string", "null"] }
     Campaign:
       type: object
-      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, destinationIds, errors]
+      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, destinationIds, errors]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1159,6 +1196,8 @@ components:
         templateMode: { type: string, enum: [text, forward] }
         templateSourceAccountId: { type: ["string", "null"] }
         templateSourceMessageId: { type: ["string", "null"] }
+        clonedFromCampaignId: { type: ["string", "null"] }
+        clonedFromUserId: { type: ["string", "null"] }
         mediaUrl: { type: ["string", "null"] }
         status: { type: string }
         scheduledAt: { type: ["string", "null"], format: date-time }
@@ -1221,6 +1260,28 @@ components:
         repeatCount: { type: number, minimum: 1, maximum: 300 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
+    AdminCampaignCloneInput:
+      type: object
+      required: [telegramAccountId]
+      properties:
+        telegramAccountId: { type: string }
+    CampaignCloneDestinationReadiness:
+      type: object
+      required: [id, title, ready, reason]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        ready: { type: boolean }
+        reason: { type: ["string", "null"] }
+    CampaignCloneReadiness:
+      type: object
+      required: [accountReady, messageReady, destinations]
+      properties:
+        accountReady: { type: boolean }
+        messageReady: { type: boolean }
+        destinations:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignCloneDestinationReadiness" }
     CalendarItem:
       type: object
       required: [id, campaignId, name, scheduledAt, status, targetCount]

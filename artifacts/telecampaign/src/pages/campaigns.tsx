@@ -16,10 +16,13 @@ import {
   deleteCampaign,
   useCreateCampaign,
   useGetSystemDefaults,
+  useGetCampaignCloneReadiness,
   useListCampaigns,
   useListDestinations,
   useListMessageTemplates,
   useListTelegramAccounts,
+  useListTelegramSavedMessages,
+  useUpdateMessageTemplate,
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
@@ -99,6 +102,15 @@ const copy = {
     detailViewTemplate: "View template",
     detailTemplateContent: "Template content",
     detailForwardContent: "This template forwards the original saved message.",
+    clonedDraft: "This cloned draft is waiting for a Saved Message before it can run.",
+    cloneRunTitle: "Choose Saved Message",
+    cloneRunDetail: "The message will be forwarded from this admin Telegram account after you confirm.",
+    cloneRunAccount: "Telegram account",
+    cloneRunMessage: "Saved Message",
+    cloneRunMessagePlaceholder: "Choose a saved message",
+    cloneRunConfirm: "Confirm & run campaign",
+    cloneRunCancel: "Cancel",
+    cloneRunMissing: "Choose a Saved Message before running this campaign.",
     detailWaitingTitle: "Waiting to send",
     detailWaitingStatus: "Waiting",
     detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
@@ -179,6 +191,15 @@ const copy = {
     detailViewTemplate: "Xem mẫu",
     detailTemplateContent: "Nội dung mẫu",
     detailForwardContent: "Mẫu này sẽ chuyển tiếp đúng tin nhắn gốc đã lưu.",
+    clonedDraft: "Bản clone này đang chờ chọn Tin nhắn đã lưu trước khi có thể chạy.",
+    cloneRunTitle: "Chọn Tin nhắn đã lưu",
+    cloneRunDetail: "Tin nhắn sẽ được forward từ tài khoản Telegram admin này sau khi bạn xác nhận.",
+    cloneRunAccount: "Tài khoản Telegram",
+    cloneRunMessage: "Tin nhắn đã lưu",
+    cloneRunMessagePlaceholder: "Chọn một tin nhắn đã lưu",
+    cloneRunConfirm: "Xác nhận & chạy chiến dịch",
+    cloneRunCancel: "Hủy",
+    cloneRunMissing: "Hãy chọn Tin nhắn đã lưu trước khi chạy chiến dịch này.",
     detailWaitingTitle: "Đang chờ gửi",
     detailWaitingStatus: "Đang chờ",
     detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
@@ -308,6 +329,7 @@ export default function Campaigns() {
   const createCampaign = useCreateCampaign();
   const systemDefaults = useGetSystemDefaults();
   const updateStatus = useUpdateCampaignStatus();
+  const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -318,6 +340,14 @@ export default function Campaigns() {
   const [groupSearch, setGroupSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [forwardCampaign, setForwardCampaign] = useState<Campaign | null>(null);
+  const [forwardSourceMessageId, setForwardSourceMessageId] = useState("");
+  const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
+    query: { enabled: Boolean(forwardCampaign?.id) } as any,
+  });
+  const forwardSavedMessages = useListTelegramSavedMessages(forwardCampaign?.telegramAccountId ?? "", {
+    query: { enabled: Boolean(forwardCampaign?.telegramAccountId) } as any,
+  });
 
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
   const listedCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) => {
@@ -488,6 +518,47 @@ export default function Campaigns() {
     }
   }
 
+  function requestQueue(campaign: Campaign) {
+    if (campaign.clonedFromCampaignId) {
+      setForwardCampaign(campaign);
+      setForwardSourceMessageId("");
+      return;
+    }
+    void changeCampaignStatus(campaign, "queued");
+  }
+
+  async function confirmClonedCampaignRun() {
+    if (!forwardCampaign?.templateId || !forwardCampaign.telegramAccountId) {
+      setToast(c.genericError);
+      return;
+    }
+    if (!forwardSourceMessageId) {
+      setToast(c.cloneRunMissing);
+      return;
+    }
+    if (!cloneReadiness.data?.accountReady || cloneReadiness.data.destinations.some((destination) => !destination.ready)) {
+      setToast("Đồng bộ tài khoản Telegram admin và xử lý các destination chưa có quyền gửi trước khi chạy.");
+      return;
+    }
+    try {
+      await updateTemplate.mutateAsync({
+        templateId: forwardCampaign.templateId,
+        data: {
+          mode: "forward",
+          sourceAccountId: forwardCampaign.telegramAccountId,
+          sourceMessageId: forwardSourceMessageId,
+        },
+      });
+      await updateStatus.mutateAsync({ campaignId: forwardCampaign.id, data: { status: "queued" } });
+      await Promise.all([campaigns.refetch(), templates.refetch()]);
+      setForwardCampaign(null);
+      setForwardSourceMessageId("");
+      setToast(c.toastResumed);
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
   async function remove(campaign: Campaign) {
     if (!window.confirm(c.confirmDelete(campaign.name))) return;
     try {
@@ -563,17 +634,22 @@ export default function Campaigns() {
                           : campaign.status === "draft"
                              ? <div className="grid grid-cols-2 gap-2">
                                <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
-                               <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
+                               <button onClick={() => requestQueue(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
                              </div>
                             : campaign.status === "paused"
                               ? <div className="grid grid-cols-2 gap-2">
                                 <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
                                  {autoResumes
                                    ? <span className="inline-flex h-10 items-center justify-center rounded-xl bg-[#eff6ff] px-3 text-center text-[12px] font-extrabold text-[#1d4ed8]">{c.automaticResume}</span>
-                                   : <button onClick={() => void changeCampaignStatus(campaign, "queued")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>}
+                                   : <button onClick={() => requestQueue(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>}
                               </div>
                             : <span className="h-10" />}
                       </div>
+                      {campaign.clonedFromCampaignId && campaign.status === "draft" && (
+                        <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
+                          {c.clonedDraft}
+                        </p>
+                      )}
                       <button onClick={() => void remove(campaign)} disabled={updateStatus.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#f99a9d] text-[14px] font-extrabold text-white hover:bg-[#f57c80]"><Trash2 className="h-[17px] w-[17px]" />{c.deleteBtn}</button>
                     </article>
                   );
@@ -676,6 +752,97 @@ export default function Campaigns() {
               {editingCampaign ? c.editBtn : c.createCampaignBtn}
             </PrimaryButton>
           </form>
+        </Modal>
+      )}
+
+      {forwardCampaign && (
+        <Modal
+          title={c.cloneRunTitle}
+          description={c.cloneRunDetail}
+          onClose={() => {
+            setForwardCampaign(null);
+            setForwardSourceMessageId("");
+          }}
+        >
+          <div className="space-y-5">
+            <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-[13px] font-medium text-[#1e3a8a]">
+              <span className="block text-[11px] font-black uppercase tracking-wide text-[#1d4ed8]">{c.cloneRunAccount}</span>
+              <span className="mt-1 block font-extrabold">
+                {connectedAccounts.find((account) => account.id === forwardCampaign.telegramAccountId)?.name ?? c.accountFallback}
+              </span>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.cloneRunMessage}</span>
+              <select
+                value={forwardSourceMessageId}
+                onChange={(event) => setForwardSourceMessageId(event.target.value)}
+                disabled={forwardSavedMessages.isLoading}
+                className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]"
+                data-testid="clone-campaign-saved-message"
+              >
+                <option value="">{forwardSavedMessages.isLoading ? "Loading…" : c.cloneRunMessagePlaceholder}</option>
+                {(forwardSavedMessages.data ?? []).map((message) => (
+                  <option key={message.id} value={message.id}>{message.text.slice(0, 100) || "Media message"}</option>
+                ))}
+              </select>
+            </label>
+            {forwardSavedMessages.isError && (
+              <p className="rounded-xl bg-[#fff1f2] px-3 py-2 text-[12px] font-semibold text-[#be123c]">
+                {localizedErrorMessage(forwardSavedMessages.error, language, c.genericError)}
+              </p>
+            )}
+            <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-[#64748b]">Kiểm tra destination</p>
+              {cloneReadiness.isLoading ? (
+                <p className="text-[12px] font-semibold text-[#64748b]">Đang kiểm tra quyền gửi…</p>
+              ) : cloneReadiness.isError ? (
+                <p className="text-[12px] font-semibold text-[#be123c]">{localizedErrorMessage(cloneReadiness.error, language, c.genericError)}</p>
+              ) : (
+                <div className="space-y-2">
+                  {!cloneReadiness.data?.accountReady && (
+                    <p className="rounded-lg bg-[#fff1f2] px-2.5 py-2 text-[12px] font-semibold text-[#be123c]">Tài khoản Telegram admin chưa kết nối.</p>
+                  )}
+                  {(cloneReadiness.data?.destinations ?? []).map((destination) => (
+                    <div key={destination.id} className={`rounded-lg px-2.5 py-2 text-[12px] font-semibold ${destination.ready ? "bg-[#ecfdf5] text-[#047857]" : "bg-[#fff1f2] text-[#be123c]"}`}>
+                      <span className="font-extrabold">{destination.title}</span>
+                      {!destination.ready && <span className="block pt-0.5 font-medium">{destination.reason}</span>}
+                    </div>
+                  ))}
+                  {!cloneReadiness.data?.destinations.length && (
+                    <p className="rounded-lg bg-[#fff1f2] px-2.5 py-2 text-[12px] font-semibold text-[#be123c]">Campaign không có destination để gửi.</p>
+                  )}
+                </div>
+              )}
+            </div>
+            {forwardSourceMessageId && (
+              <div className="rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+                <p className="mb-1 text-[10px] font-black uppercase tracking-wide text-[#64748b]">Preview</p>
+                <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-[#334155]">
+                  {(forwardSavedMessages.data ?? []).find((message) => message.id === forwardSourceMessageId)?.text || "Media message"}
+                </p>
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setForwardCampaign(null);
+                  setForwardSourceMessageId("");
+                }}
+                className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc]"
+              >
+                {c.cloneRunCancel}
+              </button>
+              <PrimaryButton
+                type="button"
+                onClick={() => void confirmClonedCampaignRun()}
+                disabled={!forwardSourceMessageId || cloneReadiness.isLoading || !cloneReadiness.data?.accountReady || (cloneReadiness.data?.destinations ?? []).some((destination) => !destination.ready) || updateTemplate.isPending || updateStatus.isPending}
+              >
+                {(updateTemplate.isPending || updateStatus.isPending) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {c.cloneRunConfirm}
+              </PrimaryButton>
+            </div>
+          </div>
         </Modal>
       )}
 

@@ -22,6 +22,10 @@ export interface Campaign {
   /** @nullable */
   templateSourceMessageId: string | null;
   /** @nullable */
+  clonedFromCampaignId: string | null;
+  /** @nullable */
+  clonedFromUserId: string | null;
+  /** @nullable */
   mediaUrl: string | null;
   status: string;
   /** @nullable */

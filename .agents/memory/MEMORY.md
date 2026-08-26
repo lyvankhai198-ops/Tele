@@ -11,6 +11,9 @@
 - [GitHub tree file modes](github-tree-file-modes.md) — Git data-tree publishing must set executable script modes explicitly or deployment hooks can silently lose permission.
 - [App Storage upload paths](app-storage-upload-paths.md) — derive the internal object path at allocation time; signed upload URLs are not a stable source for reconstructing it.
 - [VPS SSH authentication](vps-ssh-authentication.md) — validate the configured SSH key before deployment and use the secure password fallback only when key parsing fails.
+- [VPS host-key verification](vps-host-key-verification.md) — pin the ED25519 key against an owner-provided fingerprint before password SSH; do not disable strict checking.
 - [Stale Vite build assets](stale-vite-build-assets.md) — remove deleted public subdirectories from the production dist before serving the next build.
+- [Static frontend release verification](static-frontend-release-verification.md) — compare the public HTML and hashed asset with the VPS build; an already-open SPA cannot update until reloaded.
 - [Playwright tutorial capture](playwright-tutorial-capture.md) — close the recording context before awaiting a video path, and reject incomplete recordings before conversion.
 - [Dashboard video delivery](notification-video-delivery.md) — use byte-range streaming and a WebM fallback when preview Chromium cannot decode an otherwise valid H.264 MP4.
+- [Admin quota exemptions](admin-quota-exemptions.md) — a per-user exemption only removes the total daily message quota; it never changes the user’s plan or campaign/account limits.
