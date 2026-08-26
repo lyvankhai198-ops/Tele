@@ -7,5 +7,14 @@
  */
 
 export interface AdminUserQuotaUpdateInput {
-  dailyQuotaExempt: boolean;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dailyQuotaExemptFrom: string | null;
+  /**
+     * @nullable
+     * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+     */
+  dailyQuotaExemptUntil: string | null;
 }

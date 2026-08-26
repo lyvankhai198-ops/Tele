@@ -403,16 +403,25 @@ router.patch("/admin/users/:userId/quota", async (req, res): Promise<void> => {
     sendError(res, 400, "Thiết lập quota người dùng không hợp lệ.");
     return;
   }
+  const hasNoSchedule = body.data.dailyQuotaExemptFrom === null && body.data.dailyQuotaExemptUntil === null;
+  const hasValidSchedule = body.data.dailyQuotaExemptFrom !== null
+    && body.data.dailyQuotaExemptUntil !== null
+    && body.data.dailyQuotaExemptFrom <= body.data.dailyQuotaExemptUntil;
+  if (!hasNoSchedule && !hasValidSchedule) {
+    sendError(res, 400, "Ngày bắt đầu và ngày kết thúc miễn quota không hợp lệ.");
+    return;
+  }
   const outcome = await updateUserDailyQuotaExemption({
     userId: params.data.userId,
     adminUserId: req.userId!,
-    dailyQuotaExempt: body.data.dailyQuotaExempt,
+    dailyQuotaExemptFrom: body.data.dailyQuotaExemptFrom,
+    dailyQuotaExemptUntil: body.data.dailyQuotaExemptUntil,
   });
   if (!outcome.ok) {
     sendError(res, 404, "Không tìm thấy người dùng.");
     return;
   }
-  if (body.data.dailyQuotaExempt) {
+  if (outcome.subscription.dailyQuotaExempt) {
     await resumeQuotaPausedCampaignsAfterSettingsUpdate({
       ownerUserId: params.data.userId,
       pauseReasons: ["Daily user message limit reached. Campaign paused and will resume automatically on a new day."],

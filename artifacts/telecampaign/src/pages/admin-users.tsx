@@ -52,9 +52,11 @@ const copy = {
     limitCampaigns: "campaigns",
     limitMsgs: "msgs/day",
     noLimit: "Unlimited",
-    quotaExempt: "Daily message quota exempt",
-    quotaExemptDetail: "This user can send without the plan-wide daily message quota. Account and campaign limits remain unchanged.",
-    saveQuota: "Save quota access",
+    quotaExempt: "Daily message quota schedule",
+    quotaExemptDetail: "Choose a start and end date. The plan-wide daily message quota is removed for the whole range; the normal limit returns automatically afterward. Account and campaign limits remain unchanged.",
+    quotaDatesValidationError: "Choose both dates, or clear both dates to remove the schedule.",
+    quotaDateOrderError: "The end date must be on or after the start date.",
+    saveQuota: "Save quota schedule",
     quotaSaving: "Saving...",
     quotaSaved: "Daily quota access updated.",
     updateAction: "Update Plan",
@@ -98,9 +100,11 @@ const copy = {
     limitCampaigns: "chiến dịch",
     limitMsgs: "tin nhắn/ngày",
     noLimit: "Không giới hạn",
-    quotaExempt: "Miễn quota tin nhắn/ngày",
-    quotaExemptDetail: "User này được gửi không giới hạn theo quota tin nhắn/ngày của gói. Giới hạn tài khoản và chiến dịch vẫn giữ nguyên.",
-    saveQuota: "Lưu quyền quota",
+    quotaExempt: "Lịch miễn quota tin nhắn",
+    quotaExemptDetail: "Chọn ngày bắt đầu và ngày kết thúc. Quota tin nhắn/ngày của gói được gỡ trong toàn bộ khoảng này; sau đó hệ thống tự áp lại. Giới hạn tài khoản và chiến dịch vẫn giữ nguyên.",
+    quotaDatesValidationError: "Hãy chọn đủ hai ngày, hoặc xóa cả hai ngày để hủy lịch.",
+    quotaDateOrderError: "Ngày kết thúc phải từ ngày bắt đầu trở đi.",
+    saveQuota: "Lưu lịch quota",
     quotaSaving: "Đang lưu...",
     quotaSaved: "Đã cập nhật quyền quota tin nhắn/ngày.",
     updateAction: "Cập nhật Gói",
@@ -175,7 +179,8 @@ export default function AdminUsersPage() {
 
   const updateMutation = useUpdateAdminUserSubscription();
   const quotaMutation = useUpdateAdminUserQuota();
-  const [formQuotaExempt, setFormQuotaExempt] = useState(false);
+  const [formQuotaExemptFrom, setFormQuotaExemptFrom] = useState("");
+  const [formQuotaExemptUntil, setFormQuotaExemptUntil] = useState("");
   const modalUser = selectedUser ?? editingUser;
 
   const handleOpenEdit = (user: AdminUser) => {
@@ -184,15 +189,29 @@ export default function AdminUsersPage() {
     setFormPlan(user.storedPlan === "unlimited" ? "unlimited" : "pro");
     setFormDuration("30");
     setFormConfirmed(false);
-    setFormQuotaExempt(user.subscription.dailyQuotaExempt);
+    setFormQuotaExemptFrom(user.subscription.dailyQuotaExemptFrom ?? "");
+    setFormQuotaExemptUntil(user.subscription.dailyQuotaExemptUntil ?? "");
   };
 
   const handleUpdateQuota = () => {
     if (!editingUser) return;
+    const hasNoSchedule = !formQuotaExemptFrom && !formQuotaExemptUntil;
+    const hasPartialSchedule = Boolean(formQuotaExemptFrom) !== Boolean(formQuotaExemptUntil);
+    if (hasPartialSchedule) {
+      setToastMessage({ text: text.quotaDatesValidationError, isError: true });
+      return;
+    }
+    if (!hasNoSchedule && formQuotaExemptFrom > formQuotaExemptUntil) {
+      setToastMessage({ text: text.quotaDateOrderError, isError: true });
+      return;
+    }
     quotaMutation.mutate(
       {
         userId: editingUser.id,
-        data: { dailyQuotaExempt: formQuotaExempt },
+        data: {
+          dailyQuotaExemptFrom: formQuotaExemptFrom || null,
+          dailyQuotaExemptUntil: formQuotaExemptUntil || null,
+        },
       },
       {
         onSuccess: () => {
@@ -459,22 +478,31 @@ export default function AdminUsersPage() {
             />
 
             <div className="rounded-2xl border border-[#dbeafe] bg-[#eff6ff] p-4">
-              <label className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={formQuotaExempt}
-                  onChange={(e) => setFormQuotaExempt(e.target.checked)}
-                  className="mt-1 h-4 w-4 accent-[#1a2b88]"
+              <span className="block text-[14px] font-extrabold text-[#1e3a8a]">{text.quotaExempt}</span>
+              <span className="mt-1 block text-[12px] font-medium leading-relaxed text-[#1e40af]">{text.quotaExemptDetail}</span>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <Input
+                  label={language === "vi" ? "Ngày bắt đầu" : "Start date"}
+                  type="date"
+                  value={formQuotaExemptFrom}
+                  onChange={setFormQuotaExemptFrom}
                 />
-                <span>
-                  <span className="block text-[14px] font-extrabold text-[#1e3a8a]">{text.quotaExempt}</span>
-                  <span className="mt-1 block text-[12px] font-medium leading-relaxed text-[#1e40af]">{text.quotaExemptDetail}</span>
-                </span>
-              </label>
+                <Input
+                  label={language === "vi" ? "Ngày kết thúc" : "End date"}
+                  type="date"
+                  value={formQuotaExemptUntil}
+                  onChange={setFormQuotaExemptUntil}
+                />
+              </div>
+              <p className="mt-2 text-[12px] font-medium text-[#1e40af]">
+                {language === "vi" ? "Xóa cả hai ngày để hủy lịch miễn quota." : "Clear both dates to remove the quota schedule."}
+              </p>
               <div className="mt-3 flex justify-end">
                 <button
                   onClick={handleUpdateQuota}
-                  disabled={quotaMutation.isPending || formQuotaExempt === modalUser.subscription.dailyQuotaExempt}
+                  disabled={quotaMutation.isPending
+                    || (formQuotaExemptFrom === (modalUser.subscription.dailyQuotaExemptFrom ?? "")
+                      && formQuotaExemptUntil === (modalUser.subscription.dailyQuotaExemptUntil ?? ""))}
                   className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-[13px] font-bold text-[#475569] transition-colors hover:border-[#94a3b8] hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {quotaMutation.isPending ? text.quotaSaving : text.saveQuota}

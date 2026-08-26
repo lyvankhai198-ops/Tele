@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
 import { decryptSecret, encryptSecret } from "./crypto";
+import { localQuotaDate } from "./user-daily-quota";
 
 export const PLAN_ORDER = ["plus", "pro", "unlimited"] as const;
 export type PlanCode = SystemPlanCode;
@@ -228,20 +229,30 @@ function toSubscriptionSummary(
   subscription: typeof subscriptionsTable.$inferSelect,
   now = new Date(),
   catalog: PlanCatalog = PLAN_CATALOG,
+  timezone = "Asia/Ho_Chi_Minh",
 ) {
   const hasExpired = Boolean(subscription.expiresAt && subscription.expiresAt.getTime() <= now.getTime());
   const storedPlan = isPlanCode(subscription.plan) ? subscription.plan : "plus";
   const plan: PlanCode = hasExpired ? "plus" : storedPlan;
   const limits = planLimits(plan, catalog);
+  const today = localQuotaDate(timezone, now);
+  const dailyQuotaExempt = Boolean(
+    subscription.dailyQuotaExemptFrom
+    && subscription.dailyQuotaExemptUntil
+    && subscription.dailyQuotaExemptFrom <= today
+    && today <= subscription.dailyQuotaExemptUntil,
+  );
   return {
     plan,
     startedAt: subscription.startedAt,
     expiresAt: subscription.expiresAt,
     status: hasExpired ? "expired" as const : "active" as const,
-    dailyQuotaExempt: subscription.dailyQuotaExempt,
+    dailyQuotaExempt,
+    dailyQuotaExemptFrom: subscription.dailyQuotaExemptFrom,
+    dailyQuotaExemptUntil: subscription.dailyQuotaExemptUntil,
     accountLimit: planAccountLimit(plan, catalog),
     ...limits,
-    userMessageDailyLimit: subscription.dailyQuotaExempt ? null : limits.userMessageDailyLimit,
+    userMessageDailyLimit: dailyQuotaExempt ? null : limits.userMessageDailyLimit,
   };
 }
 
@@ -265,7 +276,7 @@ export async function getSubscription(ownerUserId: string) {
   ]);
   const existing = subscriptions[0] ?? await createDefaultSubscription(ownerUserId);
   const catalog = PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planLimits[plan.code] }));
-  return toSubscriptionSummary(existing, new Date(), catalog);
+  return toSubscriptionSummary(existing, new Date(), catalog, settings.defaultTimezone);
 }
 
 export async function getTelegramAccountAllowance(ownerUserId: string) {
@@ -351,6 +362,9 @@ async function buildAdminUserRecords(catalog: PlanCatalog = PLAN_CATALOG): Promi
       ownerUserId: user.id,
       plan: "plus",
       dailyQuotaExempt: false,
+      dailyQuotaExemptDate: null,
+      dailyQuotaExemptFrom: null,
+      dailyQuotaExemptUntil: null,
       startedAt: user.createdAt,
       expiresAt: null,
       updatedAt: user.createdAt,
@@ -484,9 +498,13 @@ export type AdminUserQuotaUpdateResult =
 export async function updateUserDailyQuotaExemption(input: {
   userId: string;
   adminUserId: string;
-  dailyQuotaExempt: boolean;
+  dailyQuotaExemptFrom: string | null;
+  dailyQuotaExemptUntil: string | null;
 }): Promise<AdminUserQuotaUpdateResult> {
-  const catalog = await getConfiguredPlanCatalog();
+  const [catalog, settings] = await Promise.all([
+    getConfiguredPlanCatalog(),
+    getSystemSettings(),
+  ]);
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}))`);
     const now = new Date();
@@ -498,12 +516,18 @@ export async function updateUserDailyQuotaExemption(input: {
       .where(eq(subscriptionsTable.ownerUserId, input.userId)).limit(1);
     const [next] = current
       ? await tx.update(subscriptionsTable).set({
-        dailyQuotaExempt: input.dailyQuotaExempt,
+        dailyQuotaExempt: false,
+        dailyQuotaExemptDate: null,
+        dailyQuotaExemptFrom: input.dailyQuotaExemptFrom,
+        dailyQuotaExemptUntil: input.dailyQuotaExemptUntil,
         updatedAt: now,
       }).where(eq(subscriptionsTable.id, current.id)).returning()
       : await tx.insert(subscriptionsTable).values({
         ownerUserId: input.userId,
-        dailyQuotaExempt: input.dailyQuotaExempt,
+        dailyQuotaExempt: false,
+        dailyQuotaExemptDate: null,
+        dailyQuotaExemptFrom: input.dailyQuotaExemptFrom,
+        dailyQuotaExemptUntil: input.dailyQuotaExemptUntil,
       }).returning();
     if (!next) throw new Error("Unable to update user quota exemption");
 
@@ -511,16 +535,17 @@ export async function updateUserDailyQuotaExemption(input: {
       ownerUserId: input.adminUserId,
       event: "subscription.admin_quota_exemption_updated",
       level: "success",
-      message: `${input.dailyQuotaExempt ? "Granted" : "Removed"} daily message quota exemption for user ${input.userId}`,
+      message: `${input.dailyQuotaExemptFrom && input.dailyQuotaExemptUntil ? "Scheduled" : "Removed"} daily message quota exemption for user ${input.userId}`,
       metadata: {
         targetUserId: input.userId,
-        dailyQuotaExempt: input.dailyQuotaExempt,
+        dailyQuotaExemptFrom: input.dailyQuotaExemptFrom,
+        dailyQuotaExemptUntil: input.dailyQuotaExemptUntil,
       },
     });
 
     return {
       ok: true as const,
-      subscription: toSubscriptionSummary(next, now, catalog),
+      subscription: toSubscriptionSummary(next, now, catalog, settings.defaultTimezone),
     };
   });
 }

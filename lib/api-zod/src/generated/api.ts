@@ -818,6 +818,10 @@ export const GetDashboardResponse = zod.object({
 })
 
 
+export const getAccountSummaryResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getAccountSummaryResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetAccountSummaryResponse = zod.object({
   "profile": zod.object({
   "username": zod.string(),
@@ -830,6 +834,8 @@ export const GetAccountSummaryResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(getAccountSummaryResponseSubscriptionDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(getAccountSummaryResponseSubscriptionDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -884,6 +890,10 @@ export const GetSystemDefaultsResponse = zod.object({
 })
 
 
+export const getUpgradeSummaryResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getUpgradeSummaryResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetUpgradeSummaryResponse = zod.object({
   "plans": zod.array(zod.object({
   "code": zod.enum(['plus', 'pro', 'unlimited']),
@@ -901,6 +911,8 @@ export const GetUpgradeSummaryResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(getUpgradeSummaryResponseSubscriptionDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(getUpgradeSummaryResponseSubscriptionDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1267,6 +1279,10 @@ export const ActivateLicenseBody = zod.object({
   "licenseKey": zod.string().min(activateLicenseBodyLicenseKeyMin).max(activateLicenseBodyLicenseKeyMax)
 })
 
+export const activateLicenseResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const activateLicenseResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const ActivateLicenseResponse = zod.object({
   "message": zod.string(),
   "subscription": zod.object({
@@ -1275,6 +1291,8 @@ export const ActivateLicenseResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(activateLicenseResponseSubscriptionDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(activateLicenseResponseSubscriptionDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1586,6 +1604,10 @@ export const ListAdminUsersQueryParams = zod.object({
   "plan": zod.enum(['plus', 'pro', 'unlimited']).optional()
 })
 
+export const listAdminUsersResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const listAdminUsersResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const ListAdminUsersResponseItem = zod.object({
   "id": zod.string(),
   "username": zod.string(),
@@ -1599,6 +1621,8 @@ export const ListAdminUsersResponseItem = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(listAdminUsersResponseSubscriptionDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(listAdminUsersResponseSubscriptionDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1616,6 +1640,10 @@ export const GetAdminUserParams = zod.object({
   "userId": zod.coerce.string()
 })
 
+export const getAdminUserResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getAdminUserResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const GetAdminUserResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
@@ -1629,6 +1657,8 @@ export const GetAdminUserResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(getAdminUserResponseSubscriptionDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(getAdminUserResponseSubscriptionDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1654,12 +1684,18 @@ export const UpdateAdminUserSubscriptionBody = zod.object({
   "durationDays": zod.number().min(1).max(updateAdminUserSubscriptionBodyDurationDaysMax)
 })
 
+export const updateAdminUserSubscriptionResponseDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const updateAdminUserSubscriptionResponseDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const UpdateAdminUserSubscriptionResponse = zod.object({
   "plan": zod.enum(['plus', 'pro', 'unlimited']),
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(updateAdminUserSubscriptionResponseDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(updateAdminUserSubscriptionResponseDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1671,9 +1707,18 @@ export const UpdateAdminUserQuotaParams = zod.object({
   "userId": zod.coerce.string()
 })
 
+export const updateAdminUserQuotaBodyDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const updateAdminUserQuotaBodyDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
 export const UpdateAdminUserQuotaBody = zod.object({
-  "dailyQuotaExempt": zod.boolean()
+  "dailyQuotaExemptFrom": zod.string().regex(updateAdminUserQuotaBodyDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(updateAdminUserQuotaBodyDailyQuotaExemptUntilRegExp).nullable()
 })
+
+export const updateAdminUserQuotaResponseDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const updateAdminUserQuotaResponseDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
 
 export const UpdateAdminUserQuotaResponse = zod.object({
   "plan": zod.enum(['plus', 'pro', 'unlimited']),
@@ -1681,6 +1726,8 @@ export const UpdateAdminUserQuotaResponse = zod.object({
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
   "dailyQuotaExempt": zod.boolean(),
+  "dailyQuotaExemptFrom": zod.string().regex(updateAdminUserQuotaResponseDailyQuotaExemptFromRegExp).nullable(),
+  "dailyQuotaExemptUntil": zod.string().regex(updateAdminUserQuotaResponseDailyQuotaExemptUntilRegExp).nullable(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),

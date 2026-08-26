@@ -1365,13 +1365,15 @@ components:
         durationDays: { type: number }
     Subscription:
       type: object
-      required: [plan, startedAt, expiresAt, status, dailyQuotaExempt, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]
+      required: [plan, startedAt, expiresAt, status, dailyQuotaExempt, dailyQuotaExemptFrom, dailyQuotaExemptUntil, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]
       properties:
         plan: { $ref: "#/components/schemas/PlanCode" }
         startedAt: { type: string, format: date-time }
         expiresAt: { type: ["string", "null"], format: date-time }
         status: { type: string, enum: [active, expired] }
         dailyQuotaExempt: { type: boolean }
+        dailyQuotaExemptFrom: { type: ["string", "null"], pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        dailyQuotaExemptUntil: { type: ["string", "null"], pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
         accountLimit: { type: ["number", "null"] }
         campaignLimit: { type: ["number", "null"] }
         messageDailyLimit: { type: ["number", "null"] }
@@ -1681,9 +1683,10 @@ components:
         durationDays: { type: number, minimum: 1, maximum: 3660 }
     AdminUserQuotaUpdateInput:
       type: object
-      required: [dailyQuotaExempt]
+      required: [dailyQuotaExemptFrom, dailyQuotaExemptUntil]
       properties:
-        dailyQuotaExempt: { type: boolean }
+        dailyQuotaExemptFrom: { type: ["string", "null"], pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        dailyQuotaExemptUntil: { type: ["string", "null"], pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
     UsageMetric:
       type: object
       required: [used, limit, remaining, percentage]

@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   integer,
   jsonb,
   pgTable,
@@ -64,6 +65,9 @@ export const subscriptionsTable = pgTable("subscriptions", {
   ownerUserId: text("owner_user_id").notNull().unique(),
   plan: text("plan").notNull().default("plus"),
   dailyQuotaExempt: boolean("daily_quota_exempt").notNull().default(false),
+  dailyQuotaExemptDate: date("daily_quota_exempt_date", { mode: "string" }),
+  dailyQuotaExemptFrom: date("daily_quota_exempt_from", { mode: "string" }),
+  dailyQuotaExemptUntil: date("daily_quota_exempt_until", { mode: "string" }),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
