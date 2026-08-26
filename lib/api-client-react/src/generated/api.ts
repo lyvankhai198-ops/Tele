@@ -40,6 +40,7 @@ import type {
   AdminSystemSettings,
   AdminSystemSettingsInput,
   AdminUser,
+  AdminUserQuotaUpdateInput,
   AuthUser,
   CalendarItem,
   Campaign,
@@ -4201,5 +4202,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateAdminUserSubscriptionMutationOptions(options));
+    }
+
+export const getUpdateAdminUserQuotaUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/quota`
+}
+
+export const updateAdminUserQuota = async (userId: string,
+    adminUserQuotaUpdateInput: AdminUserQuotaUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<Subscription> => {
+
+  return customFetch<Subscription>(getUpdateAdminUserQuotaUrl(userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminUserQuotaUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminUserQuotaMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserQuota>>, TError,{userId: string;data: BodyType<AdminUserQuotaUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserQuota>>, TError,{userId: string;data: BodyType<AdminUserQuotaUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateAdminUserQuota'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminUserQuota>>, {userId: string;data: BodyType<AdminUserQuotaUpdateInput>}> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  updateAdminUserQuota(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminUserQuotaMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminUserQuota>>>
+    export type UpdateAdminUserQuotaMutationBody = BodyType<AdminUserQuotaUpdateInput>
+    export type UpdateAdminUserQuotaMutationError = ErrorType<void>
+
+    export const useUpdateAdminUserQuota = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserQuota>>, TError,{userId: string;data: BodyType<AdminUserQuotaUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminUserQuota>>,
+        TError,
+        {userId: string;data: BodyType<AdminUserQuotaUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminUserQuotaMutationOptions(options));
     }
 

@@ -883,6 +883,27 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: User not found }
         "409": { description: Subscription cannot be downgraded }
+  /admin/users/{userId}/quota:
+    patch:
+      operationId: updateAdminUserQuota
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminUserQuotaUpdateInput" }
+      responses:
+        "200":
+          description: User daily message quota exemption updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Subscription" }
+        "400": { description: Invalid quota setting }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: User not found }
 components:
   parameters:
     AccountId:
@@ -1344,12 +1365,13 @@ components:
         durationDays: { type: number }
     Subscription:
       type: object
-      required: [plan, startedAt, expiresAt, status, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]
+      required: [plan, startedAt, expiresAt, status, dailyQuotaExempt, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]
       properties:
         plan: { $ref: "#/components/schemas/PlanCode" }
         startedAt: { type: string, format: date-time }
         expiresAt: { type: ["string", "null"], format: date-time }
         status: { type: string, enum: [active, expired] }
+        dailyQuotaExempt: { type: boolean }
         accountLimit: { type: ["number", "null"] }
         campaignLimit: { type: ["number", "null"] }
         messageDailyLimit: { type: ["number", "null"] }
@@ -1657,6 +1679,11 @@ components:
       properties:
         plan: { $ref: "#/components/schemas/PlanCode" }
         durationDays: { type: number, minimum: 1, maximum: 3660 }
+    AdminUserQuotaUpdateInput:
+      type: object
+      required: [dailyQuotaExempt]
+      properties:
+        dailyQuotaExempt: { type: boolean }
     UsageMetric:
       type: object
       required: [used, limit, remaining, percentage]

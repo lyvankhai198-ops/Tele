@@ -16,6 +16,9 @@ import {
   UpdateAdminUserSubscriptionParams,
   UpdateAdminUserSubscriptionBody,
   UpdateAdminUserSubscriptionResponse,
+  UpdateAdminUserQuotaParams,
+  UpdateAdminUserQuotaBody,
+  UpdateAdminUserQuotaResponse,
   GetAdminSystemSettingsResponse,
   UpdateAdminSystemSettingsBody,
   UpdateAdminSystemSettingsResponse,
@@ -61,6 +64,7 @@ import {
   listAdminUsers,
   getAdminUser,
   updateSubscriptionByAdmin,
+  updateUserDailyQuotaExemption,
   revealAdminLicenseKey,
 } from "../lib/subscriptions";
 import { requireAdmin } from "../middlewares/authMiddleware";
@@ -390,6 +394,25 @@ router.patch("/admin/users/:userId/subscription", async (req, res): Promise<void
     return;
   }
   res.json(UpdateAdminUserSubscriptionResponse.parse(outcome.subscription));
+});
+
+router.patch("/admin/users/:userId/quota", async (req, res): Promise<void> => {
+  const params = UpdateAdminUserQuotaParams.safeParse(req.params);
+  const body = UpdateAdminUserQuotaBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    sendError(res, 400, "Thiết lập quota người dùng không hợp lệ.");
+    return;
+  }
+  const outcome = await updateUserDailyQuotaExemption({
+    userId: params.data.userId,
+    adminUserId: req.userId!,
+    dailyQuotaExempt: body.data.dailyQuotaExempt,
+  });
+  if (!outcome.ok) {
+    sendError(res, 404, "Không tìm thấy người dùng.");
+    return;
+  }
+  res.json(UpdateAdminUserQuotaResponse.parse(outcome.subscription));
 });
 
 router.get("/admin/purchase-settings", async (_req, res): Promise<void> => {

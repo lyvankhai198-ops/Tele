@@ -829,6 +829,7 @@ export const GetAccountSummaryResponse = zod.object({
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -899,6 +900,7 @@ export const GetUpgradeSummaryResponse = zod.object({
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1272,6 +1274,7 @@ export const ActivateLicenseResponse = zod.object({
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1595,6 +1598,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1624,6 +1628,7 @@ export const GetAdminUserResponse = zod.object({
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1654,6 +1659,28 @@ export const UpdateAdminUserSubscriptionResponse = zod.object({
   "startedAt": zod.coerce.date(),
   "expiresAt": zod.coerce.date().nullable(),
   "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
+  "accountLimit": zod.number().nullable(),
+  "campaignLimit": zod.number().nullable(),
+  "messageDailyLimit": zod.number().nullable(),
+  "userMessageDailyLimit": zod.number().nullable()
+})
+
+
+export const UpdateAdminUserQuotaParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const UpdateAdminUserQuotaBody = zod.object({
+  "dailyQuotaExempt": zod.boolean()
+})
+
+export const UpdateAdminUserQuotaResponse = zod.object({
+  "plan": zod.enum(['plus', 'pro', 'unlimited']),
+  "startedAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date().nullable(),
+  "status": zod.enum(['active', 'expired']),
+  "dailyQuotaExempt": zod.boolean(),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),

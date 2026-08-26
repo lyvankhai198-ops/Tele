@@ -18,6 +18,7 @@ import {
   useListAdminUsers,
   useGetAdminUser,
   useUpdateAdminUserSubscription,
+  useUpdateAdminUserQuota,
   getGetAdminOverviewQueryKey,
   getGetAdminUserQueryKey,
   getListAdminUsersQueryKey,
@@ -51,6 +52,11 @@ const copy = {
     limitCampaigns: "campaigns",
     limitMsgs: "msgs/day",
     noLimit: "Unlimited",
+    quotaExempt: "Daily message quota exempt",
+    quotaExemptDetail: "This user can send without the plan-wide daily message quota. Account and campaign limits remain unchanged.",
+    saveQuota: "Save quota access",
+    quotaSaving: "Saving...",
+    quotaSaved: "Daily quota access updated.",
     updateAction: "Update Plan",
     emptyTitle: "No users found",
     emptyDetail: "No users match your current search and filter criteria.",
@@ -92,6 +98,11 @@ const copy = {
     limitCampaigns: "chiến dịch",
     limitMsgs: "tin nhắn/ngày",
     noLimit: "Không giới hạn",
+    quotaExempt: "Miễn quota tin nhắn/ngày",
+    quotaExemptDetail: "User này được gửi không giới hạn theo quota tin nhắn/ngày của gói. Giới hạn tài khoản và chiến dịch vẫn giữ nguyên.",
+    saveQuota: "Lưu quyền quota",
+    quotaSaving: "Đang lưu...",
+    quotaSaved: "Đã cập nhật quyền quota tin nhắn/ngày.",
     updateAction: "Cập nhật Gói",
     emptyTitle: "Không tìm thấy",
     emptyDetail: "Không có người dùng nào phù hợp với bộ lọc hiện tại.",
@@ -163,6 +174,8 @@ export default function AdminUsersPage() {
   });
 
   const updateMutation = useUpdateAdminUserSubscription();
+  const quotaMutation = useUpdateAdminUserQuota();
+  const [formQuotaExempt, setFormQuotaExempt] = useState(false);
   const modalUser = selectedUser ?? editingUser;
 
   const handleOpenEdit = (user: AdminUser) => {
@@ -171,6 +184,31 @@ export default function AdminUsersPage() {
     setFormPlan(user.storedPlan === "unlimited" ? "unlimited" : "pro");
     setFormDuration("30");
     setFormConfirmed(false);
+    setFormQuotaExempt(user.subscription.dailyQuotaExempt);
+  };
+
+  const handleUpdateQuota = () => {
+    if (!editingUser) return;
+    quotaMutation.mutate(
+      {
+        userId: editingUser.id,
+        data: { dailyQuotaExempt: formQuotaExempt },
+      },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getGetAdminUserQueryKey(editingUser.id) });
+          void queryClient.invalidateQueries({ queryKey: getGetAdminOverviewQueryKey() });
+          setToastMessage({ text: text.quotaSaved });
+        },
+        onError: (err: any) => {
+          setToastMessage({
+            text: localizedErrorMessage(err, language, text.saveError),
+            isError: true,
+          });
+        },
+      },
+    );
   };
 
   const handleUpdateSubscription = () => {
@@ -303,6 +341,11 @@ export default function AdminUsersPage() {
                         label={user.subscription.status === "active" ? text.statusActive : text.statusExpired}
                       />
                     </div>
+                    {user.subscription.dailyQuotaExempt && (
+                      <div className="mt-1 inline-flex items-center rounded bg-[#ecfdf5] px-2 py-0.5 text-[11px] font-bold text-[#047857]">
+                        {text.quotaExempt}
+                      </div>
+                    )}
                     {user.subscription.expiresAt && (
                       <div className="text-[12px] font-medium text-[#64748b]">
                         Exp: {formatDate(user.subscription.expiresAt, language).split(" ")[0]}
@@ -414,6 +457,29 @@ export default function AdminUsersPage() {
               max={3660}
               step={1}
             />
+
+            <div className="rounded-2xl border border-[#dbeafe] bg-[#eff6ff] p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={formQuotaExempt}
+                  onChange={(e) => setFormQuotaExempt(e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-[#1a2b88]"
+                />
+                <span>
+                  <span className="block text-[14px] font-extrabold text-[#1e3a8a]">{text.quotaExempt}</span>
+                  <span className="mt-1 block text-[12px] font-medium leading-relaxed text-[#1e40af]">{text.quotaExemptDetail}</span>
+                </span>
+              </label>
+              <div className="mt-3 flex justify-end">
+                <QuietButton
+                  onClick={handleUpdateQuota}
+                  disabled={quotaMutation.isPending || formQuotaExempt === modalUser.subscription.dailyQuotaExempt}
+                >
+                  {quotaMutation.isPending ? text.quotaSaving : text.saveQuota}
+                </QuietButton>
+              </div>
+            </div>
 
             <label className="flex items-start gap-3 cursor-pointer group pt-2">
               <div className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-[#cbd5e1] bg-white group-hover:border-[#94a3b8] transition-colors">

@@ -773,6 +773,7 @@ export interface Subscription {
   /** @nullable */
   expiresAt: string | null;
   status: SubscriptionStatus;
+  dailyQuotaExempt: boolean;
   /** @nullable */
   accountLimit: number | null;
   /** @nullable */
@@ -1155,6 +1156,10 @@ export interface AdminSubscriptionUpdateInput {
      * @maximum 3660
      */
   durationDays: number;
+}
+
+export interface AdminUserQuotaUpdateInput {
+  dailyQuotaExempt: boolean;
 }
 
 export interface UsageMetric {

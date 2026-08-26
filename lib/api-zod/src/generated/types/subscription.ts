@@ -14,6 +14,7 @@ export interface Subscription {
   /** @nullable */
   expiresAt: Date | null;
   status: SubscriptionStatus;
+  dailyQuotaExempt: boolean;
   /** @nullable */
   accountLimit: number | null;
   /** @nullable */

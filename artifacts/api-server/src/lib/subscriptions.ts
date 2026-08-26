@@ -50,7 +50,7 @@ function planLimits(plan: PlanCode, catalog: PlanCatalog = PLAN_CATALOG) {
     return {
       campaignLimit: 10,
       messageDailyLimit: 200,
-        userMessageDailyLimit: 2000,
+      userMessageDailyLimit: 2000,
     };
   }
   return {
@@ -238,8 +238,10 @@ function toSubscriptionSummary(
     startedAt: subscription.startedAt,
     expiresAt: subscription.expiresAt,
     status: hasExpired ? "expired" as const : "active" as const,
+    dailyQuotaExempt: subscription.dailyQuotaExempt,
     accountLimit: planAccountLimit(plan, catalog),
     ...limits,
+    userMessageDailyLimit: subscription.dailyQuotaExempt ? null : limits.userMessageDailyLimit,
   };
 }
 
@@ -348,6 +350,7 @@ async function buildAdminUserRecords(catalog: PlanCatalog = PLAN_CATALOG): Promi
       id: "",
       ownerUserId: user.id,
       plan: "plus",
+      dailyQuotaExempt: false,
       startedAt: user.createdAt,
       expiresAt: null,
       updatedAt: user.createdAt,
@@ -471,6 +474,54 @@ export async function updateSubscriptionByAdmin(input: {
       },
     });
     return { ok: true as const, subscription: toSubscriptionSummary(next, now, catalog), action };
+  });
+}
+
+export type AdminUserQuotaUpdateResult =
+  | { ok: true; subscription: ReturnType<typeof toSubscriptionSummary> }
+  | { ok: false; reason: "not_found" };
+
+export async function updateUserDailyQuotaExemption(input: {
+  userId: string;
+  adminUserId: string;
+  dailyQuotaExempt: boolean;
+}): Promise<AdminUserQuotaUpdateResult> {
+  const catalog = await getConfiguredPlanCatalog();
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}))`);
+    const now = new Date();
+    const [user] = await tx.select({ id: appUsersTable.id }).from(appUsersTable)
+      .where(eq(appUsersTable.id, input.userId)).limit(1);
+    if (!user) return { ok: false as const, reason: "not_found" as const };
+
+    const [current] = await tx.select().from(subscriptionsTable)
+      .where(eq(subscriptionsTable.ownerUserId, input.userId)).limit(1);
+    const [next] = current
+      ? await tx.update(subscriptionsTable).set({
+        dailyQuotaExempt: input.dailyQuotaExempt,
+        updatedAt: now,
+      }).where(eq(subscriptionsTable.id, current.id)).returning()
+      : await tx.insert(subscriptionsTable).values({
+        ownerUserId: input.userId,
+        dailyQuotaExempt: input.dailyQuotaExempt,
+      }).returning();
+    if (!next) throw new Error("Unable to update user quota exemption");
+
+    await tx.insert(activityLogsTable).values({
+      ownerUserId: input.adminUserId,
+      event: "subscription.admin_quota_exemption_updated",
+      level: "success",
+      message: `${input.dailyQuotaExempt ? "Granted" : "Removed"} daily message quota exemption for user ${input.userId}`,
+      metadata: {
+        targetUserId: input.userId,
+        dailyQuotaExempt: input.dailyQuotaExempt,
+      },
+    });
+
+    return {
+      ok: true as const,
+      subscription: toSubscriptionSummary(next, now, catalog),
+    };
   });
 }
 

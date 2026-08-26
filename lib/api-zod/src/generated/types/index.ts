@@ -45,6 +45,7 @@ export * from './adminSystemSettingsInput';
 export * from './adminSystemSettingsInputPlanLimits';
 export * from './adminSystemSettingsPlanLimits';
 export * from './adminUser';
+export * from './adminUserQuotaUpdateInput';
 export * from './adminUserRole';
 export * from './adminUserUsage';
 export * from './authUser';
