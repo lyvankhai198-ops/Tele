@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import {
   Bell,
   FileText, 
@@ -130,11 +129,8 @@ export default function Dashboard() {
                          </div>
                       </div>
                        {localizedBody && (
-                         <div className="overflow-hidden rounded-lg border border-[#e2e8f0] bg-[#f8fafc] py-2" tabIndex={0} aria-label={localizedBody}>
-                           <div className="admin-notice-marquee flex w-max whitespace-nowrap text-[#334155] font-semibold" style={{ "--marquee-duration": `${Math.max(12, Math.min(42, localizedBody.length / 4))}s` } as CSSProperties}>
-                             <span className="pr-16">{localizedBody}</span>
-                             <span className="pr-16" aria-hidden="true">{localizedBody}</span>
-                          </div>
+                          <div className="rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-[#334155] font-semibold leading-relaxed" tabIndex={0} aria-label={localizedBody}>
+                            {localizedBody}
                         </div>
                       )}
                     </div>

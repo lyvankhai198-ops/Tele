@@ -151,30 +151,3 @@
   }
 }
 
-@keyframes admin-notice-marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
-.admin-notice-marquee {
-  animation: admin-notice-marquee var(--marquee-duration, 18s) linear infinite;
-}
-
-.admin-notice-marquee:hover,
-.admin-notice-marquee:focus-within {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .admin-notice-marquee {
-    animation: none;
-    transform: none;
-    width: 100% !important;
-    padding: 0 1rem;
-    white-space: normal !important;
-  }
-
-  .admin-notice-marquee > span[aria-hidden="true"] {
-    display: none;
-  }
-}
