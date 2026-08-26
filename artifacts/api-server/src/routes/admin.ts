@@ -79,7 +79,10 @@ import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
 import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
-import { resumeQuotaPausedCampaignsAfterSettingsUpdate } from "../lib/campaigns";
+import {
+  pauseCampaignsOverCurrentQuotaAfterSettingsUpdate,
+  resumeQuotaPausedCampaignsAfterSettingsUpdate,
+} from "../lib/campaigns";
 import { campaignSummary } from "../lib/campaigns";
 import { adminNotificationResponse } from "../lib/admin-notifications";
 import {
@@ -672,9 +675,8 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     return increased(previous.messageDailyLimit, next.messageDailyLimit)
       || increased(previous.userMessageDailyLimit, next.userMessageDailyLimit);
   });
-  if (quotaWasIncreased) {
-    await resumeQuotaPausedCampaignsAfterSettingsUpdate();
-  }
+  await pauseCampaignsOverCurrentQuotaAfterSettingsUpdate();
+  if (quotaWasIncreased) await resumeQuotaPausedCampaignsAfterSettingsUpdate();
   await recordActivity({
     ownerUserId: req.userId!,
     event: "system_settings.updated",

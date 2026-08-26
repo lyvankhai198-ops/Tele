@@ -63,6 +63,7 @@ export * from './campaign';
 export * from './campaignCloneDestinationReadiness';
 export * from './campaignCloneMode';
 export * from './campaignCloneReadiness';
+export * from './campaignDailyQuota';
 export * from './campaignDefaults';
 export * from './campaignInput';
 export * from './campaignTargetError';

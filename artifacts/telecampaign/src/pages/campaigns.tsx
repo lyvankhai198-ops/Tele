@@ -55,6 +55,9 @@ const copy = {
     cloneBtn: "Clone",
     deleteBtn: "Delete",
     errorsLabel: "Errors",
+    dailyQuotaLabel: "Today",
+    dailyQuotaValue: (used: number, limit: number) => `${used}/${limit}`,
+    dailyQuotaUnlimited: (used: number) => `${used} sent · Unlimited`,
     emptyFilterTitle: "No campaigns found",
     emptyFilterDetail: "Try changing the search term or filter.",
     emptyTitle: "No campaigns yet",
@@ -98,6 +101,7 @@ const copy = {
     detailStatTotal: "Total",
     detailStatSent: "Sent",
     detailStatErrors: "Errors",
+    detailDailyQuota: "Today's campaign quota",
     detailRepeat: "Repeat:",
     detailRounds: "rounds",
     detailDelayRound: "Round delay:",
@@ -156,6 +160,9 @@ const copy = {
     cloneBtn: "Nhân bản",
     deleteBtn: "Xóa",
     errorsLabel: "Lỗi",
+    dailyQuotaLabel: "Hôm nay",
+    dailyQuotaValue: (used: number, limit: number) => `${used}/${limit}`,
+    dailyQuotaUnlimited: (used: number) => `${used} đã gửi · Không giới hạn`,
     emptyFilterTitle: "Không tìm thấy chiến dịch",
     emptyFilterDetail: "Hãy thay đổi từ khóa hoặc bộ lọc.",
     emptyTitle: "Chưa có chiến dịch",
@@ -199,6 +206,7 @@ const copy = {
     detailStatTotal: "Tổng gửi",
     detailStatSent: "Đã gửi",
     detailStatErrors: "Lỗi",
+    detailDailyQuota: "Quota chiến dịch hôm nay",
     detailRepeat: "Lặp:",
     detailRounds: "vòng",
     detailDelayRound: "Delay vòng:",
@@ -320,6 +328,14 @@ function statusLabel(status: string, c: (typeof copy)["en"] | (typeof copy)["vi"
 
 function isActive(status: string) {
   return status === "queued" || status === "running";
+}
+
+function campaignDailyQuotaLabel(
+  campaign: Campaign,
+  c: (typeof copy)["en"] | (typeof copy)["vi"],
+) {
+  const { limit, used } = campaign.dailyQuota;
+  return limit === null ? c.dailyQuotaUnlimited(used) : c.dailyQuotaValue(used, limit);
 }
 
 function resumesAfterDailyQuota(campaign: Campaign) {
@@ -681,6 +697,7 @@ export default function Campaigns() {
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] font-semibold text-[#64748b]">
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${isActive(campaign.status) ? "bg-[#eff6ff] text-[#0f172a]" : campaign.status === "paused" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#f1f5f9] text-[#64748b]"}`}>{statusLabel(campaign.status, c)}</span>
                             <span>{campaign.sentCount}/{campaign.targetCount}</span>
+                             <span className="rounded-full bg-[#eef6ff] px-2 py-1 text-[#1d4ed8]">{c.dailyQuotaLabel}: {campaignDailyQuotaLabel(campaign, c)}</span>
                             <span>OK {campaign.sentCount} · {c.errorsLabel} {campaign.failedCount}</span>
                           </div>
                         </div>
@@ -975,6 +992,10 @@ export default function Campaigns() {
               <Stat label={c.detailStatTotal} value={String(details.targetCount)} />
               <Stat label={c.detailStatSent} value={String(details.sentCount)} />
               <Stat label={c.detailStatErrors} value={String(details.failedCount)} />
+            </div>
+            <div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-[#1e3a8a]">
+              <span className="text-[11px] font-black uppercase tracking-wide text-[#1d4ed8]">{c.detailDailyQuota}</span>
+              <span className="mt-1 block text-[18px] font-black">{campaignDailyQuotaLabel(details, c)}</span>
             </div>
             <div className="rounded-xl bg-[#f8fafc] p-4 text-[#475569]">
               <p><b>{c.detailRepeat}</b> {details.repeatCount} {c.detailRounds}</p>

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CampaignCloneMode } from './campaignCloneMode';
+import type { CampaignDailyQuota } from './campaignDailyQuota';
 import type { CampaignTargetError } from './campaignTargetError';
 import type { CampaignTemplateMode } from './campaignTemplateMode';
 
@@ -42,6 +43,7 @@ export interface Campaign {
   targetCount: number;
   sentCount: number;
   failedCount: number;
+  dailyQuota: CampaignDailyQuota;
   destinationIds: string[];
   errors: CampaignTargetError[];
 }

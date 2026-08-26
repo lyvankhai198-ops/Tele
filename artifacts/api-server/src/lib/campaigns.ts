@@ -20,6 +20,7 @@ import { getSystemSettings } from "./system-settings";
 import { legacyScheduleOffsetMs } from "./campaign-schedule";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
 import {
+  getUserDailyQuotaUsage,
   releaseUserDailyQuota,
   reserveUserDailyQuota,
   type UserDailyQuotaReservation,
@@ -135,31 +136,14 @@ async function reserveCampaignDailyQuota(input: {
   timezone: string;
   reservedAt: Date;
 }): Promise<boolean> {
-  const dayStart = sql`date_trunc('day', ${input.reservedAt}::timestamptz AT TIME ZONE ${input.timezone}) AT TIME ZONE ${input.timezone}`;
-  const [sentUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
-    .where(and(
-      eq(campaignTargetsTable.campaignId, input.campaign.id),
-      eq(campaignTargetsTable.status, "sent"),
-      or(
-        gte(campaignTargetsTable.quotaReservedAt, dayStart),
-        and(
-          isNull(campaignTargetsTable.quotaReservedAt),
-          gte(campaignTargetsTable.sentAt, dayStart),
-        ),
-      ),
-    ));
-  const [reservedUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
-    .where(and(
-      eq(campaignTargetsTable.campaignId, input.campaign.id),
-      inArray(campaignTargetsTable.status, ["sending", "requires_review"]),
-      gte(campaignTargetsTable.quotaReservedAt, dayStart),
-    ));
-  const state = {
-    sentToday: sentUsage?.value ?? 0,
-    reservedToday: reservedUsage?.value ?? 0,
-  };
+  const state = await getCampaignDailyQuotaState({
+    campaignId: input.campaign.id,
+    timezone: input.timezone,
+    now: input.reservedAt,
+  });
   if (!canReserveDailyQuota(state, input.limit)) return false;
 
+  const dayStart = sql`date_trunc('day', ${input.reservedAt}::timestamptz AT TIME ZONE ${input.timezone}) AT TIME ZONE ${input.timezone}`;
   const [reserved] = await db.update(campaignTargetsTable).set({
     quotaReservedAt: input.reservedAt,
     updatedAt: input.reservedAt,
@@ -182,6 +166,37 @@ async function reserveCampaignDailyQuota(input: {
     { ...state, reservedToday: reservedAfterClaim?.value ?? state.reservedToday + 1 },
     input.limit,
   );
+}
+
+async function getCampaignDailyQuotaState(input: {
+  campaignId: string;
+  timezone: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const dayStart = sql`date_trunc('day', ${now}::timestamptz AT TIME ZONE ${input.timezone}) AT TIME ZONE ${input.timezone}`;
+  const [sentUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
+    .where(and(
+      eq(campaignTargetsTable.campaignId, input.campaignId),
+      eq(campaignTargetsTable.status, "sent"),
+      or(
+        gte(campaignTargetsTable.quotaReservedAt, dayStart),
+        and(
+          isNull(campaignTargetsTable.quotaReservedAt),
+          gte(campaignTargetsTable.sentAt, dayStart),
+        ),
+      ),
+    ));
+  const [reservedUsage] = await db.select({ value: count() }).from(campaignTargetsTable)
+    .where(and(
+      eq(campaignTargetsTable.campaignId, input.campaignId),
+      inArray(campaignTargetsTable.status, ["sending", "requires_review"]),
+      gte(campaignTargetsTable.quotaReservedAt, dayStart),
+    ));
+  return {
+    sentToday: sentUsage?.value ?? 0,
+    reservedToday: reservedUsage?.value ?? 0,
+  };
 }
 
 async function pauseForDailyQuota(
@@ -324,6 +339,8 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(input: {
 } = {}): Promise<number> {
   const pauseReasons = input.pauseReasons ?? DAILY_QUOTA_PAUSE_REASONS;
   const trigger = input.trigger ?? "system_settings_updated";
+  const settings = await getSystemSettings();
+  const timezone = settings.defaultTimezone.replace(/'/g, "");
   const candidates = await db.select({
     id: campaignsTable.id,
     ownerUserId: campaignsTable.ownerUserId,
@@ -341,6 +358,14 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(input: {
   for (const candidate of uniqueCandidates.values()) {
     const subscription = await getSubscription(candidate.ownerUserId);
     if (subscription.status !== "active") continue;
+    if (subscription.messageDailyLimit !== null) {
+      const usage = await getCampaignDailyQuotaState({ campaignId: candidate.id, timezone });
+      if (!canReserveDailyQuota(usage, subscription.messageDailyLimit)) continue;
+    }
+    if (subscription.userMessageDailyLimit !== null) {
+      const usage = await getUserDailyQuotaUsage({ ownerUserId: candidate.ownerUserId, timezone });
+      if (!canReserveDailyQuota({ sentToday: usage, reservedToday: 0 }, subscription.userMessageDailyLimit)) continue;
+    }
     const resumedAt = new Date();
     const [resumed] = await db.update(campaignsTable).set({
       status: "queued",
@@ -374,6 +399,101 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(input: {
   return resumedCount;
 }
 
+/**
+ * A lower setting takes effect before the next worker poll. Completed
+ * deliveries remain intact; only a pending delivery is marked as the durable
+ * auto-resume trigger and the campaign stops accepting new claims.
+ */
+export async function pauseCampaignsOverCurrentQuotaAfterSettingsUpdate(): Promise<number> {
+  const settings = await getSystemSettings();
+  const timezone = settings.defaultTimezone.replace(/'/g, "");
+  const activeCampaigns = await db.select().from(campaignsTable)
+    .where(inArray(campaignsTable.status, ["queued", "running"]));
+  const userQuotaReached = new Map<string, boolean>();
+  let pausedCount = 0;
+
+  for (const campaign of activeCampaigns) {
+    const subscription = await getSubscription(campaign.ownerUserId);
+    if (subscription.status !== "active") continue;
+
+    let quotaScope: "campaign" | "user" | null = null;
+    let limit: number | null = null;
+    if (subscription.messageDailyLimit !== null) {
+      const usage = await getCampaignDailyQuotaState({ campaignId: campaign.id, timezone });
+      if (!canReserveDailyQuota(usage, subscription.messageDailyLimit)) {
+        quotaScope = "campaign";
+        limit = subscription.messageDailyLimit;
+      }
+    }
+    if (!quotaScope && subscription.userMessageDailyLimit !== null) {
+      let reached = userQuotaReached.get(campaign.ownerUserId);
+      if (reached === undefined) {
+        const usage = await getUserDailyQuotaUsage({ ownerUserId: campaign.ownerUserId, timezone });
+        reached = !canReserveDailyQuota({ sentToday: usage, reservedToday: 0 }, subscription.userMessageDailyLimit);
+        userQuotaReached.set(campaign.ownerUserId, reached);
+      }
+      if (reached) {
+        quotaScope = "user";
+        limit = subscription.userMessageDailyLimit;
+      }
+    }
+    if (!quotaScope) continue;
+
+    const pauseReason = quotaScope === "user"
+      ? USER_DAILY_QUOTA_PAUSE_REASON
+      : DAILY_QUOTA_PAUSE_REASON;
+    const now = new Date();
+    const paused = await db.transaction(async (tx) => {
+      const [nextTarget] = await tx.select({ id: campaignTargetsTable.id })
+        .from(campaignTargetsTable)
+        .where(and(
+          eq(campaignTargetsTable.campaignId, campaign.id),
+          eq(campaignTargetsTable.status, "pending"),
+        ))
+        .orderBy(asc(campaignTargetsTable.nextAttemptAt))
+        .limit(1);
+      if (!nextTarget) return false;
+      const [trigger] = await tx.update(campaignTargetsTable).set({
+        lastError: pauseReason,
+        nextAttemptAt: null,
+        quotaReservedAt: null,
+        updatedAt: now,
+      }).where(and(
+        eq(campaignTargetsTable.id, nextTarget.id),
+        eq(campaignTargetsTable.status, "pending"),
+      )).returning({ id: campaignTargetsTable.id });
+      if (!trigger) return false;
+      const [pausedCampaign] = await tx.update(campaignsTable).set({
+        status: "paused",
+        updatedAt: now,
+      }).where(and(
+        eq(campaignsTable.id, campaign.id),
+        inArray(campaignsTable.status, ["queued", "running"]),
+      )).returning({ id: campaignsTable.id });
+      return Boolean(pausedCampaign);
+    });
+    if (!paused) continue;
+    pausedCount += 1;
+    await recordActivity({
+      ownerUserId: campaign.ownerUserId,
+      event: "campaign.paused.daily_quota_settings_reduced",
+      level: "warning",
+      campaignId: campaign.id,
+      message: quotaScope === "user"
+        ? `Daily user message limit of ${limit} reached after the settings update. Campaign will resume automatically on a new day.`
+        : `Daily message limit of ${limit} reached after the settings update. Campaign will resume automatically on a new day.`,
+      metadata: {
+        quotaScope,
+        campaignDailyMessageLimit: subscription.messageDailyLimit,
+        userMessageDailyLimit: subscription.userMessageDailyLimit,
+        automaticResume: true,
+        trigger: "system_settings_reduced",
+      },
+    });
+  }
+  return pausedCount;
+}
+
 export type CampaignCloneMode = "admin" | "user" | null;
 
 export function campaignCloneMode(campaign: Pick<typeof campaignsTable.$inferSelect, "ownerUserId" | "clonedFromCampaignId" | "clonedFromUserId">): CampaignCloneMode {
@@ -382,12 +502,34 @@ export function campaignCloneMode(campaign: Pick<typeof campaignsTable.$inferSel
 }
 
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
-  const targets = await db.select({
+  const [targets, subscription, settings] = await Promise.all([
+    db.select({
     target: campaignTargetsTable,
     destinationTitle: destinationsTable.title,
   }).from(campaignTargetsTable)
     .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .where(eq(campaignTargetsTable.campaignId, campaign.id));
+    .where(eq(campaignTargetsTable.campaignId, campaign.id)),
+    getSubscription(campaign.ownerUserId),
+    getSystemSettings(),
+  ]);
+  const timezone = settings.defaultTimezone;
+  const today = new Date();
+  const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const todayDate = dateFormatter.format(today);
+  const isToday = (value: Date | null) => Boolean(value && dateFormatter.format(value) === todayDate);
+  const sentToday = targets.filter(({ target }) => target.status === "sent" && (
+    isToday(target.quotaReservedAt) || (!target.quotaReservedAt && isToday(target.sentAt))
+  )).length;
+  const reservedToday = targets.filter(({ target }) =>
+    ["sending", "requires_review"].includes(target.status) && isToday(target.quotaReservedAt),
+  ).length;
+  const quotaUsed = sentToday + reservedToday;
+  const quotaLimit = subscription.messageDailyLimit;
   const nextPendingByDestination = new Map<string, typeof targets[number]>();
   for (const row of targets) {
     if (row.target.status !== "pending" || row.target.lastError || !row.target.nextAttemptAt) continue;
@@ -405,6 +547,13 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
     destinationIds: [...new Set(targets.map(({ target }) => target.destinationId))],
     sentCount: targets.filter(({ target }) => target.status === "sent").length,
     failedCount: targets.filter(({ target }) => ["failed", "requires_review"].includes(target.status)).length,
+    dailyQuota: {
+      limit: quotaLimit,
+      used: quotaLimit === null ? quotaUsed : Math.min(quotaUsed, quotaLimit),
+      remaining: quotaLimit === null ? null : Math.max(0, quotaLimit - quotaUsed),
+      sentToday,
+      reservedToday,
+    },
     errors: [...errorTargets, ...waitingTargets]
       .map(({ target, destinationTitle }) => ({
         destinationId: target.destinationId,

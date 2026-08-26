@@ -295,6 +295,16 @@ export const CampaignCloneMode = {
   user: 'user',
 } as const;
 
+export interface CampaignDailyQuota {
+  /** @nullable */
+  limit: number | null;
+  used: number;
+  /** @nullable */
+  remaining: number | null;
+  sentToday: number;
+  reservedToday: number;
+}
+
 export interface CampaignTargetError {
   destinationId: string;
   destinationTitle: string;
@@ -339,6 +349,7 @@ export interface Campaign {
   targetCount: number;
   sentCount: number;
   failedCount: number;
+  dailyQuota: CampaignDailyQuota;
   destinationIds: string[];
   errors: CampaignTargetError[];
 }
