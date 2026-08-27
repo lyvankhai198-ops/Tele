@@ -40,7 +40,8 @@ export type PageKey =
   | "admin-users"
   | "license-keys"
   | "admin-system-settings"
-  | "admin-operations";
+  | "admin-operations"
+  | "admin-active-groups";
 
 const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },

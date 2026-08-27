@@ -34,6 +34,7 @@ import AdminUserSupportPage from '@/pages/admin-user-support';
 import AdminLicenseKeysPage from '@/pages/admin-license-keys';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
+import AdminActiveGroupsPage from '@/pages/admin-active-groups';
 
 const queryClient = new QueryClient();
 
@@ -411,6 +412,7 @@ function Router() {
         <Route path="/admin/license-keys" component={() => <AdminRoute><AdminLicenseKeysPage /></AdminRoute>} />
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />
+        <Route path="/admin/active-groups" component={() => <AdminRoute><AdminActiveGroupsPage /></AdminRoute>} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>

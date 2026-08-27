@@ -784,6 +784,18 @@ paths:
               schema: { $ref: "#/components/schemas/AdminOverview" }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
+  /admin/active-groups:
+    get:
+      operationId: getAdminActiveGroupDirectory
+      tags: [admin]
+      responses:
+        "200":
+          description: Groups currently used by active campaigns
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminActiveGroupDirectory" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
   /admin/notifications:
     get:
       operationId: listAdminNotifications
@@ -1996,6 +2008,36 @@ components:
         activity:
           type: array
           items: { $ref: "#/components/schemas/AdminUserSupportActivity" }
+    AdminActiveGroupCampaign:
+      type: object
+      required: [id, name, ownerUsername, telegramAccountName, roundDelayMinSeconds, roundDelayMaxSeconds]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        ownerUsername: { type: string }
+        telegramAccountName: { type: string }
+        roundDelayMinSeconds: { type: number }
+        roundDelayMaxSeconds: { type: number }
+    AdminActiveGroup:
+      type: object
+      required: [id, title, username, telegramLink, kind, memberCount, campaigns]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        username: { type: ["string", "null"] }
+        telegramLink: { type: ["string", "null"] }
+        kind: { type: string }
+        memberCount: { type: ["number", "null"] }
+        campaigns:
+          type: array
+          items: { $ref: "#/components/schemas/AdminActiveGroupCampaign" }
+    AdminActiveGroupDirectory:
+      type: object
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/AdminActiveGroup" }
     AdminSubscriptionUpdateInput:
       type: object
       required: [plan, durationDays]

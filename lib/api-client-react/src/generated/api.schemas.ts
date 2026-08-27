@@ -1347,6 +1347,32 @@ export interface AdminUserSupport {
   activity: AdminUserSupportActivity[];
 }
 
+export interface AdminActiveGroupCampaign {
+  id: string;
+  name: string;
+  ownerUsername: string;
+  telegramAccountName: string;
+  roundDelayMinSeconds: number;
+  roundDelayMaxSeconds: number;
+}
+
+export interface AdminActiveGroup {
+  id: string;
+  title: string;
+  /** @nullable */
+  username: string | null;
+  /** @nullable */
+  telegramLink: string | null;
+  kind: string;
+  /** @nullable */
+  memberCount: number | null;
+  campaigns: AdminActiveGroupCampaign[];
+}
+
+export interface AdminActiveGroupDirectory {
+  groups: AdminActiveGroup[];
+}
+
 export interface AdminSubscriptionUpdateInput {
   plan: PlanCode;
   /**

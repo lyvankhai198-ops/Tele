@@ -23,6 +23,7 @@ import type {
   AccountSummary,
   ActivateLicenseInput,
   ActivityLog,
+  AdminActiveGroupDirectory,
   AdminCampaignCloneInput,
   AdminCampaignStatusInput,
   AdminLicenseKey,
@@ -3796,6 +3797,77 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminOverviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminActiveGroupDirectoryUrl = () => {
+
+
+
+
+  return `/api/admin/active-groups`
+}
+
+export const getAdminActiveGroupDirectory = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminActiveGroupDirectory> => {
+
+  return customFetch<AdminActiveGroupDirectory>(getGetAdminActiveGroupDirectoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminActiveGroupDirectoryQueryKey = () => {
+    return [
+    `/api/admin/active-groups`
+    ] as const;
+    }
+
+
+export const getGetAdminActiveGroupDirectoryQueryOptions = <TData = Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminActiveGroupDirectoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>> = ({ signal }) => getAdminActiveGroupDirectory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminActiveGroupDirectoryQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>>
+export type GetAdminActiveGroupDirectoryQueryError = ErrorType<void>
+
+
+
+export function useGetAdminActiveGroupDirectory<TData = Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminActiveGroupDirectory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminActiveGroupDirectoryQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

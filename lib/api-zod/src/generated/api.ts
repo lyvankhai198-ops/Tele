@@ -1549,6 +1549,26 @@ export const GetAdminOverviewResponse = zod.object({
 })
 
 
+export const GetAdminActiveGroupDirectoryResponse = zod.object({
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "username": zod.string().nullable(),
+  "telegramLink": zod.string().nullable(),
+  "kind": zod.string(),
+  "memberCount": zod.number().nullable(),
+  "campaigns": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "ownerUsername": zod.string(),
+  "telegramAccountName": zod.string(),
+  "roundDelayMinSeconds": zod.number(),
+  "roundDelayMaxSeconds": zod.number()
+}))
+}))
+})
+
+
 export const ListAdminNotificationsResponseItem = zod.object({
   "id": zod.string(),
   "title": zod.string(),

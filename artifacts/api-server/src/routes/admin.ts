@@ -29,6 +29,7 @@ import {
   UpdateAdminSystemSettingsBody,
   UpdateAdminSystemSettingsResponse,
   GetAdminOperationsResponse,
+  GetAdminActiveGroupDirectoryResponse,
   UpdateAdminCampaignStatusParams,
   UpdateAdminCampaignStatusBody,
   UpdateAdminCampaignStatusResponse,
@@ -80,6 +81,7 @@ import {
   revealAdminLicenseKey,
 } from "../lib/subscriptions";
 import { getAdminUserSupport, getAdminUserSupportCampaignTargets } from "../lib/admin-user-support";
+import { getAdminActiveGroupDirectory } from "../lib/admin-active-group-directory";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
@@ -115,6 +117,10 @@ router.use("/admin", requireAdmin);
 
 router.get("/admin/overview", async (_req, res): Promise<void> => {
   res.json(GetAdminOverviewResponse.parse(await getAdminOverview()));
+});
+
+router.get("/admin/active-groups", async (_req, res): Promise<void> => {
+  res.json(GetAdminActiveGroupDirectoryResponse.parse(await getAdminActiveGroupDirectory()));
 });
 
 router.get("/admin/notifications", async (_req, res): Promise<void> => {

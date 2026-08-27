@@ -54,6 +54,8 @@ const copy = {
     settingsDetail: "Thiết lập giới hạn, gửi tin và quyền truy cập toàn hệ thống.",
     operations: "Giám sát vận hành",
     operationsDetail: "Theo dõi Telegram, campaign, queue và dung lượng VPS.",
+    activeGroups: "Kho nhóm đang chạy",
+    activeGroupsDetail: "Tập trung các nhóm đang được campaign active sử dụng và delay đã cài.",
   }
 } as const;
 
@@ -66,6 +68,7 @@ export default function AdminDashboardPage() {
     { path: "/admin/license-keys", title: text.keys, detail: text.keysDetail, icon: KeyRound, tone: "warm" },
     { path: "/admin/system-settings", title: text.settings, detail: text.settingsDetail, icon: Settings2, tone: "purple" },
     { path: "/admin/operations", title: text.operations, detail: text.operationsDetail, icon: Activity, tone: "red" },
+    { path: "/admin/active-groups", title: text.activeGroups, detail: text.activeGroupsDetail, icon: UsersRound, tone: "blue" },
   ] as const;
 
   return (
