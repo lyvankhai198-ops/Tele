@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  CheckSquare,
   Copy,
   Eye,
   LoaderCircle,
@@ -9,25 +8,22 @@ import {
   Play,
   Plus,
   Search,
-  Square,
   Trash2,
 } from "lucide-react";
-import type { Campaign, Destination, MessageTemplate } from "@workspace/api-client-react";
+import type { Campaign, MessageTemplate } from "@workspace/api-client-react";
 import {
   deleteCampaign,
-  useCreateCampaign,
   useCloneCampaign,
-  useGetSystemDefaults,
   useGetCampaignCloneReadiness,
   useGetTelegramSavedMessage,
   useListCampaigns,
-  useListDestinations,
   useListMessageTemplates,
   useListTelegramAccounts,
   useListTelegramSavedMessages,
   useUpdateMessageTemplate,
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
+import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
 
@@ -256,33 +252,6 @@ const copy = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-type CampaignForm = {
-  name: string;
-  accountId: string;
-  templateId: string;
-  destinationIds: string[];
-  repeatCount: string;
-  roundDelayMinSeconds: string;
-  roundDelayMaxSeconds: string;
-  scheduleDate: string;
-  scheduleTime: string;
-};
-
-const emptyForm = (): CampaignForm => ({
-  name: "",
-  accountId: "",
-  templateId: "",
-  destinationIds: [],
-  repeatCount: "1",
-  roundDelayMinSeconds: "1",
-  roundDelayMaxSeconds: "3",
-  scheduleDate: "",
-  scheduleTime: "",
-});
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 function formatSchedule(value: Date | string | null, language: "en" | "vi") {
@@ -353,19 +322,6 @@ function resumesAfterDailyQuota(campaign: Campaign) {
   ));
 }
 
-function destinationLabel(
-  destination: Destination,
-  c: (typeof copy)["en"] | (typeof copy)["vi"],
-) {
-  if (destination.kind === "topic") {
-    return `${destination.parentTitle ?? "Telegram"} › ${destination.title}`;
-  }
-  if (destination.kind === "forum") {
-    return `${destination.title} › ${c.generalTopic}`;
-  }
-  return destination.title;
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -375,11 +331,8 @@ export default function Campaigns() {
 
   const campaigns = useListCampaigns();
   const accounts = useListTelegramAccounts();
-  const destinations = useListDestinations();
   const templates = useListMessageTemplates();
-  const createCampaign = useCreateCampaign();
   const cloneCampaign = useCloneCampaign();
-  const systemDefaults = useGetSystemDefaults();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
@@ -389,9 +342,6 @@ export default function Campaigns() {
   const [details, setDetails] = useState<Campaign | null>(null);
   const [templatePreview, setTemplatePreview] = useState<MessageTemplate | null>(null);
   const [forwardPreviewSource, setForwardPreviewSource] = useState<{ accountId: string; messageId: string } | null>(null);
-  const [form, setForm] = useState<CampaignForm>(emptyForm);
-  const [groupSearch, setGroupSearch] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [forwardCampaign, setForwardCampaign] = useState<Campaign | null>(null);
   const [forwardSourceMessageId, setForwardSourceMessageId] = useState("");
@@ -421,64 +371,25 @@ export default function Campaigns() {
     const needle = search.trim().toLowerCase();
     return (!needle || campaign.name.toLowerCase().includes(needle)) && (status === "all" || campaign.status === status);
   }), [campaigns.data, search, status]);
-  const accountDestinations = useMemo(() => {
-    const needle = groupSearch.trim().toLowerCase();
-    return (destinations.data ?? [])
-      .filter((destination) =>
-        destination.accountId === form.accountId
-        && (destination.canPost || Boolean(editingCampaign?.clonedFromCampaignId && form.destinationIds.includes(destination.id)))
-        && (!needle
-          || destination.title.toLowerCase().includes(needle)
-          || (destination.parentTitle ?? "").toLowerCase().includes(needle)
-          || (destination.username ?? "").toLowerCase().includes(needle)),
-      )
-      .sort((left, right) =>
-        destinationLabel(left, c).localeCompare(destinationLabel(right, c), language === "vi" ? "vi" : "en"),
-      );
-  }, [destinations.data, form.accountId, form.destinationIds, groupSearch, language, c, editingCampaign?.clonedFromCampaignId]);
-  const accountTemplates = useMemo(() => (templates.data ?? []).filter((template) =>
-    template.mode !== "forward"
-    || template.sourceAccountId === form.accountId
-    || Boolean(editingCampaign?.clonedFromCampaignId && template.id === form.templateId),
-  ), [templates.data, form.accountId, form.templateId, editingCampaign?.clonedFromCampaignId]);
-  const selectedTemplate = (templates.data ?? []).find((template) => template.id === form.templateId);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
 
   function openNew() {
-    const defaults = systemDefaults.data;
-    setForm({
-      ...emptyForm(),
-      roundDelayMinSeconds: String(defaults?.campaignDefaults.roundDelayMinSeconds ?? 1),
-      roundDelayMaxSeconds: String(defaults?.campaignDefaults.roundDelayMaxSeconds ?? 3),
-    });
-    setGroupSearch("");
-    setFormError(null);
     setEditingCampaign(null);
     setShowForm(true);
   }
 
   function openEdit(campaign: Campaign) {
-    const schedule = campaign.scheduledAt ? new Date(campaign.scheduledAt) : null;
     setEditingCampaign(campaign);
-    setForm({
-      name: campaign.name,
-      accountId: campaign.telegramAccountId ?? "",
-      templateId: campaign.templateId ?? "",
-      destinationIds: (destinations.data ?? [])
-        .filter((destination) => campaign.destinationIds.includes(destination.id)
-          && (destination.canPost || Boolean(campaign.clonedFromCampaignId)))
-        .map((destination) => destination.id),
-      repeatCount: String(campaign.repeatCount),
-      roundDelayMinSeconds: String(campaign.roundDelayMinSeconds),
-      roundDelayMaxSeconds: String(campaign.roundDelayMaxSeconds),
-      scheduleDate: schedule ? new Intl.DateTimeFormat("en-CA").format(schedule) : "",
-      scheduleTime: schedule ? schedule.toTimeString().slice(0, 5) : "",
-    });
-    setGroupSearch("");
-    setFormError(null);
     setShowForm(true);
+  }
+
+  async function handleFormSaved() {
+    await Promise.all([campaigns.refetch(), templates.refetch()]);
+    setShowForm(false);
+    setEditingCampaign(null);
+    setToast(editingCampaign ? c.toastUpdated : c.toastCreated);
   }
 
   function openClone(campaign: Campaign) {
@@ -486,106 +397,6 @@ export default function Campaigns() {
     setCloneSourceCampaign(campaign);
     setCloneTargetAccountId(preferredAccount?.id ?? "");
     setCloneError(null);
-  }
-
-  function changeAccount(accountId: string) {
-    setForm((current) => ({ ...current, accountId, templateId: "", destinationIds: [] }));
-  }
-
-  function toggleDestination(destinationId: string) {
-    setForm((current) => ({
-      ...current,
-      destinationIds: current.destinationIds.includes(destinationId)
-        ? current.destinationIds.filter((id) => id !== destinationId)
-        : [...current.destinationIds, destinationId],
-    }));
-  }
-
-  function toggleAllDestinations() {
-    const visibleIds = accountDestinations.map((destination) => destination.id);
-    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => form.destinationIds.includes(id));
-    setForm((current) => ({
-      ...current,
-      destinationIds: allVisibleSelected
-        ? current.destinationIds.filter((id) => !visibleIds.includes(id))
-        : [...new Set([...current.destinationIds, ...visibleIds])],
-    }));
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setFormError(null);
-    const values = [
-      Number(form.repeatCount),
-      Number(form.roundDelayMinSeconds),
-      Number(form.roundDelayMaxSeconds),
-    ];
-    if (!form.name.trim() || !form.accountId || !form.templateId || !form.destinationIds.length) {
-      setFormError(c.validationRequired);
-      return;
-    }
-    if (!values.every(Number.isInteger) || values.some((value) => value < 0) || values[0] < 1) {
-      setFormError(c.validationNumbers);
-      return;
-    }
-    if (values[1] > values[2]) {
-      setFormError(c.validationDelayOrder);
-      return;
-    }
-    let scheduledAt: string | null = null;
-    if (form.scheduleDate) {
-      const date = new Date(`${form.scheduleDate}T${form.scheduleTime || "00:00"}`);
-      if (Number.isNaN(date.getTime())) {
-        setFormError(c.validationSchedule);
-        return;
-      }
-      scheduledAt = date.toISOString();
-    }
-    try {
-      if (editingCampaign) {
-        const isAdminClonedCampaign = editingCampaign.cloneMode === "admin";
-        await updateStatus.mutateAsync({
-          campaignId: editingCampaign.id,
-          data: {
-            name: form.name.trim(),
-            ...(isAdminClonedCampaign ? {} : {
-              telegramAccountId: form.accountId,
-              templateId: form.templateId,
-            }),
-            destinationIds: form.destinationIds,
-            scheduledAt,
-            timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
-            repeatCount: values[0],
-            roundDelayMinSeconds: values[1],
-            roundDelayMaxSeconds: values[2],
-          },
-        });
-        await campaigns.refetch();
-        setShowForm(false);
-        setEditingCampaign(null);
-        setToast(c.toastUpdated);
-      } else {
-        await createCampaign.mutateAsync({
-          data: {
-          name: form.name.trim(),
-          content: selectedTemplate?.content ?? "",
-          telegramAccountId: form.accountId,
-          templateId: form.templateId,
-          destinationIds: form.destinationIds,
-          scheduledAt,
-          timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
-          repeatCount: values[0],
-          roundDelayMinSeconds: values[1],
-          roundDelayMaxSeconds: values[2],
-          },
-        });
-        await campaigns.refetch();
-        setShowForm(false);
-        setToast(c.toastCreated);
-      }
-    } catch (error) {
-      setFormError(localizedErrorMessage(error, language, c.genericError));
-    }
   }
 
   async function changeCampaignStatus(campaign: Campaign, nextStatus: "queued" | "paused") {
@@ -777,97 +588,14 @@ export default function Campaigns() {
       </div>
 
       {showForm && (
-        <Modal title={editingCampaign ? c.editBtn : c.modalTitle} onClose={() => setShowForm(false)} wide>
-          <form className="space-y-5" onSubmit={(event) => void submit(event)}>
-            <label className="block">
-              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldName}</span>
-              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="campaign-name" />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldAccount}</span>
-              <select value={form.accountId} onChange={(event) => changeAccount(event.target.value)} disabled={editingCampaign?.cloneMode === "admin"} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-account">
-                <option value="">{c.fieldAccountPlaceholder}</option>
-                {connectedAccounts.map((account) => <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>)}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldTemplate}</span>
-              <select value={form.templateId} onChange={(event) => setForm({ ...form, templateId: event.target.value })} disabled={!form.accountId || editingCampaign?.cloneMode === "admin"} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] disabled:bg-[#f8fafc]" data-testid="campaign-template">
-                <option value="">{c.fieldTemplatePlaceholder}</option>
-                {accountTemplates.map((template) => <option value={template.id} key={template.id}>{template.name}{template.mode === "forward" ? " · Forward" : ""}</option>)}
-              </select>
-              {editingCampaign?.cloneMode === "admin" && <span className="mt-2 block text-[12px] font-medium leading-relaxed text-[#64748b]">{c.clonedFieldsFixed}</span>}
-            </label>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[14px] font-bold text-[#0f172a]">{c.fieldDestinations}</span>
-                {form.accountId && (
-                  <button type="button" onClick={toggleAllDestinations} className="text-[12px] font-extrabold text-[#1d3bb8]">
-                    {accountDestinations.length && accountDestinations.every((item) => form.destinationIds.includes(item.id)) ? c.deselectAll : c.selectAll}
-                  </button>
-                )}
-              </div>
-              <div className="rounded-xl border border-[#e2e8f0] p-3">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
-                  <input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={c.searchGroupPlaceholder} className="h-10 w-full rounded-xl border border-[#e2e8f0] pl-9 pr-3 text-[14px] font-medium outline-none focus:border-[#1a2b88]" />
-                </div>
-                {!form.accountId
-                  ? <p className="px-1 py-4 text-[13px] font-medium leading-relaxed text-[#64748b]">{c.pickAccountHint}</p>
-                  : <div className="mt-2 max-h-40 divide-y divide-[#f1f5f9] overflow-y-auto">
-                      {accountDestinations.length
-                        ? accountDestinations.map((destination) => (
-                            <button type="button" key={destination.id} onClick={() => toggleDestination(destination.id)} className="flex w-full items-center gap-3 px-2 py-2.5 text-left">
-                              <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
-                              <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c)}</span>
-                              {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
-                               {!destination.canPost && editingCampaign?.clonedFromCampaignId && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]">Chưa xác minh</span>}
-                            </button>
-                          ))
-                        : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">{c.noGroupsHint}</p>}
-                    </div>}
-              </div>
-            </div>
-
-            <label className="block">
-              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldRepeatCount}</span>
-              <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{c.repeatCountHint}</span>
-              <input type="number" min="1" max="300" value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
-            </label>
-
-            <div className="border-t border-[#eef2f6] pt-5">
-              <p className="mb-4 text-[13px] font-medium text-[#64748b]">{c.delayBetweenRounds}</p>
-              <DelayFields
-                form={form}
-                setForm={setForm}
-                firstLabel={c.delayMinRoundLabel}
-                secondLabel={c.delayMaxRoundLabel}
-                firstKey="roundDelayMinSeconds"
-                secondKey="roundDelayMaxSeconds"
-                max={259200}
-                maxHint={c.delayMaxHint}
-              />
-            </div>
-
-            <div>
-              <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldSchedule}</span>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <input type="date" value={form.scheduleDate} onChange={(event) => setForm({ ...form, scheduleDate: event.target.value })} className="h-11 rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
-                <input type="time" value={form.scheduleTime} onChange={(event) => setForm({ ...form, scheduleTime: event.target.value })} className="h-11 rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
-              </div>
-            </div>
-
-            {formError && <p className="rounded-xl bg-[#fff1f2] px-3.5 py-3 text-[13px] font-semibold text-[#be123c]">{formError}</p>}
-
-            <PrimaryButton type="submit" disabled={createCampaign.isPending} onClick={() => undefined}>
-              {(createCampaign.isPending || updateStatus.isPending) && <LoaderCircle className="h-4 w-4 animate-spin" />}
-              {editingCampaign ? c.editBtn : c.createCampaignBtn}
-            </PrimaryButton>
-          </form>
-        </Modal>
+        <CampaignFormModal
+          editingCampaign={editingCampaign}
+          onClose={() => {
+            setShowForm(false);
+            setEditingCampaign(null);
+          }}
+          onSaved={handleFormSaved}
+        />
       )}
 
       {cloneSourceCampaign && (
@@ -1131,44 +859,6 @@ export default function Campaigns() {
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </AppLayout>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-function DelayFields({
-  form,
-  setForm,
-  firstLabel,
-  secondLabel,
-  firstKey,
-  secondKey,
-  max,
-  maxHint,
-}: {
-  form: CampaignForm;
-  setForm: (form: CampaignForm) => void;
-  firstLabel: string;
-  secondLabel: string;
-  firstKey: "roundDelayMinSeconds";
-  secondKey: "roundDelayMaxSeconds";
-  max: number;
-  maxHint: (max: number) => string;
-}) {
-  return (
-    <div className="space-y-4">
-      <label className="block">
-        <span className="mb-1.5 block text-[14px] font-bold text-[#0f172a]">{firstLabel}</span>
-        <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{maxHint(max)}</span>
-        <input type="number" min="0" max={max} value={form[firstKey]} onChange={(event) => setForm({ ...form, [firstKey]: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-[14px] font-bold text-[#0f172a]">{secondLabel}</span>
-        <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{maxHint(max)}</span>
-        <input type="number" min="0" max={max} value={form[secondKey]} onChange={(event) => setForm({ ...form, [secondKey]: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
-      </label>
-    </div>
   );
 }
 

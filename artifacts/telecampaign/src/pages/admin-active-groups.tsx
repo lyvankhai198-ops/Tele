@@ -2,16 +2,25 @@ import { useMemo, useState } from "react";
 import {
   getGetAdminActiveGroupDirectoryQueryKey,
   useGetAdminActiveGroupDirectory,
+  useListCampaigns,
+  useListDestinations,
+  useListTelegramAccounts,
   useSyncAdminGroupLibrary,
   type AdminActiveGroup,
+  type Campaign,
+  type Destination,
+  type TelegramAccount,
 } from "@workspace/api-client-react";
 import {
   ExternalLink,
   LoaderCircle,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
   Users,
 } from "lucide-react";
+import { CampaignFormModal, type CampaignFormPrefill } from "@/components/campaign-form-modal";
 import { AppLayout, EmptyState, Panel, SectionHeader } from "@/components/layout/AppLayout";
 
 const text = {
@@ -19,7 +28,6 @@ const text = {
   subtitle: "Chỉ lưu nhóm mới từ campaign đang chạy của tất cả user.",
   search: "Tìm theo tên nhóm hoặc username...",
   savedGroups: "Nhóm đã lưu",
-  activeRoundDelays: "Delay vòng đang chạy",
   noGroups: "Thư Viện Nhóm chưa có nhóm nào.",
   noGroupsDetail: "Đồng bộ thư viện để lấy nhóm từ các campaign đang chạy.",
   loading: "Đang tải danh sách nhóm...",
@@ -37,6 +45,20 @@ const text = {
   members: "thành viên",
   roundDelay: "Delay vòng",
   seconds: "giây",
+  accounts: "Tài khoản Telegram",
+  accountLoading: "Đang tải trạng thái tài khoản...",
+  joined: "Đã tham gia",
+  joinedNeedsReview: "Đã tham gia · chưa xác minh quyền gửi",
+  notJoined: "Chưa tham gia / chưa đồng bộ",
+  noAccounts: "Chưa có tài khoản Telegram nào.",
+  quickCreate: "Tạo nhanh",
+  createCampaign: "Tạo campaign",
+  needJoinedAccount: "Cần tài khoản đã tham gia và có quyền gửi",
+  configuredCampaigns: "Campaign đang dùng nhóm này",
+  noConfiguredCampaigns: "Chưa có campaign nào của admin dùng nhóm này.",
+  editCampaign: "Chỉnh sửa",
+  createdCampaign: "Đã tạo campaign từ nhóm.",
+  updatedCampaign: "Đã cập nhật campaign.",
 } as const;
 
 function groupMatches(group: AdminActiveGroup, needle: string): boolean {
@@ -49,7 +71,42 @@ function groupMatches(group: AdminActiveGroup, needle: string): boolean {
   return [...groupFields, ...delayFields].some((value) => value?.toLowerCase().includes(needle));
 }
 
-function GroupCard({ group }: { group: AdminActiveGroup }) {
+type GroupCardProps = {
+  group: AdminActiveGroup;
+  accounts: TelegramAccount[];
+  destinations: Destination[];
+  campaigns: Campaign[];
+  accountDataLoading: boolean;
+  onCreate: (group: AdminActiveGroup, delay?: AdminActiveGroup["roundDelays"][number], preferredAccountId?: string) => void;
+  onEdit: (campaign: Campaign) => void;
+};
+
+function GroupCard({
+  group,
+  accounts,
+  destinations,
+  campaigns,
+  accountDataLoading,
+  onCreate,
+  onEdit,
+}: GroupCardProps) {
+  const memberships = accounts.map((account) => ({
+    account,
+    destination: destinations.find((destination) =>
+      destination.accountId === account.id
+      && destination.telegramId === group.id
+      && destination.topicId === null,
+    ),
+  }));
+  const groupDestinationIds = new Set(memberships.flatMap(({ destination }) => destination ? [destination.id] : []));
+  const groupCampaigns = campaigns.filter((campaign) =>
+    campaign.destinationIds.some((destinationId) => groupDestinationIds.has(destinationId)),
+  );
+  const preferredAccountId = memberships.find(({ account, destination }) =>
+    account.status === "connected" && destination?.canPost,
+  )?.account.id;
+  const canQuickCreate = Boolean(preferredAccountId);
+
   return (
     <article
       className="rounded-2xl border border-[#e2e8f0] bg-white p-4 shadow-sm transition hover:border-[#bfdbfe] hover:shadow-md sm:p-5"
@@ -68,33 +125,122 @@ function GroupCard({ group }: { group: AdminActiveGroup }) {
             {group.memberCount !== null && <span>{group.memberCount.toLocaleString("vi-VN")} {text.members}</span>}
           </div>
         </div>
-        {group.telegramLink ? (
-          <a
-            href={group.telegramLink}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-1.5 text-[10px] font-extrabold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
-            data-testid={`link-admin-active-group-${group.id}`}
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => onCreate(group, group.roundDelays[0], preferredAccountId)}
+            disabled={!canQuickCreate}
+            title={canQuickCreate ? text.createCampaign : text.needJoinedAccount}
+            className="inline-flex items-center gap-1 rounded-lg bg-[#1d3bb8] px-2.5 py-1.5 text-[10px] font-extrabold text-white transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:bg-[#cbd5e1]"
+            data-testid={`button-create-campaign-from-group-${group.id}`}
           >
-            {text.openGroup}
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        ) : (
-          <span className="max-w-[145px] shrink-0 text-right text-[10px] font-semibold leading-tight text-[#94a3b8]">
-            {text.privateGroup}
-          </span>
-        )}
+            <Plus className="h-3 w-3" />
+            {text.createCampaign}
+          </button>
+          {group.telegramLink ? (
+            <a
+              href={group.telegramLink}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-1.5 text-[10px] font-extrabold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
+              data-testid={`link-admin-active-group-${group.id}`}
+            >
+              {text.openGroup}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : (
+            <span className="max-w-[145px] text-right text-[10px] font-semibold leading-tight text-[#94a3b8]">
+              {text.privateGroup}
+            </span>
+          )}
+        </div>
       </div>
 
-        {group.roundDelays.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-[#f1f5f9] pt-3">
-            {group.roundDelays.map((delay) => (
-              <span key={`${delay.minSeconds}-${delay.maxSeconds}`} className="text-[10px] font-extrabold text-[#1d4ed8]">
-                {text.roundDelay}: {delay.minSeconds}–{delay.maxSeconds} {text.seconds}
+      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.accounts}</p>
+        {accountDataLoading ? (
+          <p className="text-[11px] font-semibold text-[#64748b]">{text.accountLoading}</p>
+        ) : memberships.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {memberships.map(({ account, destination }) => (
+              <span
+                key={account.id}
+                className={`rounded-lg px-2 py-1 text-[10px] font-extrabold ${
+                  destination?.canPost
+                    ? "bg-[#ecfdf5] text-[#047857]"
+                    : destination
+                      ? "bg-[#fff7ed] text-[#c2410c]"
+                      : "bg-[#f1f5f9] text-[#64748b]"
+                }`}
+                data-testid={`group-account-status-${group.id}-${account.id}`}
+              >
+                {account.name}: {destination?.canPost ? text.joined : destination ? text.joinedNeedsReview : text.notJoined}
               </span>
             ))}
           </div>
+        ) : (
+          <p className="text-[11px] font-semibold text-[#64748b]">{text.noAccounts}</p>
         )}
+      </div>
+
+      {group.roundDelays.length > 0 && (
+        <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.roundDelay}</p>
+          <div className="flex flex-wrap gap-2">
+            {group.roundDelays.map((delay) => (
+              <div key={`${delay.minSeconds}-${delay.maxSeconds}`} className="inline-flex items-center gap-2 rounded-lg bg-[#eff6ff] px-2 py-1.5">
+                <span className="text-[10px] font-extrabold text-[#1d4ed8]">
+                  {delay.minSeconds}–{delay.maxSeconds} {text.seconds}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onCreate(group, delay, preferredAccountId)}
+                  disabled={!canQuickCreate}
+                  title={canQuickCreate ? text.quickCreate : text.needJoinedAccount}
+                  className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-extrabold text-[#1d4ed8] shadow-sm hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+                  data-testid={`button-quick-create-${group.id}-${delay.minSeconds}-${delay.maxSeconds}`}
+                >
+                  {text.quickCreate}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.configuredCampaigns}</p>
+        {groupCampaigns.length ? (
+          <div className="space-y-1.5">
+            {groupCampaigns.map((campaign) => {
+              const editable = campaign.status === "draft" || campaign.status === "paused";
+              return (
+                <div key={campaign.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#f8fafc] px-2.5 py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[11px] font-extrabold text-[#334155]">{campaign.name}</span>
+                    <span className="block text-[10px] font-semibold text-[#64748b]">
+                      {campaign.status} · {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {text.seconds}
+                    </span>
+                  </span>
+                  {editable && (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(campaign)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#1a2b88] hover:bg-[#eef2fa]"
+                      data-testid={`button-edit-campaign-from-group-${group.id}-${campaign.id}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      {text.editCampaign}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-[11px] font-semibold text-[#64748b]">{text.noConfiguredCampaigns}</p>
+        )}
+      </div>
     </article>
   );
 }
@@ -102,6 +248,11 @@ function GroupCard({ group }: { group: AdminActiveGroup }) {
 export default function AdminActiveGroupsPage() {
   const [search, setSearch] = useState("");
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+  const [feedbackIsError, setFeedbackIsError] = useState(false);
+  const [campaignForm, setCampaignForm] = useState<{
+    editingCampaign: Campaign | null;
+    prefill?: CampaignFormPrefill;
+  } | null>(null);
   const query = useGetAdminActiveGroupDirectory({
     query: {
       queryKey: getGetAdminActiveGroupDirectoryQueryKey(),
@@ -109,13 +260,20 @@ export default function AdminActiveGroupsPage() {
       refetchOnWindowFocus: true,
     },
   });
+  const accounts = useListTelegramAccounts();
+  const destinations = useListDestinations();
+  const campaigns = useListCampaigns();
   const syncLibrary = useSyncAdminGroupLibrary({
     mutation: {
       onSuccess: async (result) => {
         setSyncFeedback(result.addedCount > 0 ? text.syncAdded(result.addedCount) : text.syncNoNewGroup);
+        setFeedbackIsError(false);
         await query.refetch();
       },
-      onError: () => setSyncFeedback(text.syncFailed),
+      onError: () => {
+        setSyncFeedback(text.syncFailed);
+        setFeedbackIsError(true);
+      },
     },
   });
   const groups = query.data?.groups ?? [];
@@ -124,7 +282,30 @@ export default function AdminActiveGroupsPage() {
     () => groups.filter((group) => groupMatches(group, needle)),
     [groups, needle],
   );
-  const roundDelayCount = groups.reduce((total, group) => total + group.roundDelays.length, 0);
+
+  function openCreateCampaign(
+    group: AdminActiveGroup,
+    delay?: AdminActiveGroup["roundDelays"][number],
+    preferredAccountId?: string,
+  ) {
+    setCampaignForm({
+      editingCampaign: null,
+      prefill: {
+        destinationTelegramId: group.id,
+        destinationTitle: group.title,
+        roundDelayMinSeconds: delay?.minSeconds,
+        roundDelayMaxSeconds: delay?.maxSeconds,
+        preferredAccountId,
+      },
+    });
+  }
+
+  async function handleCampaignSaved() {
+    await Promise.all([campaigns.refetch(), destinations.refetch()]);
+    setCampaignForm(null);
+    setFeedbackIsError(false);
+    setSyncFeedback(campaignForm?.editingCampaign ? text.updatedCampaign : text.createdCampaign);
+  }
 
   return (
     <AppLayout activePage="admin-active-groups" title={text.title} subtitle={text.subtitle} hideUpgrade>
@@ -150,12 +331,12 @@ export default function AdminActiveGroupsPage() {
           )}
         />
         {syncFeedback && (
-          <p className={`-mt-4 text-[11px] font-bold ${syncLibrary.isError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
+          <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
             {syncFeedback}
           </p>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3">
           <Panel className="flex items-center gap-3 p-4">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eff6ff] text-[#2563eb]">
               <Users className="h-5 w-5" />
@@ -163,15 +344,6 @@ export default function AdminActiveGroupsPage() {
             <div>
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.savedGroups}</p>
               <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{groups.length}</p>
-            </div>
-          </Panel>
-          <Panel className="flex items-center gap-3 p-4">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#ecfdf5] text-[#059669]">
-              <RefreshCw className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.activeRoundDelays}</p>
-              <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{roundDelayCount}</p>
             </div>
           </Panel>
         </div>
@@ -210,8 +382,27 @@ export default function AdminActiveGroupsPage() {
         )}
         {!query.isLoading && !query.error && filteredGroups.length > 0 && (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {filteredGroups.map((group) => <GroupCard key={group.id} group={group} />)}
+            {filteredGroups.map((group) => (
+              <GroupCard
+                key={group.id}
+                group={group}
+                accounts={accounts.data ?? []}
+                destinations={destinations.data ?? []}
+                campaigns={campaigns.data ?? []}
+                accountDataLoading={accounts.isLoading || destinations.isLoading || campaigns.isLoading}
+                onCreate={openCreateCampaign}
+                onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
+              />
+            ))}
           </div>
+        )}
+        {campaignForm && (
+          <CampaignFormModal
+            editingCampaign={campaignForm.editingCampaign}
+            prefill={campaignForm.prefill}
+            onClose={() => setCampaignForm(null)}
+            onSaved={handleCampaignSaved}
+          />
         )}
       </div>
     </AppLayout>
