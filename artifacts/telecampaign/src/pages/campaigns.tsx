@@ -710,6 +710,7 @@ export default function Campaigns() {
                         <p>{account?.phone ?? account?.name ?? c.accountFallback}</p>
                         <p>{account?.name ?? "—"}</p>
                         <p>{c.scheduledLabel} {formatSchedule(campaign.scheduledAt, language)}</p>
+                        <p>{c.detailDelayRound} {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds}s</p>
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2">
                         <button onClick={() => setDetails(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] text-[14px] font-extrabold text-[#0f172a] hover:bg-[#f8fafc]"><Eye className="h-[17px] w-[17px]" />{c.detailsBtn}</button>
