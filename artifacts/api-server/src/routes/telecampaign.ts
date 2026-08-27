@@ -106,6 +106,7 @@ import {
   getSubscription,
   getTelegramAccountAllowance,
   getConfiguredPlanCatalog,
+  hasActivatedLicense,
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
@@ -560,7 +561,12 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
     return void sendError(res, 403, "Thư viện nhóm hiện không khả dụng cho người dùng.");
   }
 
-  const subscription = isAdmin ? null : await getSubscription(currentUserId(req));
+  const [subscription, activatedLicense] = isAdmin
+    ? [null, true] as const
+    : await Promise.all([
+      getSubscription(currentUserId(req)),
+      hasActivatedLicense(currentUserId(req)),
+    ]);
   const canOpenLinks = isAdmin || (
     subscription?.status === "active"
     && planMeetsGroupLibraryMinimum(subscription.plan, settings.groupLibraryMinimumJoinPlan)
@@ -569,7 +575,7 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
   res.json(GetGroupLibraryResponse.parse({
     groups: directory.groups.map((group) => ({
       ...group,
-      title: canOpenLinks ? group.title : "••••••••••",
+      title: activatedLicense ? group.title : "••••••••••",
       username: canOpenLinks ? group.username : null,
       telegramLink: canOpenLinks ? group.telegramLink : null,
     })),

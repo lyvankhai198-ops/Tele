@@ -308,6 +308,18 @@ export async function getSubscription(ownerUserId: string, currentTime?: Date) {
   return toSubscriptionSummary(existing, now, catalog, settings.defaultTimezone);
 }
 
+export async function hasActivatedLicense(ownerUserId: string): Promise<boolean> {
+  const [license] = await db.select({ id: licenseKeysTable.id })
+    .from(licenseKeysTable)
+    .where(and(
+      eq(licenseKeysTable.claimedBy, ownerUserId),
+      isNotNull(licenseKeysTable.claimedAt),
+      isNull(licenseKeysTable.revokedAt),
+    ))
+    .limit(1);
+  return Boolean(license);
+}
+
 export async function getTelegramAccountAllowance(ownerUserId: string) {
   const [subscription, accounts] = await Promise.all([
     getSubscription(ownerUserId),

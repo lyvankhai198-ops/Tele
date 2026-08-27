@@ -117,6 +117,8 @@ const workspaceText = {
   },
 } as const;
 
+const HIDDEN_GROUP_TITLE = "••••••••••";
+
 function groupMatches(group: AdminActiveGroup, needle: string): boolean {
   if (!needle) return true;
   const groupFields = [group.title, group.username, group.kind];
@@ -165,7 +167,7 @@ function GroupCard({
   numberLocale,
 }: GroupCardProps) {
   const isAdmin = mode === "admin";
-  const isGroupNameHidden = !isAdmin && !canOpenLinks;
+  const isGroupNameHidden = !isAdmin && group.title === HIDDEN_GROUP_TITLE;
   const memberships = accounts.map((account) => ({
     account,
     destination: destinations.find((destination) =>
