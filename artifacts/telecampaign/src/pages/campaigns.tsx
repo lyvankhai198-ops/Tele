@@ -19,6 +19,7 @@ import {
   useCloneCampaign,
   useGetSystemDefaults,
   useGetCampaignCloneReadiness,
+  useGetTelegramSavedMessage,
   useListCampaigns,
   useListDestinations,
   useListMessageTemplates,
@@ -107,6 +108,9 @@ const copy = {
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
+    detailLiveForwardContent: "Current content from Saved Messages",
+    detailLiveForwardLoading: "Loading the current Saved Message…",
+    detailLiveForwardUnavailable: "The current Saved Message could not be loaded. Check the Telegram account and message, then try again.",
     detailViewTemplate: "View template",
     detailTemplateContent: "Template content",
     detailForwardContent: "This template forwards the original saved message.",
@@ -213,6 +217,9 @@ const copy = {
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
+    detailLiveForwardContent: "Nội dung hiện tại từ Tin nhắn đã lưu",
+    detailLiveForwardLoading: "Đang tải nội dung Tin nhắn đã lưu hiện tại...",
+    detailLiveForwardUnavailable: "Không thể tải Tin nhắn đã lưu hiện tại. Hãy kiểm tra tài khoản Telegram và tin nhắn, sau đó thử lại.",
     detailViewTemplate: "Xem mẫu",
     detailTemplateContent: "Nội dung mẫu",
     detailForwardContent: "Mẫu này sẽ chuyển tiếp đúng tin nhắn gốc đã lưu.",
@@ -381,6 +388,7 @@ export default function Campaigns() {
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
   const [templatePreview, setTemplatePreview] = useState<MessageTemplate | null>(null);
+  const [forwardPreviewSource, setForwardPreviewSource] = useState<{ accountId: string; messageId: string } | null>(null);
   const [form, setForm] = useState<CampaignForm>(emptyForm);
   const [groupSearch, setGroupSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -396,6 +404,17 @@ export default function Campaigns() {
   const forwardSavedMessages = useListTelegramSavedMessages(forwardCampaign?.telegramAccountId ?? "", {
     query: { enabled: Boolean(forwardCampaign?.telegramAccountId) } as any,
   });
+  const liveForwardPreview = useGetTelegramSavedMessage(
+    forwardPreviewSource?.accountId ?? "",
+    forwardPreviewSource?.messageId ?? "",
+    {
+      query: {
+        enabled: Boolean(forwardPreviewSource?.accountId && forwardPreviewSource?.messageId),
+        refetchOnMount: "always",
+        staleTime: 0,
+      } as any,
+    },
+  );
 
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
   const listedCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) => {
@@ -1013,6 +1032,14 @@ export default function Campaigns() {
                    <button
                      type="button"
                      onClick={() => {
+                        setForwardPreviewSource(details.templateMode === "forward"
+                          && details.templateSourceAccountId
+                          && details.templateSourceMessageId
+                          ? {
+                              accountId: details.templateSourceAccountId,
+                              messageId: details.templateSourceMessageId,
+                            }
+                          : null);
                        setDetails(null);
                        setTemplatePreview(detailTemplate);
                      }}
@@ -1084,11 +1111,20 @@ export default function Campaigns() {
        {templatePreview && (
          <Modal
            title={templatePreview.name}
-           description={templatePreview.mode === "forward" ? c.detailForwardNote : c.detailTemplateContent}
-           onClose={() => setTemplatePreview(null)}
+            description={templatePreview.mode === "forward" ? c.detailLiveForwardContent : c.detailTemplateContent}
+            onClose={() => {
+              setTemplatePreview(null);
+              setForwardPreviewSource(null);
+            }}
          >
            <p className="whitespace-pre-wrap rounded-xl bg-[#f8fafc] p-4 text-[14px] font-medium leading-relaxed text-[#334155]">
-             {templatePreview.content || (templatePreview.mode === "forward" ? c.detailForwardContent : c.genericError)}
+              {templatePreview.mode !== "forward"
+                ? templatePreview.content || c.genericError
+                : !forwardPreviewSource
+                  ? c.detailForwardContent
+                  : liveForwardPreview.isLoading || liveForwardPreview.isFetching
+                    ? c.detailLiveForwardLoading
+                    : liveForwardPreview.data?.text || c.detailLiveForwardUnavailable}
            </p>
          </Modal>
        )}

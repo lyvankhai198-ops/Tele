@@ -248,6 +248,24 @@ paths:
                 items: { $ref: "#/components/schemas/TelegramSavedMessage" }
         "404": { description: Telegram account not found }
         "409": { description: Telegram account is not connected }
+  /telegram/accounts/{accountId}/saved-messages/{messageId}:
+    get:
+      operationId: getTelegramSavedMessage
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, pattern: "^[1-9][0-9]*$" }
+      responses:
+        "200":
+          description: Current saved message content from Telegram
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramSavedMessage" }
+        "404": { description: Telegram account or saved message not found }
+        "409": { description: Telegram account is not connected or Telegram could not be reached }
   /proxies:
     get:
       operationId: listProxies

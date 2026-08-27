@@ -1202,6 +1202,82 @@ export function useListTelegramSavedMessages<TData = Awaited<ReturnType<typeof l
 
 
 
+export const getGetTelegramSavedMessageUrl = (accountId: string,
+    messageId: string,) => {
+
+
+
+
+  return `/api/telegram/accounts/${accountId}/saved-messages/${messageId}`
+}
+
+export const getTelegramSavedMessage = async (accountId: string,
+    messageId: string, options?: Parameters<typeof customFetch>[1]): Promise<TelegramSavedMessage> => {
+
+  return customFetch<TelegramSavedMessage>(getGetTelegramSavedMessageUrl(accountId,messageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTelegramSavedMessageQueryKey = (accountId: string,
+    messageId: string,) => {
+    return [
+    `/api/telegram/accounts/${accountId}/saved-messages/${messageId}`
+    ] as const;
+    }
+
+
+export const getGetTelegramSavedMessageQueryOptions = <TData = Awaited<ReturnType<typeof getTelegramSavedMessage>>, TError = ErrorType<void>>(accountId: string,
+    messageId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramSavedMessage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTelegramSavedMessageQueryKey(accountId,messageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTelegramSavedMessage>>> = ({ signal }) => getTelegramSavedMessage(accountId,messageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: accountId !== null && accountId !== undefined && messageId !== null && messageId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTelegramSavedMessage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTelegramSavedMessageQueryResult = NonNullable<Awaited<ReturnType<typeof getTelegramSavedMessage>>>
+export type GetTelegramSavedMessageQueryError = ErrorType<void>
+
+
+
+export function useGetTelegramSavedMessage<TData = Awaited<ReturnType<typeof getTelegramSavedMessage>>, TError = ErrorType<void>>(
+ accountId: string,
+    messageId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramSavedMessage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTelegramSavedMessageQueryOptions(accountId,messageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListProxiesUrl = () => {
 
 

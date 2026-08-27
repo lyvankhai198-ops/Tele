@@ -24,6 +24,8 @@ import {
   GetCampaignCloneReadinessResponse,
   ListDestinationsResponse,
   ListMessageTemplatesResponse,
+  GetTelegramSavedMessageParams,
+  GetTelegramSavedMessageResponse,
   ListTelegramSavedMessagesParams,
   ListTelegramSavedMessagesResponse,
   ListTelegramAccountsResponse,
@@ -87,6 +89,7 @@ import {
   encryptSecret,
   getAccountClient,
   getTelegramProxyConfig,
+  getTelegramSavedMessage,
   isDevelopmentDemoTelegramAccount,
   isTelegramSessionRevoked,
   listTelegramSavedMessages,
@@ -1164,6 +1167,26 @@ router.get("/telegram/accounts/:accountId/saved-messages", async (req, res): Pro
     sendError(res, 409, isTelegramSessionRevoked(error)
       ? revokedTelegramSessionMessage
       : error instanceof Error ? error.message : "Không thể đồng bộ Tin nhắn đã lưu.");
+  }
+});
+
+router.get("/telegram/accounts/:accountId/saved-messages/:messageId", async (req, res): Promise<void> => {
+  const params = GetTelegramSavedMessageParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const account = await ownedTelegramAccount(params.data.accountId, currentUserId(req));
+  if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  if (!account.sessionEncrypted || account.status !== "connected") {
+    return void sendError(res, 409, "Tài khoản Telegram cần đăng nhập trước khi đồng bộ Tin nhắn đã lưu.");
+  }
+  try {
+    const message = await getTelegramSavedMessage(account.id, params.data.messageId);
+    if (!message) return void sendError(res, 404, "Tin nhắn đã lưu không còn tồn tại.");
+    res.json(GetTelegramSavedMessageResponse.parse(message));
+  } catch (error) {
+    req.log.warn({ err: error }, "Telegram saved message preview failed");
+    sendError(res, 409, isTelegramSessionRevoked(error)
+      ? revokedTelegramSessionMessage
+      : error instanceof Error ? error.message : "Không thể tải Tin nhắn đã lưu.");
   }
 });
 

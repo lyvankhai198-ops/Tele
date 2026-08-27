@@ -298,6 +298,22 @@ export const ListTelegramSavedMessagesResponseItem = zod.object({
 export const ListTelegramSavedMessagesResponse = zod.array(ListTelegramSavedMessagesResponseItem)
 
 
+export const getTelegramSavedMessagePathMessageIdRegExp = new RegExp('^[1-9][0-9]*$');
+
+
+export const GetTelegramSavedMessageParams = zod.object({
+  "accountId": zod.coerce.string(),
+  "messageId": zod.coerce.string().regex(getTelegramSavedMessagePathMessageIdRegExp)
+})
+
+export const GetTelegramSavedMessageResponse = zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "date": zod.coerce.date().nullable(),
+  "hasMedia": zod.boolean()
+})
+
+
 export const ListProxiesResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),

@@ -451,18 +451,44 @@ export async function syncAccountDestinations(accountId: string) {
   }
 }
 
+function toTelegramSavedMessage(message: any) {
+  if (!message?.id || !(message.message || message.media)) return null;
+  return {
+    id: String(message.id),
+    text: String(message.message || (message.media ? "Tin nhắn đa phương tiện" : "")),
+    date: message.date ? new Date(Number(message.date) * 1000) : null,
+    hasMedia: Boolean(message.media),
+  };
+}
+
 export async function listTelegramSavedMessages(accountId: string) {
   const { client, account } = await getAccountClient(accountId);
   try {
     const messages = await client.getMessages("me", { limit: 100 });
     return messages
-      .filter((message: any) => Boolean(message?.id) && Boolean(message.message || message.media))
-      .map((message: any) => ({
-        id: String(message.id),
-        text: String(message.message || (message.media ? "Tin nhắn đa phương tiện" : "")),
-        date: message.date ? new Date(Number(message.date) * 1000) : null,
-        hasMedia: Boolean(message.media),
-      }));
+      .map(toTelegramSavedMessage)
+      .filter((message): message is NonNullable<typeof message> => message !== null);
+  } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
+    throw error;
+  } finally {
+    await client.disconnect();
+  }
+}
+
+export async function getTelegramSavedMessage(accountId: string, sourceMessageId: string) {
+  const numericSourceMessageId = Number(sourceMessageId);
+  if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
+    throw new Error("The saved Telegram message ID is invalid");
+  }
+  const { client, account } = await getAccountClient(accountId);
+  try {
+    const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
+    return messages
+      .map(toTelegramSavedMessage)
+      .find((message): message is NonNullable<typeof message> => message !== null) ?? null;
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
       await invalidateTelegramSession(account.id);
