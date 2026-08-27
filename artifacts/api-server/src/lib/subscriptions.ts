@@ -40,6 +40,32 @@ function isPlanCode(value: string): value is PlanCode {
   return (PLAN_ORDER as readonly string[]).includes(value);
 }
 
+export function isActiveUnclaimedPlusTrial(
+  subscription: Pick<typeof subscriptionsTable.$inferSelect, "plan" | "startedAt" | "expiresAt"> | null | undefined,
+  hasClaimedLicense: boolean,
+  now = new Date(),
+): boolean {
+  return Boolean(
+    subscription
+    && !hasClaimedLicense
+    && subscription.plan === "plus"
+    && subscription.startedAt
+    && subscription.expiresAt
+    && subscription.expiresAt > now
+    && subscription.expiresAt.getTime() - subscription.startedAt.getTime() === TRIAL_DURATION_DAYS * DAY_MS,
+  );
+}
+
+export function canRedeemLicensePlan(
+  currentPlan: PlanCode | null,
+  licensePlan: PlanCode,
+  isTrialPlusActivation: boolean,
+): boolean {
+  if (!currentPlan) return true;
+  if (isTrialPlusActivation && licensePlan === "plus") return true;
+  return PLAN_ORDER.indexOf(licensePlan) > PLAN_ORDER.indexOf(currentPlan);
+}
+
 export function planAccountLimit(plan: PlanCode, catalog: PlanCatalog = PLAN_CATALOG): number | null {
   const item = catalog.find((entry) => entry.code === plan);
   return item ? item.accountLimit : 1;
@@ -584,7 +610,18 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
       .where(eq(subscriptionsTable.ownerUserId, ownerUserId)).limit(1);
     const hasActiveSubscription = Boolean(current && (!current.expiresAt || current.expiresAt > now));
     const currentPlan = hasActiveSubscription && current && isPlanCode(current.plan) ? current.plan : null;
-    if (currentPlan && PLAN_ORDER.indexOf(license.plan) <= PLAN_ORDER.indexOf(currentPlan)) {
+    const [claimedLicense] = current
+      ? await tx.select({ id: licenseKeysTable.id })
+        .from(licenseKeysTable)
+        .where(and(
+          eq(licenseKeysTable.claimedBy, ownerUserId),
+          isNotNull(licenseKeysTable.claimedAt),
+        ))
+        .limit(1)
+      : [];
+    const isTrialPlusActivation = isActiveUnclaimedPlusTrial(current, Boolean(claimedLicense), now)
+      && license.plan === "plus";
+    if (!canRedeemLicensePlan(currentPlan, license.plan, isTrialPlusActivation)) {
       return { ok: false as const, reason: "not_an_upgrade" as const };
     }
 
