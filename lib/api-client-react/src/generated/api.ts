@@ -59,6 +59,7 @@ import type {
   DashboardSummary,
   Destination,
   GetAdminUserSupportCampaignTargetsParams,
+  GroupLibraryAccess,
   HealthStatus,
   LegacyOwnerMappingInput,
   LegacyOwnerMigrationResult,
@@ -2703,6 +2704,148 @@ export function useGetSystemDefaults<TData = Awaited<ReturnType<typeof getSystem
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSystemDefaultsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetGroupLibraryAccessUrl = () => {
+
+
+
+
+  return `/api/group-library/access`
+}
+
+export const getGroupLibraryAccess = async ( options?: Parameters<typeof customFetch>[1]): Promise<GroupLibraryAccess> => {
+
+  return customFetch<GroupLibraryAccess>(getGetGroupLibraryAccessUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupLibraryAccessQueryKey = () => {
+    return [
+    `/api/group-library/access`
+    ] as const;
+    }
+
+
+export const getGetGroupLibraryAccessQueryOptions = <TData = Awaited<ReturnType<typeof getGroupLibraryAccess>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupLibraryAccess>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupLibraryAccessQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupLibraryAccess>>> = ({ signal }) => getGroupLibraryAccess({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupLibraryAccess>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupLibraryAccessQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupLibraryAccess>>>
+export type GetGroupLibraryAccessQueryError = ErrorType<void>
+
+
+
+export function useGetGroupLibraryAccess<TData = Awaited<ReturnType<typeof getGroupLibraryAccess>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupLibraryAccess>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupLibraryAccessQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetGroupLibraryUrl = () => {
+
+
+
+
+  return `/api/group-library`
+}
+
+export const getGroupLibrary = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminActiveGroupDirectory> => {
+
+  return customFetch<AdminActiveGroupDirectory>(getGetGroupLibraryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGroupLibraryQueryKey = () => {
+    return [
+    `/api/group-library`
+    ] as const;
+    }
+
+
+export const getGetGroupLibraryQueryOptions = <TData = Awaited<ReturnType<typeof getGroupLibrary>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupLibrary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGroupLibraryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGroupLibrary>>> = ({ signal }) => getGroupLibrary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGroupLibrary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGroupLibraryQueryResult = NonNullable<Awaited<ReturnType<typeof getGroupLibrary>>>
+export type GetGroupLibraryQueryError = ErrorType<void>
+
+
+
+export function useGetGroupLibrary<TData = Awaited<ReturnType<typeof getGroupLibrary>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGroupLibrary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGroupLibraryQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

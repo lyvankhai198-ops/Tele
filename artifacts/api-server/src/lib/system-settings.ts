@@ -14,6 +14,8 @@ export type ConfiguredPlanLimits = {
 
 export type SystemSettings = {
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
+  groupLibraryVisibleToUsers: boolean;
+  groupLibraryMinimumJoinPlan: "pro" | "unlimited";
   defaultAccountDailyLimit: number;
   campaignDefaults: {
     maxRetries: number;
@@ -27,6 +29,8 @@ export type SystemSettings = {
 
 type StoredSystemSettings = {
   planLimits?: Partial<Record<PlanCode, Partial<ConfiguredPlanLimits>>>;
+  groupLibraryVisibleToUsers?: unknown;
+  groupLibraryMinimumJoinPlan?: unknown;
   defaultAccountDailyLimit?: unknown;
   campaignDefaults?: Partial<SystemSettings["campaignDefaults"]>;
   registrationEnabled?: unknown;
@@ -40,6 +44,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     pro: { accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, userMessageDailyLimit: 30000 },
     unlimited: { accountLimit: null, campaignLimit: null, messageDailyLimit: null, userMessageDailyLimit: null },
   },
+  groupLibraryVisibleToUsers: false,
+  groupLibraryMinimumJoinPlan: "pro",
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
     maxRetries: 3,
@@ -105,6 +111,12 @@ function parseSettings(value: string | undefined): SystemSettings {
         pro: normalizedPlanLimits(planLimits.pro, DEFAULT_SYSTEM_SETTINGS.planLimits.pro),
         unlimited: normalizedPlanLimits(planLimits.unlimited, DEFAULT_SYSTEM_SETTINGS.planLimits.unlimited),
       },
+      groupLibraryVisibleToUsers: typeof raw.groupLibraryVisibleToUsers === "boolean"
+        ? raw.groupLibraryVisibleToUsers
+        : DEFAULT_SYSTEM_SETTINGS.groupLibraryVisibleToUsers,
+      groupLibraryMinimumJoinPlan: raw.groupLibraryMinimumJoinPlan === "unlimited"
+        ? "unlimited"
+        : DEFAULT_SYSTEM_SETTINGS.groupLibraryMinimumJoinPlan,
       defaultAccountDailyLimit: isFiniteInteger(raw.defaultAccountDailyLimit, 1, 100000)
         ? raw.defaultAccountDailyLimit
         : DEFAULT_SYSTEM_SETTINGS.defaultAccountDailyLimit,

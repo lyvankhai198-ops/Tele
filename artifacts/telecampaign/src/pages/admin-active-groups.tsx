@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
 import {
   getGetAdminActiveGroupDirectoryQueryKey,
+  getGetGroupLibraryQueryKey,
+  getListCampaignsQueryKey,
+  getListDestinationsQueryKey,
+  getListTelegramAccountsQueryKey,
   useGetAdminActiveGroupDirectory,
+  useGetGroupLibrary,
+  useGetGroupLibraryAccess,
   useListCampaigns,
   useListDestinations,
   useListTelegramAccounts,
@@ -65,6 +71,21 @@ const text = {
   updatedCampaign: "Đã cập nhật campaign.",
 } as const;
 
+const workspaceText = {
+  title: "Thư viện nhóm / Group library",
+  subtitle: "Khám phá các nhóm Telegram được chia sẻ từ campaign đang hoạt động.",
+  lockedTitle: "Cần nâng cấp để mở link nhóm",
+  lockedDetail: (plan: string) => `Gói hiện tại chưa đủ điều kiện. Nâng cấp lên ${plan.toUpperCase()} hoặc cao hơn để mở link Telegram. / Your current plan cannot open group links. Upgrade to ${plan.toUpperCase()} or higher to open Telegram links.`,
+  noGroups: "Chưa có nhóm nào trong thư viện. / No groups are available in the library yet.",
+  noGroupsDetail: "Vui lòng quay lại sau khi thư viện được cập nhật. / Please check back after the library is updated.",
+  loading: "Đang tải thư viện nhóm... / Loading group library...",
+  loadError: "Không thể tải thư viện nhóm. / Could not load group library.",
+  retry: "Thử lại / Retry",
+  search: "Tìm theo tên nhóm hoặc username... / Search group name or username...",
+  savedGroups: "Nhóm trong thư viện / Saved groups",
+  lockedButton: "Mở nhóm / Open group",
+} as const;
+
 function groupMatches(group: AdminActiveGroup, needle: string): boolean {
   if (!needle) return true;
   const groupFields = [group.title, group.username, group.kind];
@@ -83,6 +104,8 @@ type GroupCardProps = {
   accountDataLoading: boolean;
   onCreate: (group: AdminActiveGroup, delay?: AdminActiveGroup["roundDelays"][number], preferredAccountId?: string) => void;
   onEdit: (campaign: Campaign) => void;
+  mode: "admin" | "workspace";
+  canOpenLinks: boolean;
 };
 
 function GroupCard({
@@ -93,7 +116,10 @@ function GroupCard({
   accountDataLoading,
   onCreate,
   onEdit,
+  mode,
+  canOpenLinks,
 }: GroupCardProps) {
+  const isAdmin = mode === "admin";
   const memberships = accounts.map((account) => ({
     account,
     destination: destinations.find((destination) =>
@@ -130,7 +156,7 @@ function GroupCard({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          {group.telegramLink ? (
+          {group.telegramLink && (isAdmin || canOpenLinks) ? (
             <a
               href={group.telegramLink}
               target="_blank"
@@ -141,15 +167,25 @@ function GroupCard({
               {text.openGroup}
               <ExternalLink className="h-3 w-3" />
             </a>
-          ) : (
+          ) : isAdmin ? (
             <span className="max-w-[145px] text-right text-[10px] font-semibold leading-tight text-[#94a3b8]">
               {text.privateGroup}
             </span>
-          )}
+          ) : !canOpenLinks ? (
+            <button
+              type="button"
+              disabled
+              className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1.5 text-[10px] font-extrabold text-[#94a3b8]"
+              data-testid={`locked-link-group-${group.id}`}
+            >
+              {workspaceText.lockedButton}
+              <ExternalLink className="h-3 w-3" />
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+      {isAdmin && <div className="mt-3 border-t border-[#f1f5f9] pt-3">
         <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.accounts}</p>
         {accountDataLoading ? (
           <p className="text-[11px] font-semibold text-[#64748b]">{text.accountLoading}</p>
@@ -174,9 +210,9 @@ function GroupCard({
         ) : (
           <p className="text-[11px] font-semibold text-[#64748b]">{text.noAccounts}</p>
         )}
-      </div>
+      </div>}
 
-      {group.roundDelays.length > 0 && (
+      {isAdmin && group.roundDelays.length > 0 && (
         <div className="mt-3 border-t border-[#f1f5f9] pt-3">
           <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.roundDelay}</p>
           <div className="flex flex-wrap gap-2">
@@ -224,7 +260,7 @@ function GroupCard({
         </div>
       )}
 
-      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+      {isAdmin && <div className="mt-3 border-t border-[#f1f5f9] pt-3">
         <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.configuredCampaigns}</p>
         {groupCampaigns.length ? (
           <div className="space-y-1.5">
@@ -256,12 +292,13 @@ function GroupCard({
         ) : (
           <p className="text-[11px] font-semibold text-[#64748b]">{text.noConfiguredCampaigns}</p>
         )}
-      </div>
+      </div>}
     </article>
   );
 }
 
-export default function AdminActiveGroupsPage() {
+export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admin" | "workspace" }) {
+  const isAdmin = mode === "admin";
   const [search, setSearch] = useState("");
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [feedbackIsError, setFeedbackIsError] = useState(false);
@@ -272,13 +309,16 @@ export default function AdminActiveGroupsPage() {
   const query = useGetAdminActiveGroupDirectory({
     query: {
       queryKey: getGetAdminActiveGroupDirectoryQueryKey(),
+      enabled: isAdmin,
       refetchInterval: 30000,
       refetchOnWindowFocus: true,
     },
   });
-  const accounts = useListTelegramAccounts();
-  const destinations = useListDestinations();
-  const campaigns = useListCampaigns();
+  const groupLibraryAccess = useGetGroupLibraryAccess();
+  const workspaceQuery = useGetGroupLibrary({ query: { queryKey: getGetGroupLibraryQueryKey(), enabled: !isAdmin && groupLibraryAccess.data?.canView === true } });
+  const accounts = useListTelegramAccounts({ query: { queryKey: getListTelegramAccountsQueryKey(), enabled: isAdmin } });
+  const destinations = useListDestinations({ query: { queryKey: getListDestinationsQueryKey(), enabled: isAdmin } });
+  const campaigns = useListCampaigns({ query: { queryKey: getListCampaignsQueryKey(), enabled: isAdmin } });
   const syncLibrary = useSyncAdminGroupLibrary({
     mutation: {
       onSuccess: async (result) => {
@@ -292,7 +332,9 @@ export default function AdminActiveGroupsPage() {
       },
     },
   });
-  const groups = query.data?.groups ?? [];
+  const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
+  const directoryQuery = isAdmin ? query : workspaceQuery;
+  const pageText = isAdmin ? text : workspaceText;
   const needle = search.trim().toLowerCase();
   const filteredGroups = useMemo(
     () => groups.filter((group) => groupMatches(group, needle)),
@@ -324,13 +366,13 @@ export default function AdminActiveGroupsPage() {
   }
 
   return (
-    <AppLayout activePage="admin-active-groups" title={text.title} subtitle={text.subtitle} hideUpgrade>
+    <AppLayout activePage={isAdmin ? "admin-active-groups" : "group-library"} title={pageText.title} subtitle={pageText.subtitle} hideUpgrade={isAdmin}>
       <div className="space-y-6">
         <SectionHeader
-          eyebrow="Admin Center"
-          title={text.title}
-          detail={text.subtitle}
-          action={(
+          eyebrow={isAdmin ? "Admin Center" : "Workspace"}
+          title={pageText.title}
+          detail={pageText.subtitle}
+          action={isAdmin ? (
             <button
               type="button"
               onClick={() => {
@@ -344,9 +386,9 @@ export default function AdminActiveGroupsPage() {
               {syncLibrary.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {syncLibrary.isPending ? text.syncing : text.sync}
             </button>
-          )}
+          ) : undefined}
         />
-        {syncFeedback && (
+        {isAdmin && syncFeedback && (
           <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
             {syncFeedback}
           </p>
@@ -358,7 +400,7 @@ export default function AdminActiveGroupsPage() {
               <Users className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.savedGroups}</p>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{pageText.savedGroups}</p>
               <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{groups.length}</p>
             </div>
           </Panel>
@@ -370,33 +412,39 @@ export default function AdminActiveGroupsPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder={text.search}
+              placeholder={pageText.search}
               className="h-10 w-full rounded-xl border border-[#dbe2ea] pl-9 pr-3 text-[12px] font-semibold outline-none transition focus:border-[#1a2b88]"
               data-testid="input-search-admin-active-groups"
             />
           </label>
         </Panel>
 
-        {query.isLoading && (
-          <Panel className="p-10 text-center text-[13px] font-semibold text-[#64748b]">{text.loading}</Panel>
+        {!isAdmin && !groupLibraryAccess.data?.canOpenLinks && (
+          <Panel className="border-[#fde68a] bg-[#fffbeb] p-5">
+            <p className="font-extrabold text-[#92400e]">{workspaceText.lockedTitle}</p>
+            <p className="mt-1 text-[13px] font-medium leading-relaxed text-[#a16207]">{workspaceText.lockedDetail(groupLibraryAccess.data?.minimumJoinPlan ?? "pro")}</p>
+          </Panel>
         )}
-        {query.error && !query.isLoading && (
+        {directoryQuery.isLoading && (
+          <Panel className="p-10 text-center text-[13px] font-semibold text-[#64748b]">{pageText.loading}</Panel>
+        )}
+        {directoryQuery.error && !directoryQuery.isLoading && (
           <Panel className="p-8 text-center">
-            <p className="text-[13px] font-semibold text-[#be123c]">{text.loadError}</p>
+            <p className="text-[13px] font-semibold text-[#be123c]">{pageText.loadError}</p>
             <button
               type="button"
-              onClick={() => void query.refetch()}
+              onClick={() => void directoryQuery.refetch()}
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#1a2b88] px-3 py-2 text-[11px] font-extrabold text-white hover:bg-[#152473]"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              {text.retry}
+              {pageText.retry}
             </button>
           </Panel>
         )}
-        {!query.isLoading && !query.error && !filteredGroups.length && (
-          <EmptyState icon={Users} title={needle ? "Không tìm thấy nhóm phù hợp." : text.noGroups} detail={needle ? "" : text.noGroupsDetail} />
+        {!directoryQuery.isLoading && !directoryQuery.error && !filteredGroups.length && (
+          <EmptyState icon={Users} title={needle ? "Không tìm thấy nhóm phù hợp." : pageText.noGroups} detail={needle ? "" : pageText.noGroupsDetail} />
         )}
-        {!query.isLoading && !query.error && filteredGroups.length > 0 && (
+        {!directoryQuery.isLoading && !directoryQuery.error && filteredGroups.length > 0 && (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {filteredGroups.map((group) => (
               <GroupCard
@@ -408,11 +456,13 @@ export default function AdminActiveGroupsPage() {
                 accountDataLoading={accounts.isLoading || destinations.isLoading || campaigns.isLoading}
                 onCreate={openCreateCampaign}
                 onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
+                mode={mode}
+                canOpenLinks={groupLibraryAccess.data?.canOpenLinks === true}
               />
             ))}
           </div>
         )}
-        {campaignForm && (
+        {isAdmin && campaignForm && (
           <CampaignFormModal
             editingCampaign={campaignForm.editingCampaign}
             prefill={campaignForm.prefill}

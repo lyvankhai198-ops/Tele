@@ -14,7 +14,7 @@ import {
   Router as WouterRouter,
   Redirect,
 } from 'wouter';
-import { useGetUpgradeSummary } from '@workspace/api-client-react';
+import { useGetGroupLibraryAccess, useGetUpgradeSummary } from '@workspace/api-client-react';
 
 import Dashboard from '@/pages/dashboard';
 import Account from '@/pages/account';
@@ -383,6 +383,17 @@ function AdminRoute({ children }: { children: ReactNode }) {
   return user?.role === 'admin' ? <LanguageOverride language="vi">{children}</LanguageOverride> : <Redirect to="/dashboard" replace />;
 }
 
+function GroupLibraryRoute({ children }: { children: ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const access = useGetGroupLibraryAccess();
+  if (isLoading || access.isLoading) {
+    return <main className="grid min-h-screen place-items-center bg-[#0b1420] text-[#dce8f5]"><LoaderCircle className="h-6 w-6 animate-spin text-[#65b8f8]" /></main>;
+  }
+  if (!user) return <Redirect to="/login" replace />;
+  if (!access.data?.canView) return <Redirect to="/dashboard" replace />;
+  return user.role === "admin" ? children : <SubscriptionGate>{children}</SubscriptionGate>;
+}
+
 function Router() {
   return (
     <RoutedErrorBoundary>
@@ -398,6 +409,7 @@ function Router() {
         <Route path="/dashboard/templates" component={() => <WorkspaceRoute><Templates /></WorkspaceRoute>} />
         <Route path="/dashboard/campaigns" component={() => <WorkspaceRoute><Campaigns /></WorkspaceRoute>} />
         <Route path="/dashboard/proxy" component={() => <WorkspaceRoute><ProxyPage /></WorkspaceRoute>} />
+        <Route path="/group-library" component={() => <GroupLibraryRoute><AdminActiveGroupsPage mode="workspace" /></GroupLibraryRoute>} />
         <Route path="/dashboard/calendar" component={() => <WorkspaceRoute><Calendar /></WorkspaceRoute>} />
         <Route path="/dashboard/logs" component={() => <WorkspaceRoute><Logs /></WorkspaceRoute>} />
         <Route path="/dashboard/account" component={() => <WorkspaceRoute><Account /></WorkspaceRoute>} />
@@ -412,7 +424,7 @@ function Router() {
         <Route path="/admin/license-keys" component={() => <AdminRoute><AdminLicenseKeysPage /></AdminRoute>} />
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />
-        <Route path="/admin/active-groups" component={() => <AdminRoute><AdminActiveGroupsPage /></AdminRoute>} />
+        <Route path="/admin/active-groups" component={() => <AdminRoute><AdminActiveGroupsPage mode="admin" /></AdminRoute>} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
@@ -427,16 +439,16 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 function App() {
   return (
     <WouterRouter base={basePath}>
-      <AuthProvider>
-        <LanguageProvider>
-          <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <LanguageProvider>
             <TooltipProvider>
               <Router />
               <Toaster />
             </TooltipProvider>
-          </QueryClientProvider>
-        </LanguageProvider>
-      </AuthProvider>
+          </LanguageProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </WouterRouter>
   );
 }

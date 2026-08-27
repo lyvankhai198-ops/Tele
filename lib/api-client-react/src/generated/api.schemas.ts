@@ -933,14 +933,39 @@ export interface SystemDefaults {
   defaultTimezone: string;
 }
 
+export type GroupLibraryAccessMinimumJoinPlan = typeof GroupLibraryAccessMinimumJoinPlan[keyof typeof GroupLibraryAccessMinimumJoinPlan];
+
+
+export const GroupLibraryAccessMinimumJoinPlan = {
+  pro: 'pro',
+  unlimited: 'unlimited',
+} as const;
+
+export interface GroupLibraryAccess {
+  visible: boolean;
+  minimumJoinPlan: GroupLibraryAccessMinimumJoinPlan;
+  canView: boolean;
+  canOpenLinks: boolean;
+}
+
 export type AdminSystemSettingsPlanLimits = {
   plus: PlanLimitSettings;
   pro: PlanLimitSettings;
   unlimited: PlanLimitSettings;
 };
 
+export type AdminSystemSettingsGroupLibraryMinimumJoinPlan = typeof AdminSystemSettingsGroupLibraryMinimumJoinPlan[keyof typeof AdminSystemSettingsGroupLibraryMinimumJoinPlan];
+
+
+export const AdminSystemSettingsGroupLibraryMinimumJoinPlan = {
+  pro: 'pro',
+  unlimited: 'unlimited',
+} as const;
+
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
+  groupLibraryVisibleToUsers: boolean;
+  groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   /**
      * @minimum 1
      * @maximum 100000
@@ -962,8 +987,18 @@ export type AdminSystemSettingsInputPlanLimits = {
   unlimited: PlanLimitSettings;
 };
 
+export type AdminSystemSettingsInputGroupLibraryMinimumJoinPlan = typeof AdminSystemSettingsInputGroupLibraryMinimumJoinPlan[keyof typeof AdminSystemSettingsInputGroupLibraryMinimumJoinPlan];
+
+
+export const AdminSystemSettingsInputGroupLibraryMinimumJoinPlan = {
+  pro: 'pro',
+  unlimited: 'unlimited',
+} as const;
+
 export interface AdminSystemSettingsInput {
   planLimits: AdminSystemSettingsInputPlanLimits;
+  groupLibraryVisibleToUsers: boolean;
+  groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
   /**
      * @minimum 1
      * @maximum 100000

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { useGetGroupLibraryAccess } from "@workspace/api-client-react";
 
 export type PageKey =
   | "dashboard"
@@ -33,6 +34,7 @@ export type PageKey =
   | "settings"
   | "templates"
   | "proxy"
+  | "group-library"
   | "upgrade"
   | "admin"
   | "admin-overview"
@@ -43,7 +45,7 @@ export type PageKey =
   | "admin-operations"
   | "admin-active-groups";
 
-const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean }> = [
+const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean; groupLibraryOnly?: boolean }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
   { key: "account", label: "Account", icon: UserCircle, path: "/dashboard/account" },
   { key: "accounts", label: "Telegram Accounts", icon: UsersRound, path: "/dashboard/telegram-accounts" },
@@ -51,6 +53,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "templates", label: "Message templates", icon: FileText, path: "/dashboard/templates" },
   { key: "campaigns", label: "Campaigns", icon: Megaphone, path: "/dashboard/campaigns" },
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
+  { key: "group-library", label: "Group library", icon: Users, path: "/group-library", groupLibraryOnly: true },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
 ];
@@ -76,6 +79,7 @@ export function AppLayout({
   const [location, setLocation] = useLocation();
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
+  const groupLibraryAccess = useGetGroupLibraryAccess();
   const isAdminSection = location === "/admin" || location.startsWith("/admin/");
 
   function navigate(path: string) {
@@ -107,7 +111,10 @@ export function AppLayout({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
-          {navigation.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
+          {navigation.filter((item) => (
+            (!item.adminOnly || user?.role === "admin")
+            && (!item.groupLibraryOnly || groupLibraryAccess.data?.visible)
+          )).map((item) => {
             const Icon = item.icon;
             const selected = item.key === "admin"
               ? activePage === "admin" || activePage.startsWith("admin") || activePage === "license-keys"

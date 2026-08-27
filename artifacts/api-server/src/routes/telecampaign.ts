@@ -14,6 +14,8 @@ import {
   GetDashboardResponse,
   GetUpgradeSummaryResponse,
   GetSystemDefaultsResponse,
+  GetGroupLibraryAccessResponse,
+  GetGroupLibraryResponse,
   GetTelegramConfigResponse,
   ListActivityQueryParams,
   ListActivityResponse,
@@ -107,6 +109,7 @@ import {
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
+import { getAdminActiveGroupDirectory } from "../lib/admin-active-group-directory";
 import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
@@ -504,6 +507,71 @@ router.post("/upgrade/activate", async (req, res): Promise<void> => {
   res.json(ActivateLicenseResponse.parse({
     message: "Kích hoạt gói dịch vụ thành công",
     subscription: result.subscription,
+  }));
+});
+
+function planMeetsGroupLibraryMinimum(
+  plan: "plus" | "pro" | "unlimited",
+  minimumPlan: "pro" | "unlimited",
+): boolean {
+  return plan === "unlimited" || (minimumPlan === "pro" && plan === "pro");
+}
+
+async function requireGroupLibrarySubscription(req: any, res: any, next: any): Promise<void> {
+  // Administrators retain access to the directory even when their own
+  // subscription has expired.
+  if (req.authUser?.role === "admin") {
+    next();
+    return;
+  }
+  await requireActiveSubscription(req, res, next);
+}
+
+router.get("/group-library/access", async (req, res): Promise<void> => {
+  const settings = await getSystemSettings();
+  const isAdmin = req.authUser?.role === "admin";
+  if (isAdmin) {
+    res.json(GetGroupLibraryAccessResponse.parse({
+      visible: settings.groupLibraryVisibleToUsers,
+      minimumJoinPlan: settings.groupLibraryMinimumJoinPlan,
+      canView: true,
+      canOpenLinks: true,
+    }));
+    return;
+  }
+
+  const subscription = await getSubscription(currentUserId(req));
+  const canView = settings.groupLibraryVisibleToUsers;
+  const canOpenLinks = canView
+    && subscription.status === "active"
+    && planMeetsGroupLibraryMinimum(subscription.plan, settings.groupLibraryMinimumJoinPlan);
+  res.json(GetGroupLibraryAccessResponse.parse({
+    visible: settings.groupLibraryVisibleToUsers,
+    minimumJoinPlan: settings.groupLibraryMinimumJoinPlan,
+    canView,
+    canOpenLinks,
+  }));
+});
+
+router.get("/group-library", requireGroupLibrarySubscription, async (req, res): Promise<void> => {
+  const settings = await getSystemSettings();
+  const isAdmin = req.authUser?.role === "admin";
+  if (!isAdmin && !settings.groupLibraryVisibleToUsers) {
+    return void sendError(res, 403, "Thư viện nhóm hiện không khả dụng cho người dùng.");
+  }
+
+  const subscription = isAdmin ? null : await getSubscription(currentUserId(req));
+  const canOpenLinks = isAdmin || (
+    subscription?.status === "active"
+    && planMeetsGroupLibraryMinimum(subscription.plan, settings.groupLibraryMinimumJoinPlan)
+  );
+  const directory = await getAdminActiveGroupDirectory();
+  res.json(GetGroupLibraryResponse.parse({
+    groups: directory.groups.map((group) => ({
+      ...group,
+      username: canOpenLinks ? group.username : null,
+      telegramLink: canOpenLinks ? group.telegramLink : null,
+    })),
   }));
 });
 

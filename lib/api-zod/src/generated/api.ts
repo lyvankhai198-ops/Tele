@@ -999,6 +999,40 @@ export const GetSystemDefaultsResponse = zod.object({
 })
 
 
+export const GetGroupLibraryAccessResponse = zod.object({
+  "visible": zod.boolean(),
+  "minimumJoinPlan": zod.enum(['pro', 'unlimited']),
+  "canView": zod.boolean(),
+  "canOpenLinks": zod.boolean()
+})
+
+
+export const getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMin = 0;
+export const getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMax = 1;
+
+
+
+export const GetGroupLibraryResponse = zod.object({
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "username": zod.string().nullable(),
+  "telegramLink": zod.string().nullable(),
+  "kind": zod.string(),
+  "memberCount": zod.number().nullable(),
+  "roundDelays": zod.array(zod.object({
+  "minSeconds": zod.number(),
+  "maxSeconds": zod.number(),
+  "sentCount": zod.number(),
+  "errorCount": zod.number(),
+  "sampleCount": zod.number(),
+  "errorRate": zod.number().min(getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMin).max(getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMax).nullable(),
+  "isPreferred": zod.boolean()
+}))
+}))
+})
+
+
 export const getUpgradeSummaryResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getUpgradeSummaryResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
@@ -1109,6 +1143,8 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "userMessageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
+  "groupLibraryVisibleToUsers": zod.boolean(),
+  "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "defaultAccountDailyLimit": zod.number().min(1).max(getAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
@@ -1181,6 +1217,8 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
+  "groupLibraryVisibleToUsers": zod.boolean(),
+  "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMax),
@@ -1252,6 +1290,8 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
+  "groupLibraryVisibleToUsers": zod.boolean(),
+  "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),

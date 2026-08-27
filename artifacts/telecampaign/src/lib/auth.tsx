@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { localizedErrorMessage, type Language } from "@/lib/i18n";
 
 export type AuthUser = {
@@ -47,6 +48,7 @@ async function authRequest<T>(path: string, language: Language, init?: RequestIn
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -70,24 +72,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify({ username, password, confirmPassword }),
     });
+    queryClient.clear();
     setUser(currentUser);
-  }, []);
+  }, [queryClient]);
 
   const login = useCallback(async (username: string, password: string) => {
     const currentUser = await authRequest<AuthUser>("/login", currentLanguage(), {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
+    queryClient.clear();
     setUser(currentUser);
-  }, []);
+  }, [queryClient]);
 
   const logout = useCallback(async () => {
     try {
       await authRequest<void>("/logout", currentLanguage(), { method: "POST" });
     } finally {
+      queryClient.clear();
       setUser(null);
     }
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo(() => ({ user, isLoading, register, login, logout }), [isLoading, login, logout, register, user]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

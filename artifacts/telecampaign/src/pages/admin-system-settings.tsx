@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminSystemSettingsQueryKey,
+  getGetGroupLibraryAccessQueryKey,
   type AdminSystemSettings,
   type PlanLimitSettings,
   useGetAdminSystemSettings,
@@ -35,6 +36,10 @@ const copy = {
     registration: "Allow new user registration",
     maintenance: "Maintenance mode",
     maintenanceHint: "Non-admin users cannot access their workspace while maintenance mode is enabled.",
+    groupLibrary: "Group library access",
+    groupLibraryHint: "Show the shared group directory to users. The selected plan controls who can open Telegram links.",
+    groupLibraryVisible: "Show group library to users / Hiển thị thư viện nhóm cho user",
+    groupLibraryMinimumPlan: "Minimum plan to open links / Gói tối thiểu để mở link",
     timezone: "Default timezone",
     timezoneHint: "Used when a new campaign does not provide its own timezone.",
     save: "Save system settings",
@@ -66,6 +71,10 @@ const copy = {
     registration: "Cho phép đăng ký user mới",
     maintenance: "Chế độ bảo trì",
     maintenanceHint: "User không phải admin không thể truy cập workspace khi bật chế độ bảo trì.",
+    groupLibrary: "Quyền truy cập Thư viện nhóm",
+    groupLibraryHint: "Hiển thị thư mục nhóm dùng chung cho user. Gói được chọn quyết định ai có thể mở link Telegram.",
+    groupLibraryVisible: "Hiển thị thư viện nhóm cho user / Show group library to users",
+    groupLibraryMinimumPlan: "Gói tối thiểu để mở link / Minimum plan to open links",
     timezone: "Múi giờ mặc định",
     timezoneHint: "Dùng khi campaign mới không chỉ định múi giờ riêng.",
     save: "Lưu cấu hình",
@@ -163,6 +172,7 @@ export default function AdminSystemSettingsPage() {
       onSuccess: (next) => {
         setForm(next);
         void queryClient.invalidateQueries({ queryKey: getGetAdminSystemSettingsQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetGroupLibraryAccessQueryKey() });
         setToast({ message: text.saved });
       },
       onError: (error) => setToast({ message: localizedErrorMessage(error, language, text.failed), error: true }),
@@ -216,6 +226,21 @@ export default function AdminSystemSettingsPage() {
         <Panel className="p-5 sm:p-7">
           <SectionHeader eyebrow="Safety" title={text.access} detail={text.maintenanceHint} />
           <div className="space-y-3">
+            <div className="rounded-2xl border border-[#e7edf4] p-4">
+              <p className="text-[13px] font-extrabold text-[#0f172a]">{text.groupLibrary}</p>
+              <p className="mt-1 text-[12px] font-medium text-[#64748b]">{text.groupLibraryHint}</p>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="flex-1"><p className="text-[12px] font-bold text-[#475569]">{text.groupLibraryVisible}</p></div>
+                <Toggle checked={form.groupLibraryVisibleToUsers} onChange={() => setForm({ ...form, groupLibraryVisibleToUsers: !form.groupLibraryVisibleToUsers })} label={text.groupLibraryVisible} />
+              </div>
+              <label className="mt-4 block">
+                <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.groupLibraryMinimumPlan}</span>
+                <select value={form.groupLibraryMinimumJoinPlan} onChange={(event) => setForm({ ...form, groupLibraryMinimumJoinPlan: event.target.value as typeof form.groupLibraryMinimumJoinPlan })} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-bold outline-none focus:border-[#1a2b88]">
+                  <option value="pro">PRO</option>
+                  <option value="unlimited">UNLIMITED</option>
+                </select>
+              </label>
+            </div>
             <div className="flex items-center gap-4 rounded-2xl border border-[#e7edf4] p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef2fa] text-[#1a2b88]"><Check className="h-5 w-5" /></span><div className="flex-1"><p className="text-[13px] font-extrabold text-[#0f172a]">{text.registration}</p></div><Toggle checked={form.registrationEnabled} onChange={() => setForm({ ...form, registrationEnabled: !form.registrationEnabled })} label={text.registration} /></div>
             <div className={`flex items-center gap-4 rounded-2xl border p-4 ${form.maintenanceMode ? "border-[#fecdd3] bg-[#fff1f2]" : "border-[#e7edf4]"}`}><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff1f2] text-[#e11d48]"><ShieldAlert className="h-5 w-5" /></span><div className="flex-1"><p className="text-[13px] font-extrabold text-[#0f172a]">{text.maintenance}</p><p className="mt-1 text-[12px] font-medium text-[#64748b]">{text.maintenanceHint}</p></div><Toggle checked={form.maintenanceMode} onChange={() => setForm({ ...form, maintenanceMode: !form.maintenanceMode })} label={text.maintenance} /></div>
             {form.maintenanceMode && <div className="flex gap-2 rounded-xl border border-[#fecdd3] bg-[#fff7f8] p-3 text-[12px] font-semibold text-[#be123c]"><AlertTriangle className="h-4 w-4 shrink-0" />{text.maintenanceHint}</div>}

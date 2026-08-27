@@ -538,6 +538,30 @@ paths:
               schema: { $ref: "#/components/schemas/SystemDefaults" }
         "401": { description: Authentication is required }
         "503": { description: Ownership migration is pending }
+  /group-library/access:
+    get:
+      operationId: getGroupLibraryAccess
+      tags: [settings]
+      responses:
+        "200":
+          description: Current user's access to the shared group library
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupLibraryAccess" }
+        "401": { description: Authentication is required }
+  /group-library:
+    get:
+      operationId: getGroupLibrary
+      tags: [destinations]
+      responses:
+        "200":
+          description: Persisted Telegram groups visible to the current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminActiveGroupDirectory" }
+        "401": { description: Authentication is required }
+        "403": { description: Group library is not visible to users }
+        "503": { description: Ownership migration is pending }
   /upgrade:
     get:
       operationId: getUpgradeSummary
@@ -1639,9 +1663,17 @@ components:
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
+    GroupLibraryAccess:
+      type: object
+      required: [visible, minimumJoinPlan, canView, canOpenLinks]
+      properties:
+        visible: { type: boolean }
+        minimumJoinPlan: { type: string, enum: [pro, unlimited] }
+        canView: { type: boolean }
+        canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1650,6 +1682,8 @@ components:
             plus: { $ref: "#/components/schemas/PlanLimitSettings" }
             pro: { $ref: "#/components/schemas/PlanLimitSettings" }
             unlimited: { $ref: "#/components/schemas/PlanLimitSettings" }
+        groupLibraryVisibleToUsers: { type: boolean }
+        groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
@@ -1657,7 +1691,7 @@ components:
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminSystemSettingsInput:
       type: object
-      required: [planLimits, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1666,6 +1700,8 @@ components:
             plus: { $ref: "#/components/schemas/PlanLimitSettings" }
             pro: { $ref: "#/components/schemas/PlanLimitSettings" }
             unlimited: { $ref: "#/components/schemas/PlanLimitSettings" }
+        groupLibraryVisibleToUsers: { type: boolean }
+        groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }

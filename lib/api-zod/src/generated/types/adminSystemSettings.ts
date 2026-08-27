@@ -5,11 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminSystemSettingsGroupLibraryMinimumJoinPlan } from './adminSystemSettingsGroupLibraryMinimumJoinPlan';
 import type { AdminSystemSettingsPlanLimits } from './adminSystemSettingsPlanLimits';
 import type { CampaignDefaults } from './campaignDefaults';
 
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
+  groupLibraryVisibleToUsers: boolean;
+  groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   /**
      * @minimum 1
      * @maximum 100000
