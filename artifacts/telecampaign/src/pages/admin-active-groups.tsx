@@ -93,6 +93,18 @@ const workspaceText = {
     group: "Nhóm",
     forum: "Forum",
     members: "thành viên",
+    roundDelay: "Delay vòng",
+    seconds: "giây",
+    quickCreate: "Tạo nhanh",
+    needJoinedAccount: "Cần tài khoản đã tham gia và có quyền gửi",
+    preferredDelay: "Ưu tiên",
+    noDelayHistory: "Chưa có dữ liệu",
+    delayHistory: (errorRate: number, sampleCount: number) =>
+      `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(errorRate * 100)}% lỗi · ${sampleCount.toLocaleString("vi-VN")} lượt`,
+    delayOutcomeTitle: (sentCount: number, errorCount: number) =>
+      `${sentCount.toLocaleString("vi-VN")} thành công · ${errorCount.toLocaleString("vi-VN")} lỗi`,
+    createdCampaign: "Đã tạo campaign từ nhóm.",
+    updatedCampaign: "Đã cập nhật campaign.",
   },
   en: {
     title: "Group library",
@@ -114,6 +126,18 @@ const workspaceText = {
     group: "Group",
     forum: "Forum",
     members: "members",
+    roundDelay: "Round delay",
+    seconds: "sec",
+    quickCreate: "Quick create",
+    needJoinedAccount: "A joined account with posting permission is required",
+    preferredDelay: "Preferred",
+    noDelayHistory: "No history yet",
+    delayHistory: (errorRate: number, sampleCount: number) =>
+      `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(errorRate * 100)}% errors · ${sampleCount.toLocaleString("en-US")} deliveries`,
+    delayOutcomeTitle: (sentCount: number, errorCount: number) =>
+      `${sentCount.toLocaleString("en-US")} successful · ${errorCount.toLocaleString("en-US")} errors`,
+    createdCampaign: "Campaign created from this group.",
+    updatedCampaign: "Campaign updated.",
   },
 } as const;
 
@@ -146,6 +170,14 @@ type GroupCardProps = {
   lockedButtonLabel: string;
   hiddenGroupNameLabel: string;
   numberLocale: string;
+  roundDelayLabel: string;
+  secondsLabel: string;
+  quickCreateLabel: string;
+  needJoinedAccountLabel: string;
+  preferredDelayLabel: string;
+  noDelayHistoryLabel: string;
+  delayHistoryLabel: (errorRate: number, sampleCount: number) => string;
+  delayOutcomeTitleLabel: (sentCount: number, errorCount: number) => string;
 };
 
 function GroupCard({
@@ -165,6 +197,14 @@ function GroupCard({
   lockedButtonLabel,
   hiddenGroupNameLabel,
   numberLocale,
+  roundDelayLabel,
+  secondsLabel,
+  quickCreateLabel,
+  needJoinedAccountLabel,
+  preferredDelayLabel,
+  noDelayHistoryLabel,
+  delayHistoryLabel,
+  delayOutcomeTitleLabel,
 }: GroupCardProps) {
   const isAdmin = mode === "admin";
   const isGroupNameHidden = !isAdmin && group.title === HIDDEN_GROUP_TITLE;
@@ -267,9 +307,9 @@ function GroupCard({
         )}
       </div>}
 
-      {isAdmin && group.roundDelays.length > 0 && (
+      {group.roundDelays.length > 0 && (
         <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.roundDelay}</p>
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{roundDelayLabel}</p>
           <div className="flex flex-wrap gap-2">
             {group.roundDelays.map((delay) => (
               <div
@@ -281,37 +321,42 @@ function GroupCard({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-[10px] font-extrabold ${delay.isPreferred ? "text-[#047857]" : "text-[#1d4ed8]"}`}>
-                    {delay.minSeconds}–{delay.maxSeconds} {text.seconds}
+                    {delay.minSeconds}–{delay.maxSeconds} {secondsLabel}
                   </span>
                   {delay.isPreferred && (
                     <span className="rounded-full bg-[#dcfce7] px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wide text-[#047857]">
-                      {text.preferredDelay}
+                      {preferredDelayLabel}
                     </span>
                   )}
                 </div>
                 <div className="mt-1.5 flex items-center justify-between gap-2">
                   <span
                     className="text-[9px] font-bold text-[#64748b]"
-                    title={text.delayOutcomeTitle(delay.sentCount, delay.errorCount)}
+                    title={delayOutcomeTitleLabel(delay.sentCount, delay.errorCount)}
                   >
                     {delay.errorRate === null
-                      ? text.noDelayHistory
-                      : text.delayHistory(delay.errorRate, delay.sampleCount)}
+                      ? noDelayHistoryLabel
+                      : delayHistoryLabel(delay.errorRate, delay.sampleCount)}
                   </span>
                   <button
                     type="button"
                     onClick={() => onCreate(group, delay, preferredAccountId)}
                     disabled={!canQuickCreate}
-                    title={canQuickCreate ? text.quickCreate : text.needJoinedAccount}
+                    title={canQuickCreate ? quickCreateLabel : needJoinedAccountLabel}
                     className="shrink-0 rounded-md bg-white px-1.5 py-0.5 text-[9px] font-extrabold text-[#1d4ed8] shadow-sm hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
                     data-testid={`button-quick-create-${group.id}-${delay.minSeconds}-${delay.maxSeconds}`}
                   >
-                    {text.quickCreate}
+                    {quickCreateLabel}
                   </button>
                 </div>
               </div>
             ))}
           </div>
+          {!isAdmin && !accountDataLoading && !canQuickCreate && (
+            <p className="mt-2 text-[10px] font-semibold leading-relaxed text-[#64748b]" data-testid={`quick-create-requirement-${group.id}`}>
+              {needJoinedAccountLabel}
+            </p>
+          )}
         </div>
       )}
 
@@ -373,8 +418,9 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   });
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const workspaceQuery = useGetGroupLibrary({ query: { queryKey: getGetGroupLibraryQueryKey(), enabled: !isAdmin && groupLibraryAccess.data?.canView === true } });
-  const accounts = useListTelegramAccounts({ query: { queryKey: getListTelegramAccountsQueryKey(), enabled: isAdmin } });
-  const destinations = useListDestinations({ query: { queryKey: getListDestinationsQueryKey(), enabled: isAdmin } });
+  const userDataEnabled = isAdmin || groupLibraryAccess.data?.canView === true;
+  const accounts = useListTelegramAccounts({ query: { queryKey: getListTelegramAccountsQueryKey(), enabled: userDataEnabled } });
+  const destinations = useListDestinations({ query: { queryKey: getListDestinationsQueryKey(), enabled: userDataEnabled } });
   const campaigns = useListCampaigns({ query: { queryKey: getListCampaignsQueryKey(), enabled: isAdmin } });
   const syncLibrary = useSyncAdminGroupLibrary({
     mutation: {
@@ -416,10 +462,15 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   }
 
   async function handleCampaignSaved() {
-    await Promise.all([campaigns.refetch(), destinations.refetch()]);
+    await Promise.all([
+      destinations.refetch(),
+      ...(isAdmin ? [campaigns.refetch()] : []),
+    ]);
     setCampaignForm(null);
     setFeedbackIsError(false);
-    setSyncFeedback(campaignForm?.editingCampaign ? text.updatedCampaign : text.createdCampaign);
+    setSyncFeedback(campaignForm?.editingCampaign
+      ? (isAdmin ? text.updatedCampaign : localizedWorkspaceText.updatedCampaign)
+      : (isAdmin ? text.createdCampaign : localizedWorkspaceText.createdCampaign));
   }
 
   return (
@@ -446,6 +497,11 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           ) : undefined}
         />
         {isAdmin && syncFeedback && (
+          <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
+            {syncFeedback}
+          </p>
+        )}
+        {!isAdmin && syncFeedback && (
           <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
             {syncFeedback}
           </p>
@@ -522,11 +578,19 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 lockedButtonLabel={localizedWorkspaceText.lockedButton}
                 hiddenGroupNameLabel={localizedWorkspaceText.hiddenGroupName}
                 numberLocale={language === "en" ? "en-US" : "vi-VN"}
+                roundDelayLabel={isAdmin ? text.roundDelay : localizedWorkspaceText.roundDelay}
+                secondsLabel={isAdmin ? text.seconds : localizedWorkspaceText.seconds}
+                quickCreateLabel={isAdmin ? text.quickCreate : localizedWorkspaceText.quickCreate}
+                needJoinedAccountLabel={isAdmin ? text.needJoinedAccount : localizedWorkspaceText.needJoinedAccount}
+                preferredDelayLabel={isAdmin ? text.preferredDelay : localizedWorkspaceText.preferredDelay}
+                noDelayHistoryLabel={isAdmin ? text.noDelayHistory : localizedWorkspaceText.noDelayHistory}
+                delayHistoryLabel={isAdmin ? text.delayHistory : localizedWorkspaceText.delayHistory}
+                delayOutcomeTitleLabel={isAdmin ? text.delayOutcomeTitle : localizedWorkspaceText.delayOutcomeTitle}
               />
             ))}
           </div>
         )}
-        {isAdmin && campaignForm && (
+        {campaignForm && (
           <CampaignFormModal
             editingCampaign={campaignForm.editingCampaign}
             prefill={campaignForm.prefill}
