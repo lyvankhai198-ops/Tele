@@ -1897,6 +1897,8 @@ export const GetAdminUserSupportResponse = zod.object({
   "scheduledAt": zod.coerce.date().nullable(),
   "timezone": zod.string(),
   "repeatCount": zod.number(),
+  "roundDelayMinSeconds": zod.number(),
+  "roundDelayMaxSeconds": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),

@@ -25,6 +25,8 @@ export interface AdminUserSupportCampaign {
   scheduledAt: Date | null;
   timezone: string;
   repeatCount: number;
+  roundDelayMinSeconds: number;
+  roundDelayMaxSeconds: number;
   dailyQuota: CampaignDailyQuota;
   destinationCount: number;
   deliveryCount: number;

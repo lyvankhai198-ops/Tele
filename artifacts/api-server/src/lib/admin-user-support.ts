@@ -84,6 +84,8 @@ export type AdminUserSupportRecord = {
     scheduledAt: Date | null;
     timezone: string;
     repeatCount: number;
+    roundDelayMinSeconds: number;
+    roundDelayMaxSeconds: number;
     dailyQuota: {
       limit: number | null;
       used: number;
@@ -191,6 +193,8 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       scheduledAt: campaignsTable.scheduledAt,
       timezone: campaignsTable.timezone,
       repeatCount: campaignsTable.repeatCount,
+       roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
+       roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
     }).from(campaignsTable)
       .where(eq(campaignsTable.ownerUserId, userId))
        .orderBy(desc(campaignsTable.updatedAt)),
@@ -337,6 +341,8 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       scheduledAt: campaign.scheduledAt,
       timezone: campaign.timezone,
       repeatCount: campaign.repeatCount,
+      roundDelayMinSeconds: campaign.roundDelayMinSeconds,
+      roundDelayMaxSeconds: campaign.roundDelayMaxSeconds,
        dailyQuota: {
          limit: subscription.messageDailyLimit,
          used: subscription.messageDailyLimit === null

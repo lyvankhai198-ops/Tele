@@ -109,6 +109,7 @@ const copy = {
     queuedCampaigns: "Queued",
     completedCampaigns: "Completed",
     campaignSchedule: "Scheduled",
+    campaignDelay: "Round delay",
     campaignQuota: "Today",
     campaignQuotaUnlimited: (used: number) => `${used} sent · Unlimited`,
     campaignQuotaLimited: (used: number, limit: number) => `${used}/${limit}`,
@@ -189,6 +190,7 @@ const copy = {
     queuedCampaigns: "Đang chờ",
     completedCampaigns: "Hoàn thành",
     campaignSchedule: "Lên lịch",
+    campaignDelay: "Delay vòng",
     campaignQuota: "Hôm nay",
     campaignQuotaUnlimited: (used: number) => `${used} đã gửi · Không giới hạn`,
     campaignQuotaLimited: (used: number, limit: number) => `${used}/${limit}`,
@@ -713,6 +715,7 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                     <div className="mt-3 space-y-1 text-[10px] font-semibold text-[#64748b]">
                       <p>{text.campaignQuota}: <span className="font-extrabold text-[#1d4ed8]">{quotaLabel}</span></p>
                       <p>{text.campaignSchedule}: <span className="font-extrabold text-[#334155]">{camp.scheduledAt ? formatDate(camp.scheduledAt, language) : "—"}</span></p>
+                      <p>{text.campaignDelay}: <span className="font-extrabold text-[#334155]">{camp.roundDelayMinSeconds}–{camp.roundDelayMaxSeconds}s</span></p>
                     </div>
                     <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <button
