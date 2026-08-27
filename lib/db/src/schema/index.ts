@@ -131,6 +131,7 @@ export const campaignsTable = pgTable("campaigns", {
   status: text("status").notNull().default("draft"),
   pauseReason: text("pause_reason"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  scheduleAnchorAt: timestamp("schedule_anchor_at", { withTimezone: true }),
   timezone: text("timezone").notNull().default("Asia/Ho_Chi_Minh"),
   maxRetries: integer("max_retries").notNull().default(3),
   repeatCount: integer("repeat_count").notNull().default(1),

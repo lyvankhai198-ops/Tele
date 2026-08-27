@@ -17,7 +17,12 @@ import {
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
-import { legacyScheduleOffsetMs, rebasePastPendingSchedule } from "./campaign-schedule";
+import {
+  legacyScheduleOffsetMs,
+  nextCampaignDailyStart,
+  rebasePastPendingSchedule,
+  rebaseQuotaPausedSchedule,
+} from "./campaign-schedule";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
 import { getDatabaseNow } from "./database-clock";
 import {
@@ -173,6 +178,7 @@ const DAILY_QUOTA_PAUSE_REASONS = [
   LEGACY_DAILY_QUOTA_PAUSE_REASON,
   USER_DAILY_QUOTA_PAUSE_REASON,
 ];
+const DAILY_QUOTA_CAMPAIGN_PAUSE_REASONS = ["daily_quota", "user_daily_quota"];
 
 type DailyQuotaResult =
   | { pausedForQuota: true }
@@ -299,7 +305,6 @@ async function pauseForDailyQuota(
       status: "pending",
       attempts: previousAttempts,
       quotaReservedAt: null,
-      nextAttemptAt: null,
       lastError: pauseReason,
       updatedAt: now,
     }).where(and(
@@ -346,14 +351,24 @@ async function pauseForDailyQuota(
 async function resumeDailyQuotaPausedCampaigns() {
   const settings = await getSystemSettings();
   const timezone = settings.defaultTimezone.replace(/'/g, "");
-  const dayStart = sql`date_trunc('day', now() AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
+  const resetObservedAt = await getDatabaseNow();
+  const dayStart = sql`date_trunc('day', ${resetObservedAt}::timestamptz AT TIME ZONE ${timezone}) AT TIME ZONE ${timezone}`;
   const candidates = await db.select({
     id: campaignsTable.id,
     ownerUserId: campaignsTable.ownerUserId,
+    pauseReason: campaignsTable.pauseReason,
+    scheduleAnchorAt: campaignsTable.scheduleAnchorAt,
+    scheduledAt: campaignsTable.scheduledAt,
+    createdAt: campaignsTable.createdAt,
+    timezone: campaignsTable.timezone,
   }).from(campaignsTable)
     .innerJoin(campaignTargetsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
     .where(and(
       eq(campaignsTable.status, "paused"),
+      or(
+        isNull(campaignsTable.pauseReason),
+        inArray(campaignsTable.pauseReason, DAILY_QUOTA_CAMPAIGN_PAUSE_REASONS),
+      ),
       eq(campaignTargetsTable.status, "pending"),
       inArray(campaignTargetsTable.lastError, DAILY_QUOTA_PAUSE_REASONS),
       lt(campaignTargetsTable.updatedAt, dayStart),
@@ -363,22 +378,68 @@ async function resumeDailyQuotaPausedCampaigns() {
   for (const candidate of uniqueCandidates.values()) {
     const subscription = await getSubscription(candidate.ownerUserId);
     if (subscription.status !== "active") continue;
-    const [resumed] = await db.update(campaignsTable).set({
-      status: "queued",
-      pauseReason: null,
-      updatedAt: new Date(),
-    }).where(and(
-      eq(campaignsTable.id, candidate.id),
-      eq(campaignsTable.status, "paused"),
-    )).returning({ id: campaignsTable.id });
-    if (!resumed) continue;
+    const scheduleAnchorAt = candidate.scheduleAnchorAt ?? candidate.scheduledAt ?? candidate.createdAt;
+    const nextRunAt = nextCampaignDailyStart(scheduleAnchorAt, resetObservedAt, candidate.timezone);
+    const rebase = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
+      const [currentCampaign] = await tx.select({
+        status: campaignsTable.status,
+        pauseReason: campaignsTable.pauseReason,
+      }).from(campaignsTable).where(eq(campaignsTable.id, candidate.id));
+      if (!currentCampaign || currentCampaign.status !== "paused" || (
+        currentCampaign.pauseReason !== null
+        && !DAILY_QUOTA_CAMPAIGN_PAUSE_REASONS.includes(currentCampaign.pauseReason)
+      )) return null;
+
+      await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${candidate.id} FOR UPDATE`);
+      const targets = await tx.select({
+        id: campaignTargetsTable.id,
+        status: campaignTargetsTable.status,
+        lastError: campaignTargetsTable.lastError,
+        nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+        updatedAt: campaignTargetsTable.updatedAt,
+      }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, candidate.id));
+      const scheduleRebase = rebaseQuotaPausedSchedule(targets, nextRunAt, DAILY_QUOTA_PAUSE_REASONS);
+      if (!scheduleRebase) return null;
+
+      for (const update of scheduleRebase.updates) {
+        const [updated] = await tx.update(campaignTargetsTable).set({
+          nextAttemptAt: update.nextAttemptAt,
+          ...(update.clearQuotaPauseMarker ? { lastError: null } : {}),
+          updatedAt: resetObservedAt,
+        }).where(and(
+          eq(campaignTargetsTable.id, update.id),
+          eq(campaignTargetsTable.status, "pending"),
+          update.previousLastError === null
+            ? isNull(campaignTargetsTable.lastError)
+            : eq(campaignTargetsTable.lastError, update.previousLastError),
+          update.previousNextAttemptAt === null
+            ? isNull(campaignTargetsTable.nextAttemptAt)
+            : eq(campaignTargetsTable.nextAttemptAt, update.previousNextAttemptAt),
+        )).returning({ id: campaignTargetsTable.id });
+        if (!updated) {
+          throw new Error(`Quota reset schedule changed concurrently for target ${update.id}`);
+        }
+      }
+
+      const [resumed] = await tx.update(campaignsTable).set({
+        status: "queued",
+        pauseReason: null,
+        updatedAt: resetObservedAt,
+      }).where(and(
+        eq(campaignsTable.id, candidate.id),
+        eq(campaignsTable.status, "paused"),
+      )).returning({ id: campaignsTable.id });
+      return resumed ? scheduleRebase : null;
+    });
+    if (!rebase) continue;
     await recordActivity({
       ownerUserId: candidate.ownerUserId,
       event: "campaign.resumed.daily_quota_reset",
       level: "info",
       campaignId: candidate.id,
-      message: "Campaign resumed automatically after the daily message limit reset.",
-      metadata: { automaticResume: true },
+      message: "Campaign was scheduled automatically after the daily message limit reset.",
+      metadata: { automaticResume: true, nextRunAt: rebase.nextRunAt.toISOString(), scheduleRebased: true },
     });
   }
 }

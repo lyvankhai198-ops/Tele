@@ -1353,6 +1353,7 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     templateSourceMessageId,
     mediaUrl: parsed.data.mediaUrl ?? null,
     scheduledAt,
+    scheduleAnchorAt: initialRoundStartAt,
     timezone: parsed.data.timezone,
     status: "queued",
     maxRetries: systemSettings.campaignDefaults.maxRetries,
@@ -1474,6 +1475,7 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
       mediaUrl: null,
       status: "draft",
       scheduledAt: sourceCampaign.scheduledAt,
+      scheduleAnchorAt: sourceCampaign.scheduleAnchorAt ?? sourceCampaign.scheduledAt ?? sourceCampaign.createdAt,
       timezone: sourceCampaign.timezone,
       maxRetries: sourceCampaign.maxRetries,
       repeatCount: sourceCampaign.repeatCount,
@@ -1671,6 +1673,9 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         requestedScheduledAt,
         editSetAt,
       );
+      const scheduleAnchorAt = parsed.data.scheduledAt === undefined
+        ? lockedCampaign.scheduleAnchorAt ?? lockedCampaign.scheduledAt ?? lockedCampaign.createdAt
+        : configuredRoundStartAt;
       const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
       const sentByDestination = new Map<string, number>();
       let latestSentAt: Date | null = null;
@@ -1724,6 +1729,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         templateSourceAccountId: template.sourceAccountId,
         templateSourceMessageId: template.sourceMessageId,
         scheduledAt,
+        scheduleAnchorAt,
         timezone: parsed.data.timezone ?? lockedCampaign.timezone,
         repeatCount,
         delayMinSeconds: 0,

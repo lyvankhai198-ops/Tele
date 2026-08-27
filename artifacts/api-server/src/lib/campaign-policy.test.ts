@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
-import { rebasePastPendingSchedule, resolveCampaignScheduleStart } from "./campaign-schedule";
+import {
+  nextCampaignDailyStart,
+  rebasePastPendingSchedule,
+  rebaseQuotaPausedSchedule,
+  resolveCampaignScheduleStart,
+} from "./campaign-schedule";
 import { isSubscriptionActiveAt } from "./subscription-time";
 
 function reserveSlot(state: { sentToday: number; reservedToday: number }, limit: number | null) {
@@ -56,6 +61,48 @@ assert.deepEqual(
   ], configuredAt),
   { shiftMs: 0, nextRunAt: null, updates: [] },
 );
+
+const campaignAAnchor = new Date("2026-08-27T08:00:00.000Z"); // 15:00 Asia/Ho_Chi_Minh
+const campaignBAnchor = new Date("2026-08-27T12:00:00.000Z"); // 19:00 Asia/Ho_Chi_Minh
+const quotaResetAt = new Date("2026-08-27T17:05:00.000Z"); // 00:05 on August 28 locally
+assert.equal(
+  nextCampaignDailyStart(campaignAAnchor, quotaResetAt, "Asia/Ho_Chi_Minh").toISOString(),
+  "2026-08-28T08:00:00.000Z",
+);
+assert.equal(
+  nextCampaignDailyStart(campaignBAnchor, quotaResetAt, "Asia/Ho_Chi_Minh").toISOString(),
+  "2026-08-28T12:00:00.000Z",
+);
+
+const quotaResumeAt = new Date("2026-08-28T08:00:00.000Z");
+const quotaRebase = rebaseQuotaPausedSchedule([
+  { id: "quota-marker", status: "pending", lastError: "Daily message limit reached. Campaign paused and will resume automatically on a new day.", nextAttemptAt: new Date("2026-08-27T15:00:00.000Z"), updatedAt: new Date("2026-08-27T15:00:00.000Z") },
+  { id: "same-round", status: "pending", lastError: null, nextAttemptAt: new Date("2026-08-27T15:00:00.000Z"), updatedAt: new Date("2026-08-27T15:00:00.000Z") },
+  { id: "next-round", status: "pending", lastError: null, nextAttemptAt: new Date("2026-08-27T16:00:00.000Z"), updatedAt: new Date("2026-08-27T15:00:00.000Z") },
+  // A 2,220-second interval sampled from a campaign-specific 1,800–3,600 range.
+  { id: "variable-round", status: "pending", lastError: null, nextAttemptAt: new Date("2026-08-27T15:37:00.000Z"), updatedAt: new Date("2026-08-27T15:00:00.000Z") },
+  { id: "retry", status: "pending", lastError: "Telegram flood wait", nextAttemptAt: new Date("2026-08-27T15:30:00.000Z"), updatedAt: new Date("2026-08-27T15:30:00.000Z") },
+  { id: "sent", status: "sent", lastError: null, nextAttemptAt: new Date("2026-08-27T14:00:00.000Z"), updatedAt: new Date("2026-08-27T14:00:00.000Z") },
+  { id: "review", status: "requires_review", lastError: "Needs operator review", nextAttemptAt: null, updatedAt: new Date("2026-08-27T15:00:00.000Z") },
+  { id: "sending", status: "sending", lastError: null, nextAttemptAt: new Date("2026-08-27T15:00:00.000Z"), updatedAt: new Date("2026-08-27T15:00:00.000Z") },
+], quotaResumeAt, ["Daily message limit reached. Campaign paused and will resume automatically on a new day."]);
+assert.ok(quotaRebase);
+assert.equal(quotaRebase.nextRunAt.toISOString(), quotaResumeAt.toISOString());
+assert.deepEqual(
+  quotaRebase.updates.map((target) => [target.id, target.nextAttemptAt.toISOString(), target.clearQuotaPauseMarker]),
+  [
+    ["quota-marker", "2026-08-28T08:00:00.000Z", true],
+    ["same-round", "2026-08-28T08:00:00.000Z", false],
+    ["next-round", "2026-08-28T09:00:00.000Z", false],
+    ["variable-round", "2026-08-28T08:37:00.000Z", false],
+  ],
+);
+assert.equal(
+  quotaRebase.updates.find((target) => target.id === "variable-round")!.nextAttemptAt.getTime()
+    - quotaRebase.updates.find((target) => target.id === "same-round")!.nextAttemptAt.getTime(),
+  2_220_000,
+);
+assert.equal(quotaRebase.updates.some((target) => ["retry", "sent", "review", "sending"].includes(target.id)), false);
 const subscriptionExpiry = new Date("2026-08-24T00:00:00.000Z");
 assert.equal(isSubscriptionActiveAt(subscriptionExpiry, new Date("2026-08-23T23:59:59.999Z")), true);
 assert.equal(isSubscriptionActiveAt(subscriptionExpiry, subscriptionExpiry), false);
