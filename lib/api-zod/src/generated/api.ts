@@ -1928,7 +1928,13 @@ export const GetAdminUserSupportResponse = zod.object({
   "sendingCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
-  "reviewCount": zod.number()
+  "reviewCount": zod.number(),
+  "clones": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "telegramAccountName": zod.string().nullable()
+}))
 })),
   "campaignsTruncated": zod.boolean(),
   "recentErrors": zod.array(zod.object({

@@ -52,6 +52,7 @@ export * from './adminUserSupport';
 export * from './adminUserSupportAccount';
 export * from './adminUserSupportActivity';
 export * from './adminUserSupportCampaign';
+export * from './adminUserSupportCampaignClone';
 export * from './adminUserSupportCampaignTargets';
 export * from './adminUserSupportOverview';
 export * from './adminUserSupportTarget';

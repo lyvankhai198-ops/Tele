@@ -100,6 +100,12 @@ export type AdminUserSupportRecord = {
     sentCount: number;
     failedCount: number;
     reviewCount: number;
+    clones: Array<{
+      id: string;
+      name: string;
+      status: string;
+      telegramAccountName: string | null;
+    }>;
   }>;
   campaignsTruncated: boolean;
   recentErrors: Array<SupportTarget>;
@@ -193,6 +199,7 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       scheduledAt: campaignsTable.scheduledAt,
       timezone: campaignsTable.timezone,
       repeatCount: campaignsTable.repeatCount,
+       clonedFromCampaignId: campaignsTable.clonedFromCampaignId,
        roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
        roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
     }).from(campaignsTable)
@@ -267,6 +274,21 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
   ]);
 
   const campaignIds = campaigns.map((campaign) => campaign.id);
+  const clonedCampaignRows = campaignIds.length
+    ? await db.select({
+      id: campaignsTable.id,
+      name: campaignsTable.name,
+      status: campaignsTable.status,
+      clonedFromCampaignId: campaignsTable.clonedFromCampaignId,
+      telegramAccountName: telegramAccountsTable.name,
+    }).from(campaignsTable)
+      .leftJoin(telegramAccountsTable, and(
+        eq(campaignsTable.telegramAccountId, telegramAccountsTable.id),
+        isNull(telegramAccountsTable.deletedAt),
+      ))
+      .where(inArray(campaignsTable.clonedFromCampaignId, campaignIds))
+      .orderBy(desc(campaignsTable.updatedAt))
+    : [];
   const campaignMetrics = campaignIds.length
     ? await db.select({
       campaignId: campaignTargetsTable.campaignId,
@@ -305,6 +327,13 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
   const proxyById = new Map(proxies.map((proxy) => [proxy.id, proxy]));
   const sourceAccountNameById = new Map(accounts.map((account) => [account.id, account.name]));
   const metricByCampaign = new Map(campaignMetrics.map((metric) => [metric.campaignId, metric]));
+  const clonesBySourceId = new Map<string, typeof clonedCampaignRows>();
+  for (const clone of clonedCampaignRows) {
+    if (!clone.clonedFromCampaignId) continue;
+    const sourceClones = clonesBySourceId.get(clone.clonedFromCampaignId) ?? [];
+    sourceClones.push(clone);
+    clonesBySourceId.set(clone.clonedFromCampaignId, sourceClones);
+  }
 
   const telegramAccounts = accounts.map((account) => {
     const proxy = account.proxyId ? proxyById.get(account.proxyId) : undefined;
@@ -367,6 +396,12 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       sentCount: metrics?.sentCount ?? 0,
       failedCount: metrics?.failedCount ?? 0,
       reviewCount: metrics?.reviewCount ?? 0,
+       clones: (clonesBySourceId.get(campaign.id) ?? []).map((clone) => ({
+         id: clone.id,
+         name: clone.name,
+         status: clone.status,
+         telegramAccountName: clone.telegramAccountName,
+       })),
     };
   });
 

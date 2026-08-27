@@ -1280,6 +1280,14 @@ export interface AdminUserSupportTarget {
   updatedAt: string;
 }
 
+export interface AdminUserSupportCampaignClone {
+  id: string;
+  name: string;
+  status: string;
+  /** @nullable */
+  telegramAccountName: string | null;
+}
+
 export interface AdminUserSupportCampaign {
   id: string;
   name: string;
@@ -1308,6 +1316,7 @@ export interface AdminUserSupportCampaign {
   sentCount: number;
   failedCount: number;
   reviewCount: number;
+  clones: AdminUserSupportCampaignClone[];
 }
 
 export interface AdminUserSupportCampaignTargets {

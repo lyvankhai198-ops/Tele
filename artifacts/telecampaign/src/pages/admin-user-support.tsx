@@ -113,6 +113,8 @@ const copy = {
     campaignQuota: "Today",
     campaignQuotaUnlimited: (used: number) => `${used} sent · Unlimited`,
     campaignQuotaLimited: (used: number, limit: number) => `${used}/${limit}`,
+    clonedLabel: "Cloned",
+    cloneNoAccount: "No Telegram account",
     pauseCampaign: "Pause",
     resumeCampaign: "Resume",
     retryTarget: "Retry target",
@@ -194,6 +196,8 @@ const copy = {
     campaignQuota: "Hôm nay",
     campaignQuotaUnlimited: (used: number) => `${used} đã gửi · Không giới hạn`,
     campaignQuotaLimited: (used: number, limit: number) => `${used}/${limit}`,
+    clonedLabel: "Đã clone",
+    cloneNoAccount: "Chưa gắn tài khoản",
     pauseCampaign: "Dừng",
     resumeCampaign: "Tiếp tục",
     retryTarget: "Retry target",
@@ -685,14 +689,26 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                     : text.campaignQuotaLimited(camp.dailyQuota.used, camp.dailyQuota.limit);
                   return (
                   <div key={camp.id} className="p-4 hover:bg-[#f8fafc]/50 transition-colors">
-                    <div className="flex items-start justify-between mb-2 gap-4">
-                      <div>
+                     <div className="flex items-start justify-between mb-2 gap-4">
+                       <div className="min-w-0">
                         <div className="font-extrabold text-[14px] text-[#0f172a]">{camp.name}</div>
                         <div className="text-[12px] font-medium text-[#64748b] mt-0.5">
                           {camp.telegramAccountName ? `via ${camp.telegramAccountName}` : "No account"}
                         </div>
                       </div>
-                      <StatusBadge status={camp.status as any} />
+                       <div className="flex shrink-0 flex-col items-end gap-1">
+                         <StatusBadge status={camp.status as any} />
+                         {camp.clones.length > 0 && (
+                           <div className="max-w-[170px] text-right text-[9px] font-bold leading-tight text-[#1d4ed8]">
+                             <div>{text.clonedLabel}:</div>
+                             {camp.clones.map((clone) => (
+                               <div key={clone.id} className="truncate">
+                                 {clone.name} · {clone.telegramAccountName ?? text.cloneNoAccount}
+                               </div>
+                             ))}
+                           </div>
+                         )}
+                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-2 text-center text-[11px] mt-4 font-black uppercase tracking-wider">
                       <div className="bg-[#f8fafc] rounded-lg py-2 border border-[#eef2f6]">

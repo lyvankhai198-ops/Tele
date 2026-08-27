@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminUserSupportCampaignClone } from './adminUserSupportCampaignClone';
 import type { CampaignDailyQuota } from './campaignDailyQuota';
 
 export interface AdminUserSupportCampaign {
@@ -35,4 +36,5 @@ export interface AdminUserSupportCampaign {
   sentCount: number;
   failedCount: number;
   reviewCount: number;
+  clones: AdminUserSupportCampaignClone[];
 }

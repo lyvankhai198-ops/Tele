@@ -1922,7 +1922,7 @@ components:
         updatedAt: { type: string, format: date-time }
     AdminUserSupportCampaign:
       type: object
-      required: [id, name, status, content, templateMode, templateSourceAccountName, templateSourceMessageId, telegramAccountId, telegramAccountName, scheduledAt, timezone, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, dailyQuota, destinationCount, deliveryCount, pendingCount, sendingCount, sentCount, failedCount, reviewCount]
+      required: [id, name, status, content, templateMode, templateSourceAccountName, templateSourceMessageId, telegramAccountId, telegramAccountName, scheduledAt, timezone, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, dailyQuota, destinationCount, deliveryCount, pendingCount, sendingCount, sentCount, failedCount, reviewCount, clones]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1946,6 +1946,17 @@ components:
         sentCount: { type: number }
         failedCount: { type: number }
         reviewCount: { type: number }
+        clones:
+          type: array
+          items: { $ref: "#/components/schemas/AdminUserSupportCampaignClone" }
+    AdminUserSupportCampaignClone:
+      type: object
+      required: [id, name, status, telegramAccountName]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string }
+        telegramAccountName: { type: ["string", "null"] }
     AdminUserSupportCampaignTargets:
       type: object
       required: [totalTargets, hasMore, targets]
