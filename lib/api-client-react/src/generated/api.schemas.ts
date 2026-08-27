@@ -1369,6 +1369,11 @@ export interface AdminActiveGroupDirectory {
   groups: AdminActiveGroup[];
 }
 
+export interface AdminGroupLibrarySyncResult {
+  addedCount: number;
+  candidateCount: number;
+}
+
 export interface AdminSubscriptionUpdateInput {
   plan: PlanCode;
   /**

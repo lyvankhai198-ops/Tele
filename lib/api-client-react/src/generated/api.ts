@@ -26,6 +26,7 @@ import type {
   AdminActiveGroupDirectory,
   AdminCampaignCloneInput,
   AdminCampaignStatusInput,
+  AdminGroupLibrarySyncResult,
   AdminLicenseKey,
   AdminLicenseKeySecret,
   AdminNotification,
@@ -3879,6 +3880,71 @@ export function useGetAdminActiveGroupDirectory<TData = Awaited<ReturnType<typeo
 
 
 
+
+export const getSyncAdminGroupLibraryUrl = () => {
+
+
+
+
+  return `/api/admin/active-groups`
+}
+
+export const syncAdminGroupLibrary = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupLibrarySyncResult> => {
+
+  return customFetch<AdminGroupLibrarySyncResult>(getSyncAdminGroupLibraryUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSyncAdminGroupLibraryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncAdminGroupLibrary>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncAdminGroupLibrary>>, TError,void, TContext> => {
+
+const mutationKey = ['syncAdminGroupLibrary'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncAdminGroupLibrary>>, void> = () => {
+
+
+          return  syncAdminGroupLibrary(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncAdminGroupLibraryMutationResult = NonNullable<Awaited<ReturnType<typeof syncAdminGroupLibrary>>>
+
+    export type SyncAdminGroupLibraryMutationError = ErrorType<void>
+
+    export const useSyncAdminGroupLibrary = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncAdminGroupLibrary>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncAdminGroupLibrary>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncAdminGroupLibraryMutationOptions(options));
+    }
 
 export const getListAdminNotificationsUrl = () => {
 

@@ -4,6 +4,7 @@ import {
   campaignsTable,
   db,
   destinationsTable,
+  groupLibraryEntriesTable,
 } from "@workspace/db";
 
 function destinationLink(username: string | null): string | null {
@@ -20,6 +21,15 @@ export type SavedGroupRow = {
   memberCount: number | null;
   roundDelayMinSeconds: number | null;
   roundDelayMaxSeconds: number | null;
+};
+
+export type RunningGroupLibraryCandidate = {
+  telegramId: string;
+  title: string;
+  username: string | null;
+  kind: string;
+  memberCount: number | null;
+  sourceDestinationId: string;
 };
 
 export type AdminActiveGroupDirectoryRecord = {
@@ -85,23 +95,76 @@ export function aggregateSavedGroupRows(rows: SavedGroupRow[]): AdminActiveGroup
   };
 }
 
-export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDirectoryRecord> {
-  const rows = await db.select({
+export function dedupeRunningGroupLibraryCandidates(
+  rows: RunningGroupLibraryCandidate[],
+): RunningGroupLibraryCandidate[] {
+  const candidatesByTelegramId = new Map<string, RunningGroupLibraryCandidate>();
+  for (const row of rows) {
+    if (!candidatesByTelegramId.has(row.telegramId)) {
+      candidatesByTelegramId.set(row.telegramId, row);
+    }
+  }
+  return [...candidatesByTelegramId.values()];
+}
+
+export async function syncAdminGroupLibrary(): Promise<{ addedCount: number; candidateCount: number }> {
+  const candidateRows = await db.select({
     telegramId: destinationsTable.telegramId,
     title: destinationsTable.title,
     username: destinationsTable.username,
     kind: destinationsTable.kind,
     memberCount: destinationsTable.memberCount,
-    roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
-    roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
-  }).from(destinationsTable)
-    .leftJoin(campaignTargetsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .leftJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+    sourceDestinationId: destinationsTable.id,
+  }).from(campaignTargetsTable)
+    .innerJoin(campaignsTable, and(
+      eq(campaignTargetsTable.campaignId, campaignsTable.id),
+      eq(campaignsTable.status, "running"),
+    ))
+    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
     .where(and(
       inArray(destinationsTable.kind, ["group", "forum"]),
       isNull(destinationsTable.topicId),
+    ));
+  const candidates = dedupeRunningGroupLibraryCandidates(candidateRows);
+  if (!candidates.length) return { addedCount: 0, candidateCount: 0 };
+
+  const inserted = await db.insert(groupLibraryEntriesTable)
+    .values(candidates.map((candidate) => ({
+      telegramId: candidate.telegramId,
+      title: candidate.title,
+      username: candidate.username,
+      kind: candidate.kind,
+      memberCount: candidate.memberCount,
+      sourceDestinationId: candidate.sourceDestinationId,
+    })))
+    .onConflictDoNothing({ target: groupLibraryEntriesTable.telegramId })
+    .returning({ id: groupLibraryEntriesTable.id });
+  return { addedCount: inserted.length, candidateCount: candidates.length };
+}
+
+export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDirectoryRecord> {
+  const rows = await db.select({
+    telegramId: groupLibraryEntriesTable.telegramId,
+    title: groupLibraryEntriesTable.title,
+    username: groupLibraryEntriesTable.username,
+    kind: groupLibraryEntriesTable.kind,
+    memberCount: groupLibraryEntriesTable.memberCount,
+    roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
+    roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
+  }).from(groupLibraryEntriesTable)
+    .leftJoin(destinationsTable, and(
+      eq(destinationsTable.telegramId, groupLibraryEntriesTable.telegramId),
+      isNull(destinationsTable.topicId),
     ))
-    .orderBy(desc(destinationsTable.updatedAt), asc(destinationsTable.title));
+    .leftJoin(campaignTargetsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+    .leftJoin(campaignsTable, and(
+      eq(campaignTargetsTable.campaignId, campaignsTable.id),
+      eq(campaignsTable.status, "running"),
+    ))
+    .where(and(
+      inArray(groupLibraryEntriesTable.kind, ["group", "forum"]),
+    ))
+    .orderBy(desc(groupLibraryEntriesTable.updatedAt), asc(groupLibraryEntriesTable.title));
 
   return aggregateSavedGroupRows(rows);
 }

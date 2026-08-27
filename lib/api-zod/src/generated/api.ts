@@ -1565,6 +1565,12 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
 })
 
 
+export const SyncAdminGroupLibraryResponse = zod.object({
+  "addedCount": zod.number(),
+  "candidateCount": zod.number()
+})
+
+
 export const ListAdminNotificationsResponseItem = zod.object({
   "id": zod.string(),
   "title": zod.string(),

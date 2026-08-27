@@ -30,6 +30,7 @@ import {
   UpdateAdminSystemSettingsResponse,
   GetAdminOperationsResponse,
   GetAdminActiveGroupDirectoryResponse,
+  SyncAdminGroupLibraryResponse,
   UpdateAdminCampaignStatusParams,
   UpdateAdminCampaignStatusBody,
   UpdateAdminCampaignStatusResponse,
@@ -81,7 +82,7 @@ import {
   revealAdminLicenseKey,
 } from "../lib/subscriptions";
 import { getAdminUserSupport, getAdminUserSupportCampaignTargets } from "../lib/admin-user-support";
-import { getAdminActiveGroupDirectory } from "../lib/admin-active-group-directory";
+import { getAdminActiveGroupDirectory, syncAdminGroupLibrary } from "../lib/admin-active-group-directory";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
@@ -121,6 +122,10 @@ router.get("/admin/overview", async (_req, res): Promise<void> => {
 
 router.get("/admin/active-groups", async (_req, res): Promise<void> => {
   res.json(GetAdminActiveGroupDirectoryResponse.parse(await getAdminActiveGroupDirectory()));
+});
+
+router.post("/admin/active-groups", async (_req, res): Promise<void> => {
+  res.status(201).json(SyncAdminGroupLibraryResponse.parse(await syncAdminGroupLibrary()));
 });
 
 router.get("/admin/notifications", async (_req, res): Promise<void> => {

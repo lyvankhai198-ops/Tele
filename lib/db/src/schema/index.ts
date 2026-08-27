@@ -164,6 +164,19 @@ export const campaignTargetsTable = pgTable(
   ],
 );
 
+export const groupLibraryEntriesTable = pgTable("group_library_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  telegramId: text("telegram_id").notNull().unique(),
+  title: text("title").notNull(),
+  username: text("username"),
+  kind: text("kind").notNull().default("group"),
+  memberCount: integer("member_count"),
+  sourceDestinationId: uuid("source_destination_id").references(() => destinationsTable.id, { onDelete: "set null" }),
+  firstCapturedAt: timestamp("first_captured_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const activityLogsTable = pgTable("activity_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   ownerUserId: text("owner_user_id").notNull(),
@@ -241,6 +254,7 @@ export const insertAuthSessionSchema = createInsertSchema(authSessionsTable);
 export const insertDestinationSchema = createInsertSchema(destinationsTable);
 export const insertCampaignSchema = createInsertSchema(campaignsTable);
 export const insertCampaignTargetSchema = createInsertSchema(campaignTargetsTable);
+export const insertGroupLibraryEntrySchema = createInsertSchema(groupLibraryEntriesTable);
 export const insertActivityLogSchema = createInsertSchema(activityLogsTable);
 export const insertMessageTemplateSchema = createInsertSchema(messageTemplatesTable);
 export const insertAdminNotificationSchema = createInsertSchema(adminNotificationsTable);
@@ -255,6 +269,7 @@ export type AuthSession = typeof authSessionsTable.$inferSelect;
 export type Destination = typeof destinationsTable.$inferSelect;
 export type Campaign = typeof campaignsTable.$inferSelect;
 export type CampaignTarget = typeof campaignTargetsTable.$inferSelect;
+export type GroupLibraryEntry = typeof groupLibraryEntriesTable.$inferSelect;
 export type ActivityLog = typeof activityLogsTable.$inferSelect;
 export type MessageTemplate = typeof messageTemplatesTable.$inferSelect;
 export type AdminNotification = typeof adminNotificationsTable.$inferSelect;

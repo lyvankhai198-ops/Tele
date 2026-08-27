@@ -1,6 +1,7 @@
 - [Subscription access policy](subscription-upgrade-policy.md) — new users receive a one-day PLUS trial; expiry locks the workspace until any paid plan key is redeemed.
 - [Telegram account verification](telegram-account-verification.md) — saving API credentials and a phone never proves a Telegram session; keep unverified accounts out of sync/send paths.
 - [Delivery error recovery](delivery-error-recovery.md) — refresh only an invalid Forward source message; never auto-sync a banned account or a group with restricted posting.
+- [Live Saved Message previews](live-saved-message-previews.md) — Forward sends and previews must resolve the current Telegram message by its source ID, not a stored text snapshot.
 - [OpenAPI numeric validation](openapi-numeric-validation.md) — use `number` plus route-level integer validation; generated `integer` schemas are incompatible with this Zod toolchain.
 - [Telegram proxy transport](telegram-proxy-transport.md) — HTTP/SOCKS5 assignments are stored per account; GramJS needs a socket adapter before they can carry MTProto traffic.
 - [Concurrent delivery quotas](concurrent-delivery-quotas.md) — daily delivery quotas need an atomic reservation before sending when more than one worker can run.
@@ -25,3 +26,5 @@
 - [Clock-safe campaign pauses](clock-safe-campaign-pauses.md) — a temporary VPS clock skew can falsely expire a trial and pause active campaigns; distinguish this from real expiry.
 - [Database clock result type](database-clock-result-type.md) — Drizzle’s raw PostgreSQL `now()` value can arrive as a string; parse it before timestamp comparisons.
 - [Durable Git SHA construction](durable-git-sha-construction.md) — construct Git blob SHA separators at runtime; literal null bytes can break sandbox callback replay.
+- [Persistent group library](persistent-group-library.md) — a dedicated admin library imports target groups only from running campaigns and retains its own snapshots.
+- [OpenAPI route contracts](openapi-route-contracts.md) — generated client verb/path must match the server route exactly, or a request can fall through unrelated middleware.

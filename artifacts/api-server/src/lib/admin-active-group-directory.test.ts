@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { aggregateSavedGroupRows, type SavedGroupRow } from "./admin-active-group-directory";
+import {
+  aggregateSavedGroupRows,
+  dedupeRunningGroupLibraryCandidates,
+  type SavedGroupRow,
+} from "./admin-active-group-directory";
 
 const rows: SavedGroupRow[] = [
   {
@@ -63,4 +67,34 @@ assert.ok(privateGroup);
 assert.equal(privateGroup.telegramLink, null);
 assert.deepEqual(privateGroup.roundDelays, []);
 
-console.log("Admin saved group directory aggregation checks passed.");
+const candidates = dedupeRunningGroupLibraryCandidates([
+  {
+    telegramId: "-100123",
+    title: "Nhóm công nghệ",
+    username: "@tech_forum",
+    kind: "forum",
+    memberCount: 1200,
+    sourceDestinationId: "destination-one",
+  },
+  {
+    telegramId: "-100123",
+    title: "Tên trùng từ account khác",
+    username: null,
+    kind: "forum",
+    memberCount: null,
+    sourceDestinationId: "destination-two",
+  },
+  {
+    telegramId: "-100555",
+    title: "Nhóm chỉ mới có campaign đang chạy",
+    username: null,
+    kind: "group",
+    memberCount: null,
+    sourceDestinationId: "destination-three",
+  },
+]);
+assert.equal(candidates.length, 2);
+assert.equal(candidates[0]?.sourceDestinationId, "destination-one");
+assert.equal(candidates[1]?.telegramId, "-100555");
+
+console.log("Admin group library aggregation and one-time import checks passed.");

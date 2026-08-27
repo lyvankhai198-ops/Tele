@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   getGetAdminActiveGroupDirectoryQueryKey,
   useGetAdminActiveGroupDirectory,
+  useSyncAdminGroupLibrary,
   type AdminActiveGroup,
 } from "@workspace/api-client-react";
 import {
@@ -15,15 +16,20 @@ import { AppLayout, EmptyState, Panel, SectionHeader } from "@/components/layout
 
 const text = {
   title: "Thư Viện Nhóm",
-  subtitle: "Tập trung các nhóm đã lưu từ tài khoản Telegram.",
+  subtitle: "Chỉ lưu nhóm mới từ campaign đang chạy của tất cả user.",
   search: "Tìm theo tên nhóm hoặc username...",
   savedGroups: "Nhóm đã lưu",
-  savedRoundDelays: "Delay vòng đã lưu",
+  activeRoundDelays: "Delay vòng đang chạy",
   noGroups: "Thư Viện Nhóm chưa có nhóm nào.",
-  noGroupsDetail: "Đồng bộ tài khoản Telegram để lưu nhóm vào thư viện.",
+  noGroupsDetail: "Đồng bộ thư viện để lấy nhóm từ các campaign đang chạy.",
   loading: "Đang tải danh sách nhóm...",
   loadError: "Không thể tải Thư Viện Nhóm.",
   retry: "Thử lại",
+  sync: "Đồng bộ thư viện",
+  syncing: "Đang đồng bộ...",
+  syncFailed: "Không thể đồng bộ thư viện. Vui lòng thử lại.",
+  syncAdded: (count: number) => `Đã thêm ${count} nhóm mới vào thư viện.`,
+  syncNoNewGroup: "Không có nhóm mới từ campaign đang chạy.",
   openGroup: "Mở nhóm",
   privateGroup: "Nhóm riêng tư · Chưa có link tham gia",
   group: "Nhóm",
@@ -95,11 +101,21 @@ function GroupCard({ group }: { group: AdminActiveGroup }) {
 
 export default function AdminActiveGroupsPage() {
   const [search, setSearch] = useState("");
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const query = useGetAdminActiveGroupDirectory({
     query: {
       queryKey: getGetAdminActiveGroupDirectoryQueryKey(),
       refetchInterval: 30000,
       refetchOnWindowFocus: true,
+    },
+  });
+  const syncLibrary = useSyncAdminGroupLibrary({
+    mutation: {
+      onSuccess: async (result) => {
+        setSyncFeedback(result.addedCount > 0 ? text.syncAdded(result.addedCount) : text.syncNoNewGroup);
+        await query.refetch();
+      },
+      onError: () => setSyncFeedback(text.syncFailed),
     },
   });
   const groups = query.data?.groups ?? [];
@@ -120,16 +136,24 @@ export default function AdminActiveGroupsPage() {
           action={(
             <button
               type="button"
-              onClick={() => void query.refetch()}
-              disabled={query.isFetching}
+              onClick={() => {
+                setSyncFeedback(null);
+                syncLibrary.mutate();
+              }}
+              disabled={query.isFetching || syncLibrary.isPending}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 py-2.5 text-[11px] font-extrabold text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="button-refresh-admin-active-groups"
             >
-              {query.isFetching ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              Làm mới
+              {syncLibrary.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {syncLibrary.isPending ? text.syncing : text.sync}
             </button>
           )}
         />
+        {syncFeedback && (
+          <p className={`-mt-4 text-[11px] font-bold ${syncLibrary.isError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
+            {syncFeedback}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Panel className="flex items-center gap-3 p-4">
@@ -146,7 +170,7 @@ export default function AdminActiveGroupsPage() {
               <RefreshCw className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.savedRoundDelays}</p>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.activeRoundDelays}</p>
               <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{roundDelayCount}</p>
             </div>
           </Panel>
