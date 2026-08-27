@@ -129,6 +129,7 @@ export const campaignsTable = pgTable("campaigns", {
   clonedFromUserId: text("cloned_from_user_id"),
   mediaUrl: text("media_url"),
   status: text("status").notNull().default("draft"),
+  pauseReason: text("pause_reason"),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   timezone: text("timezone").notNull().default("Asia/Ho_Chi_Minh"),
   maxRetries: integer("max_retries").notNull().default(3),

@@ -12,6 +12,8 @@ import {
 import { getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { localQuotaDate } from "./user-daily-quota";
+import { getDatabaseNow } from "./database-clock";
+import { isSubscriptionActiveAt } from "./subscription-time";
 
 export const PLAN_ORDER = ["plus", "pro", "unlimited"] as const;
 export type PlanCode = SystemPlanCode;
@@ -257,7 +259,7 @@ function toSubscriptionSummary(
   catalog: PlanCatalog = PLAN_CATALOG,
   timezone = "Asia/Ho_Chi_Minh",
 ) {
-  const hasExpired = Boolean(subscription.expiresAt && subscription.expiresAt.getTime() <= now.getTime());
+  const hasExpired = !isSubscriptionActiveAt(subscription.expiresAt, now);
   const storedPlan = isPlanCode(subscription.plan) ? subscription.plan : "plus";
   const plan: PlanCode = hasExpired ? "plus" : storedPlan;
   const limits = planLimits(plan, catalog);
@@ -294,15 +296,16 @@ async function createDefaultSubscription(ownerUserId: string) {
   return existing;
 }
 
-export async function getSubscription(ownerUserId: string) {
-  const [subscriptions, settings] = await Promise.all([
+export async function getSubscription(ownerUserId: string, currentTime?: Date) {
+  const [subscriptions, settings, now] = await Promise.all([
     db.select().from(subscriptionsTable)
       .where(eq(subscriptionsTable.ownerUserId, ownerUserId)).limit(1),
     getSystemSettings(),
+    currentTime ? Promise.resolve(currentTime) : getDatabaseNow(),
   ]);
   const existing = subscriptions[0] ?? await createDefaultSubscription(ownerUserId);
   const catalog = PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planLimits[plan.code] }));
-  return toSubscriptionSummary(existing, new Date(), catalog, settings.defaultTimezone);
+  return toSubscriptionSummary(existing, now, catalog, settings.defaultTimezone);
 }
 
 export async function getTelegramAccountAllowance(ownerUserId: string) {
@@ -345,7 +348,7 @@ export type AdminUserRecord = {
 
 function effectivePlan(subscription: typeof subscriptionsTable.$inferSelect | undefined, now: Date): PlanCode {
   if (!subscription) return "plus";
-  if (subscription.expiresAt && subscription.expiresAt.getTime() <= now.getTime()) return "plus";
+  if (!isSubscriptionActiveAt(subscription.expiresAt, now)) return "plus";
   return isPlanCode(subscription.plan) ? subscription.plan : "plus";
 }
 

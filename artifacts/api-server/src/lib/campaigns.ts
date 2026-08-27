@@ -17,8 +17,9 @@ import {
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
-import { legacyScheduleOffsetMs } from "./campaign-schedule";
+import { legacyScheduleOffsetMs, rebasePastPendingSchedule } from "./campaign-schedule";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
+import { getDatabaseNow } from "./database-clock";
 import {
   getUserDailyQuotaUsage,
   releaseUserDailyQuota,
@@ -99,6 +100,54 @@ export async function rebaseLegacyPastScheduleCampaigns() {
   if (rebasedCampaigns > 0) {
     logger.info({ rebasedCampaigns, rebasedTargets }, "Rebased active campaign schedules that were anchored before configuration time");
   }
+}
+
+/**
+ * Prepare a paused campaign to resume without compressing its remaining rounds
+ * into one immediate burst. Only ordinary pending targets are shifted; retries,
+ * review states, in-flight deliveries, and confirmed sends are left intact.
+ */
+export async function rebaseCampaignScheduleForResume(campaignId: string, resumedAt = new Date()) {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${campaignId} FOR UPDATE`);
+    const [campaign] = await tx.select().from(campaignsTable).where(eq(campaignsTable.id, campaignId));
+    if (!campaign || campaign.status !== "paused") {
+      return { rebasedTargetCount: 0, clearedPastSchedule: false, nextRunAt: null, resumedAt };
+    }
+
+    await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${campaignId} FOR UPDATE`);
+    const targets = await tx.select({
+      id: campaignTargetsTable.id,
+      status: campaignTargetsTable.status,
+      lastError: campaignTargetsTable.lastError,
+      nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+    }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, campaignId));
+    const rebase = rebasePastPendingSchedule(targets, resumedAt);
+
+    let rebasedTargetCount = 0;
+    for (const update of rebase.updates) {
+      const [updated] = await tx.update(campaignTargetsTable).set({
+        nextAttemptAt: update.nextAttemptAt,
+        updatedAt: resumedAt,
+      }).where(and(
+        eq(campaignTargetsTable.id, update.id),
+        eq(campaignTargetsTable.status, "pending"),
+        isNull(campaignTargetsTable.lastError),
+        eq(campaignTargetsTable.nextAttemptAt, update.previousNextAttemptAt),
+      )).returning({ id: campaignTargetsTable.id });
+      if (updated) rebasedTargetCount += 1;
+    }
+
+    const clearedPastSchedule = Boolean(campaign.scheduledAt && campaign.scheduledAt <= resumedAt);
+    if (clearedPastSchedule) {
+      await tx.update(campaignsTable).set({
+        scheduledAt: null,
+        updatedAt: resumedAt,
+      }).where(and(eq(campaignsTable.id, campaignId), eq(campaignsTable.status, "paused")));
+    }
+
+    return { rebasedTargetCount, clearedPastSchedule, nextRunAt: rebase.nextRunAt, resumedAt };
+  });
 }
 
 async function withOwnerDeliveryLock<T>(ownerUserId: string, action: () => Promise<T>): Promise<T> {
@@ -261,6 +310,7 @@ async function pauseForDailyQuota(
 
     const [pausedCampaign] = await tx.update(campaignsTable).set({
       status: "paused",
+      pauseReason: quotaScope === "user" ? "user_daily_quota" : "daily_quota",
       updatedAt: now,
     }).where(and(
       eq(campaignsTable.id, campaign.id),
@@ -315,6 +365,7 @@ async function resumeDailyQuotaPausedCampaigns() {
     if (subscription.status !== "active") continue;
     const [resumed] = await db.update(campaignsTable).set({
       status: "queued",
+      pauseReason: null,
       updatedAt: new Date(),
     }).where(and(
       eq(campaignsTable.id, candidate.id),
@@ -369,6 +420,7 @@ export async function resumeQuotaPausedCampaignsAfterSettingsUpdate(input: {
     const resumedAt = new Date();
     const [resumed] = await db.update(campaignsTable).set({
       status: "queued",
+      pauseReason: null,
       updatedAt: resumedAt,
     }).where(and(
       eq(campaignsTable.id, candidate.id),
@@ -465,6 +517,7 @@ export async function pauseCampaignsOverCurrentQuotaAfterSettingsUpdate(): Promi
       if (!trigger) return false;
       const [pausedCampaign] = await tx.update(campaignsTable).set({
         status: "paused",
+        pauseReason: quotaScope === "user" ? "user_daily_quota" : "daily_quota",
         updatedAt: now,
       }).where(and(
         eq(campaignsTable.id, campaign.id),
@@ -492,6 +545,55 @@ export async function pauseCampaignsOverCurrentQuotaAfterSettingsUpdate(): Promi
     });
   }
   return pausedCount;
+}
+
+/**
+ * Requeue only campaigns whose persisted pause reason was subscription expiry.
+ * This deliberately excludes manual and quota pauses, even if a subscription
+ * has since become active.
+ */
+async function resumeSubscriptionExpiryPausedCampaigns() {
+  const resumedAt = await getDatabaseNow();
+  const candidates = await db.select({
+    id: campaignsTable.id,
+    ownerUserId: campaignsTable.ownerUserId,
+  }).from(campaignsTable).where(and(
+    eq(campaignsTable.status, "paused"),
+    eq(campaignsTable.pauseReason, "subscription_expired"),
+  ));
+
+  let resumedCount = 0;
+  for (const candidate of candidates) {
+    const subscription = await getSubscription(candidate.ownerUserId, resumedAt);
+    if (subscription.status !== "active") continue;
+
+    const scheduleRebase = await rebaseCampaignScheduleForResume(candidate.id, resumedAt);
+    const [resumed] = await db.update(campaignsTable).set({
+      status: "queued",
+      pauseReason: null,
+      updatedAt: resumedAt,
+    }).where(and(
+      eq(campaignsTable.id, candidate.id),
+      eq(campaignsTable.status, "paused"),
+      eq(campaignsTable.pauseReason, "subscription_expired"),
+    )).returning({ id: campaignsTable.id });
+    if (!resumed) continue;
+
+    resumedCount += 1;
+    await recordActivity({
+      ownerUserId: candidate.ownerUserId,
+      event: "campaign.resumed.subscription_recovered",
+      level: "info",
+      campaignId: candidate.id,
+      message: "Campaign resumed after the subscription became active again.",
+      metadata: {
+        automaticResume: true,
+        pauseReason: "subscription_expired",
+        rebasedPendingTargetCount: scheduleRebase.rebasedTargetCount,
+      },
+    });
+  }
+  return resumedCount;
 }
 
 export type CampaignCloneMode = "admin" | "user" | null;
@@ -605,7 +707,7 @@ async function markTargetForReview(targetId: string, reason: string) {
 }
 
 export async function processNextCampaignTarget() {
-  const now = new Date();
+  const now = await getDatabaseNow();
   const candidates = await db.select({
     target: campaignTargetsTable,
     campaign: campaignsTable,
@@ -707,7 +809,7 @@ export async function processNextCampaignTarget() {
       ));
       return true;
     }
-    const subscription = await getSubscription(job.campaign.ownerUserId);
+    const subscription = await getSubscription(job.campaign.ownerUserId, now);
     if (subscription.status !== "active") {
       await db.update(campaignTargetsTable).set({
         status: "pending",
@@ -719,6 +821,7 @@ export async function processNextCampaignTarget() {
       ));
       await db.update(campaignsTable).set({
         status: "paused",
+        pauseReason: "subscription_expired",
         updatedAt: new Date(),
       }).where(eq(campaignsTable.id, job.campaign.id));
       await recordActivity({
@@ -875,6 +978,8 @@ export function startCampaignWorker() {
       )).returning({ campaignId: campaignTargetsTable.campaignId });
       await Promise.all([...new Set(stalled.map((target) => target.campaignId))].map(finalizeCampaignIfTerminal));
       await resumeDailyQuotaPausedCampaigns();
+       await resumeSubscriptionExpiryPausedCampaigns();
+       await resumeDailyQuotaPausedCampaigns();
       while (await processNextCampaignTarget()) {
         // Process one delivery at a time to honor Telegram limits.
       }

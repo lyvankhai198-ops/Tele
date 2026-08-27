@@ -75,7 +75,7 @@ import {
   proxiesTable,
   telegramAccountsTable,
 } from "@workspace/db";
-import { campaignCloneMode, campaignSummary } from "../lib/campaigns";
+import { campaignCloneMode, campaignSummary, rebaseCampaignScheduleForResume } from "../lib/campaigns";
 import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration } from "../lib/telegram-config";
@@ -1753,6 +1753,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
 
   const nextStatus = parsed.data.status;
   if (!nextStatus) return void sendError(res, 400, "No campaign status was provided");
+  const isResumingPausedCampaign = nextStatus === "queued" && existing.status === "paused";
   if (nextStatus === "queued") {
     if (!existing.telegramAccountId || !existing.templateId) {
       return void sendError(res, 409, "Campaign needs a Telegram account and a message template before it can run.");
@@ -1820,22 +1821,46 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       }
     }
   }
-  const [campaign] = await db.update(campaignsTable).set({ status: nextStatus, updatedAt: new Date() })
+  const scheduleRebase = isResumingPausedCampaign
+    ? await rebaseCampaignScheduleForResume(existing.id)
+    : null;
+  const [campaign] = await db.update(campaignsTable).set({
+    status: nextStatus,
+    pauseReason: nextStatus === "paused" ? "manual" : null,
+    updatedAt: scheduleRebase?.resumedAt ?? new Date(),
+  })
     .where(eq(campaignsTable.id, existing.id)).returning();
   if (nextStatus === "cancelled") {
     await db.update(campaignTargetsTable).set({ status: "cancelled", quotaReservedAt: null, updatedAt: new Date() })
       .where(and(eq(campaignTargetsTable.campaignId, campaign.id), inArray(campaignTargetsTable.status, ["pending", "sending"])));
   }
+  const isCloneConfirmation = nextStatus === "queued"
+    && Boolean(existing.clonedFromCampaignId)
+    && existing.status === "draft";
+  const activityMetadata = {
+    ...(existing.clonedFromCampaignId ? { clonedFromCampaignId: existing.clonedFromCampaignId } : {}),
+    ...(scheduleRebase?.rebasedTargetCount
+      ? {
+        scheduleRebased: true,
+        pendingTargetCount: scheduleRebase.rebasedTargetCount,
+        nextRunAt: scheduleRebase.nextRunAt?.toISOString() ?? null,
+      }
+      : {}),
+  };
   await recordActivity({
-    event: nextStatus === "queued" && Boolean(existing.clonedFromCampaignId)
+    event: isCloneConfirmation
       ? "campaign.clone.queued"
-      : `campaign.${nextStatus}`,
-    message: nextStatus === "queued" && existing.clonedFromCampaignId
+      : isResumingPausedCampaign ? "campaign.resumed" : `campaign.${nextStatus}`,
+    message: isCloneConfirmation
       ? `Confirmed and queued cloned campaign "${campaign.name}".`
-      : `${nextStatus[0].toUpperCase()}${nextStatus.slice(1)} campaign "${campaign.name}"`,
+      : isResumingPausedCampaign
+        ? scheduleRebase?.rebasedTargetCount
+          ? `Resumed campaign "${campaign.name}" and moved its remaining schedule forward.`
+          : `Resumed campaign "${campaign.name}".`
+        : `${nextStatus[0].toUpperCase()}${nextStatus.slice(1)} campaign "${campaign.name}"`,
     ownerUserId: currentUserId(req),
     campaignId: campaign.id,
-    metadata: existing.clonedFromCampaignId ? { clonedFromCampaignId: existing.clonedFromCampaignId } : undefined,
+    metadata: Object.keys(activityMetadata).length ? activityMetadata : undefined,
   });
   res.json(UpdateCampaignStatusResponse.parse(await campaignSummary(campaign)));
 });

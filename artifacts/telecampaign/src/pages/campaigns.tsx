@@ -133,6 +133,7 @@ const copy = {
     detailWaitingStatus: "Waiting",
     detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
     detailWaitingCountdown: "Send countdown:",
+    detailNextSend: "Next send:",
     detailErrorTitle: "Delivery errors",
     detailErrorEmpty: "No delivery errors recorded.",
     detailErrorAttempts: "attempts",
@@ -238,6 +239,7 @@ const copy = {
     detailWaitingStatus: "Đang chờ",
     detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
     detailWaitingCountdown: "Đếm ngược lần gửi:",
+    detailNextSend: "Lần gửi tiếp:",
     detailErrorTitle: "Chi tiết lỗi gửi",
     detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
     detailErrorAttempts: "lần thử",
@@ -569,7 +571,8 @@ export default function Campaigns() {
 
   async function changeCampaignStatus(campaign: Campaign, nextStatus: "queued" | "paused") {
     try {
-      await updateStatus.mutateAsync({ campaignId: campaign.id, data: { status: nextStatus } });
+      const updatedCampaign = await updateStatus.mutateAsync({ campaignId: campaign.id, data: { status: nextStatus } });
+      if (details?.id === campaign.id) setDetails(updatedCampaign);
       await campaigns.refetch();
       setToast(nextStatus === "paused" ? c.toastPaused : c.toastResumed);
     } catch (error) {
@@ -1044,7 +1047,7 @@ export default function Campaigns() {
                                </div>
                                <p className="mt-2 text-[16px]">{c.detailWaitingCountdown} <RetryCountdown nextAttemptAt={error.nextAttemptAt!} /></p>
                                <p className="mt-1 font-medium">{c.detailWaitingMessage}</p>
-                               {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
+                                {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailNextSend} {formatSchedule(error.nextAttemptAt, language)}</p>}
                              </div>
                            ))}
                          </div>
