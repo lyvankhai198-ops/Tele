@@ -1,11 +1,9 @@
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
-  appUsersTable,
   campaignTargetsTable,
   campaignsTable,
   db,
   destinationsTable,
-  telegramAccountsTable,
 } from "@workspace/db";
 
 function destinationLink(username: string | null): string | null {
@@ -14,18 +12,14 @@ function destinationLink(username: string | null): string | null {
   return normalized ? `https://t.me/${normalized}` : null;
 }
 
-export type ActiveGroupRow = {
+export type SavedGroupRow = {
   telegramId: string;
   title: string;
   username: string | null;
   kind: string;
   memberCount: number | null;
-  campaignId: string;
-  campaignName: string;
-  ownerUsername: string;
-  telegramAccountName: string;
-  roundDelayMinSeconds: number;
-  roundDelayMaxSeconds: number;
+  roundDelayMinSeconds: number | null;
+  roundDelayMaxSeconds: number | null;
 };
 
 export type AdminActiveGroupDirectoryRecord = {
@@ -36,18 +30,14 @@ export type AdminActiveGroupDirectoryRecord = {
     telegramLink: string | null;
     kind: string;
     memberCount: number | null;
-    campaigns: Array<{
-      id: string;
-      name: string;
-      ownerUsername: string;
-      telegramAccountName: string;
-      roundDelayMinSeconds: number;
-      roundDelayMaxSeconds: number;
+    roundDelays: Array<{
+      minSeconds: number;
+      maxSeconds: number;
     }>;
   }>;
 };
 
-export function aggregateActiveGroupRows(rows: ActiveGroupRow[]): AdminActiveGroupDirectoryRecord {
+export function aggregateSavedGroupRows(rows: SavedGroupRow[]): AdminActiveGroupDirectoryRecord {
   const rowsByTelegramId = new Map<string, {
     id: string;
     title: string;
@@ -55,10 +45,10 @@ export function aggregateActiveGroupRows(rows: ActiveGroupRow[]): AdminActiveGro
     telegramLink: string | null;
     kind: string;
     memberCount: number | null;
-    campaigns: AdminActiveGroupDirectoryRecord["groups"][number]["campaigns"];
+    roundDelays: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"];
   }>();
 
-  for (const row of rows as ActiveGroupRow[]) {
+  for (const row of rows) {
     const group = rowsByTelegramId.get(row.telegramId) ?? {
       id: row.telegramId,
       title: row.title,
@@ -66,23 +56,32 @@ export function aggregateActiveGroupRows(rows: ActiveGroupRow[]): AdminActiveGro
       telegramLink: destinationLink(row.username),
       kind: row.kind,
       memberCount: row.memberCount,
-      campaigns: [],
+      roundDelays: [],
     };
-    if (!group.campaigns.some((campaign) => campaign.id === row.campaignId)) {
-      group.campaigns.push({
-        id: row.campaignId,
-        name: row.campaignName,
-        ownerUsername: row.ownerUsername,
-        telegramAccountName: row.telegramAccountName,
-        roundDelayMinSeconds: row.roundDelayMinSeconds,
-        roundDelayMaxSeconds: row.roundDelayMaxSeconds,
+    if (
+      row.roundDelayMinSeconds !== null
+      && row.roundDelayMaxSeconds !== null
+      && !group.roundDelays.some((delay) =>
+        delay.minSeconds === row.roundDelayMinSeconds && delay.maxSeconds === row.roundDelayMaxSeconds,
+      )
+    ) {
+      group.roundDelays.push({
+        minSeconds: row.roundDelayMinSeconds,
+        maxSeconds: row.roundDelayMaxSeconds,
       });
     }
     rowsByTelegramId.set(row.telegramId, group);
   }
 
   return {
-    groups: [...rowsByTelegramId.values()].sort((left, right) => left.title.localeCompare(right.title)),
+    groups: [...rowsByTelegramId.values()]
+      .map((group) => ({
+        ...group,
+        roundDelays: group.roundDelays.sort((left, right) =>
+          left.minSeconds - right.minSeconds || left.maxSeconds - right.maxSeconds,
+        ),
+      }))
+      .sort((left, right) => left.title.localeCompare(right.title)),
   };
 }
 
@@ -93,31 +92,16 @@ export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDi
     username: destinationsTable.username,
     kind: destinationsTable.kind,
     memberCount: destinationsTable.memberCount,
-    campaignId: campaignsTable.id,
-    campaignName: campaignsTable.name,
-    ownerUsername: appUsersTable.username,
-    telegramAccountName: telegramAccountsTable.name,
     roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
     roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
-  }).from(campaignTargetsTable)
-    .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
-    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .innerJoin(appUsersTable, sql`${campaignsTable.ownerUserId} = ${appUsersTable.id}::text`)
-    .innerJoin(telegramAccountsTable, and(
-      eq(campaignsTable.telegramAccountId, telegramAccountsTable.id),
-      isNull(telegramAccountsTable.deletedAt),
-      eq(telegramAccountsTable.status, "connected"),
-      isNotNull(telegramAccountsTable.sessionEncrypted),
-    ))
+  }).from(destinationsTable)
+    .leftJoin(campaignTargetsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+    .leftJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
     .where(and(
-      inArray(campaignsTable.status, ["queued", "running"]),
-      eq(destinationsTable.accountId, campaignsTable.telegramAccountId),
       inArray(destinationsTable.kind, ["group", "forum"]),
       isNull(destinationsTable.topicId),
-      eq(destinationsTable.canPost, true),
-      inArray(campaignTargetsTable.status, ["pending", "sending", "sent"]),
     ))
-    .orderBy(asc(destinationsTable.title), asc(campaignsTable.name));
+    .orderBy(desc(destinationsTable.updatedAt), asc(destinationsTable.title));
 
-  return aggregateActiveGroupRows(rows);
+  return aggregateSavedGroupRows(rows);
 }

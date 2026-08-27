@@ -189,6 +189,31 @@ type TelegramForumTopic = {
   hidden?: boolean;
 };
 
+type SyncedDestination = {
+  id: string;
+  telegramId: string;
+  topicId: number | null;
+};
+
+export function destinationIdsToMarkUnavailableAfterSync(
+  previousDestinations: SyncedDestination[],
+  syncedTelegramIds: ReadonlySet<string>,
+  syncedDestinationKeys: ReadonlySet<string>,
+  topicSyncVerifiedForTelegramIds: ReadonlySet<string>,
+): string[] {
+  const destinationKey = (telegramId: string, topicId: number | null) =>
+    `${telegramId}:${topicId ?? "chat"}`;
+
+  return previousDestinations
+    .filter((destination) => {
+      if (!syncedTelegramIds.has(destination.telegramId)) return true;
+      if (destination.topicId === null) return false;
+      return topicSyncVerifiedForTelegramIds.has(destination.telegramId)
+        && !syncedDestinationKeys.has(destinationKey(destination.telegramId, destination.topicId));
+    })
+    .map((destination) => destination.id);
+}
+
 async function listForumTopics(client: TelegramClient, channel: any): Promise<TelegramForumTopic[]> {
   const topics: TelegramForumTopic[] = [];
   let offsetDate = 0;
@@ -417,19 +442,19 @@ export async function syncAccountDestinations(accountId: string) {
         logger.warn({ err: error, accountId, telegramId: id }, "Telegram forum topic sync failed");
       }
     }
-    await Promise.all(previousDestinations
-      .filter((destination) => {
-        if (!syncedTelegramIds.has(destination.telegramId)) return true;
-        if (destination.topicId === null) return false;
-        return topicSyncVerifiedForTelegramIds.has(destination.telegramId)
-          && !syncedDestinationKeys.has(destinationKey(destination.telegramId, destination.topicId));
-      })
-      .map((destination) => db.update(destinationsTable).set({
+    const unavailableDestinationIds = destinationIdsToMarkUnavailableAfterSync(
+      previousDestinations,
+      syncedTelegramIds,
+      syncedDestinationKeys,
+      topicSyncVerifiedForTelegramIds,
+    );
+    await Promise.all(unavailableDestinationIds
+      .map((destinationId) => db.update(destinationsTable).set({
         canPost: false,
         permissionReason: "This destination is no longer available to the connected account",
         permissionCheckedAt: new Date(),
         updatedAt: new Date(),
-      }).where(eq(destinationsTable.id, destination.id))));
+      }).where(eq(destinationsTable.id, destinationId))));
     await db.update(telegramAccountsTable).set({ status: "connected", lastSyncAt: new Date(), updatedAt: new Date() })
       .where(eq(telegramAccountsTable.id, accountId));
     await recordActivity({

@@ -790,7 +790,7 @@ paths:
       tags: [admin]
       responses:
         "200":
-          description: Groups currently used by active campaigns
+          description: Persisted Telegram groups available in the administrator group library
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminActiveGroupDirectory" }
@@ -2008,19 +2008,15 @@ components:
         activity:
           type: array
           items: { $ref: "#/components/schemas/AdminUserSupportActivity" }
-    AdminActiveGroupCampaign:
+    AdminGroupRoundDelay:
       type: object
-      required: [id, name, ownerUsername, telegramAccountName, roundDelayMinSeconds, roundDelayMaxSeconds]
+      required: [minSeconds, maxSeconds]
       properties:
-        id: { type: string }
-        name: { type: string }
-        ownerUsername: { type: string }
-        telegramAccountName: { type: string }
-        roundDelayMinSeconds: { type: number }
-        roundDelayMaxSeconds: { type: number }
+        minSeconds: { type: number }
+        maxSeconds: { type: number }
     AdminActiveGroup:
       type: object
-      required: [id, title, username, telegramLink, kind, memberCount, campaigns]
+      required: [id, title, username, telegramLink, kind, memberCount, roundDelays]
       properties:
         id: { type: string }
         title: { type: string }
@@ -2028,9 +2024,9 @@ components:
         telegramLink: { type: ["string", "null"] }
         kind: { type: string }
         memberCount: { type: ["number", "null"] }
-        campaigns:
+        roundDelays:
           type: array
-          items: { $ref: "#/components/schemas/AdminActiveGroupCampaign" }
+          items: { $ref: "#/components/schemas/AdminGroupRoundDelay" }
     AdminActiveGroupDirectory:
       type: object
       required: [groups]

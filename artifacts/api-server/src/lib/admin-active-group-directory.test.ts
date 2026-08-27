@@ -1,17 +1,13 @@
 import assert from "node:assert/strict";
-import { aggregateActiveGroupRows, type ActiveGroupRow } from "./admin-active-group-directory";
+import { aggregateSavedGroupRows, type SavedGroupRow } from "./admin-active-group-directory";
 
-const rows: ActiveGroupRow[] = [
+const rows: SavedGroupRow[] = [
   {
     telegramId: "-100123",
     title: "Nhóm công nghệ",
     username: "@tech_forum",
     kind: "forum",
     memberCount: 1200,
-    campaignId: "campaign-a",
-    campaignName: "Tin sáng",
-    ownerUsername: "khanh",
-    telegramAccountName: "Khanh TG",
     roundDelayMinSeconds: 15,
     roundDelayMaxSeconds: 30,
   },
@@ -21,10 +17,6 @@ const rows: ActiveGroupRow[] = [
     username: null,
     kind: "forum",
     memberCount: null,
-    campaignId: "campaign-b",
-    campaignName: "Tin chiều",
-    ownerUsername: "linh",
-    telegramAccountName: "Linh TG",
     roundDelayMinSeconds: 45,
     roundDelayMaxSeconds: 60,
   },
@@ -34,12 +26,8 @@ const rows: ActiveGroupRow[] = [
     username: null,
     kind: "group",
     memberCount: null,
-    campaignId: "campaign-c",
-    campaignName: "Chia sẻ",
-    ownerUsername: "minh",
-    telegramAccountName: "Minh TG",
-    roundDelayMinSeconds: 10,
-    roundDelayMaxSeconds: 20,
+    roundDelayMinSeconds: null,
+    roundDelayMaxSeconds: null,
   },
   {
     telegramId: "-100123",
@@ -47,16 +35,12 @@ const rows: ActiveGroupRow[] = [
     username: "@tech_forum",
     kind: "forum",
     memberCount: 1200,
-    campaignId: "campaign-a",
-    campaignName: "Tin sáng",
-    ownerUsername: "khanh",
-    telegramAccountName: "Khanh TG",
     roundDelayMinSeconds: 15,
     roundDelayMaxSeconds: 30,
   },
 ];
 
-const directory = aggregateActiveGroupRows(rows);
+const directory = aggregateSavedGroupRows(rows);
 
 assert.equal(directory.groups.length, 2);
 
@@ -64,20 +48,19 @@ const techGroup = directory.groups.find((group) => group.id === "-100123");
 assert.ok(techGroup);
 assert.equal(techGroup.telegramLink, "https://t.me/tech_forum");
 assert.deepEqual(
-  techGroup.campaigns.map((campaign) => [
-    campaign.id,
-    campaign.telegramAccountName,
-    campaign.roundDelayMinSeconds,
-    campaign.roundDelayMaxSeconds,
+  techGroup.roundDelays.map((delay) => [
+    delay.minSeconds,
+    delay.maxSeconds,
   ]),
   [
-    ["campaign-a", "Khanh TG", 15, 30],
-    ["campaign-b", "Linh TG", 45, 60],
+    [15, 30],
+    [45, 60],
   ],
 );
 
 const privateGroup = directory.groups.find((group) => group.id === "-100987");
 assert.ok(privateGroup);
 assert.equal(privateGroup.telegramLink, null);
+assert.deepEqual(privateGroup.roundDelays, []);
 
-console.log("Admin active group directory aggregation checks passed.");
+console.log("Admin saved group directory aggregation checks passed.");

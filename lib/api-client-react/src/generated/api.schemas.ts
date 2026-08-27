@@ -1347,13 +1347,9 @@ export interface AdminUserSupport {
   activity: AdminUserSupportActivity[];
 }
 
-export interface AdminActiveGroupCampaign {
-  id: string;
-  name: string;
-  ownerUsername: string;
-  telegramAccountName: string;
-  roundDelayMinSeconds: number;
-  roundDelayMaxSeconds: number;
+export interface AdminGroupRoundDelay {
+  minSeconds: number;
+  maxSeconds: number;
 }
 
 export interface AdminActiveGroup {
@@ -1366,7 +1362,7 @@ export interface AdminActiveGroup {
   kind: string;
   /** @nullable */
   memberCount: number | null;
-  campaigns: AdminActiveGroupCampaign[];
+  roundDelays: AdminGroupRoundDelay[];
 }
 
 export interface AdminActiveGroupDirectory {

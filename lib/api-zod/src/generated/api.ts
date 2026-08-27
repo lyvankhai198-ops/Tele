@@ -1557,13 +1557,9 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
   "telegramLink": zod.string().nullable(),
   "kind": zod.string(),
   "memberCount": zod.number().nullable(),
-  "campaigns": zod.array(zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "ownerUsername": zod.string(),
-  "telegramAccountName": zod.string(),
-  "roundDelayMinSeconds": zod.number(),
-  "roundDelayMaxSeconds": zod.number()
+  "roundDelays": zod.array(zod.object({
+  "minSeconds": zod.number(),
+  "maxSeconds": zod.number()
 }))
 }))
 })

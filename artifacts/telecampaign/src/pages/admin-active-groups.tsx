@@ -15,12 +15,12 @@ import { AppLayout, EmptyState, Panel, SectionHeader } from "@/components/layout
 
 const text = {
   title: "Thư Viện Nhóm",
-  subtitle: "Các nhóm được sử dụng bởi campaign đang chờ hoặc chạy.",
-  search: "Tìm theo tên nhóm, username, campaign hoặc người dùng...",
-  activeGroups: "Nhóm đang hoạt động",
-  relatedCampaigns: "Campaign liên quan",
-  noGroups: "Chưa có nhóm nào được sử dụng.",
-  noGroupsDetail: "Nhóm chỉ xuất hiện khi có campaign đang chờ hoặc chạy.",
+  subtitle: "Tập trung các nhóm đã lưu từ tài khoản Telegram.",
+  search: "Tìm theo tên nhóm hoặc username...",
+  savedGroups: "Nhóm đã lưu",
+  savedRoundDelays: "Delay vòng đã lưu",
+  noGroups: "Thư Viện Nhóm chưa có nhóm nào.",
+  noGroupsDetail: "Đồng bộ tài khoản Telegram để lưu nhóm vào thư viện.",
   loading: "Đang tải danh sách nhóm...",
   loadError: "Không thể tải Thư Viện Nhóm.",
   retry: "Thử lại",
@@ -29,22 +29,18 @@ const text = {
   group: "Nhóm",
   forum: "Forum",
   members: "thành viên",
-  campaignOwner: "Người dùng",
-  telegramAccount: "Tài khoản gửi",
   roundDelay: "Delay vòng",
   seconds: "giây",
-  activeCampaigns: "campaign active",
 } as const;
 
 function groupMatches(group: AdminActiveGroup, needle: string): boolean {
   if (!needle) return true;
   const groupFields = [group.title, group.username, group.kind];
-  const campaignFields = group.campaigns.flatMap((campaign) => [
-    campaign.name,
-    campaign.ownerUsername,
-    campaign.telegramAccountName,
+  const delayFields = group.roundDelays.flatMap((delay) => [
+    delay.minSeconds.toString(),
+    delay.maxSeconds.toString(),
   ]);
-  return [...groupFields, ...campaignFields].some((value) => value?.toLowerCase().includes(needle));
+  return [...groupFields, ...delayFields].some((value) => value?.toLowerCase().includes(needle));
 }
 
 function GroupCard({ group }: { group: AdminActiveGroup }) {
@@ -84,23 +80,15 @@ function GroupCard({ group }: { group: AdminActiveGroup }) {
         )}
       </div>
 
-      <div className="mt-4 space-y-2">
-        {group.campaigns.map((campaign) => (
-          <div key={campaign.id} className="rounded-xl border border-[#eef2f6] bg-[#f8fafc] px-3 py-2.5">
-            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <div className="min-w-0">
-                <p className="truncate text-[12px] font-extrabold text-[#0f172a]">{campaign.name}</p>
-                <p className="mt-0.5 truncate text-[10px] font-semibold text-[#64748b]">
-                  {text.campaignOwner}: {campaign.ownerUsername} · {text.telegramAccount}: {campaign.telegramAccountName}
-                </p>
-              </div>
-              <span className="shrink-0 text-[10px] font-extrabold text-[#1d4ed8]">
-                {text.roundDelay}: {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {text.seconds}
+        {group.roundDelays.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-[#f1f5f9] pt-3">
+            {group.roundDelays.map((delay) => (
+              <span key={`${delay.minSeconds}-${delay.maxSeconds}`} className="text-[10px] font-extrabold text-[#1d4ed8]">
+                {text.roundDelay}: {delay.minSeconds}–{delay.maxSeconds} {text.seconds}
               </span>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
     </article>
   );
 }
@@ -120,7 +108,7 @@ export default function AdminActiveGroupsPage() {
     () => groups.filter((group) => groupMatches(group, needle)),
     [groups, needle],
   );
-  const campaignCount = groups.reduce((total, group) => total + group.campaigns.length, 0);
+  const roundDelayCount = groups.reduce((total, group) => total + group.roundDelays.length, 0);
 
   return (
     <AppLayout activePage="admin-active-groups" title={text.title} subtitle={text.subtitle} hideUpgrade>
@@ -149,7 +137,7 @@ export default function AdminActiveGroupsPage() {
               <Users className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.activeGroups}</p>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.savedGroups}</p>
               <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{groups.length}</p>
             </div>
           </Panel>
@@ -158,8 +146,8 @@ export default function AdminActiveGroupsPage() {
               <RefreshCw className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.relatedCampaigns}</p>
-              <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{campaignCount}</p>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">{text.savedRoundDelays}</p>
+              <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{roundDelayCount}</p>
             </div>
           </Panel>
         </div>

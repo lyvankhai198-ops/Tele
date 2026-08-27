@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdminActiveGroupCampaign } from './adminActiveGroupCampaign';
+import type { AdminGroupRoundDelay } from './adminGroupRoundDelay';
 
 export interface AdminActiveGroup {
   id: string;
@@ -17,5 +17,5 @@ export interface AdminActiveGroup {
   kind: string;
   /** @nullable */
   memberCount: number | null;
-  campaigns: AdminActiveGroupCampaign[];
+  roundDelays: AdminGroupRoundDelay[];
 }
