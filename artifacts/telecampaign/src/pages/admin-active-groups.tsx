@@ -14,15 +14,15 @@ import {
 import { AppLayout, EmptyState, Panel, SectionHeader } from "@/components/layout/AppLayout";
 
 const text = {
-  title: "Kho nhóm đang chạy",
-  subtitle: "Các nhóm đang được sử dụng bởi campaign đang chờ hoặc đang chạy.",
+  title: "Thư Viện Nhóm",
+  subtitle: "Các nhóm được sử dụng bởi campaign đang chờ hoặc chạy.",
   search: "Tìm theo tên nhóm, username, campaign hoặc người dùng...",
   activeGroups: "Nhóm đang hoạt động",
   relatedCampaigns: "Campaign liên quan",
-  noGroups: "Chưa có nhóm nào đang được sử dụng.",
-  noGroupsDetail: "Nhóm chỉ xuất hiện khi có campaign đang chờ hoặc đang chạy.",
+  noGroups: "Chưa có nhóm nào được sử dụng.",
+  noGroupsDetail: "Nhóm chỉ xuất hiện khi có campaign đang chờ hoặc chạy.",
   loading: "Đang tải danh sách nhóm...",
-  loadError: "Không thể tải danh sách nhóm đang chạy.",
+  loadError: "Không thể tải Thư Viện Nhóm.",
   retry: "Thử lại",
   openGroup: "Mở nhóm",
   privateGroup: "Nhóm riêng tư · Chưa có link tham gia",

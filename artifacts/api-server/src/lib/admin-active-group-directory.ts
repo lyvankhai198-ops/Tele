@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   appUsersTable,
   campaignTargetsTable,
@@ -102,7 +102,7 @@ export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDi
   }).from(campaignTargetsTable)
     .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
     .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .innerJoin(appUsersTable, eq(campaignsTable.ownerUserId, appUsersTable.id))
+    .innerJoin(appUsersTable, sql`${campaignsTable.ownerUserId} = ${appUsersTable.id}::text`)
     .innerJoin(telegramAccountsTable, and(
       eq(campaignsTable.telegramAccountId, telegramAccountsTable.id),
       isNull(telegramAccountsTable.deletedAt),

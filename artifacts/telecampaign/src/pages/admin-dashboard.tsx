@@ -54,8 +54,8 @@ const copy = {
     settingsDetail: "Thiết lập giới hạn, gửi tin và quyền truy cập toàn hệ thống.",
     operations: "Giám sát vận hành",
     operationsDetail: "Theo dõi Telegram, campaign, queue và dung lượng VPS.",
-    activeGroups: "Kho nhóm đang chạy",
-    activeGroupsDetail: "Tập trung các nhóm đang được campaign active sử dụng và delay đã cài.",
+    activeGroups: "Thư Viện Nhóm",
+    activeGroupsDetail: "Tập trung các nhóm được campaign active sử dụng và delay đã cài.",
   }
 } as const;
 
