@@ -1346,11 +1346,50 @@ export const UpdateAdminCampaignStatusResponse = zod.object({
 })
 
 
+export const UpdateAdminUserCampaignStatusParams = zod.object({
+  "userId": zod.coerce.string(),
+  "campaignId": zod.coerce.string()
+})
+
+export const UpdateAdminUserCampaignStatusBody = zod.object({
+  "status": zod.enum(['queued', 'paused'])
+})
+
+export const UpdateAdminUserCampaignStatusResponse = zod.object({
+  "id": zod.string(),
+  "ownerUsername": zod.string(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "pendingTargets": zod.number(),
+  "failedTargets": zod.number(),
+  "reviewTargets": zod.number(),
+  "sentTargets": zod.number()
+})
+
+
 export const RetryAdminCampaignTargetParams = zod.object({
   "targetId": zod.coerce.string()
 })
 
 export const RetryAdminCampaignTargetResponse = zod.object({
+  "id": zod.string(),
+  "campaignId": zod.string(),
+  "campaignName": zod.string(),
+  "ownerUsername": zod.string(),
+  "destinationTitle": zod.string().nullable(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable()
+})
+
+
+export const RetryAdminUserSupportCampaignTargetParams = zod.object({
+  "userId": zod.coerce.string(),
+  "targetId": zod.coerce.string()
+})
+
+export const RetryAdminUserSupportCampaignTargetResponse = zod.object({
   "id": zod.string(),
   "campaignId": zod.string(),
   "campaignName": zod.string(),
@@ -1858,6 +1897,13 @@ export const GetAdminUserSupportResponse = zod.object({
   "scheduledAt": zod.coerce.date().nullable(),
   "timezone": zod.string(),
   "repeatCount": zod.number(),
+  "dailyQuota": zod.object({
+  "limit": zod.number().nullable(),
+  "used": zod.number(),
+  "remaining": zod.number().nullable(),
+  "sentToday": zod.number(),
+  "reservedToday": zod.number()
+}),
   "destinationCount": zod.number(),
   "deliveryCount": zod.number(),
   "pendingCount": zod.number(),

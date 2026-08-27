@@ -8,13 +8,20 @@
 - [Campaign scheduling semantics](campaign-scheduling-semantics.md) — repeat count means full destination rounds; delays are measured in seconds between scheduled deliveries.
 - [Paused campaign edits](paused-campaign-edits.md) — editing a paused campaign preserves confirmed sends and rebuilds only its remaining deliveries.
 - [Cloned campaign editing](cloned-campaign-editing.md) — clone routing can be edited without changing its fixed account/template; queue-time readiness remains mandatory.
+- [Administrative delivery controls](administrative-delivery-controls.md) — admin resume/retry paths must enforce the same atomic readiness and scheduling safety as customer controls.
 - [Shared VPS deployments](shared-vps-deployments.md) — publish workspace changes to GitHub main before the VPS pulls and rebuilds TeleCampaign.
 - [GitHub tree file modes](github-tree-file-modes.md) — Git data-tree publishing must set executable script modes explicitly or deployment hooks can silently lose permission.
+- [GitHub blob content verification](github-blob-content-verification.md) — verify Git Blob SHA matches the local source before advancing a deployment branch.
+- [GitHub Git-data refs](github-git-data-refs.md) — read refs use `/git/ref`, while safe ref updates use `/git/refs`; do not reuse the read path for PATCH.
 - [App Storage upload paths](app-storage-upload-paths.md) — derive the internal object path at allocation time; signed upload URLs are not a stable source for reconstructing it.
 - [VPS SSH authentication](vps-ssh-authentication.md) — validate the configured SSH key before deployment and use the secure password fallback only when key parsing fails.
 - [VPS host-key verification](vps-host-key-verification.md) — pin the ED25519 key against an owner-provided fingerprint before password SSH; do not disable strict checking.
+- [VPS disk expansion](vps-disk-expansion.md) — AZVPS upgrades require a full portal Stop/Start; the partition may auto-expand, leaving only ext4 resize needed.
 - [Stale Vite build assets](stale-vite-build-assets.md) — remove deleted public subdirectories from the production dist before serving the next build.
 - [Static frontend release verification](static-frontend-release-verification.md) — compare the public HTML and hashed asset with the VPS build; an already-open SPA cannot update until reloaded.
 - [Playwright tutorial capture](playwright-tutorial-capture.md) — close the recording context before awaiting a video path, and reject incomplete recordings before conversion.
 - [Dashboard video delivery](notification-video-delivery.md) — use byte-range streaming and a WebM fallback when preview Chromium cannot decode an otherwise valid H.264 MP4.
 - [Admin quota exemptions](admin-quota-exemptions.md) — a per-user exemption only removes the total daily message quota; it never changes the user’s plan or campaign/account limits.
+- [Clock-safe campaign pauses](clock-safe-campaign-pauses.md) — a temporary VPS clock skew can falsely expire a trial and pause active campaigns; distinguish this from real expiry.
+- [Database clock result type](database-clock-result-type.md) — Drizzle’s raw PostgreSQL `now()` value can arrive as a string; parse it before timestamp comparisons.
+- [Durable Git SHA construction](durable-git-sha-construction.md) — construct Git blob SHA separators at runtime; literal null bytes can break sandbox callback replay.

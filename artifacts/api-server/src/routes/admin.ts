@@ -32,8 +32,13 @@ import {
   UpdateAdminCampaignStatusParams,
   UpdateAdminCampaignStatusBody,
   UpdateAdminCampaignStatusResponse,
+  UpdateAdminUserCampaignStatusParams,
+  UpdateAdminUserCampaignStatusBody,
+  UpdateAdminUserCampaignStatusResponse,
   RetryAdminCampaignTargetParams,
   RetryAdminCampaignTargetResponse,
+  RetryAdminUserSupportCampaignTargetParams,
+  RetryAdminUserSupportCampaignTargetResponse,
   GetAdminLicenseKeySecretParams,
   GetAdminLicenseKeySecretResponse,
   ListAdminNotificationsResponse,
@@ -83,6 +88,7 @@ import {
   pauseCampaignsOverCurrentQuotaAfterSettingsUpdate,
   resumeQuotaPausedCampaignsAfterSettingsUpdate,
 } from "../lib/campaigns";
+import { rebasePastPendingSchedule } from "../lib/campaign-schedule";
 import { campaignSummary } from "../lib/campaigns";
 import { adminNotificationResponse } from "../lib/admin-notifications";
 import {
@@ -804,92 +810,299 @@ router.get("/admin/operations", async (_req, res): Promise<void> => {
   }));
 });
 
-router.patch("/admin/campaigns/:campaignId", async (req, res): Promise<void> => {
-  const params = UpdateAdminCampaignStatusParams.safeParse(req.params);
-  const body = UpdateAdminCampaignStatusBody.safeParse(req.body);
-  if (!params.success || !body.success) return void sendError(res, 400, "Trạng thái campaign không hợp lệ.");
-  const [campaign] = await db.update(campaignsTable).set({ status: body.data.status, updatedAt: new Date() })
-    .where(eq(campaignsTable.id, params.data.campaignId))
-    .returning();
-  if (!campaign) return void sendError(res, 404, "Không tìm thấy campaign.");
-  const targets = await db.select({ status: campaignTargetsTable.status }).from(campaignTargetsTable)
-    .where(eq(campaignTargetsTable.campaignId, campaign.id));
-  const [owner] = await db.select({ username: appUsersTable.username }).from(appUsersTable)
-    .where(eq(appUsersTable.id, campaign.ownerUserId)).limit(1);
-  await recordActivity({
-    ownerUserId: req.userId!,
-    event: "campaign.admin_status_updated",
-    level: "success",
-    campaignId: campaign.id,
-    message: `Admin changed campaign status to ${body.data.status}`,
-    metadata: { targetOwnerUserId: campaign.ownerUserId, status: body.data.status },
-  });
-  res.json(UpdateAdminCampaignStatusResponse.parse({
+async function adminCampaignOperationResponse(campaign: typeof campaignsTable.$inferSelect) {
+  const [targets, owner] = await Promise.all([
+    db.select({ status: campaignTargetsTable.status }).from(campaignTargetsTable)
+      .where(eq(campaignTargetsTable.campaignId, campaign.id)),
+    db.select({ username: appUsersTable.username }).from(appUsersTable)
+      .where(eq(appUsersTable.id, campaign.ownerUserId)).limit(1),
+  ]);
+  return {
     id: campaign.id,
-    ownerUsername: owner?.username ?? "Unknown",
+    ownerUsername: owner[0]?.username ?? "Unknown",
     name: campaign.name,
     status: campaign.status,
     pendingTargets: targets.filter((target) => ["pending", "sending"].includes(target.status)).length,
     failedTargets: targets.filter((target) => target.status === "failed").length,
+    reviewTargets: targets.filter((target) => target.status === "requires_review").length,
     sentTargets: targets.filter((target) => target.status === "sent").length,
-  }));
+  };
+}
+
+type TransactionalQuery = Pick<typeof db, "execute" | "select">;
+
+async function checkCampaignReadiness(
+  tx: TransactionalQuery,
+  campaign: typeof campaignsTable.$inferSelect,
+) {
+  if (!campaign.telegramAccountId || !campaign.templateId) {
+    return { ready: false as const, message: "Campaign cần tài khoản Telegram và mẫu tin trước khi chạy." };
+  }
+  await Promise.all([
+    tx.execute(sql`SELECT 1 FROM ${telegramAccountsTable} WHERE ${telegramAccountsTable.id} = ${campaign.telegramAccountId} FOR SHARE`),
+    tx.execute(sql`SELECT 1 FROM ${messageTemplatesTable} WHERE ${messageTemplatesTable.id} = ${campaign.templateId} FOR SHARE`),
+    tx.execute(sql`
+      SELECT 1 FROM ${campaignTargetsTable}
+      INNER JOIN ${destinationsTable} ON ${campaignTargetsTable.destinationId} = ${destinationsTable.id}
+      WHERE ${campaignTargetsTable.campaignId} = ${campaign.id}
+      FOR SHARE
+    `),
+  ]);
+  const [accountRows, templateRows, targetDestinations] = await Promise.all([
+    tx.select().from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.id, campaign.telegramAccountId),
+      eq(telegramAccountsTable.ownerUserId, campaign.ownerUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    )).limit(1),
+    tx.select().from(messageTemplatesTable).where(and(
+      eq(messageTemplatesTable.id, campaign.templateId),
+      eq(messageTemplatesTable.ownerUserId, campaign.ownerUserId),
+    )).limit(1),
+    tx.select({ destination: destinationsTable }).from(campaignTargetsTable)
+      .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .where(eq(campaignTargetsTable.campaignId, campaign.id)),
+  ]);
+  const account = accountRows[0];
+  const template = templateRows[0];
+  if (!account || !account.sessionEncrypted || account.status !== "connected") {
+    return { ready: false as const, message: "Tài khoản Telegram của campaign cần được kết nối trước khi chạy." };
+  }
+  if (!template) {
+    return { ready: false as const, message: "Mẫu tin của campaign không còn khả dụng." };
+  }
+  if (template.mode === "forward" && (
+    template.sourceAccountId !== campaign.telegramAccountId || !template.sourceMessageId
+  )) {
+    return { ready: false as const, message: "Campaign forward cần một Tin nhắn đã lưu hợp lệ trước khi chạy." };
+  }
+  if (!targetDestinations.length || targetDestinations.some(({ destination }) => (
+    destination.accountId !== campaign.telegramAccountId || !destination.canPost
+  ))) {
+    return { ready: false as const, message: "Mọi group đích cần được đồng bộ và có quyền gửi trước khi chạy." };
+  }
+  return { ready: true as const };
+}
+
+async function updateCampaignStatusAsAdmin(input: {
+  actorUserId: string;
+  campaignId: string;
+  ownerUserId?: string;
+  status: "queued" | "paused";
+}) {
+  const filters = [
+    eq(campaignsTable.id, input.campaignId),
+    ...(input.ownerUserId ? [eq(campaignsTable.ownerUserId, input.ownerUserId)] : []),
+  ];
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${and(...filters)} FOR UPDATE`);
+    const [existing] = await tx.select().from(campaignsTable).where(and(...filters)).limit(1);
+    if (!existing) return { kind: "error" as const, status: 404, message: "Không tìm thấy campaign của người dùng." };
+    if (input.status === "paused" && !["queued", "running"].includes(existing.status)) {
+      return { kind: "error" as const, status: 409, message: "Chỉ có thể dừng campaign đang chờ hoặc đang chạy." };
+    }
+    if (input.status === "queued" && existing.status !== "paused") {
+      return { kind: "error" as const, status: 409, message: "Chỉ có thể tiếp tục campaign đang tạm dừng." };
+    }
+
+    let scheduleRebase: { rebasedTargetCount: number; clearedPastSchedule: boolean; nextRunAt: Date | null } | null = null;
+    const now = new Date();
+    if (input.status === "queued") {
+      const readiness = await checkCampaignReadiness(tx, existing);
+      if (!readiness.ready) return { kind: "error" as const, status: 409, message: readiness.message };
+      await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${existing.id} FOR UPDATE`);
+      const targets = await tx.select({
+        id: campaignTargetsTable.id,
+        status: campaignTargetsTable.status,
+        lastError: campaignTargetsTable.lastError,
+        nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+      }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, existing.id));
+      const rebase = rebasePastPendingSchedule(targets, now);
+      let rebasedTargetCount = 0;
+      for (const update of rebase.updates) {
+        const [updated] = await tx.update(campaignTargetsTable).set({
+          nextAttemptAt: update.nextAttemptAt,
+          updatedAt: now,
+        }).where(and(
+          eq(campaignTargetsTable.id, update.id),
+          eq(campaignTargetsTable.status, "pending"),
+          isNull(campaignTargetsTable.lastError),
+          eq(campaignTargetsTable.nextAttemptAt, update.previousNextAttemptAt),
+        )).returning({ id: campaignTargetsTable.id });
+        if (!updated) throw new Error(`Campaign target ${update.id} changed while resuming.`);
+        rebasedTargetCount += 1;
+      }
+      const clearedPastSchedule = Boolean(existing.scheduledAt && existing.scheduledAt <= now);
+      if (clearedPastSchedule) {
+        await tx.update(campaignsTable).set({ scheduledAt: null, updatedAt: now })
+          .where(and(eq(campaignsTable.id, existing.id), eq(campaignsTable.status, "paused")));
+      }
+      scheduleRebase = { rebasedTargetCount, clearedPastSchedule, nextRunAt: rebase.nextRunAt };
+    }
+
+    const [campaign] = await tx.update(campaignsTable).set({
+      status: input.status,
+      pauseReason: input.status === "paused" ? "manual" : null,
+      updatedAt: now,
+    }).where(and(
+      ...filters,
+      eq(campaignsTable.status, existing.status),
+    )).returning();
+    if (!campaign) return { kind: "error" as const, status: 409, message: "Trạng thái campaign đã thay đổi. Hãy tải lại và thử lại." };
+    return { kind: "success" as const, campaign, existing, scheduleRebase };
+  });
+  if (outcome.kind === "error") return outcome;
+
+  await recordActivity({
+    ownerUserId: input.actorUserId,
+    event: "campaign.admin_status_updated",
+    level: "success",
+    campaignId: outcome.campaign.id,
+    message: `Admin changed customer campaign status from ${outcome.existing.status} to ${input.status}.`,
+    metadata: {
+      targetOwnerUserId: outcome.campaign.ownerUserId,
+      previousStatus: outcome.existing.status,
+      status: input.status,
+      ...(outcome.scheduleRebase?.rebasedTargetCount
+        ? { scheduleRebased: true, pendingTargetCount: outcome.scheduleRebase.rebasedTargetCount }
+        : {}),
+    },
+  });
+  return { kind: "success" as const, campaign: outcome.campaign };
+}
+
+async function retryCampaignTargetAsAdmin(input: {
+  actorUserId: string;
+  ownerUserId?: string;
+  targetId: string;
+}) {
+  const outcome = await db.transaction(async (tx) => {
+    const [candidate] = await tx.select({
+      target: campaignTargetsTable,
+      campaign: campaignsTable,
+    }).from(campaignTargetsTable)
+      .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+      .where(and(
+        eq(campaignTargetsTable.id, input.targetId),
+        ...(input.ownerUserId ? [eq(campaignsTable.ownerUserId, input.ownerUserId)] : []),
+      )).limit(1);
+    if (!candidate) return { kind: "error" as const, status: 404, message: "Không tìm thấy target của người dùng." };
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.campaign.id} FOR UPDATE`);
+    await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.id} = ${candidate.target.id} FOR UPDATE`);
+    const [target] = await tx.select().from(campaignTargetsTable).where(eq(campaignTargetsTable.id, candidate.target.id));
+    if (!target || target.status !== "failed") {
+      return {
+        kind: "error" as const,
+        status: 409,
+        message: target?.status === "requires_review"
+          ? "Target cần xác minh kết quả gửi trước khi retry để tránh gửi trùng và giữ quota chính xác."
+          : "Chỉ có thể retry target đang lỗi.",
+      };
+    }
+    const [campaign] = await tx.select().from(campaignsTable).where(eq(campaignsTable.id, target.campaignId));
+    if (!campaign) return { kind: "error" as const, status: 404, message: "Không tìm thấy campaign." };
+    const shouldResumeCompletedCampaign = ["completed", "completed_with_errors"].includes(campaign.status);
+    if (shouldResumeCompletedCampaign) {
+      const readiness = await checkCampaignReadiness(tx, campaign);
+      if (!readiness.ready) {
+        return { kind: "error" as const, status: 409, message: readiness.message };
+      }
+    }
+    const now = new Date();
+    const [retriedTarget] = await tx.update(campaignTargetsTable).set({
+      status: "pending",
+      quotaReservedAt: null,
+      nextAttemptAt: now,
+      lastError: null,
+      updatedAt: now,
+    }).where(and(
+      eq(campaignTargetsTable.id, target.id),
+      eq(campaignTargetsTable.status, "failed"),
+    )).returning();
+    if (!retriedTarget) return { kind: "error" as const, status: 409, message: "Target đã thay đổi trạng thái. Hãy tải lại và thử lại." };
+
+    const [updatedCampaign] = shouldResumeCompletedCampaign
+      ? await tx.update(campaignsTable).set({ status: "queued", pauseReason: null, updatedAt: now })
+        .where(and(eq(campaignsTable.id, campaign.id), eq(campaignsTable.status, campaign.status))).returning()
+      : [campaign];
+    if (!updatedCampaign) return { kind: "error" as const, status: 409, message: "Campaign đã thay đổi trạng thái. Hãy tải lại và thử lại." };
+    const [destination] = await tx.select({ title: destinationsTable.title }).from(destinationsTable)
+      .where(eq(destinationsTable.id, retriedTarget.destinationId)).limit(1);
+    return { kind: "success" as const, target: retriedTarget, campaign: updatedCampaign, destinationTitle: destination?.title ?? null };
+  });
+  if (outcome.kind === "error") return outcome;
+
+  const [owner] = await db.select({ username: appUsersTable.username }).from(appUsersTable)
+    .where(eq(appUsersTable.id, outcome.campaign.ownerUserId)).limit(1);
+  await recordActivity({
+    ownerUserId: input.actorUserId,
+    event: "campaign.target.admin_retried",
+    level: "success",
+    campaignId: outcome.target.campaignId,
+    targetId: outcome.target.id,
+    message: `Admin requeued a failed target for customer campaign "${outcome.campaign.name}".`,
+    metadata: { targetOwnerUserId: outcome.campaign.ownerUserId },
+  });
+  return {
+    kind: "success" as const,
+    response: {
+      id: outcome.target.id,
+      campaignId: outcome.target.campaignId,
+      campaignName: outcome.campaign.name,
+      ownerUsername: owner?.username ?? "Unknown",
+      destinationTitle: outcome.destinationTitle,
+      status: outcome.target.status,
+      attempts: outcome.target.attempts,
+      nextAttemptAt: outcome.target.nextAttemptAt,
+      lastError: outcome.target.lastError,
+    },
+  };
+}
+
+router.patch("/admin/campaigns/:campaignId", async (req, res): Promise<void> => {
+  const params = UpdateAdminCampaignStatusParams.safeParse(req.params);
+  const body = UpdateAdminCampaignStatusBody.safeParse(req.body);
+  if (!params.success || !body.success) return void sendError(res, 400, "Trạng thái campaign không hợp lệ.");
+  const outcome = await updateCampaignStatusAsAdmin({
+    actorUserId: req.userId!,
+    campaignId: params.data.campaignId,
+    status: body.data.status,
+  });
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.json(UpdateAdminCampaignStatusResponse.parse(await adminCampaignOperationResponse(outcome.campaign)));
+});
+
+router.patch("/admin/users/:userId/campaigns/:campaignId", async (req, res): Promise<void> => {
+  const params = UpdateAdminUserCampaignStatusParams.safeParse(req.params);
+  const body = UpdateAdminUserCampaignStatusBody.safeParse(req.body);
+  if (!params.success || !body.success) return void sendError(res, 400, "Trạng thái campaign không hợp lệ.");
+  const outcome = await updateCampaignStatusAsAdmin({
+    actorUserId: req.userId!,
+    campaignId: params.data.campaignId,
+    ownerUserId: params.data.userId,
+    status: body.data.status,
+  });
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.json(UpdateAdminUserCampaignStatusResponse.parse(await adminCampaignOperationResponse(outcome.campaign)));
 });
 
 router.post("/admin/targets/:targetId/retry", async (req, res): Promise<void> => {
   const params = RetryAdminCampaignTargetParams.safeParse(req.params);
   if (!params.success) return void sendError(res, 400, "Target không hợp lệ.");
-  const [target] = await db.update(campaignTargetsTable).set({
-    status: "pending",
-    quotaReservedAt: null,
-    nextAttemptAt: new Date(),
-    lastError: null,
-    updatedAt: new Date(),
-  }).where(and(
-    eq(campaignTargetsTable.id, params.data.targetId),
-    eq(campaignTargetsTable.status, "failed"),
-  )).returning();
-  if (!target) {
-    const [existing] = await db.select({
-      id: campaignTargetsTable.id,
-      status: campaignTargetsTable.status,
-    }).from(campaignTargetsTable)
-      .where(eq(campaignTargetsTable.id, params.data.targetId)).limit(1);
-    return void sendError(res, existing ? 409 : 404, existing
-      ? existing.status === "requires_review"
-        ? "Target cần xác minh kết quả gửi trước khi có thể retry để tránh gửi trùng và giữ quota chính xác."
-        : "Chỉ có thể retry target đang lỗi."
-      : "Không tìm thấy target.");
-  }
-  const [campaign] = await db.select().from(campaignsTable).where(eq(campaignsTable.id, target.campaignId)).limit(1);
-  if (campaign) {
-    await db.update(campaignsTable).set({ status: "queued", updatedAt: new Date() })
-      .where(eq(campaignsTable.id, campaign.id));
-  }
-  const [destination] = await db.select({ title: destinationsTable.title }).from(destinationsTable)
-    .where(eq(destinationsTable.id, target.destinationId)).limit(1);
-  const [owner] = campaign
-    ? await db.select({ username: appUsersTable.username }).from(appUsersTable).where(eq(appUsersTable.id, campaign.ownerUserId)).limit(1)
-    : [];
-  await recordActivity({
-    ownerUserId: req.userId!,
-    event: "campaign.target.admin_retried",
-    level: "success",
-    campaignId: target.campaignId,
-    targetId: target.id,
-    message: "Admin requeued a campaign target",
-    metadata: { targetOwnerUserId: campaign?.ownerUserId ?? null },
+  const outcome = await retryCampaignTargetAsAdmin({ actorUserId: req.userId!, targetId: params.data.targetId });
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.json(RetryAdminCampaignTargetResponse.parse(outcome.response));
+});
+
+router.post("/admin/users/:userId/targets/:targetId/retry", async (req, res): Promise<void> => {
+  const params = RetryAdminUserSupportCampaignTargetParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, "Target không hợp lệ.");
+  const outcome = await retryCampaignTargetAsAdmin({
+    actorUserId: req.userId!,
+    ownerUserId: params.data.userId,
+    targetId: params.data.targetId,
   });
-  res.json(RetryAdminCampaignTargetResponse.parse({
-    id: target.id,
-    campaignId: target.campaignId,
-    campaignName: campaign?.name ?? "Unknown campaign",
-    ownerUsername: owner?.username ?? "Unknown",
-    destinationTitle: destination?.title ?? null,
-    status: target.status,
-    attempts: target.attempts,
-    nextAttemptAt: target.nextAttemptAt,
-    lastError: target.lastError,
-  }));
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.json(RetryAdminUserSupportCampaignTargetResponse.parse(outcome.response));
 });
 
 router.get("/admin/license-keys", async (req, res): Promise<void> => {

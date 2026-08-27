@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignDailyQuota } from './campaignDailyQuota';
 
 export interface AdminUserSupportCampaign {
   id: string;
@@ -24,6 +25,7 @@ export interface AdminUserSupportCampaign {
   scheduledAt: Date | null;
   timezone: string;
   repeatCount: number;
+  dailyQuota: CampaignDailyQuota;
   destinationCount: number;
   deliveryCount: number;
   pendingCount: number;

@@ -3117,6 +3117,74 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateAdminCampaignStatusMutationOptions(options));
     }
 
+export const getUpdateAdminUserCampaignStatusUrl = (userId: string,
+    campaignId: string,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/campaigns/${campaignId}`
+}
+
+export const updateAdminUserCampaignStatus = async (userId: string,
+    campaignId: string,
+    adminCampaignStatusInput: AdminCampaignStatusInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminOperationCampaign> => {
+
+  return customFetch<AdminOperationCampaign>(getUpdateAdminUserCampaignStatusUrl(userId,campaignId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminCampaignStatusInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminUserCampaignStatusMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserCampaignStatus>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserCampaignStatus>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignStatusInput>}, TContext> => {
+
+const mutationKey = ['updateAdminUserCampaignStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminUserCampaignStatus>>, {userId: string;campaignId: string;data: BodyType<AdminCampaignStatusInput>}> = (props) => {
+          const {userId,campaignId,data} = props ?? {};
+
+          return  updateAdminUserCampaignStatus(userId,campaignId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminUserCampaignStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminUserCampaignStatus>>>
+    export type UpdateAdminUserCampaignStatusMutationBody = BodyType<AdminCampaignStatusInput>
+    export type UpdateAdminUserCampaignStatusMutationError = ErrorType<void>
+
+    export const useUpdateAdminUserCampaignStatus = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserCampaignStatus>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminUserCampaignStatus>>,
+        TError,
+        {userId: string;campaignId: string;data: BodyType<AdminCampaignStatusInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminUserCampaignStatusMutationOptions(options));
+    }
+
 export const getRetryAdminCampaignTargetUrl = (targetId: string,) => {
 
 
@@ -3180,6 +3248,73 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getRetryAdminCampaignTargetMutationOptions(options));
+    }
+
+export const getRetryAdminUserSupportCampaignTargetUrl = (userId: string,
+    targetId: string,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/targets/${targetId}/retry`
+}
+
+export const retryAdminUserSupportCampaignTarget = async (userId: string,
+    targetId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminOperationTarget> => {
+
+  return customFetch<AdminOperationTarget>(getRetryAdminUserSupportCampaignTargetUrl(userId,targetId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryAdminUserSupportCampaignTargetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryAdminUserSupportCampaignTarget>>, TError,{userId: string;targetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryAdminUserSupportCampaignTarget>>, TError,{userId: string;targetId: string}, TContext> => {
+
+const mutationKey = ['retryAdminUserSupportCampaignTarget'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryAdminUserSupportCampaignTarget>>, {userId: string;targetId: string}> = (props) => {
+          const {userId,targetId} = props ?? {};
+
+          return  retryAdminUserSupportCampaignTarget(userId,targetId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryAdminUserSupportCampaignTargetMutationResult = NonNullable<Awaited<ReturnType<typeof retryAdminUserSupportCampaignTarget>>>
+
+    export type RetryAdminUserSupportCampaignTargetMutationError = ErrorType<void>
+
+    export const useRetryAdminUserSupportCampaignTarget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryAdminUserSupportCampaignTarget>>, TError,{userId: string;targetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryAdminUserSupportCampaignTarget>>,
+        TError,
+        {userId: string;targetId: string},
+        TContext
+      > => {
+      return useMutation(getRetryAdminUserSupportCampaignTargetMutationOptions(options));
     }
 
 export const getActivateLicenseUrl = () => {

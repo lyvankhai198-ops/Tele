@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { vi as viLocale, enUS } from "date-fns/locale";
@@ -17,6 +18,8 @@ import {
   useGetAdminUserSupport,
   useGetAdminUserSupportCampaignTargets,
   useListTelegramAccounts,
+  useRetryAdminUserSupportCampaignTarget,
+  useUpdateAdminUserCampaignStatus,
   getGetAdminUserSupportQueryKey,
   getGetAdminUserSupportCampaignTargetsQueryKey,
   type AdminUserSupportCampaign,
@@ -41,7 +44,11 @@ import {
   ExternalLink,
   FileText,
   Copy,
+  CirclePause,
   LoaderCircle,
+  Play,
+  RotateCcw,
+  Search,
 } from "lucide-react";
 
 const copy = {
@@ -58,7 +65,7 @@ const copy = {
     statDeliveries: "Failed / Review Deliveries",
     statSentToday: "Total messages sent today",
     sectionAccounts: "Telegram Accounts",
-    sectionCampaigns: "Recent Campaigns",
+    sectionCampaigns: "Customer Campaigns",
     sectionErrors: "Recent Delivery Errors",
     sectionActivity: "Activity Log",
     emptyAccounts: "No Telegram accounts found.",
@@ -94,7 +101,25 @@ const copy = {
     targetPage: "Showing {start}–{end} of {total} targets",
     previousTargets: "Previous",
     nextTargets: "Next",
-    recentCampaignsOnly: "Showing the 50 most recently updated campaigns.",
+    campaignSearch: "Search campaign name…",
+    allCampaigns: "All campaigns",
+    activeCampaigns: "Active",
+    runningCampaigns: "Running",
+    pausedCampaigns: "Paused",
+    queuedCampaigns: "Queued",
+    completedCampaigns: "Completed",
+    campaignSchedule: "Scheduled",
+    campaignQuota: "Today",
+    campaignQuotaUnlimited: (used: number) => `${used} sent · Unlimited`,
+    campaignQuotaLimited: (used: number, limit: number) => `${used}/${limit}`,
+    pauseCampaign: "Pause",
+    resumeCampaign: "Resume",
+    retryTarget: "Retry target",
+    retryingTarget: "Retrying…",
+    reviewRequired: "Review before retry",
+    campaignPaused: "Campaign paused.",
+    campaignResumed: "Campaign resumed.",
+    targetRetried: "Target returned to the delivery queue.",
     cloneQuick: "Quick clone",
     cloneTitle: "Clone campaign to admin draft",
     cloneDetail: "The original campaign stays unchanged. This creates a draft under your admin account without delivery history or quota usage.",
@@ -120,7 +145,7 @@ const copy = {
     statDeliveries: "Gửi lỗi / Cần xem xét",
     statSentToday: "Tổng tin nhắn gửi hôm nay",
     sectionAccounts: "Tài khoản Telegram",
-    sectionCampaigns: "Chiến dịch gần đây",
+    sectionCampaigns: "Chiến dịch khách hàng",
     sectionErrors: "Lỗi gửi gần đây",
     sectionActivity: "Nhật ký hoạt động",
     emptyAccounts: "Không có tài khoản Telegram.",
@@ -156,7 +181,25 @@ const copy = {
     targetPage: "Hiển thị {start}–{end} / {total} target",
     previousTargets: "Trước",
     nextTargets: "Tiếp",
-    recentCampaignsOnly: "Đang hiển thị 50 chiến dịch được cập nhật gần nhất.",
+    campaignSearch: "Tìm theo tên chiến dịch...",
+    allCampaigns: "Tất cả campaign",
+    activeCampaigns: "Đang hoạt động",
+    runningCampaigns: "Đang chạy",
+    pausedCampaigns: "Đã dừng",
+    queuedCampaigns: "Đang chờ",
+    completedCampaigns: "Hoàn thành",
+    campaignSchedule: "Lên lịch",
+    campaignQuota: "Hôm nay",
+    campaignQuotaUnlimited: (used: number) => `${used} đã gửi · Không giới hạn`,
+    campaignQuotaLimited: (used: number, limit: number) => `${used}/${limit}`,
+    pauseCampaign: "Dừng",
+    resumeCampaign: "Tiếp tục",
+    retryTarget: "Retry target",
+    retryingTarget: "Đang retry…",
+    reviewRequired: "Cần review trước khi retry",
+    campaignPaused: "Đã dừng campaign.",
+    campaignResumed: "Campaign đã tiếp tục.",
+    targetRetried: "Target đã được đưa lại vào hàng chờ gửi.",
     cloneQuick: "Clone nhanh",
     cloneTitle: "Clone campaign thành nháp admin",
     cloneDetail: "Campaign gốc không bị thay đổi. Hệ thống tạo một bản nháp của admin, không mang theo lịch sử gửi hoặc quota đã dùng.",
@@ -188,11 +231,15 @@ function CampaignDetails({
   userId,
   language,
   text,
+  onRetryTarget,
+  retryingTargetId,
 }: {
   campaign: AdminUserSupportCampaign;
   userId: string;
   language: string;
   text: SupportCopy;
+  onRetryTarget: (targetId: string) => void;
+  retryingTargetId: string | null;
 }) {
   const [offset, setOffset] = useState(0);
   const { data, isLoading, error } = useGetAdminUserSupportCampaignTargets(
@@ -273,6 +320,20 @@ function CampaignDetails({
                     {target.sentAt && <span>{text.sentAt}: {formatDate(target.sentAt, language)}</span>}
                   </div>
                   {target.lastError && <p className="mt-2 break-words rounded-lg bg-[#fff1f2] px-2 py-1.5 text-[11px] font-medium leading-relaxed text-[#be123c]">{target.lastError}</p>}
+                   {target.status === "failed" && (
+                     <button
+                       type="button"
+                       onClick={() => onRetryTarget(target.id)}
+                       disabled={retryingTargetId === target.id}
+                       className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wide text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60"
+                     >
+                       {retryingTargetId === target.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                       {retryingTargetId === target.id ? text.retryingTarget : text.retryTarget}
+                     </button>
+                   )}
+                   {target.status === "requires_review" && (
+                     <p className="mt-3 text-[10px] font-extrabold uppercase tracking-wide text-[#b45309]">{text.reviewRequired}</p>
+                   )}
                 </div>
               ))}
             </div>
@@ -308,6 +369,7 @@ function CampaignDetails({
 
 export default function AdminUserSupportPage({ userId }: { userId: string }) {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { language } = useLanguage();
   const text = copy[language];
   const [expandedCampaignIds, setExpandedCampaignIds] = useState<Set<string>>(() => new Set());
@@ -315,8 +377,12 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
   const [cloneAccountId, setCloneAccountId] = useState("");
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [campaignSearch, setCampaignSearch] = useState("");
+  const [campaignStatus, setCampaignStatus] = useState("active");
   const adminAccounts = useListTelegramAccounts();
   const cloneMutation = useCloneAdminUserCampaign();
+  const updateCampaignMutation = useUpdateAdminUserCampaignStatus();
+  const retryTargetMutation = useRetryAdminUserSupportCampaignTarget();
 
   const { data, isLoading, error } = useGetAdminUserSupport(userId, {
     query: {
@@ -395,6 +461,36 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
       setCloneError(cause instanceof Error ? cause.message : text.loadError);
     }
   };
+  const refreshCampaignSupport = () => {
+    void queryClient.invalidateQueries({ queryKey: getGetAdminUserSupportQueryKey(userId) });
+    void queryClient.invalidateQueries({ queryKey: getGetAdminUserSupportCampaignTargetsQueryKey() });
+  };
+  const changeCampaignStatus = async (campaign: AdminUserSupportCampaign, status: "queued" | "paused") => {
+    try {
+      await updateCampaignMutation.mutateAsync({ userId, campaignId: campaign.id, data: { status } });
+      setToast(status === "paused" ? text.campaignPaused : text.campaignResumed);
+      refreshCampaignSupport();
+    } catch (cause) {
+      setToast(cause instanceof Error ? cause.message : text.loadError);
+    }
+  };
+  const retryCampaignTarget = async (targetId: string) => {
+    try {
+      await retryTargetMutation.mutateAsync({ userId, targetId });
+      setToast(text.targetRetried);
+      refreshCampaignSupport();
+    } catch (cause) {
+      setToast(cause instanceof Error ? cause.message : text.loadError);
+    }
+  };
+  const listedCampaigns = campaigns.filter((campaign) => {
+    const needle = campaignSearch.trim().toLowerCase();
+    const matchesSearch = !needle || campaign.name.toLowerCase().includes(needle);
+    const matchesStatus = campaignStatus === "all"
+      || (campaignStatus === "active" && ["queued", "running"].includes(campaign.status))
+      || campaign.status === campaignStatus;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <AppLayout
@@ -563,9 +659,28 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
             {campaigns.length === 0 ? (
               <EmptyState icon={Megaphone} title={text.emptyCampaigns} detail="" />
             ) : (
-              <div className="divide-y divide-[#eef2f6] max-h-[500px] overflow-y-auto">
-                {campaigns.map((camp) => {
+              <>
+                <div className="grid gap-2 border-b border-[#eef2f6] p-4">
+                  <label className="relative">
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#94a3b8]" />
+                    <input value={campaignSearch} onChange={(event) => setCampaignSearch(event.target.value)} placeholder={text.campaignSearch} className="h-9 w-full rounded-lg border border-[#dbe2ea] pl-8 pr-3 text-[12px] font-semibold outline-none focus:border-[#1a2b88]" />
+                  </label>
+                  <select value={campaignStatus} onChange={(event) => setCampaignStatus(event.target.value)} className="h-9 rounded-lg border border-[#dbe2ea] bg-white px-2.5 text-[12px] font-semibold text-[#334155] outline-none focus:border-[#1a2b88]">
+                    <option value="active">{text.activeCampaigns}</option>
+                    <option value="all">{text.allCampaigns}</option>
+                    <option value="queued">{text.queuedCampaigns}</option>
+                    <option value="running">{text.runningCampaigns}</option>
+                    <option value="paused">{text.pausedCampaigns}</option>
+                    <option value="completed">{text.completedCampaigns}</option>
+                    <option value="completed_with_errors">{text.completedCampaigns}</option>
+                  </select>
+                </div>
+                <div className="divide-y divide-[#eef2f6] max-h-[650px] overflow-y-auto">
+                {listedCampaigns.map((camp) => {
                   const isExpanded = expandedCampaignIds.has(camp.id);
+                  const quotaLabel = camp.dailyQuota.limit === null
+                    ? text.campaignQuotaUnlimited(camp.dailyQuota.used)
+                    : text.campaignQuotaLimited(camp.dailyQuota.used, camp.dailyQuota.limit);
                   return (
                   <div key={camp.id} className="p-4 hover:bg-[#f8fafc]/50 transition-colors">
                     <div className="flex items-start justify-between mb-2 gap-4">
@@ -595,7 +710,11 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                         <div className="text-[14px] text-[#c2410c] mt-0.5">{camp.reviewCount}</div>
                       </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="mt-3 space-y-1 text-[10px] font-semibold text-[#64748b]">
+                      <p>{text.campaignQuota}: <span className="font-extrabold text-[#1d4ed8]">{quotaLabel}</span></p>
+                      <p>{text.campaignSchedule}: <span className="font-extrabold text-[#334155]">{camp.scheduledAt ? formatDate(camp.scheduledAt, language) : "—"}</span></p>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <button
                         type="button"
                         onClick={() => toggleCampaignDetails(camp.id)}
@@ -605,6 +724,27 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                         {isExpanded ? text.hideDetails : text.viewDetails}
                         {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </button>
+                      {["queued", "running"].includes(camp.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => void changeCampaignStatus(camp, "paused")}
+                          disabled={updateCampaignMutation.isPending}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#f04444] px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-white transition hover:bg-[#dc2626] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {updateCampaignMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <CirclePause className="h-3.5 w-3.5" />}
+                          {text.pauseCampaign}
+                        </button>
+                      ) : camp.status === "paused" ? (
+                        <button
+                          type="button"
+                          onClick={() => void changeCampaignStatus(camp, "queued")}
+                          disabled={updateCampaignMutation.isPending}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#1a2b88] px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-white transition hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {updateCampaignMutation.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                          {text.resumeCampaign}
+                        </button>
+                      ) : <span />}
                       <button
                         type="button"
                         onClick={() => openClone(camp)}
@@ -616,17 +756,23 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                       </button>
                     </div>
                     {isExpanded && (
-                      <CampaignDetails campaign={camp} userId={userId} language={language} text={text} />
+                      <CampaignDetails
+                        campaign={camp}
+                        userId={userId}
+                        language={language}
+                        text={text}
+                        onRetryTarget={(targetId) => void retryCampaignTarget(targetId)}
+                        retryingTargetId={retryTargetMutation.isPending ? retryTargetMutation.variables?.targetId ?? null : null}
+                      />
                     )}
                   </div>
                   );
                 })}
-              </div>
-            )}
-            {data.campaignsTruncated && (
-              <p className="border-t border-[#eef2f6] px-4 py-3 text-[10px] font-semibold text-[#b45309]">
-                {text.recentCampaignsOnly}
-              </p>
+                {!listedCampaigns.length && (
+                  <div className="p-5 text-center text-[12px] font-semibold text-[#64748b]">{text.emptyCampaigns}</div>
+                )}
+                </div>
+              </>
             )}
           </Panel>
         </div>

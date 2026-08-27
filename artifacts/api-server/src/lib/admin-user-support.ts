@@ -10,8 +10,8 @@ import {
   telegramAccountsTable,
 } from "@workspace/db";
 import { getSubscription, type AdminUserRecord } from "./subscriptions";
+import { getSystemSettings } from "./system-settings";
 
-const SUPPORT_CAMPAIGN_LIMIT = 50;
 const SUPPORT_ERROR_LIMIT = 50;
 const SUPPORT_ACTIVITY_LIMIT = 50;
 const SUPPORT_TARGET_LIMIT = 100;
@@ -84,6 +84,13 @@ export type AdminUserSupportRecord = {
     scheduledAt: Date | null;
     timezone: string;
     repeatCount: number;
+    dailyQuota: {
+      limit: number | null;
+      used: number;
+      remaining: number | null;
+      sentToday: number;
+      reservedToday: number;
+    };
     destinationCount: number;
     deliveryCount: number;
     pendingCount: number;
@@ -120,8 +127,9 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
   }).from(appUsersTable).where(eq(appUsersTable.id, userId)).limit(1);
   if (!appUser) return null;
 
-  const [subscription, accountUsage, campaignUsage, lastActivity] = await Promise.all([
+  const [subscription, settings, accountUsage, campaignUsage, lastActivity] = await Promise.all([
     getSubscription(userId),
+    getSystemSettings(),
     db.select({ value: count() }).from(telegramAccountsTable)
       .where(and(eq(telegramAccountsTable.ownerUserId, userId), isNull(telegramAccountsTable.deletedAt))),
     db.select({ value: count() }).from(campaignsTable)
@@ -185,8 +193,7 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       repeatCount: campaignsTable.repeatCount,
     }).from(campaignsTable)
       .where(eq(campaignsTable.ownerUserId, userId))
-      .orderBy(desc(campaignsTable.updatedAt))
-      .limit(SUPPORT_CAMPAIGN_LIMIT),
+       .orderBy(desc(campaignsTable.updatedAt)),
     db.select({
       status: campaignsTable.status,
       value: count(),
@@ -266,6 +273,13 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       sentCount: sql<number>`count(*) filter (where ${campaignTargetsTable.status} = 'sent')`.mapWith(Number),
       failedCount: sql<number>`count(*) filter (where ${campaignTargetsTable.status} = 'failed')`.mapWith(Number),
       reviewCount: sql<number>`count(*) filter (where ${campaignTargetsTable.status} = 'requires_review')`.mapWith(Number),
+       sentToday: sql<number>`count(*) filter (where ${campaignTargetsTable.status} = 'sent' and (
+         ${campaignTargetsTable.quotaReservedAt} >= date_trunc('day', now() AT TIME ZONE ${settings.defaultTimezone}) AT TIME ZONE ${settings.defaultTimezone}
+         or (${campaignTargetsTable.quotaReservedAt} is null and ${campaignTargetsTable.sentAt} >= date_trunc('day', now() AT TIME ZONE ${settings.defaultTimezone}) AT TIME ZONE ${settings.defaultTimezone})
+       ))`.mapWith(Number),
+       reservedToday: sql<number>`count(*) filter (where ${campaignTargetsTable.status} in ('sending', 'requires_review') and
+         ${campaignTargetsTable.quotaReservedAt} >= date_trunc('day', now() AT TIME ZONE ${settings.defaultTimezone}) AT TIME ZONE ${settings.defaultTimezone}
+       )`.mapWith(Number),
     }).from(campaignTargetsTable)
       .where(inArray(campaignTargetsTable.campaignId, campaignIds))
       .groupBy(campaignTargetsTable.campaignId)
@@ -323,6 +337,23 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
       scheduledAt: campaign.scheduledAt,
       timezone: campaign.timezone,
       repeatCount: campaign.repeatCount,
+       dailyQuota: {
+         limit: subscription.messageDailyLimit,
+         used: subscription.messageDailyLimit === null
+           ? (metrics?.sentToday ?? 0) + (metrics?.reservedToday ?? 0)
+           : Math.min(
+             (metrics?.sentToday ?? 0) + (metrics?.reservedToday ?? 0),
+             subscription.messageDailyLimit,
+           ),
+         remaining: subscription.messageDailyLimit === null
+           ? null
+           : Math.max(
+             0,
+             subscription.messageDailyLimit - (metrics?.sentToday ?? 0) - (metrics?.reservedToday ?? 0),
+           ),
+         sentToday: metrics?.sentToday ?? 0,
+         reservedToday: metrics?.reservedToday ?? 0,
+       },
       destinationCount: metrics?.destinationCount ?? 0,
       deliveryCount: metrics?.deliveryCount ?? 0,
       pendingCount: metrics?.pendingCount ?? 0,
@@ -356,7 +387,7 @@ export async function getAdminUserSupport(userId: string): Promise<AdminUserSupp
     },
     telegramAccounts,
     campaigns: supportCampaigns,
-    campaignsTruncated: user.usage.campaigns > supportCampaigns.length,
+    campaignsTruncated: false,
     recentErrors: recentErrorRows.map(toSupportTarget),
     activity,
   };

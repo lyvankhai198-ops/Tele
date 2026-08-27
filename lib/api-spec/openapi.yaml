@@ -621,6 +621,28 @@ paths:
               schema: { $ref: "#/components/schemas/AdminOperationCampaign" }
         "400": { description: Invalid status }
         "404": { description: Campaign not found }
+  /admin/users/{userId}/campaigns/{campaignId}:
+    patch:
+      operationId: updateAdminUserCampaignStatus
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+        - { $ref: "#/components/parameters/AdminCampaignId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminCampaignStatusInput" }
+      responses:
+        "200":
+          description: Customer campaign status updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOperationCampaign" }
+        "400": { description: Invalid status or identifier }
+        "403": { description: Administrator permission is required }
+        "404": { description: User or campaign not found }
+        "409": { description: Campaign is not ready for the requested status }
   /admin/targets/{targetId}/retry:
     post:
       operationId: retryAdminCampaignTarget
@@ -634,6 +656,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AdminOperationTarget" }
         "404": { description: Target not found }
+  /admin/users/{userId}/targets/{targetId}/retry:
+    post:
+      operationId: retryAdminUserSupportCampaignTarget
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+        - { name: targetId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Customer campaign target requeued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminOperationTarget" }
+        "400": { description: Invalid identifier }
+        "403": { description: Administrator permission is required }
+        "404": { description: User or target not found }
+        "409": { description: Target is not eligible for retry }
   /upgrade/activate:
     post:
       operationId: activateLicense
@@ -1865,7 +1904,7 @@ components:
         updatedAt: { type: string, format: date-time }
     AdminUserSupportCampaign:
       type: object
-      required: [id, name, status, content, templateMode, templateSourceAccountName, templateSourceMessageId, telegramAccountId, telegramAccountName, scheduledAt, timezone, repeatCount, destinationCount, deliveryCount, pendingCount, sendingCount, sentCount, failedCount, reviewCount]
+      required: [id, name, status, content, templateMode, templateSourceAccountName, templateSourceMessageId, telegramAccountId, telegramAccountName, scheduledAt, timezone, repeatCount, dailyQuota, destinationCount, deliveryCount, pendingCount, sendingCount, sentCount, failedCount, reviewCount]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1879,6 +1918,7 @@ components:
         scheduledAt: { type: ["string", "null"], format: date-time }
         timezone: { type: string }
         repeatCount: { type: number }
+        dailyQuota: { $ref: "#/components/schemas/CampaignDailyQuota" }
         destinationCount: { type: number }
         deliveryCount: { type: number }
         pendingCount: { type: number }
