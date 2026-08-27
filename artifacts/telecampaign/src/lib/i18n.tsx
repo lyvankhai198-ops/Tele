@@ -9,6 +9,7 @@ const translations: Record<string, string> = {
   "Telegram Accounts": "Tài khoản Telegram",
   "Message templates": "Mẫu tin nhắn",
   "Proxy": "Proxy",
+  "Group library": "Thư viện nhóm",
   "Logs": "Nhật ký",
   "Language": "Ngôn ngữ",
   "Upgrade": "Nâng cấp",

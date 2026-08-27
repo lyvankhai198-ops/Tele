@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { CampaignFormModal, type CampaignFormPrefill } from "@/components/campaign-form-modal";
 import { AppLayout, EmptyState, Panel, SectionHeader } from "@/components/layout/AppLayout";
+import { useLanguage } from "@/lib/i18n";
 
 const text = {
   title: "Thư Viện Nhóm",
@@ -72,18 +73,46 @@ const text = {
 } as const;
 
 const workspaceText = {
-  title: "Thư viện nhóm / Group library",
-  subtitle: "Khám phá các nhóm Telegram được chia sẻ từ campaign đang hoạt động.",
-  lockedTitle: "Cần nâng cấp để mở link nhóm",
-  lockedDetail: (plan: string) => `Gói hiện tại chưa đủ điều kiện. Nâng cấp lên ${plan.toUpperCase()} hoặc cao hơn để mở link Telegram. / Your current plan cannot open group links. Upgrade to ${plan.toUpperCase()} or higher to open Telegram links.`,
-  noGroups: "Chưa có nhóm nào trong thư viện. / No groups are available in the library yet.",
-  noGroupsDetail: "Vui lòng quay lại sau khi thư viện được cập nhật. / Please check back after the library is updated.",
-  loading: "Đang tải thư viện nhóm... / Loading group library...",
-  loadError: "Không thể tải thư viện nhóm. / Could not load group library.",
-  retry: "Thử lại / Retry",
-  search: "Tìm theo tên nhóm hoặc username... / Search group name or username...",
-  savedGroups: "Nhóm trong thư viện / Saved groups",
-  lockedButton: "Mở nhóm / Open group",
+  vi: {
+    title: "Thư viện nhóm",
+    subtitle: "Khám phá các nhóm Telegram được chia sẻ từ campaign đang hoạt động.",
+    eyebrow: "Không gian làm việc",
+    lockedTitle: "Cần nâng cấp để mở link nhóm",
+    lockedDetail: (plan: string) => `Gói hiện tại chưa đủ điều kiện. Nâng cấp lên ${plan.toUpperCase()} hoặc cao hơn để mở link Telegram.`,
+    noGroups: "Chưa có nhóm nào trong thư viện.",
+    noGroupsDetail: "Vui lòng quay lại sau khi thư viện được cập nhật.",
+    noSearchResults: "Không tìm thấy nhóm phù hợp.",
+    loading: "Đang tải thư viện nhóm...",
+    loadError: "Không thể tải thư viện nhóm.",
+    retry: "Thử lại",
+    search: "Tìm theo tên nhóm hoặc username...",
+    savedGroups: "Nhóm trong thư viện",
+    lockedButton: "Mở nhóm",
+    openGroup: "Mở nhóm",
+    group: "Nhóm",
+    forum: "Forum",
+    members: "thành viên",
+  },
+  en: {
+    title: "Group library",
+    subtitle: "Explore Telegram groups shared from active campaigns.",
+    eyebrow: "Workspace",
+    lockedTitle: "Upgrade to open group links",
+    lockedDetail: (plan: string) => `Your current plan cannot open group links. Upgrade to ${plan.toUpperCase()} or higher to open Telegram links.`,
+    noGroups: "No groups are available in the library yet.",
+    noGroupsDetail: "Please check back after the library is updated.",
+    noSearchResults: "No matching groups found.",
+    loading: "Loading group library...",
+    loadError: "Could not load group library.",
+    retry: "Retry",
+    search: "Search by group name or username...",
+    savedGroups: "Groups in library",
+    lockedButton: "Open group",
+    openGroup: "Open group",
+    group: "Group",
+    forum: "Forum",
+    members: "members",
+  },
 } as const;
 
 function groupMatches(group: AdminActiveGroup, needle: string): boolean {
@@ -106,6 +135,12 @@ type GroupCardProps = {
   onEdit: (campaign: Campaign) => void;
   mode: "admin" | "workspace";
   canOpenLinks: boolean;
+  openGroupLabel: string;
+  groupLabel: string;
+  forumLabel: string;
+  membersLabel: string;
+  lockedButtonLabel: string;
+  numberLocale: string;
 };
 
 function GroupCard({
@@ -118,6 +153,12 @@ function GroupCard({
   onEdit,
   mode,
   canOpenLinks,
+  openGroupLabel,
+  groupLabel,
+  forumLabel,
+  membersLabel,
+  lockedButtonLabel,
+  numberLocale,
 }: GroupCardProps) {
   const isAdmin = mode === "admin";
   const memberships = accounts.map((account) => ({
@@ -147,12 +188,12 @@ function GroupCard({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-[15px] font-extrabold text-[#0f172a]">{group.title}</h3>
             <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#1d4ed8]">
-              {group.kind === "forum" ? text.forum : text.group}
+              {group.kind === "forum" ? forumLabel : groupLabel}
             </span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[#64748b]">
             {group.username && <span>@{group.username.replace(/^@/, "")}</span>}
-            {group.memberCount !== null && <span>{group.memberCount.toLocaleString("vi-VN")} {text.members}</span>}
+            {group.memberCount !== null && <span>{group.memberCount.toLocaleString(numberLocale)} {membersLabel}</span>}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -164,7 +205,7 @@ function GroupCard({
               className="inline-flex items-center gap-1 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-1.5 text-[10px] font-extrabold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
               data-testid={`link-admin-active-group-${group.id}`}
             >
-              {text.openGroup}
+              {openGroupLabel}
               <ExternalLink className="h-3 w-3" />
             </a>
           ) : isAdmin ? (
@@ -178,7 +219,7 @@ function GroupCard({
               className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1.5 text-[10px] font-extrabold text-[#94a3b8]"
               data-testid={`locked-link-group-${group.id}`}
             >
-              {workspaceText.lockedButton}
+              {lockedButtonLabel}
               <ExternalLink className="h-3 w-3" />
             </button>
           ) : null}
@@ -299,6 +340,8 @@ function GroupCard({
 
 export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admin" | "workspace" }) {
   const isAdmin = mode === "admin";
+  const { language } = useLanguage();
+  const localizedWorkspaceText = workspaceText[language];
   const [search, setSearch] = useState("");
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [feedbackIsError, setFeedbackIsError] = useState(false);
@@ -334,7 +377,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   });
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
   const directoryQuery = isAdmin ? query : workspaceQuery;
-  const pageText = isAdmin ? text : workspaceText;
+  const pageText = isAdmin ? text : localizedWorkspaceText;
   const needle = search.trim().toLowerCase();
   const filteredGroups = useMemo(
     () => groups.filter((group) => groupMatches(group, needle)),
@@ -369,7 +412,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     <AppLayout activePage={isAdmin ? "admin-active-groups" : "group-library"} title={pageText.title} subtitle={pageText.subtitle} hideUpgrade={isAdmin}>
       <div className="space-y-6">
         <SectionHeader
-          eyebrow={isAdmin ? "Admin Center" : "Workspace"}
+          eyebrow={isAdmin ? "Admin Center" : localizedWorkspaceText.eyebrow}
           title={pageText.title}
           detail={pageText.subtitle}
           action={isAdmin ? (
@@ -421,8 +464,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
 
         {!isAdmin && !groupLibraryAccess.data?.canOpenLinks && (
           <Panel className="border-[#fde68a] bg-[#fffbeb] p-5">
-            <p className="font-extrabold text-[#92400e]">{workspaceText.lockedTitle}</p>
-            <p className="mt-1 text-[13px] font-medium leading-relaxed text-[#a16207]">{workspaceText.lockedDetail(groupLibraryAccess.data?.minimumJoinPlan ?? "pro")}</p>
+            <p className="font-extrabold text-[#92400e]">{localizedWorkspaceText.lockedTitle}</p>
+            <p className="mt-1 text-[13px] font-medium leading-relaxed text-[#a16207]">{localizedWorkspaceText.lockedDetail(groupLibraryAccess.data?.minimumJoinPlan ?? "pro")}</p>
           </Panel>
         )}
         {directoryQuery.isLoading && (
@@ -442,7 +485,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           </Panel>
         )}
         {!directoryQuery.isLoading && !directoryQuery.error && !filteredGroups.length && (
-          <EmptyState icon={Users} title={needle ? "Không tìm thấy nhóm phù hợp." : pageText.noGroups} detail={needle ? "" : pageText.noGroupsDetail} />
+          <EmptyState icon={Users} title={needle ? (isAdmin ? "Không tìm thấy nhóm phù hợp." : localizedWorkspaceText.noSearchResults) : pageText.noGroups} detail={needle ? "" : pageText.noGroupsDetail} />
         )}
         {!directoryQuery.isLoading && !directoryQuery.error && filteredGroups.length > 0 && (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -458,6 +501,12 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
                 mode={mode}
                 canOpenLinks={groupLibraryAccess.data?.canOpenLinks === true}
+                openGroupLabel={isAdmin ? text.openGroup : localizedWorkspaceText.openGroup}
+                groupLabel={isAdmin ? text.group : localizedWorkspaceText.group}
+                forumLabel={isAdmin ? text.forum : localizedWorkspaceText.forum}
+                membersLabel={isAdmin ? text.members : localizedWorkspaceText.members}
+                lockedButtonLabel={localizedWorkspaceText.lockedButton}
+                numberLocale={language === "en" ? "en-US" : "vi-VN"}
               />
             ))}
           </div>
