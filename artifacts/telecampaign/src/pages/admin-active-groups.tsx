@@ -89,6 +89,7 @@ const workspaceText = {
     savedGroups: "Nhóm trong thư viện",
     lockedButton: "Mở nhóm",
     openGroup: "Mở nhóm",
+    hiddenGroupName: "Tên nhóm được ẩn",
     group: "Nhóm",
     forum: "Forum",
     members: "thành viên",
@@ -109,6 +110,7 @@ const workspaceText = {
     savedGroups: "Groups in library",
     lockedButton: "Open group",
     openGroup: "Open group",
+    hiddenGroupName: "Group name hidden",
     group: "Group",
     forum: "Forum",
     members: "members",
@@ -140,6 +142,7 @@ type GroupCardProps = {
   forumLabel: string;
   membersLabel: string;
   lockedButtonLabel: string;
+  hiddenGroupNameLabel: string;
   numberLocale: string;
 };
 
@@ -158,9 +161,11 @@ function GroupCard({
   forumLabel,
   membersLabel,
   lockedButtonLabel,
+  hiddenGroupNameLabel,
   numberLocale,
 }: GroupCardProps) {
   const isAdmin = mode === "admin";
+  const isGroupNameHidden = !isAdmin && !canOpenLinks;
   const memberships = accounts.map((account) => ({
     account,
     destination: destinations.find((destination) =>
@@ -186,7 +191,14 @@ function GroupCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-[15px] font-extrabold text-[#0f172a]">{group.title}</h3>
+            <h3 className="truncate text-[15px] font-extrabold text-[#0f172a]" aria-label={isGroupNameHidden ? hiddenGroupNameLabel : group.title}>
+              {isGroupNameHidden ? (
+                <>
+                  <span aria-hidden="true" className="inline-block select-none blur-[3px] opacity-75">{group.title}</span>
+                  <span className="sr-only">{hiddenGroupNameLabel}</span>
+                </>
+              ) : group.title}
+            </h3>
             <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#1d4ed8]">
               {group.kind === "forum" ? forumLabel : groupLabel}
             </span>
@@ -506,6 +518,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 forumLabel={isAdmin ? text.forum : localizedWorkspaceText.forum}
                 membersLabel={isAdmin ? text.members : localizedWorkspaceText.members}
                 lockedButtonLabel={localizedWorkspaceText.lockedButton}
+                hiddenGroupNameLabel={localizedWorkspaceText.hiddenGroupName}
                 numberLocale={language === "en" ? "en-US" : "vi-VN"}
               />
             ))}

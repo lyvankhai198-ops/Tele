@@ -569,6 +569,7 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
   res.json(GetGroupLibraryResponse.parse({
     groups: directory.groups.map((group) => ({
       ...group,
+      title: canOpenLinks ? group.title : "••••••••••",
       username: canOpenLinks ? group.username : null,
       telegramLink: canOpenLinks ? group.telegramLink : null,
     })),
