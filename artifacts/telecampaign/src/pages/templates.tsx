@@ -13,6 +13,7 @@ import type { MessageTemplate, MessageTemplateInput } from "@workspace/api-clien
 import {
   useCreateMessageTemplate,
   useDeleteMessageTemplate,
+  useGetTelegramSavedMessage,
   useListMessageTemplates,
   useListTelegramAccounts,
   useListTelegramSavedMessages,
@@ -71,6 +72,9 @@ export default function Templates() {
     mediaMessage: "Tin nhắn đa phương tiện",
     save: "Lưu",
     previewForward: "Forward từ Tin nhắn đã lưu",
+    previewForwardCurrent: "Nội dung hiện tại từ Tin nhắn đã lưu",
+    previewForwardLoading: "Đang tải nội dung Tin nhắn đã lưu hiện tại...",
+    previewForwardUnavailable: "Không thể tải Tin nhắn đã lưu hiện tại. Hãy kiểm tra tài khoản Telegram và tin nhắn, sau đó thử lại.",
     previewText: "Nội dung văn bản",
     previewForwardContent: "Mẫu này sẽ chuyển tiếp đúng tin nhắn gốc đã chọn.",
     toastAdded: "Đã thêm mẫu tin nhắn.",
@@ -113,6 +117,9 @@ export default function Templates() {
     mediaMessage: "Media message",
     save: "Save",
     previewForward: "Forward from Saved Messages",
+    previewForwardCurrent: "Current content from Saved Messages",
+    previewForwardLoading: "Loading the current Saved Message…",
+    previewForwardUnavailable: "The current Saved Message could not be loaded. Check the Telegram account and message, then try again.",
     previewText: "Plain text content",
     previewForwardContent: "This template will forward the exact original message selected.",
     toastAdded: "Template added.",
@@ -133,12 +140,24 @@ export default function Templates() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editing, setEditing] = useState<MessageTemplate | null>(null);
   const [preview, setPreview] = useState<MessageTemplate | null>(null);
+  const [previewSource, setPreviewSource] = useState<{ accountId: string; messageId: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const savedMessages = useListTelegramSavedMessages(form.sourceAccountId || "", {
     query: { enabled: showForm && form.mode === "forward" && Boolean(form.sourceAccountId) } as any,
   });
+  const liveForwardPreview = useGetTelegramSavedMessage(
+    previewSource?.accountId ?? "",
+    previewSource?.messageId ?? "",
+    {
+      query: {
+        enabled: Boolean(previewSource?.accountId && previewSource?.messageId),
+        refetchOnMount: "always",
+        staleTime: 0,
+      } as any,
+    },
+  );
 
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
   const rows = useMemo(() => {
@@ -245,7 +264,18 @@ export default function Templates() {
                   </div>
                   <span className="inline-flex w-fit rounded-full bg-[#f1f5f9] px-2.5 py-1 text-[10px] font-extrabold text-[#334155]">{template.mode === "forward" ? "FORWARD" : "PLAIN"}</span>
                   <div className="flex justify-end gap-1.5">
-                    <button onClick={() => setPreview(template)} className="grid h-10 w-10 place-items-center rounded-xl border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]" aria-label={copy.ariaView(template.name)}><Eye className="h-[18px] w-[18px]" /></button>
+                    <button
+                      onClick={() => {
+                        setPreview(template);
+                        setPreviewSource(template.mode === "forward" && template.sourceAccountId && template.sourceMessageId
+                          ? { accountId: template.sourceAccountId, messageId: template.sourceMessageId }
+                          : null);
+                      }}
+                      className="grid h-10 w-10 place-items-center rounded-xl border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]"
+                      aria-label={copy.ariaView(template.name)}
+                    >
+                      <Eye className="h-[18px] w-[18px]" />
+                    </button>
                     <button onClick={() => openEdit(template)} className="grid h-10 w-10 place-items-center rounded-xl border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]" aria-label={copy.ariaEdit(template.name)}><Pencil className="h-[17px] w-[17px]" /></button>
                     <button onClick={() => void remove(template)} disabled={deleteTemplate.isPending} className="grid h-10 w-10 place-items-center rounded-xl bg-[#ef4444] text-white hover:bg-[#dc2626] disabled:opacity-50" aria-label={copy.ariaDelete(template.name)}><Trash2 className="h-[17px] w-[17px]" /></button>
                   </div>
@@ -325,10 +355,21 @@ export default function Templates() {
       {preview && (
         <Modal
           title={preview.name}
-          description={preview.mode === "forward" ? copy.previewForward : copy.previewText}
-          onClose={() => setPreview(null)}
+          description={preview.mode === "forward" ? copy.previewForwardCurrent : copy.previewText}
+          onClose={() => {
+            setPreview(null);
+            setPreviewSource(null);
+          }}
         >
-          <p className="whitespace-pre-wrap rounded-2xl bg-[#f8fafc] p-4 text-[14px] font-medium leading-relaxed text-[#334155]">{preview.content || copy.previewForwardContent}</p>
+          <p className="whitespace-pre-wrap rounded-2xl bg-[#f8fafc] p-4 text-[14px] font-medium leading-relaxed text-[#334155]">
+            {preview.mode !== "forward"
+              ? preview.content || copy.previewText
+              : !previewSource
+                ? copy.previewForwardContent
+                : liveForwardPreview.isLoading || liveForwardPreview.isFetching
+                  ? copy.previewForwardLoading
+                  : liveForwardPreview.data?.text || copy.previewForwardUnavailable}
+          </p>
         </Modal>
       )}
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
