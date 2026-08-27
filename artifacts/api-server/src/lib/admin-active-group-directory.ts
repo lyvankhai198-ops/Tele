@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   campaignTargetsTable,
   campaignsTable,
@@ -23,6 +23,14 @@ export type SavedGroupRow = {
   roundDelayMaxSeconds: number | null;
 };
 
+export type DelayOutcomeRow = {
+  telegramId: string;
+  roundDelayMinSeconds: number;
+  roundDelayMaxSeconds: number;
+  sentCount: number;
+  errorCount: number;
+};
+
 export type RunningGroupLibraryCandidate = {
   telegramId: string;
   title: string;
@@ -43,11 +51,58 @@ export type AdminActiveGroupDirectoryRecord = {
     roundDelays: Array<{
       minSeconds: number;
       maxSeconds: number;
+      sentCount: number;
+      errorCount: number;
+      sampleCount: number;
+      errorRate: number | null;
+      isPreferred: boolean;
     }>;
   }>;
 };
 
-export function aggregateSavedGroupRows(rows: SavedGroupRow[]): AdminActiveGroupDirectoryRecord {
+function delayKey(telegramId: string, minSeconds: number, maxSeconds: number): string {
+  return `${telegramId}:${minSeconds}:${maxSeconds}`;
+}
+
+function wilsonErrorUpperBound(errorCount: number, sampleCount: number): number {
+  if (sampleCount <= 0) return Number.POSITIVE_INFINITY;
+  const z = 1.96;
+  const proportion = errorCount / sampleCount;
+  const zSquaredPerSample = (z * z) / sampleCount;
+  const center = proportion + zSquaredPerSample / 2;
+  const margin = z * Math.sqrt((proportion * (1 - proportion) + zSquaredPerSample / 4) / sampleCount);
+  return (center + margin) / (1 + zSquaredPerSample);
+}
+
+function compareDelaySafety(
+  left: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"][number],
+  right: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"][number],
+): number {
+  const leftHasSamples = left.sampleCount > 0;
+  const rightHasSamples = right.sampleCount > 0;
+  if (leftHasSamples !== rightHasSamples) return leftHasSamples ? -1 : 1;
+  if (leftHasSamples && rightHasSamples) {
+    const scoreDifference = wilsonErrorUpperBound(left.errorCount, left.sampleCount)
+      - wilsonErrorUpperBound(right.errorCount, right.sampleCount);
+    if (Math.abs(scoreDifference) > Number.EPSILON) return scoreDifference;
+    if (left.sampleCount !== right.sampleCount) return right.sampleCount - left.sampleCount;
+  }
+
+  const averageDifference = (right.minSeconds + right.maxSeconds) - (left.minSeconds + left.maxSeconds);
+  if (averageDifference !== 0) return averageDifference;
+  const spreadDifference = (right.maxSeconds - right.minSeconds) - (left.maxSeconds - left.minSeconds);
+  if (spreadDifference !== 0) return spreadDifference;
+  return right.minSeconds - left.minSeconds || right.maxSeconds - left.maxSeconds;
+}
+
+export function aggregateSavedGroupRows(
+  rows: SavedGroupRow[],
+  delayOutcomeRows: DelayOutcomeRow[] = [],
+): AdminActiveGroupDirectoryRecord {
+  const outcomesByDelay = new Map(delayOutcomeRows.map((outcome) => [
+    delayKey(outcome.telegramId, outcome.roundDelayMinSeconds, outcome.roundDelayMaxSeconds),
+    outcome,
+  ]));
   const rowsByTelegramId = new Map<string, {
     id: string;
     title: string;
@@ -75,9 +130,22 @@ export function aggregateSavedGroupRows(rows: SavedGroupRow[]): AdminActiveGroup
         delay.minSeconds === row.roundDelayMinSeconds && delay.maxSeconds === row.roundDelayMaxSeconds,
       )
     ) {
+      const outcome = outcomesByDelay.get(delayKey(
+        row.telegramId,
+        row.roundDelayMinSeconds,
+        row.roundDelayMaxSeconds,
+      ));
+      const sentCount = outcome?.sentCount ?? 0;
+      const errorCount = outcome?.errorCount ?? 0;
+      const sampleCount = sentCount + errorCount;
       group.roundDelays.push({
         minSeconds: row.roundDelayMinSeconds,
         maxSeconds: row.roundDelayMaxSeconds,
+        sentCount,
+        errorCount,
+        sampleCount,
+        errorRate: sampleCount > 0 ? errorCount / sampleCount : null,
+        isPreferred: false,
       });
     }
     rowsByTelegramId.set(row.telegramId, group);
@@ -87,9 +155,9 @@ export function aggregateSavedGroupRows(rows: SavedGroupRow[]): AdminActiveGroup
     groups: [...rowsByTelegramId.values()]
       .map((group) => ({
         ...group,
-        roundDelays: group.roundDelays.sort((left, right) =>
-          left.minSeconds - right.minSeconds || left.maxSeconds - right.maxSeconds,
-        ),
+        roundDelays: group.roundDelays
+          .sort(compareDelaySafety)
+          .map((delay, index) => ({ ...delay, isPreferred: index === 0 })),
       }))
       .sort((left, right) => left.title.localeCompare(right.title)),
   };
@@ -143,28 +211,52 @@ export async function syncAdminGroupLibrary(): Promise<{ addedCount: number; can
 }
 
 export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDirectoryRecord> {
-  const rows = await db.select({
-    telegramId: groupLibraryEntriesTable.telegramId,
-    title: groupLibraryEntriesTable.title,
-    username: groupLibraryEntriesTable.username,
-    kind: groupLibraryEntriesTable.kind,
-    memberCount: groupLibraryEntriesTable.memberCount,
-    roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
-    roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
-  }).from(groupLibraryEntriesTable)
-    .leftJoin(destinationsTable, and(
-      eq(destinationsTable.telegramId, groupLibraryEntriesTable.telegramId),
-      isNull(destinationsTable.topicId),
-    ))
-    .leftJoin(campaignTargetsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .leftJoin(campaignsTable, and(
-      eq(campaignTargetsTable.campaignId, campaignsTable.id),
-      eq(campaignsTable.status, "running"),
-    ))
-    .where(and(
-      inArray(groupLibraryEntriesTable.kind, ["group", "forum"]),
-    ))
-    .orderBy(desc(groupLibraryEntriesTable.updatedAt), asc(groupLibraryEntriesTable.title));
+  const [rows, delayOutcomeRows] = await Promise.all([
+    db.select({
+      telegramId: groupLibraryEntriesTable.telegramId,
+      title: groupLibraryEntriesTable.title,
+      username: groupLibraryEntriesTable.username,
+      kind: groupLibraryEntriesTable.kind,
+      memberCount: groupLibraryEntriesTable.memberCount,
+      roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
+      roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
+    }).from(groupLibraryEntriesTable)
+      .leftJoin(destinationsTable, and(
+        eq(destinationsTable.telegramId, groupLibraryEntriesTable.telegramId),
+        isNull(destinationsTable.topicId),
+      ))
+      .leftJoin(campaignTargetsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .leftJoin(campaignsTable, and(
+        eq(campaignTargetsTable.campaignId, campaignsTable.id),
+        eq(campaignsTable.status, "running"),
+      ))
+      .where(and(
+        inArray(groupLibraryEntriesTable.kind, ["group", "forum"]),
+      ))
+      .orderBy(desc(groupLibraryEntriesTable.updatedAt), asc(groupLibraryEntriesTable.title)),
+    db.select({
+      telegramId: destinationsTable.telegramId,
+      roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
+      roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
+      sentCount: sql<number>`count(*) filter (where ${campaignTargetsTable.status} = 'sent')`.mapWith(Number),
+      errorCount: sql<number>`count(*) filter (where ${campaignTargetsTable.status} in ('failed', 'requires_review'))`.mapWith(Number),
+    }).from(groupLibraryEntriesTable)
+      .innerJoin(destinationsTable, and(
+        eq(destinationsTable.telegramId, groupLibraryEntriesTable.telegramId),
+        isNull(destinationsTable.topicId),
+      ))
+      .innerJoin(campaignTargetsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+      .where(and(
+        inArray(groupLibraryEntriesTable.kind, ["group", "forum"]),
+        inArray(campaignTargetsTable.status, ["sent", "failed", "requires_review"]),
+      ))
+      .groupBy(
+        destinationsTable.telegramId,
+        campaignsTable.roundDelayMinSeconds,
+        campaignsTable.roundDelayMaxSeconds,
+      ),
+  ]);
 
-  return aggregateSavedGroupRows(rows);
+  return aggregateSavedGroupRows(rows, delayOutcomeRows);
 }

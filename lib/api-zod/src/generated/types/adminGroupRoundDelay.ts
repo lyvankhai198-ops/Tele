@@ -9,4 +9,14 @@
 export interface AdminGroupRoundDelay {
   minSeconds: number;
   maxSeconds: number;
+  sentCount: number;
+  errorCount: number;
+  sampleCount: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     * @nullable
+     */
+  errorRate: number | null;
+  isPreferred: boolean;
 }

@@ -1549,6 +1549,11 @@ export const GetAdminOverviewResponse = zod.object({
 })
 
 
+export const getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMin = 0;
+export const getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMax = 1;
+
+
+
 export const GetAdminActiveGroupDirectoryResponse = zod.object({
   "groups": zod.array(zod.object({
   "id": zod.string(),
@@ -1559,7 +1564,12 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
   "memberCount": zod.number().nullable(),
   "roundDelays": zod.array(zod.object({
   "minSeconds": zod.number(),
-  "maxSeconds": zod.number()
+  "maxSeconds": zod.number(),
+  "sentCount": zod.number(),
+  "errorCount": zod.number(),
+  "sampleCount": zod.number(),
+  "errorRate": zod.number().min(getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMin).max(getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMax).nullable(),
+  "isPreferred": zod.boolean()
 }))
 }))
 })

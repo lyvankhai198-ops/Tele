@@ -2021,10 +2021,15 @@ components:
           items: { $ref: "#/components/schemas/AdminUserSupportActivity" }
     AdminGroupRoundDelay:
       type: object
-      required: [minSeconds, maxSeconds]
+      required: [minSeconds, maxSeconds, sentCount, errorCount, sampleCount, errorRate, isPreferred]
       properties:
         minSeconds: { type: number }
         maxSeconds: { type: number }
+        sentCount: { type: number }
+        errorCount: { type: number }
+        sampleCount: { type: number }
+        errorRate: { type: ["number", "null"], minimum: 0, maximum: 1 }
+        isPreferred: { type: boolean }
     AdminActiveGroup:
       type: object
       required: [id, title, username, telegramLink, kind, memberCount, roundDelays]

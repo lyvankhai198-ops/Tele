@@ -15,7 +15,6 @@ import {
   ExternalLink,
   LoaderCircle,
   Pencil,
-  Plus,
   RefreshCw,
   Search,
   Users,
@@ -52,8 +51,13 @@ const text = {
   notJoined: "Chưa tham gia / chưa đồng bộ",
   noAccounts: "Chưa có tài khoản Telegram nào.",
   quickCreate: "Tạo nhanh",
-  createCampaign: "Tạo campaign",
   needJoinedAccount: "Cần tài khoản đã tham gia và có quyền gửi",
+  preferredDelay: "Ưu tiên",
+  noDelayHistory: "Chưa có dữ liệu",
+  delayHistory: (errorRate: number, sampleCount: number) =>
+    `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(errorRate * 100)}% lỗi · ${sampleCount.toLocaleString("vi-VN")} lượt`,
+  delayOutcomeTitle: (sentCount: number, errorCount: number) =>
+    `${sentCount.toLocaleString("vi-VN")} thành công · ${errorCount.toLocaleString("vi-VN")} lỗi`,
   configuredCampaigns: "Campaign đang dùng nhóm này",
   noConfiguredCampaigns: "Chưa có campaign nào của admin dùng nhóm này.",
   editCampaign: "Chỉnh sửa",
@@ -126,17 +130,6 @@ function GroupCard({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => onCreate(group, group.roundDelays[0], preferredAccountId)}
-            disabled={!canQuickCreate}
-            title={canQuickCreate ? text.createCampaign : text.needJoinedAccount}
-            className="inline-flex items-center gap-1 rounded-lg bg-[#1d3bb8] px-2.5 py-1.5 text-[10px] font-extrabold text-white transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:bg-[#cbd5e1]"
-            data-testid={`button-create-campaign-from-group-${group.id}`}
-          >
-            <Plus className="h-3 w-3" />
-            {text.createCampaign}
-          </button>
           {group.telegramLink ? (
             <a
               href={group.telegramLink}
@@ -188,20 +181,43 @@ function GroupCard({
           <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.roundDelay}</p>
           <div className="flex flex-wrap gap-2">
             {group.roundDelays.map((delay) => (
-              <div key={`${delay.minSeconds}-${delay.maxSeconds}`} className="inline-flex items-center gap-2 rounded-lg bg-[#eff6ff] px-2 py-1.5">
-                <span className="text-[10px] font-extrabold text-[#1d4ed8]">
-                  {delay.minSeconds}–{delay.maxSeconds} {text.seconds}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onCreate(group, delay, preferredAccountId)}
-                  disabled={!canQuickCreate}
-                  title={canQuickCreate ? text.quickCreate : text.needJoinedAccount}
-                  className="rounded-md bg-white px-1.5 py-0.5 text-[9px] font-extrabold text-[#1d4ed8] shadow-sm hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
-                  data-testid={`button-quick-create-${group.id}-${delay.minSeconds}-${delay.maxSeconds}`}
-                >
-                  {text.quickCreate}
-                </button>
+              <div
+                key={`${delay.minSeconds}-${delay.maxSeconds}`}
+                className={`min-w-[170px] rounded-xl border px-2.5 py-2 ${
+                  delay.isPreferred ? "border-[#86efac] bg-[#f0fdf4]" : "border-[#dbeafe] bg-[#eff6ff]"
+                }`}
+                data-testid={delay.isPreferred ? `preferred-delay-${group.id}` : undefined}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-[10px] font-extrabold ${delay.isPreferred ? "text-[#047857]" : "text-[#1d4ed8]"}`}>
+                    {delay.minSeconds}–{delay.maxSeconds} {text.seconds}
+                  </span>
+                  {delay.isPreferred && (
+                    <span className="rounded-full bg-[#dcfce7] px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wide text-[#047857]">
+                      {text.preferredDelay}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <span
+                    className="text-[9px] font-bold text-[#64748b]"
+                    title={text.delayOutcomeTitle(delay.sentCount, delay.errorCount)}
+                  >
+                    {delay.errorRate === null
+                      ? text.noDelayHistory
+                      : text.delayHistory(delay.errorRate, delay.sampleCount)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onCreate(group, delay, preferredAccountId)}
+                    disabled={!canQuickCreate}
+                    title={canQuickCreate ? text.quickCreate : text.needJoinedAccount}
+                    className="shrink-0 rounded-md bg-white px-1.5 py-0.5 text-[9px] font-extrabold text-[#1d4ed8] shadow-sm hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:text-[#94a3b8]"
+                    data-testid={`button-quick-create-${group.id}-${delay.minSeconds}-${delay.maxSeconds}`}
+                  >
+                    {text.quickCreate}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

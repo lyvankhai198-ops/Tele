@@ -57,15 +57,49 @@ assert.deepEqual(
     delay.maxSeconds,
   ]),
   [
-    [15, 30],
     [45, 60],
+    [15, 30],
   ],
 );
+assert.equal(techGroup.roundDelays[0]?.isPreferred, true);
+assert.equal(techGroup.roundDelays[0]?.errorRate, null);
 
 const privateGroup = directory.groups.find((group) => group.id === "-100987");
 assert.ok(privateGroup);
 assert.equal(privateGroup.telegramLink, null);
 assert.deepEqual(privateGroup.roundDelays, []);
+
+const rankedDirectory = aggregateSavedGroupRows(rows, [
+  {
+    telegramId: "-100123",
+    roundDelayMinSeconds: 15,
+    roundDelayMaxSeconds: 30,
+    sentCount: 99,
+    errorCount: 1,
+  },
+  {
+    telegramId: "-100123",
+    roundDelayMinSeconds: 45,
+    roundDelayMaxSeconds: 60,
+    sentCount: 1,
+    errorCount: 0,
+  },
+]);
+const rankedGroup = rankedDirectory.groups.find((group) => group.id === "-100123");
+assert.ok(rankedGroup);
+assert.deepEqual(
+  rankedGroup.roundDelays.map((delay) => [
+    delay.minSeconds,
+    delay.maxSeconds,
+    delay.sampleCount,
+    delay.errorRate,
+    delay.isPreferred,
+  ]),
+  [
+    [15, 30, 100, 0.01, true],
+    [45, 60, 1, 0, false],
+  ],
+);
 
 const candidates = dedupeRunningGroupLibraryCandidates([
   {
