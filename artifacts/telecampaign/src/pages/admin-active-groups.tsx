@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getGetAdminActiveGroupDirectoryQueryKey,
   getGetGroupLibraryQueryKey,
@@ -46,6 +46,7 @@ const text = {
   syncAccountsFailed: "Đã cập nhật thư viện nhưng một hoặc nhiều tài khoản Telegram chưa đồng bộ được.",
   syncCompleted: (accountCount: number, addedCount: number) =>
     `Đã đồng bộ ${accountCount} tài khoản Telegram${addedCount > 0 ? ` và thêm ${addedCount} nhóm mới` : ""}.`,
+    noConnectedAccounts: "Chưa có tài khoản Telegram đã kết nối để đồng bộ.",
   syncAdded: (count: number) => `Đã thêm ${count} nhóm mới vào thư viện.`,
   syncNoNewGroup: "Không có nhóm mới từ campaign đang chạy.",
   openGroup: "Mở nhóm",
@@ -102,6 +103,12 @@ const workspaceText = {
     roundDelay: "Delay vòng",
     seconds: "giây",
     quickCreate: "Tạo nhanh",
+    sync: "Đồng bộ tài khoản",
+    syncing: "Đang đồng bộ...",
+    syncFailed: "Không thể đồng bộ tài khoản Telegram. Vui lòng thử lại.",
+    syncAccountsFailed: "Một hoặc nhiều tài khoản Telegram chưa đồng bộ được.",
+    syncCompleted: (accountCount: number) => `Đã đồng bộ ${accountCount} tài khoản Telegram.`,
+    noConnectedAccounts: "Chưa có tài khoản Telegram đã kết nối để đồng bộ.",
     needJoinedAccount: "Cần tài khoản đã tham gia và có quyền gửi",
     preferredDelay: "Ưu tiên",
     noDelayHistory: "Chưa có dữ liệu",
@@ -135,6 +142,12 @@ const workspaceText = {
     roundDelay: "Round delay",
     seconds: "sec",
     quickCreate: "Quick create",
+    sync: "Sync accounts",
+    syncing: "Syncing...",
+    syncFailed: "Could not sync Telegram accounts. Please try again.",
+    syncAccountsFailed: "One or more Telegram accounts could not be synchronized.",
+    syncCompleted: (accountCount: number) => `${accountCount} Telegram account${accountCount === 1 ? "" : "s"} synchronized.`,
+    noConnectedAccounts: "No connected Telegram account is available to synchronize.",
     needJoinedAccount: "A joined account with posting permission is required",
     preferredDelay: "Preferred",
     noDelayHistory: "No history yet",
@@ -449,6 +462,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     },
   });
   const syncTelegram = useSyncTelegramDestinations();
+  const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
   const directoryQuery = isAdmin ? query : workspaceQuery;
   const pageText = isAdmin ? text : localizedWorkspaceText;
@@ -462,7 +476,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     [accounts.data],
   );
 
-  async function handleAdminSync() {
+  async function handleSync() {
     setSyncFeedback(null);
     setFeedbackIsError(false);
     try {
@@ -471,19 +485,34 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       );
       const accountSyncFailed = accountSyncResults.some((result) => result.status === "rejected");
       await destinations.refetch();
-      const libraryResult = await syncLibrary.mutateAsync();
-      await query.refetch();
-      setSyncFeedback(accountSyncFailed
-        ? text.syncAccountsFailed
-        : connectedAccounts.length > 0
-          ? text.syncCompleted(connectedAccounts.length, libraryResult.addedCount)
-          : (libraryResult.addedCount > 0 ? text.syncAdded(libraryResult.addedCount) : text.syncNoNewGroup));
+      if (isAdmin) {
+        const libraryResult = await syncLibrary.mutateAsync();
+        await query.refetch();
+        setSyncFeedback(accountSyncFailed
+          ? text.syncAccountsFailed
+          : connectedAccounts.length > 0
+            ? text.syncCompleted(connectedAccounts.length, libraryResult.addedCount)
+            : (libraryResult.addedCount > 0 ? text.syncAdded(libraryResult.addedCount) : text.syncNoNewGroup));
+      } else {
+        await workspaceQuery.refetch();
+        setSyncFeedback(accountSyncFailed
+          ? localizedWorkspaceText.syncAccountsFailed
+          : connectedAccounts.length > 0
+            ? localizedWorkspaceText.syncCompleted(connectedAccounts.length)
+            : localizedWorkspaceText.noConnectedAccounts);
+      }
       setFeedbackIsError(accountSyncFailed);
     } catch {
-      setSyncFeedback(text.syncFailed);
+      setSyncFeedback(isAdmin ? text.syncFailed : localizedWorkspaceText.syncFailed);
       setFeedbackIsError(true);
     }
   }
+
+  useEffect(() => {
+    if (isAdmin || !groupLibraryAccess.data?.canView || accounts.isLoading || autoSyncStarted.current) return;
+    autoSyncStarted.current = true;
+    void handleSync();
+  }, [accounts.isLoading, groupLibraryAccess.data?.canView, isAdmin]);
 
   function openCreateCampaign(
     group: AdminActiveGroup,
@@ -521,25 +550,24 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           eyebrow={isAdmin ? "Admin Center" : localizedWorkspaceText.eyebrow}
           title={pageText.title}
           detail={pageText.subtitle}
-          action={isAdmin ? (
+           action={(
             <button
               type="button"
-              onClick={() => void handleAdminSync()}
-              disabled={query.isFetching || syncLibrary.isPending || syncTelegram.isPending || accounts.isLoading}
+               onClick={() => void handleSync()}
+               disabled={directoryQuery.isFetching || syncLibrary.isPending || syncTelegram.isPending || accounts.isLoading}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 py-2.5 text-[11px] font-extrabold text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa] disabled:cursor-not-allowed disabled:opacity-60"
-              data-testid="button-refresh-admin-active-groups"
+               data-testid={isAdmin ? "button-refresh-admin-active-groups" : "button-refresh-group-library"}
             >
-              {syncLibrary.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {syncLibrary.isPending ? text.syncing : text.sync}
+               {syncLibrary.isPending || syncTelegram.isPending
+                 ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                 : <RefreshCw className="h-3.5 w-3.5" />}
+               {syncLibrary.isPending || syncTelegram.isPending
+                 ? (isAdmin ? text.syncing : localizedWorkspaceText.syncing)
+                 : (isAdmin ? text.sync : localizedWorkspaceText.sync)}
             </button>
-          ) : undefined}
+           )}
         />
-        {isAdmin && syncFeedback && (
-          <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
-            {syncFeedback}
-          </p>
-        )}
-        {!isAdmin && syncFeedback && (
+         {syncFeedback && (
           <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
             {syncFeedback}
           </p>
