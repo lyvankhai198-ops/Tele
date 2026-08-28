@@ -279,6 +279,7 @@ function GroupCard({
 }: GroupCardProps) {
   const isAdmin = mode === "admin";
   const isGroupNameHidden = !isAdmin && group.title === HIDDEN_GROUP_TITLE;
+  const showEntitlementDetails = isAdmin || canOpenLinks;
   const memberships = accounts.map((account) => {
     const groupMembership = group.accountMemberships?.find((membership) => membership.accountId === account.id);
     return {
@@ -376,8 +377,9 @@ function GroupCard({
         </div>
       </div>
 
-      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{accountsLabel}</p>
+      {showEntitlementDetails && (
+        <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{accountsLabel}</p>
         {accountDataLoading ? (
           <p className="text-[11px] font-semibold text-[#64748b]">{accountLoadingLabel}</p>
         ) : memberships.length ? (
@@ -403,8 +405,9 @@ function GroupCard({
           </div>
         ) : (
           <p className="text-[11px] font-semibold text-[#64748b]">{noAccountsLabel}</p>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {group.roundDelays.length > 0 && (
         <div className="mt-3 border-t border-[#f1f5f9] pt-3">
@@ -459,8 +462,9 @@ function GroupCard({
         </div>
       )}
 
-      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{configuredCampaignsLabel}</p>
+      {showEntitlementDetails && (
+        <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{configuredCampaignsLabel}</p>
         {groupCampaigns.length ? (
           <div className="space-y-1.5">
             {groupCampaigns.map((campaign) => {
@@ -504,8 +508,9 @@ function GroupCard({
           </div>
         ) : (
           <p className="text-[11px] font-semibold text-[#64748b]">{noConfiguredCampaignsLabel}</p>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </article>
   );
 }
