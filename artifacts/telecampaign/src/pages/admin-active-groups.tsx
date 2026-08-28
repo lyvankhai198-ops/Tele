@@ -100,7 +100,6 @@ const workspaceText = {
     retry: "Thử lại",
     search: "Tìm theo tên nhóm hoặc username...",
     savedGroups: "Nhóm trong Thư Viện Nhóm ( MMO )",
-    lockedButton: "Mở nhóm",
     openGroup: "Mở nhóm",
     hiddenGroupName: "Tên nhóm được ẩn",
     group: "Nhóm",
@@ -149,7 +148,6 @@ const workspaceText = {
     retry: "Retry",
     search: "Search by group name or username...",
     savedGroups: "Groups in Group Library (MMO)",
-    lockedButton: "Open group",
     openGroup: "Open group",
     hiddenGroupName: "Group name hidden",
     group: "Group",
@@ -215,7 +213,6 @@ type GroupCardProps = {
   groupLabel: string;
   forumLabel: string;
   membersLabel: string;
-  lockedButtonLabel: string;
   hiddenGroupNameLabel: string;
   numberLocale: string;
   roundDelayLabel: string;
@@ -255,7 +252,6 @@ function GroupCard({
   groupLabel,
   forumLabel,
   membersLabel,
-  lockedButtonLabel,
   hiddenGroupNameLabel,
   numberLocale,
   roundDelayLabel,
@@ -312,9 +308,11 @@ function GroupCard({
                 </>
               ) : group.title}
             </h3>
-            <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#1d4ed8]">
-              {group.kind === "forum" ? forumLabel : groupLabel}
-            </span>
+            {(isAdmin || canOpenLinks) && (
+              <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#1d4ed8]">
+                {group.kind === "forum" ? forumLabel : groupLabel}
+              </span>
+            )}
             {isAdmin && !group.isPublished && (
               <span
                 className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#c2410c]"
@@ -357,48 +355,40 @@ function GroupCard({
             <span className="max-w-[145px] text-right text-[10px] font-semibold leading-tight text-[#94a3b8]">
               {text.privateGroup}
             </span>
-          ) : !canOpenLinks ? (
-            <button
-              type="button"
-              disabled
-              className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-2.5 py-1.5 text-[10px] font-extrabold text-[#94a3b8]"
-              data-testid={`locked-link-group-${group.id}`}
-            >
-              {lockedButtonLabel}
-              <ExternalLink className="h-3 w-3" />
-            </button>
           ) : null}
         </div>
       </div>
 
-      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{accountsLabel}</p>
-        {accountDataLoading ? (
-          <p className="text-[11px] font-semibold text-[#64748b]">{accountLoadingLabel}</p>
-        ) : memberships.length ? (
-          <div className="flex flex-wrap gap-1.5">
-            {memberships.map(({ account, destination }) => (
-              <span
-                key={account.id}
-                className={`rounded-lg px-2 py-1 text-[10px] font-extrabold ${
-                  destination?.canPost
-                    ? "bg-[#ecfdf5] text-[#047857]"
-                    : destination
-                      ? "bg-[#fff7ed] text-[#c2410c]"
-                      : "bg-[#f1f5f9] text-[#64748b]"
-                }`}
-                data-testid={`group-account-status-${group.id}-${account.id}`}
-              >
-                {account.name}: {destination?.canPost ? joinedLabel : destination ? joinedNeedsReviewLabel : notJoinedLabel}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[11px] font-semibold text-[#64748b]">{noAccountsLabel}</p>
-        )}
-      </div>
+      {(isAdmin || canOpenLinks) && (
+        <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{accountsLabel}</p>
+          {accountDataLoading ? (
+            <p className="text-[11px] font-semibold text-[#64748b]">{accountLoadingLabel}</p>
+          ) : memberships.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {memberships.map(({ account, destination }) => (
+                <span
+                  key={account.id}
+                  className={`rounded-lg px-2 py-1 text-[10px] font-extrabold ${
+                    destination?.canPost
+                      ? "bg-[#ecfdf5] text-[#047857]"
+                      : destination
+                        ? "bg-[#fff7ed] text-[#c2410c]"
+                        : "bg-[#f1f5f9] text-[#64748b]"
+                  }`}
+                  data-testid={`group-account-status-${group.id}-${account.id}`}
+                >
+                  {account.name}: {destination?.canPost ? joinedLabel : destination ? joinedNeedsReviewLabel : notJoinedLabel}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] font-semibold text-[#64748b]">{noAccountsLabel}</p>
+          )}
+        </div>
+      )}
 
-      {group.roundDelays.length > 0 && (
+      {(isAdmin || canOpenLinks) && group.roundDelays.length > 0 && (
         <div className="mt-3 border-t border-[#f1f5f9] pt-3">
           <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{roundDelayLabel}</p>
           <div className="flex flex-wrap gap-2">
@@ -451,51 +441,53 @@ function GroupCard({
         </div>
       )}
 
-      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{configuredCampaignsLabel}</p>
-        {groupCampaigns.length ? (
-          <div className="space-y-1.5">
-            {groupCampaigns.map((campaign) => {
-              const editable = campaign.status === "draft" || campaign.status === "paused";
-              const attachedAccount = campaign.telegramAccountId
-                ? accounts.find((account) => account.id === campaign.telegramAccountId)
-                : undefined;
-              return (
-                <div key={campaign.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#f8fafc] px-2.5 py-2">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[11px] font-extrabold text-[#334155]">{campaign.name}</span>
-                    <span className="block text-[10px] font-semibold text-[#64748b]">
-                      {campaign.status} · {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {secondsLabel}
+      {(isAdmin || canOpenLinks) && (
+        <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+          <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{configuredCampaignsLabel}</p>
+          {groupCampaigns.length ? (
+            <div className="space-y-1.5">
+              {groupCampaigns.map((campaign) => {
+                const editable = campaign.status === "draft" || campaign.status === "paused";
+                const attachedAccount = campaign.telegramAccountId
+                  ? accounts.find((account) => account.id === campaign.telegramAccountId)
+                  : undefined;
+                return (
+                  <div key={campaign.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#f8fafc] px-2.5 py-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-extrabold text-[#334155]">{campaign.name}</span>
+                      <span className="block text-[10px] font-semibold text-[#64748b]">
+                        {campaign.status} · {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {secondsLabel}
+                      </span>
                     </span>
-                  </span>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <span
-                      className="max-w-[150px] truncate rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#475569]"
-                      title={attachedAccount?.name ?? (campaign.telegramAccountId ? accountLoadingLabel : noAttachedAccountLabel)}
-                      data-testid={`campaign-account-${group.id}-${campaign.id}`}
-                    >
-                      {attachedAccountLabel}: {attachedAccount?.name ?? (campaign.telegramAccountId ? accountLoadingLabel : noAttachedAccountLabel)}
-                    </span>
-                    {isAdmin && editable && (
-                      <button
-                        type="button"
-                        onClick={() => onEdit(campaign)}
-                        className="inline-flex items-center gap-1 rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#1a2b88] hover:bg-[#eef2fa]"
-                        data-testid={`button-edit-campaign-from-group-${group.id}-${campaign.id}`}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span
+                        className="max-w-[150px] truncate rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#475569]"
+                        title={attachedAccount?.name ?? (campaign.telegramAccountId ? accountLoadingLabel : noAttachedAccountLabel)}
+                        data-testid={`campaign-account-${group.id}-${campaign.id}`}
                       >
-                        <Pencil className="h-3 w-3" />
-                        {text.editCampaign}
-                      </button>
-                    )}
+                        {attachedAccountLabel}: {attachedAccount?.name ?? (campaign.telegramAccountId ? accountLoadingLabel : noAttachedAccountLabel)}
+                      </span>
+                      {isAdmin && editable && (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(campaign)}
+                          className="inline-flex items-center gap-1 rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#1a2b88] hover:bg-[#eef2fa]"
+                          data-testid={`button-edit-campaign-from-group-${group.id}-${campaign.id}`}
+                        >
+                          <Pencil className="h-3 w-3" />
+                          {text.editCampaign}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-[11px] font-semibold text-[#64748b]">{noConfiguredCampaignsLabel}</p>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] font-semibold text-[#64748b]">{noConfiguredCampaignsLabel}</p>
+          )}
+        </div>
+      )}
     </article>
   );
 }
@@ -522,7 +514,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   });
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const workspaceQuery = useGetGroupLibrary({ query: { queryKey: getGetGroupLibraryQueryKey(), enabled: !isAdmin && groupLibraryAccess.data?.canView === true } });
-  const userDataEnabled = isAdmin || groupLibraryAccess.data?.canView === true;
+  const canOpenLinks = groupLibraryAccess.data?.canOpenLinks === true;
+  const userDataEnabled = isAdmin || canOpenLinks;
   const accounts = useListTelegramAccounts({ query: { queryKey: getListTelegramAccountsQueryKey(), enabled: userDataEnabled } });
   const destinations = useListDestinations({ query: { queryKey: getListDestinationsQueryKey(), enabled: userDataEnabled } });
   const campaigns = useListCampaigns({ query: { queryKey: getListCampaignsQueryKey(), enabled: userDataEnabled } });
@@ -599,10 +592,10 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   }
 
   useEffect(() => {
-    if (isAdmin || !groupLibraryAccess.data?.canView || accounts.isLoading || autoSyncStarted.current) return;
+    if (isAdmin || !canOpenLinks || accounts.isLoading || autoSyncStarted.current) return;
     autoSyncStarted.current = true;
     void handleSync();
-  }, [accounts.isLoading, groupLibraryAccess.data?.canView, isAdmin]);
+  }, [accounts.isLoading, canOpenLinks, isAdmin]);
 
   function openCreateCampaign(
     group: AdminActiveGroup,
@@ -640,7 +633,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           eyebrow={isAdmin ? "Admin Center" : localizedWorkspaceText.eyebrow}
           title={pageText.title}
           detail={pageText.subtitle}
-           action={(
+           action={(isAdmin || canOpenLinks) ? (
             <button
               type="button"
                onClick={() => void handleSync()}
@@ -655,7 +648,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                  ? (isAdmin ? text.syncing : localizedWorkspaceText.syncing)
                  : (isAdmin ? text.sync : localizedWorkspaceText.sync)}
             </button>
-           )}
+            ) : undefined}
         />
          {syncFeedback && (
           <p className={`-mt-4 text-[11px] font-bold ${feedbackIsError ? "text-[#be123c]" : "text-[#047857]"}`} role="status">
@@ -729,12 +722,11 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 importDisabled={importGroup.isPending}
                 importing={importGroup.isPending && importingGroupId === group.id}
                 mode={mode}
-                canOpenLinks={groupLibraryAccess.data?.canOpenLinks === true}
+                 canOpenLinks={canOpenLinks}
                 openGroupLabel={isAdmin ? text.openGroup : localizedWorkspaceText.openGroup}
                 groupLabel={isAdmin ? text.group : localizedWorkspaceText.group}
                 forumLabel={isAdmin ? text.forum : localizedWorkspaceText.forum}
                 membersLabel={isAdmin ? text.members : localizedWorkspaceText.members}
-                lockedButtonLabel={localizedWorkspaceText.lockedButton}
                 hiddenGroupNameLabel={localizedWorkspaceText.hiddenGroupName}
                 numberLocale={language === "en" ? "en-US" : "vi-VN"}
                 roundDelayLabel={isAdmin ? text.roundDelay : localizedWorkspaceText.roundDelay}
