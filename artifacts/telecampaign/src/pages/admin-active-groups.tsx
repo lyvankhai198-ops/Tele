@@ -109,6 +109,16 @@ const workspaceText = {
     syncAccountsFailed: "Một hoặc nhiều tài khoản Telegram chưa đồng bộ được.",
     syncCompleted: (accountCount: number) => `Đã đồng bộ ${accountCount} tài khoản Telegram.`,
     noConnectedAccounts: "Chưa có tài khoản Telegram đã kết nối để đồng bộ.",
+    accounts: "Tài khoản Telegram",
+    accountLoading: "Đang tải trạng thái tài khoản...",
+    joined: "Đã tham gia",
+    joinedNeedsReview: "Đã tham gia · chưa xác minh quyền gửi",
+    notJoined: "Chưa tham gia / chưa đồng bộ",
+    noAccounts: "Chưa có tài khoản Telegram nào.",
+    configuredCampaigns: "Campaign đang dùng nhóm này",
+    noConfiguredCampaigns: "Bạn chưa có campaign nào dùng nhóm này.",
+    attachedAccount: "Tài khoản",
+    noAttachedAccount: "Chưa gắn tài khoản",
     needJoinedAccount: "Cần tài khoản đã tham gia và có quyền gửi",
     preferredDelay: "Ưu tiên",
     noDelayHistory: "Chưa có dữ liệu",
@@ -148,6 +158,16 @@ const workspaceText = {
     syncAccountsFailed: "One or more Telegram accounts could not be synchronized.",
     syncCompleted: (accountCount: number) => `${accountCount} Telegram account${accountCount === 1 ? "" : "s"} synchronized.`,
     noConnectedAccounts: "No connected Telegram account is available to synchronize.",
+    accounts: "Telegram accounts",
+    accountLoading: "Loading account status...",
+    joined: "Joined",
+    joinedNeedsReview: "Joined · posting permission unverified",
+    notJoined: "Not joined / not synchronized",
+    noAccounts: "No Telegram accounts yet.",
+    configuredCampaigns: "Campaigns using this group",
+    noConfiguredCampaigns: "You have no campaigns using this group.",
+    attachedAccount: "Account",
+    noAttachedAccount: "No account attached",
     needJoinedAccount: "A joined account with posting permission is required",
     preferredDelay: "Preferred",
     noDelayHistory: "No history yet",
@@ -192,6 +212,16 @@ type GroupCardProps = {
   roundDelayLabel: string;
   secondsLabel: string;
   quickCreateLabel: string;
+  accountsLabel: string;
+  accountLoadingLabel: string;
+  joinedLabel: string;
+  joinedNeedsReviewLabel: string;
+  notJoinedLabel: string;
+  noAccountsLabel: string;
+  configuredCampaignsLabel: string;
+  noConfiguredCampaignsLabel: string;
+  attachedAccountLabel: string;
+  noAttachedAccountLabel: string;
   needJoinedAccountLabel: string;
   preferredDelayLabel: string;
   noDelayHistoryLabel: string;
@@ -219,6 +249,16 @@ function GroupCard({
   roundDelayLabel,
   secondsLabel,
   quickCreateLabel,
+  accountsLabel,
+  accountLoadingLabel,
+  joinedLabel,
+  joinedNeedsReviewLabel,
+  notJoinedLabel,
+  noAccountsLabel,
+  configuredCampaignsLabel,
+  noConfiguredCampaignsLabel,
+  attachedAccountLabel,
+  noAttachedAccountLabel,
   needJoinedAccountLabel,
   preferredDelayLabel,
   noDelayHistoryLabel,
@@ -299,10 +339,10 @@ function GroupCard({
         </div>
       </div>
 
-      {isAdmin && <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.accounts}</p>
+      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{accountsLabel}</p>
         {accountDataLoading ? (
-          <p className="text-[11px] font-semibold text-[#64748b]">{text.accountLoading}</p>
+          <p className="text-[11px] font-semibold text-[#64748b]">{accountLoadingLabel}</p>
         ) : memberships.length ? (
           <div className="flex flex-wrap gap-1.5">
             {memberships.map(({ account, destination }) => (
@@ -317,14 +357,14 @@ function GroupCard({
                 }`}
                 data-testid={`group-account-status-${group.id}-${account.id}`}
               >
-                {account.name}: {destination?.canPost ? text.joined : destination ? text.joinedNeedsReview : text.notJoined}
+                {account.name}: {destination?.canPost ? joinedLabel : destination ? joinedNeedsReviewLabel : notJoinedLabel}
               </span>
             ))}
           </div>
         ) : (
-          <p className="text-[11px] font-semibold text-[#64748b]">{text.noAccounts}</p>
+          <p className="text-[11px] font-semibold text-[#64748b]">{noAccountsLabel}</p>
         )}
-      </div>}
+      </div>
 
       {group.roundDelays.length > 0 && (
         <div className="mt-3 border-t border-[#f1f5f9] pt-3">
@@ -379,8 +419,8 @@ function GroupCard({
         </div>
       )}
 
-      {isAdmin && <div className="mt-3 border-t border-[#f1f5f9] pt-3">
-        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.configuredCampaigns}</p>
+      <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+        <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{configuredCampaignsLabel}</p>
         {groupCampaigns.length ? (
           <div className="space-y-1.5">
             {groupCampaigns.map((campaign) => {
@@ -393,18 +433,18 @@ function GroupCard({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[11px] font-extrabold text-[#334155]">{campaign.name}</span>
                     <span className="block text-[10px] font-semibold text-[#64748b]">
-                      {campaign.status} · {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {text.seconds}
+                      {campaign.status} · {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {secondsLabel}
                     </span>
                   </span>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <span
                       className="max-w-[150px] truncate rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#475569]"
-                      title={attachedAccount?.name ?? (campaign.telegramAccountId ? text.accountLoading : text.noAttachedAccount)}
+                      title={attachedAccount?.name ?? (campaign.telegramAccountId ? accountLoadingLabel : noAttachedAccountLabel)}
                       data-testid={`campaign-account-${group.id}-${campaign.id}`}
                     >
-                      {text.attachedAccount}: {attachedAccount?.name ?? (campaign.telegramAccountId ? text.accountLoading : text.noAttachedAccount)}
+                      {attachedAccountLabel}: {attachedAccount?.name ?? (campaign.telegramAccountId ? accountLoadingLabel : noAttachedAccountLabel)}
                     </span>
-                    {editable && (
+                    {isAdmin && editable && (
                       <button
                         type="button"
                         onClick={() => onEdit(campaign)}
@@ -421,9 +461,9 @@ function GroupCard({
             })}
           </div>
         ) : (
-          <p className="text-[11px] font-semibold text-[#64748b]">{text.noConfiguredCampaigns}</p>
+          <p className="text-[11px] font-semibold text-[#64748b]">{noConfiguredCampaignsLabel}</p>
         )}
-      </div>}
+      </div>
     </article>
   );
 }
@@ -452,7 +492,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const userDataEnabled = isAdmin || groupLibraryAccess.data?.canView === true;
   const accounts = useListTelegramAccounts({ query: { queryKey: getListTelegramAccountsQueryKey(), enabled: userDataEnabled } });
   const destinations = useListDestinations({ query: { queryKey: getListDestinationsQueryKey(), enabled: userDataEnabled } });
-  const campaigns = useListCampaigns({ query: { queryKey: getListCampaignsQueryKey(), enabled: isAdmin } });
+  const campaigns = useListCampaigns({ query: { queryKey: getListCampaignsQueryKey(), enabled: userDataEnabled } });
   const syncLibrary = useSyncAdminGroupLibrary({
     mutation: {
       onError: () => {
@@ -534,7 +574,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   async function handleCampaignSaved() {
     await Promise.all([
       destinations.refetch(),
-      ...(isAdmin ? [campaigns.refetch()] : []),
+      campaigns.refetch(),
     ]);
     setCampaignForm(null);
     setFeedbackIsError(false);
@@ -647,6 +687,16 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 roundDelayLabel={isAdmin ? text.roundDelay : localizedWorkspaceText.roundDelay}
                 secondsLabel={isAdmin ? text.seconds : localizedWorkspaceText.seconds}
                 quickCreateLabel={isAdmin ? text.quickCreate : localizedWorkspaceText.quickCreate}
+                 accountsLabel={isAdmin ? text.accounts : localizedWorkspaceText.accounts}
+                 accountLoadingLabel={isAdmin ? text.accountLoading : localizedWorkspaceText.accountLoading}
+                 joinedLabel={isAdmin ? text.joined : localizedWorkspaceText.joined}
+                 joinedNeedsReviewLabel={isAdmin ? text.joinedNeedsReview : localizedWorkspaceText.joinedNeedsReview}
+                 notJoinedLabel={isAdmin ? text.notJoined : localizedWorkspaceText.notJoined}
+                 noAccountsLabel={isAdmin ? text.noAccounts : localizedWorkspaceText.noAccounts}
+                 configuredCampaignsLabel={isAdmin ? text.configuredCampaigns : localizedWorkspaceText.configuredCampaigns}
+                 noConfiguredCampaignsLabel={isAdmin ? text.noConfiguredCampaigns : localizedWorkspaceText.noConfiguredCampaigns}
+                 attachedAccountLabel={isAdmin ? text.attachedAccount : localizedWorkspaceText.attachedAccount}
+                 noAttachedAccountLabel={isAdmin ? text.noAttachedAccount : localizedWorkspaceText.noAttachedAccount}
                 needJoinedAccountLabel={isAdmin ? text.needJoinedAccount : localizedWorkspaceText.needJoinedAccount}
                 preferredDelayLabel={isAdmin ? text.preferredDelay : localizedWorkspaceText.preferredDelay}
                 noDelayHistoryLabel={isAdmin ? text.noDelayHistory : localizedWorkspaceText.noDelayHistory}
