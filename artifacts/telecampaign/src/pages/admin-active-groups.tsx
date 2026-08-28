@@ -67,6 +67,8 @@ const text = {
     `${sentCount.toLocaleString("vi-VN")} thành công · ${errorCount.toLocaleString("vi-VN")} lỗi`,
   configuredCampaigns: "Campaign đang dùng nhóm này",
   noConfiguredCampaigns: "Chưa có campaign nào của admin dùng nhóm này.",
+  attachedAccount: "Tài khoản",
+  noAttachedAccount: "Chưa gắn tài khoản",
   editCampaign: "Chỉnh sửa",
   createdCampaign: "Đã tạo campaign từ nhóm.",
   updatedCampaign: "Đã cập nhật campaign.",
@@ -366,25 +368,37 @@ function GroupCard({
           <div className="space-y-1.5">
             {groupCampaigns.map((campaign) => {
               const editable = campaign.status === "draft" || campaign.status === "paused";
+              const attachedAccount = campaign.telegramAccountId
+                ? accounts.find((account) => account.id === campaign.telegramAccountId)
+                : undefined;
               return (
                 <div key={campaign.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#f8fafc] px-2.5 py-2">
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-[11px] font-extrabold text-[#334155]">{campaign.name}</span>
                     <span className="block text-[10px] font-semibold text-[#64748b]">
                       {campaign.status} · {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds} {text.seconds}
                     </span>
                   </span>
-                  {editable && (
-                    <button
-                      type="button"
-                      onClick={() => onEdit(campaign)}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#1a2b88] hover:bg-[#eef2fa]"
-                      data-testid={`button-edit-campaign-from-group-${group.id}-${campaign.id}`}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span
+                      className="max-w-[150px] truncate rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#475569]"
+                      title={attachedAccount?.name ?? (campaign.telegramAccountId ? text.accountLoading : text.noAttachedAccount)}
+                      data-testid={`campaign-account-${group.id}-${campaign.id}`}
                     >
-                      <Pencil className="h-3 w-3" />
-                      {text.editCampaign}
-                    </button>
-                  )}
+                      {text.attachedAccount}: {attachedAccount?.name ?? (campaign.telegramAccountId ? text.accountLoading : text.noAttachedAccount)}
+                    </span>
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(campaign)}
+                        className="inline-flex items-center gap-1 rounded-md border border-[#cbd5e1] bg-white px-2 py-1 text-[10px] font-extrabold text-[#1a2b88] hover:bg-[#eef2fa]"
+                        data-testid={`button-edit-campaign-from-group-${group.id}-${campaign.id}`}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        {text.editCampaign}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
