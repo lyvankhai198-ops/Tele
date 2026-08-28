@@ -205,6 +205,28 @@
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
 
+.admin-notices-list {
+  max-height: min(760px, calc(100vh - 220px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.5rem;
+  scrollbar-color: #94a3b8 transparent;
+  scrollbar-width: thin;
+}
+
+.admin-notices-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-notices-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-notices-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
 .admin-notice-card:hover,
 .admin-notice-card:focus-within {
   transform: translateY(-2px);

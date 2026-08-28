@@ -103,7 +103,7 @@ export default function Dashboard() {
             </div>
             
             {adminNotifications.length > 0 ? (
-              <div className="space-y-7">
+              <div className="admin-notices-list space-y-7" data-testid="admin-notices-list">
                 {adminNotifications.map((notice) => (
                   <article key={notice.id} className="admin-notice-card overflow-hidden rounded-2xl border border-[#dbe6f0] bg-white text-[14px] text-[#0f172a] shadow-sm" data-testid={`notice-${notice.id}`}>
                     {(() => {
