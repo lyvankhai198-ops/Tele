@@ -73,9 +73,7 @@ export function redactGroupLibraryGroups(
     title: "••••••••••",
     username: null,
     telegramLink: null,
-    kind: "",
     isPublished: true,
-    roundDelays: [],
   }));
 }
 

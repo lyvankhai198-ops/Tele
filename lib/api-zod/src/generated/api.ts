@@ -1029,7 +1029,12 @@ export const GetGroupLibraryResponse = zod.object({
   "sampleCount": zod.number(),
   "errorRate": zod.number().min(getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMin).max(getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMax).nullable(),
   "isPreferred": zod.boolean()
-}))
+})),
+  "accountMemberships": zod.array(zod.object({
+  "accountId": zod.string(),
+  "destinationId": zod.string(),
+  "canPost": zod.boolean()
+})).optional()
 }))
 })
 
@@ -1795,7 +1800,12 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
   "sampleCount": zod.number(),
   "errorRate": zod.number().min(getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMin).max(getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMax).nullable(),
   "isPreferred": zod.boolean()
-}))
+})),
+  "accountMemberships": zod.array(zod.object({
+  "accountId": zod.string(),
+  "destinationId": zod.string(),
+  "canPost": zod.boolean()
+})).optional()
 }))
 })
 

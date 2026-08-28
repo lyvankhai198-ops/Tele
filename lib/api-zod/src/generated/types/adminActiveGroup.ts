@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminGroupRoundDelay } from './adminGroupRoundDelay';
+import type { GroupLibraryAccountMembership } from './groupLibraryAccountMembership';
 
 export interface AdminActiveGroup {
   id: string;
@@ -19,4 +20,5 @@ export interface AdminActiveGroup {
   memberCount: number | null;
   isPublished: boolean;
   roundDelays: AdminGroupRoundDelay[];
+  accountMemberships?: GroupLibraryAccountMembership[];
 }

@@ -91,6 +91,7 @@ export * from './destination';
 export * from './getAdminUserSupportCampaignTargetsParams';
 export * from './groupLibraryAccess';
 export * from './groupLibraryAccessMinimumJoinPlan';
+export * from './groupLibraryAccountMembership';
 export * from './healthStatus';
 export * from './legacyOwnerMappingInput';
 export * from './legacyOwnerMigrationResult';

@@ -1461,6 +1461,12 @@ export interface AdminGroupRoundDelay {
   isPreferred: boolean;
 }
 
+export interface GroupLibraryAccountMembership {
+  accountId: string;
+  destinationId: string;
+  canPost: boolean;
+}
+
 export interface AdminActiveGroup {
   id: string;
   title: string;
@@ -1473,6 +1479,7 @@ export interface AdminActiveGroup {
   memberCount: number | null;
   isPublished: boolean;
   roundDelays: AdminGroupRoundDelay[];
+  accountMemberships?: GroupLibraryAccountMembership[];
 }
 
 export interface AdminActiveGroupDirectory {

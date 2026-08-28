@@ -2125,6 +2125,13 @@ components:
         sampleCount: { type: number }
         errorRate: { type: ["number", "null"], minimum: 0, maximum: 1 }
         isPreferred: { type: boolean }
+    GroupLibraryAccountMembership:
+      type: object
+      required: [accountId, destinationId, canPost]
+      properties:
+        accountId: { type: string }
+        destinationId: { type: string }
+        canPost: { type: boolean }
     AdminActiveGroup:
       type: object
       required: [id, title, username, telegramLink, kind, memberCount, isPublished, roundDelays]
@@ -2139,6 +2146,9 @@ components:
         roundDelays:
           type: array
           items: { $ref: "#/components/schemas/AdminGroupRoundDelay" }
+        accountMemberships:
+          type: array
+          items: { $ref: "#/components/schemas/GroupLibraryAccountMembership" }
     AdminActiveGroupDirectory:
       type: object
       required: [groups]

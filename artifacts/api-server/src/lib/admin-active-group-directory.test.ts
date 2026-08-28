@@ -152,10 +152,16 @@ assert.notEqual(lockedGroups[0]?.id, directory.groups[0]?.id);
 assert.equal(lockedGroups[0]?.title, "••••••••••");
 assert.equal(lockedGroups[0]?.username, null);
 assert.equal(lockedGroups[0]?.telegramLink, null);
-assert.equal(lockedGroups[0]?.kind, "");
+assert.equal(lockedGroups[0]?.kind, directory.groups[0]?.kind);
 assert.equal(lockedGroups[0]?.memberCount, directory.groups[0]?.memberCount);
 assert.equal(lockedGroups[0]?.isPublished, true);
-assert.deepEqual(lockedGroups[0]?.roundDelays, []);
+assert.deepEqual(
+  lockedGroups[0]?.roundDelays.map((delay) => [delay.minSeconds, delay.maxSeconds]),
+  [
+    [45, 60],
+    [15, 30],
+  ],
+);
 assert.strictEqual(redactGroupLibraryGroups(directory.groups, true), directory.groups);
 
 console.log("Admin group library aggregation and one-time import checks passed.");

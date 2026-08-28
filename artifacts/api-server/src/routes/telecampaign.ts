@@ -566,8 +566,41 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
     && planMeetsGroupLibraryMinimum(subscription.plan, settings.groupLibraryMinimumJoinPlan)
   );
   const directory = await getAdminActiveGroupDirectory({ includeUnpublished: false });
+  const groupIds = directory.groups.map((group) => group.id);
+  const membershipRows = isAdmin || groupIds.length === 0
+    ? []
+    : await db.select({
+      telegramId: destinationsTable.telegramId,
+      accountId: destinationsTable.accountId,
+      destinationId: destinationsTable.id,
+      canPost: destinationsTable.canPost,
+    })
+      .from(destinationsTable)
+      .innerJoin(telegramAccountsTable, eq(destinationsTable.accountId, telegramAccountsTable.id))
+      .where(and(
+        eq(telegramAccountsTable.ownerUserId, currentUserId(req)),
+        isNull(telegramAccountsTable.deletedAt),
+        isNull(destinationsTable.topicId),
+        inArray(destinationsTable.telegramId, groupIds),
+      ));
+  const membershipsByTelegramId = new Map<string, typeof membershipRows>();
+  for (const membership of membershipRows) {
+    const existing = membershipsByTelegramId.get(membership.telegramId) ?? [];
+    existing.push(membership);
+    membershipsByTelegramId.set(membership.telegramId, existing);
+  }
+  const visibleGroups = redactGroupLibraryGroups(directory.groups, canOpenLinks);
   res.json(GetGroupLibraryResponse.parse({
-    groups: redactGroupLibraryGroups(directory.groups, canOpenLinks),
+    groups: visibleGroups.map((group, index) => ({
+      ...group,
+      accountMemberships: isAdmin
+        ? []
+        : (membershipsByTelegramId.get(directory.groups[index]?.id ?? "") ?? []).map((membership) => ({
+          accountId: membership.accountId,
+          destinationId: membership.destinationId,
+          canPost: membership.canPost,
+        })),
+    })),
   }));
 });
 
