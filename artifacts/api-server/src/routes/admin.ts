@@ -666,8 +666,11 @@ router.get("/admin/system-settings", async (_req, res): Promise<void> => {
 router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const parsed = UpdateAdminSystemSettingsBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Cấu hình hệ thống không hợp lệ.");
-  const settings = parsed.data;
   const previousSettings = await getSystemSettings();
+  const settings = {
+    ...parsed.data,
+    planContent: parsed.data.planContent ?? previousSettings.planContent,
+  };
   const allLimits = Object.values(settings.planLimits);
   const allIntegerLimits = allLimits.every((limit) => (
     (Object.entries(PLAN_LIMIT_MAXIMUMS) as Array<[keyof typeof PLAN_LIMIT_MAXIMUMS, number]>)
@@ -684,13 +687,35 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     settings.defaultAccountDailyLimit,
   ].every(Number.isInteger)
     && defaults.roundDelayMinSeconds <= defaults.roundDelayMaxSeconds;
+  const validPlanContent = Object.values(settings.planContent).every((content) => {
+    const taglines = [content.tagline, content.taglineEn];
+    const featureLists = [content.features, content.featuresEn];
+    return taglines.every((tagline) => tagline.trim().length >= 1 && tagline.trim().length <= 160)
+      && featureLists.every((features) => (
+        features.length >= 1
+        && features.length <= 8
+        && features.every((feature) => feature.trim().length >= 1 && feature.trim().length <= 120)
+      ));
+  });
   try {
     Intl.DateTimeFormat(undefined, { timeZone: settings.defaultTimezone });
   } catch {
     return void sendError(res, 400, "Múi giờ mặc định không hợp lệ.");
   }
   if (!allIntegerLimits || !validDefaults) return void sendError(res, 400, "Cấu hình giới hạn hoặc delay không hợp lệ.");
+  if (!validPlanContent) return void sendError(res, 400, "Nội dung gói dịch vụ không hợp lệ.");
+  for (const content of Object.values(settings.planContent)) {
+    content.tagline = content.tagline.trim();
+    content.taglineEn = content.taglineEn.trim();
+    content.features = content.features.map((feature) => feature.trim());
+    content.featuresEn = content.featuresEn.map((feature) => feature.trim());
+  }
   const updated = await updateSystemSettings(settings, req.userId!);
+  const planLimitsChanged = (Object.keys(updated.planLimits) as Array<keyof typeof updated.planLimits>).some((plan) => {
+    const previous = previousSettings.planLimits[plan];
+    const next = updated.planLimits[plan];
+    return (Object.keys(next) as Array<keyof typeof next>).some((field) => previous[field] !== next[field]);
+  });
   const quotaWasIncreased = (Object.keys(updated.planLimits) as Array<keyof typeof updated.planLimits>).some((plan) => {
     const previous = previousSettings.planLimits[plan];
     const next = updated.planLimits[plan];
@@ -698,8 +723,10 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     return increased(previous.messageDailyLimit, next.messageDailyLimit)
       || increased(previous.userMessageDailyLimit, next.userMessageDailyLimit);
   });
-  await pauseCampaignsOverCurrentQuotaAfterSettingsUpdate();
-  if (quotaWasIncreased) await resumeQuotaPausedCampaignsAfterSettingsUpdate();
+  if (planLimitsChanged) {
+    await pauseCampaignsOverCurrentQuotaAfterSettingsUpdate();
+    if (quotaWasIncreased) await resumeQuotaPausedCampaignsAfterSettingsUpdate();
+  }
   await recordActivity({
     ownerUserId: req.userId!,
     event: "system_settings.updated",

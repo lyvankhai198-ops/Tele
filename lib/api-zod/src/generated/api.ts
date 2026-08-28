@@ -1033,6 +1033,18 @@ export const GetGroupLibraryResponse = zod.object({
 })
 
 
+export const getUpgradeSummaryResponsePlansItemTaglineMax = 160;
+
+export const getUpgradeSummaryResponsePlansItemTaglineEnMax = 160;
+
+export const getUpgradeSummaryResponsePlansItemFeaturesItemMax = 120;
+
+export const getUpgradeSummaryResponsePlansItemFeaturesMax = 8;
+
+export const getUpgradeSummaryResponsePlansItemFeaturesEnItemMax = 120;
+
+export const getUpgradeSummaryResponsePlansItemFeaturesEnMax = 8;
+
 export const getUpgradeSummaryResponseSubscriptionDailyQuotaExemptFromRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 export const getUpgradeSummaryResponseSubscriptionDailyQuotaExemptUntilRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
 
@@ -1041,7 +1053,10 @@ export const GetUpgradeSummaryResponse = zod.object({
   "plans": zod.array(zod.object({
   "code": zod.enum(['plus', 'pro', 'unlimited']),
   "name": zod.string(),
-  "tagline": zod.string(),
+  "tagline": zod.string().min(1).max(getUpgradeSummaryResponsePlansItemTaglineMax),
+  "taglineEn": zod.string().min(1).max(getUpgradeSummaryResponsePlansItemTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(getUpgradeSummaryResponsePlansItemFeaturesItemMax)).min(1).max(getUpgradeSummaryResponsePlansItemFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(getUpgradeSummaryResponsePlansItemFeaturesEnItemMax)).min(1).max(getUpgradeSummaryResponsePlansItemFeaturesEnMax),
   "accountLimit": zod.number().nullable(),
   "campaignLimit": zod.number().nullable(),
   "messageDailyLimit": zod.number().nullable(),
@@ -1107,6 +1122,42 @@ export const getAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitM
 
 export const getAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin = 0;
 
+export const getAdminSystemSettingsResponsePlanContentPlusTaglineMax = 160;
+
+export const getAdminSystemSettingsResponsePlanContentPlusTaglineEnMax = 160;
+
+export const getAdminSystemSettingsResponsePlanContentPlusFeaturesItemMax = 120;
+
+export const getAdminSystemSettingsResponsePlanContentPlusFeaturesMax = 8;
+
+export const getAdminSystemSettingsResponsePlanContentPlusFeaturesEnItemMax = 120;
+
+export const getAdminSystemSettingsResponsePlanContentPlusFeaturesEnMax = 8;
+
+export const getAdminSystemSettingsResponsePlanContentProTaglineMax = 160;
+
+export const getAdminSystemSettingsResponsePlanContentProTaglineEnMax = 160;
+
+export const getAdminSystemSettingsResponsePlanContentProFeaturesItemMax = 120;
+
+export const getAdminSystemSettingsResponsePlanContentProFeaturesMax = 8;
+
+export const getAdminSystemSettingsResponsePlanContentProFeaturesEnItemMax = 120;
+
+export const getAdminSystemSettingsResponsePlanContentProFeaturesEnMax = 8;
+
+export const getAdminSystemSettingsResponsePlanContentUnlimitedTaglineMax = 160;
+
+export const getAdminSystemSettingsResponsePlanContentUnlimitedTaglineEnMax = 160;
+
+export const getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesItemMax = 120;
+
+export const getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesMax = 8;
+
+export const getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax = 120;
+
+export const getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax = 8;
+
 export const getAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
 export const getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
@@ -1141,6 +1192,26 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "campaignLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedCampaignLimitMin).nullable(),
   "messageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin).nullable(),
   "userMessageDailyLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
+})
+}),
+  "planContent": zod.object({
+  "plus": zod.object({
+  "tagline": zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentPlusTaglineMax),
+  "taglineEn": zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentPlusTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentPlusFeaturesItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentPlusFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentPlusFeaturesEnItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentPlusFeaturesEnMax)
+}),
+  "pro": zod.object({
+  "tagline": zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentProTaglineMax),
+  "taglineEn": zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentProTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentProFeaturesItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentProFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentProFeaturesEnItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentProFeaturesEnMax)
+}),
+  "unlimited": zod.object({
+  "tagline": zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedTaglineMax),
+  "taglineEn": zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax)
 })
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
@@ -1181,6 +1252,42 @@ export const updateAdminSystemSettingsBodyPlanLimitsUnlimitedMessageDailyLimitMi
 
 export const updateAdminSystemSettingsBodyPlanLimitsUnlimitedUserMessageDailyLimitMin = 0;
 
+export const updateAdminSystemSettingsBodyPlanContentPlusTaglineMax = 160;
+
+export const updateAdminSystemSettingsBodyPlanContentPlusTaglineEnMax = 160;
+
+export const updateAdminSystemSettingsBodyPlanContentPlusFeaturesItemMax = 120;
+
+export const updateAdminSystemSettingsBodyPlanContentPlusFeaturesMax = 8;
+
+export const updateAdminSystemSettingsBodyPlanContentPlusFeaturesEnItemMax = 120;
+
+export const updateAdminSystemSettingsBodyPlanContentPlusFeaturesEnMax = 8;
+
+export const updateAdminSystemSettingsBodyPlanContentProTaglineMax = 160;
+
+export const updateAdminSystemSettingsBodyPlanContentProTaglineEnMax = 160;
+
+export const updateAdminSystemSettingsBodyPlanContentProFeaturesItemMax = 120;
+
+export const updateAdminSystemSettingsBodyPlanContentProFeaturesMax = 8;
+
+export const updateAdminSystemSettingsBodyPlanContentProFeaturesEnItemMax = 120;
+
+export const updateAdminSystemSettingsBodyPlanContentProFeaturesEnMax = 8;
+
+export const updateAdminSystemSettingsBodyPlanContentUnlimitedTaglineMax = 160;
+
+export const updateAdminSystemSettingsBodyPlanContentUnlimitedTaglineEnMax = 160;
+
+export const updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesItemMax = 120;
+
+export const updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesMax = 8;
+
+export const updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnItemMax = 120;
+
+export const updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnMax = 8;
+
 export const updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax = 100000;
 
 export const updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin = 0;
@@ -1217,6 +1324,26 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
 })
 }),
+  "planContent": zod.object({
+  "plus": zod.object({
+  "tagline": zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentPlusTaglineMax),
+  "taglineEn": zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentPlusTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentPlusFeaturesItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentPlusFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentPlusFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentPlusFeaturesEnMax)
+}),
+  "pro": zod.object({
+  "tagline": zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentProTaglineMax),
+  "taglineEn": zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentProTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentProFeaturesItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentProFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentProFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentProFeaturesEnMax)
+}),
+  "unlimited": zod.object({
+  "tagline": zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedTaglineMax),
+  "taglineEn": zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnMax)
+})
+}).optional(),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
@@ -1254,6 +1381,42 @@ export const updateAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLim
 
 export const updateAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin = 0;
 
+export const updateAdminSystemSettingsResponsePlanContentPlusTaglineMax = 160;
+
+export const updateAdminSystemSettingsResponsePlanContentPlusTaglineEnMax = 160;
+
+export const updateAdminSystemSettingsResponsePlanContentPlusFeaturesItemMax = 120;
+
+export const updateAdminSystemSettingsResponsePlanContentPlusFeaturesMax = 8;
+
+export const updateAdminSystemSettingsResponsePlanContentPlusFeaturesEnItemMax = 120;
+
+export const updateAdminSystemSettingsResponsePlanContentPlusFeaturesEnMax = 8;
+
+export const updateAdminSystemSettingsResponsePlanContentProTaglineMax = 160;
+
+export const updateAdminSystemSettingsResponsePlanContentProTaglineEnMax = 160;
+
+export const updateAdminSystemSettingsResponsePlanContentProFeaturesItemMax = 120;
+
+export const updateAdminSystemSettingsResponsePlanContentProFeaturesMax = 8;
+
+export const updateAdminSystemSettingsResponsePlanContentProFeaturesEnItemMax = 120;
+
+export const updateAdminSystemSettingsResponsePlanContentProFeaturesEnMax = 8;
+
+export const updateAdminSystemSettingsResponsePlanContentUnlimitedTaglineMax = 160;
+
+export const updateAdminSystemSettingsResponsePlanContentUnlimitedTaglineEnMax = 160;
+
+export const updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesItemMax = 120;
+
+export const updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesMax = 8;
+
+export const updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax = 120;
+
+export const updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax = 8;
+
 export const updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
 export const updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
@@ -1288,6 +1451,26 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "campaignLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedCampaignLimitMin).nullable(),
   "messageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedMessageDailyLimitMin).nullable(),
   "userMessageDailyLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsUnlimitedUserMessageDailyLimitMin).nullable()
+})
+}),
+  "planContent": zod.object({
+  "plus": zod.object({
+  "tagline": zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentPlusTaglineMax),
+  "taglineEn": zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentPlusTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentPlusFeaturesItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentPlusFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentPlusFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentPlusFeaturesEnMax)
+}),
+  "pro": zod.object({
+  "tagline": zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentProTaglineMax),
+  "taglineEn": zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentProTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentProFeaturesItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentProFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentProFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentProFeaturesEnMax)
+}),
+  "unlimited": zod.object({
+  "tagline": zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedTaglineMax),
+  "taglineEn": zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedTaglineEnMax),
+  "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesMax),
+  "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax)
 })
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),

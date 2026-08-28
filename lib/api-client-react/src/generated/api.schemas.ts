@@ -811,7 +811,30 @@ export const PlanCode = {
 export interface Plan {
   code: PlanCode;
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
   tagline: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  taglineEn: string;
+  /**
+     * @minItems 1
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  features: string[];
+  /**
+     * @minItems 1
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  featuresEn: string[];
   /** @nullable */
   accountLimit: number | null;
   /** @nullable */
@@ -901,6 +924,33 @@ export interface PlanLimitSettings {
   userMessageDailyLimit: number | null;
 }
 
+export interface PlanDisplayContent {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  tagline: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  taglineEn: string;
+  /**
+     * @minItems 1
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  features: string[];
+  /**
+     * @minItems 1
+     * @maxItems 8
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  featuresEn: string[];
+}
+
 export interface CampaignDefaults {
   /**
      * @minimum 0
@@ -954,6 +1004,12 @@ export type AdminSystemSettingsPlanLimits = {
   unlimited: PlanLimitSettings;
 };
 
+export type AdminSystemSettingsPlanContent = {
+  plus: PlanDisplayContent;
+  pro: PlanDisplayContent;
+  unlimited: PlanDisplayContent;
+};
+
 export type AdminSystemSettingsGroupLibraryMinimumJoinPlan = typeof AdminSystemSettingsGroupLibraryMinimumJoinPlan[keyof typeof AdminSystemSettingsGroupLibraryMinimumJoinPlan];
 
 
@@ -964,6 +1020,7 @@ export const AdminSystemSettingsGroupLibraryMinimumJoinPlan = {
 
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
+  planContent: AdminSystemSettingsPlanContent;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   /**
@@ -987,6 +1044,12 @@ export type AdminSystemSettingsInputPlanLimits = {
   unlimited: PlanLimitSettings;
 };
 
+export type AdminSystemSettingsInputPlanContent = {
+  plus: PlanDisplayContent;
+  pro: PlanDisplayContent;
+  unlimited: PlanDisplayContent;
+};
+
 export type AdminSystemSettingsInputGroupLibraryMinimumJoinPlan = typeof AdminSystemSettingsInputGroupLibraryMinimumJoinPlan[keyof typeof AdminSystemSettingsInputGroupLibraryMinimumJoinPlan];
 
 
@@ -997,6 +1060,7 @@ export const AdminSystemSettingsInputGroupLibraryMinimumJoinPlan = {
 
 export interface AdminSystemSettingsInput {
   planLimits: AdminSystemSettingsInputPlanLimits;
+  planContent?: AdminSystemSettingsInputPlanContent;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
   /**

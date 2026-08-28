@@ -6,47 +6,7 @@ import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
 import { useGetUpgradeSummary, getGetUpgradeSummaryQueryKey, useActivateLicense } from "@workspace/api-client-react";
 
-// Plan feature keys — translated via t() at render time
-const planFeatureKeys: Record<string, string[]> = {
-  plus: [
-    "Campaign management",
-    "Message templates (feature)",
-    "Activity log tracking",
-    "Automatic group sync",
-    "Campaign automation",
-    "Technical support",
-  ],
-  pro: [
-    "Campaign management",
-    "Message templates (feature)",
-    "Activity log tracking",
-    "Automatic group sync",
-    "Campaign automation",
-    "Priority support",
-  ],
-  unlimited: [
-    "Campaign management",
-    "Message templates (feature)",
-    "Activity log tracking",
-    "Automatic group sync",
-    "Campaign automation",
-    "Priority support 24/7",
-  ],
-};
-
 const planOrder: Record<string, number> = { plus: 1, pro: 2, unlimited: 3 };
-const planTaglines = {
-  en: {
-    plus: "Simple coverage for one operating account",
-    pro: "More room for your growing team",
-    unlimited: "Unlimited Telegram accounts",
-  },
-  vi: {
-    plus: "Gọn gàng cho một tài khoản vận hành",
-    pro: "Nhiều không gian hơn cho đội nhóm",
-    unlimited: "Không giới hạn tài khoản Telegram",
-  },
-} as const;
 
 export default function Upgrade() {
   const { language, t } = useLanguage();
@@ -219,7 +179,7 @@ export default function Upgrade() {
               ? "bg-white text-[#0f172a] hover:bg-[#f8fafc] shadow-lg"
               : "bg-[#1a2b88] text-white hover:bg-[#152473] shadow-md";
 
-            const featureKeys = planFeatureKeys[plan.code] || planFeatureKeys.plus;
+            const features = language === "vi" ? plan.features : plan.featuresEn;
 
             return (
               <div
@@ -235,7 +195,7 @@ export default function Upgrade() {
 
                 <h3 className={`text-[26px] font-extrabold mb-2 uppercase tracking-tight ${titleColor}`}>{plan.name}</h3>
                 <p className={`text-[14px] font-medium mb-8 min-h-[42px] leading-relaxed ${subtitleColor}`}>
-                  {planTaglines[language][plan.code as keyof typeof planTaglines.en] ?? plan.name}
+                  {language === "vi" ? plan.tagline : plan.taglineEn}
                 </p>
 
                 <div className="mb-8">
@@ -253,10 +213,10 @@ export default function Upgrade() {
                 <div className={`border-t ${dividerColor} mb-8`} />
 
                 <ul className="space-y-4 mb-10 flex-1">
-                  {featureKeys.map((key, i) => (
+                  {features.map((feature, i) => (
                     <li key={i} className="flex gap-3.5 text-[14px] font-bold items-start">
                       <Check className={`h-5 w-5 shrink-0 ${checkColor}`} strokeWidth={2.5} />
-                      <span className={titleColor}>{t(key)}</span>
+                      <span className={titleColor}>{feature}</span>
                     </li>
                   ))}
                 </ul>

@@ -9,7 +9,7 @@ import {
   telegramAccountsTable,
   campaignsTable,
 } from "@workspace/db";
-import { getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
+import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { localQuotaDate } from "./user-daily-quota";
 import { getDatabaseNow } from "./database-clock";
@@ -19,15 +19,45 @@ export const PLAN_ORDER = ["plus", "pro", "unlimited"] as const;
 export type PlanCode = SystemPlanCode;
 
 export const PLAN_CATALOG = [
-  { code: "plus", name: "PLUS", tagline: "Gọn gàng cho một tài khoản vận hành", accountLimit: 1, campaignLimit: 10, messageDailyLimit: 300, userMessageDailyLimit: 3000, durationDays: 30 },
-  { code: "pro", name: "PRO", tagline: "Nhiều không gian hơn cho đội nhóm", accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, userMessageDailyLimit: 30000, durationDays: 30 },
-  { code: "unlimited", name: "UNLIMITED", tagline: "Không giới hạn tài khoản Telegram", accountLimit: null, campaignLimit: null, messageDailyLimit: null, userMessageDailyLimit: null, durationDays: 30 },
+  {
+    code: "plus",
+    name: "PLUS",
+    ...DEFAULT_SYSTEM_SETTINGS.planContent.plus,
+    accountLimit: 1,
+    campaignLimit: 10,
+    messageDailyLimit: 300,
+    userMessageDailyLimit: 3000,
+    durationDays: 30,
+  },
+  {
+    code: "pro",
+    name: "PRO",
+    ...DEFAULT_SYSTEM_SETTINGS.planContent.pro,
+    accountLimit: 3,
+    campaignLimit: 50,
+    messageDailyLimit: 600,
+    userMessageDailyLimit: 30000,
+    durationDays: 30,
+  },
+  {
+    code: "unlimited",
+    name: "UNLIMITED",
+    ...DEFAULT_SYSTEM_SETTINGS.planContent.unlimited,
+    accountLimit: null,
+    campaignLimit: null,
+    messageDailyLimit: null,
+    userMessageDailyLimit: null,
+    durationDays: 30,
+  },
 ] as const;
 
 type PlanCatalog = ReadonlyArray<{
   code: PlanCode;
   name: string;
   tagline: string;
+  taglineEn: string;
+  features: readonly string[];
+  featuresEn: readonly string[];
   accountLimit: number | null;
   campaignLimit: number | null;
   messageDailyLimit: number | null;
@@ -91,7 +121,7 @@ function planLimits(plan: PlanCode, catalog: PlanCatalog = PLAN_CATALOG) {
 
 export async function getConfiguredPlanCatalog(): Promise<PlanCatalog> {
   const settings = await getSystemSettings();
-  return PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planLimits[plan.code] }));
+  return PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planContent[plan.code], ...settings.planLimits[plan.code] }));
 }
 
 function normalizedLicenseKey(value: string): string {
@@ -304,7 +334,7 @@ export async function getSubscription(ownerUserId: string, currentTime?: Date) {
     currentTime ? Promise.resolve(currentTime) : getDatabaseNow(),
   ]);
   const existing = subscriptions[0] ?? await createDefaultSubscription(ownerUserId);
-  const catalog = PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planLimits[plan.code] }));
+  const catalog = PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planContent[plan.code], ...settings.planLimits[plan.code] }));
   return toSubscriptionSummary(existing, now, catalog, settings.defaultTimezone);
 }
 

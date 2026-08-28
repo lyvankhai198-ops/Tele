@@ -12,8 +12,16 @@ export type ConfiguredPlanLimits = {
   userMessageDailyLimit: number | null;
 };
 
+export type ConfiguredPlanContent = {
+  tagline: string;
+  taglineEn: string;
+  features: string[];
+  featuresEn: string[];
+};
+
 export type SystemSettings = {
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
+  planContent: Record<PlanCode, ConfiguredPlanContent>;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: "pro" | "unlimited";
   defaultAccountDailyLimit: number;
@@ -29,6 +37,7 @@ export type SystemSettings = {
 
 type StoredSystemSettings = {
   planLimits?: Partial<Record<PlanCode, Partial<ConfiguredPlanLimits>>>;
+  planContent?: Partial<Record<PlanCode, Partial<ConfiguredPlanContent>>>;
   groupLibraryVisibleToUsers?: unknown;
   groupLibraryMinimumJoinPlan?: unknown;
   defaultAccountDailyLimit?: unknown;
@@ -43,6 +52,68 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     plus: { accountLimit: 1, campaignLimit: 10, messageDailyLimit: 300, userMessageDailyLimit: 3000 },
     pro: { accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, userMessageDailyLimit: 30000 },
     unlimited: { accountLimit: null, campaignLimit: null, messageDailyLimit: null, userMessageDailyLimit: null },
+  },
+  planContent: {
+    plus: {
+      tagline: "Gọn gàng cho một tài khoản vận hành",
+      taglineEn: "Simple coverage for one operating account",
+      features: [
+        "Quản lý chiến dịch",
+        "Mẫu tin nhắn",
+        "Theo dõi nhật ký",
+        "Đồng bộ nhóm tự động",
+        "Tự động hóa chiến dịch",
+        "Hỗ trợ kỹ thuật",
+      ],
+      featuresEn: [
+        "Campaign management",
+        "Message templates",
+        "Activity log tracking",
+        "Automatic group sync",
+        "Campaign automation",
+        "Technical support",
+      ],
+    },
+    pro: {
+      tagline: "Nhiều không gian hơn cho đội nhóm",
+      taglineEn: "More room for your growing team",
+      features: [
+        "Quản lý chiến dịch",
+        "Mẫu tin nhắn",
+        "Theo dõi nhật ký",
+        "Đồng bộ nhóm tự động",
+        "Tự động hóa chiến dịch",
+        "Hỗ trợ ưu tiên",
+      ],
+      featuresEn: [
+        "Campaign management",
+        "Message templates",
+        "Activity log tracking",
+        "Automatic group sync",
+        "Campaign automation",
+        "Priority support",
+      ],
+    },
+    unlimited: {
+      tagline: "Không giới hạn tài khoản Telegram",
+      taglineEn: "Unlimited Telegram accounts",
+      features: [
+        "Quản lý chiến dịch",
+        "Mẫu tin nhắn",
+        "Theo dõi nhật ký",
+        "Đồng bộ nhóm tự động",
+        "Tự động hóa chiến dịch",
+        "Hỗ trợ ưu tiên 24/7",
+      ],
+      featuresEn: [
+        "Campaign management",
+        "Message templates",
+        "Activity log tracking",
+        "Automatic group sync",
+        "Campaign automation",
+        "Priority support 24/7",
+      ],
+    },
   },
   groupLibraryVisibleToUsers: false,
   groupLibraryMinimumJoinPlan: "pro",
@@ -99,17 +170,49 @@ function normalizedPlanLimits(
   };
 }
 
+function normalizedPlanContent(
+  stored: Partial<ConfiguredPlanContent> | undefined,
+  fallback: ConfiguredPlanContent,
+): ConfiguredPlanContent {
+  const normalizedText = (value: unknown, defaultValue: string, maxLength: number) => (
+    typeof value === "string" && value.trim().length > 0 && value.trim().length <= maxLength
+      ? value.trim()
+      : defaultValue
+  );
+  const normalizedFeatures = (value: unknown, defaultValue: string[]) => {
+    if (!Array.isArray(value)) return defaultValue;
+    const features = value.map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
+    return features.length >= 1
+      && features.length <= 8
+      && features.every((feature) => feature.length <= 120)
+      ? features
+      : defaultValue;
+  };
+  return {
+    tagline: normalizedText(stored?.tagline, fallback.tagline, 160),
+    taglineEn: normalizedText(stored?.taglineEn, fallback.taglineEn, 160),
+    features: normalizedFeatures(stored?.features, fallback.features),
+    featuresEn: normalizedFeatures(stored?.featuresEn, fallback.featuresEn),
+  };
+}
+
 function parseSettings(value: string | undefined): SystemSettings {
   if (!value) return structuredClone(DEFAULT_SYSTEM_SETTINGS);
   try {
     const raw = JSON.parse(value) as StoredSystemSettings;
     const planLimits = raw.planLimits ?? {};
+    const planContent = raw.planContent ?? {};
     const campaignDefaults = raw.campaignDefaults ?? {};
     return {
       planLimits: {
         plus: normalizedPlanLimits(planLimits.plus, DEFAULT_SYSTEM_SETTINGS.planLimits.plus),
         pro: normalizedPlanLimits(planLimits.pro, DEFAULT_SYSTEM_SETTINGS.planLimits.pro),
         unlimited: normalizedPlanLimits(planLimits.unlimited, DEFAULT_SYSTEM_SETTINGS.planLimits.unlimited),
+      },
+      planContent: {
+        plus: normalizedPlanContent(planContent.plus, DEFAULT_SYSTEM_SETTINGS.planContent.plus),
+        pro: normalizedPlanContent(planContent.pro, DEFAULT_SYSTEM_SETTINGS.planContent.pro),
+        unlimited: normalizedPlanContent(planContent.unlimited, DEFAULT_SYSTEM_SETTINGS.planContent.unlimited),
       },
       groupLibraryVisibleToUsers: typeof raw.groupLibraryVisibleToUsers === "boolean"
         ? raw.groupLibraryVisibleToUsers

@@ -3,12 +3,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminSystemSettingsQueryKey,
   getGetGroupLibraryAccessQueryKey,
+  getGetUpgradeSummaryQueryKey,
   type AdminSystemSettings,
+  type PlanDisplayContent,
   type PlanLimitSettings,
   useGetAdminSystemSettings,
   useUpdateAdminSystemSettings,
 } from "@workspace/api-client-react";
-import { AlertTriangle, Check, Save, Settings2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Check, Save, ShieldAlert } from "lucide-react";
 import { AppLayout, Input, Panel, PrimaryButton, SectionHeader, Toast } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 
@@ -19,6 +21,13 @@ const copy = {
     loadError: "Could not load system settings.",
     planLimits: "Plan limits",
     planDetail: "These values immediately apply to the active entitlement of every plan.",
+    planContent: "Upgrade card content",
+    planContentDetail: "Edit the short description and ordered benefits shown for each plan.",
+    taglineVi: "Short description · Vietnamese",
+    taglineEn: "Short description · English",
+    featuresVi: "Benefits · Vietnamese",
+    featuresEn: "Benefits · English",
+    featuresHint: "Enter one benefit per line, from 1 to 8 lines.",
     accountLimit: "Telegram accounts",
     campaignLimit: "Campaigns",
     messageLimit: "Messages / campaign / day",
@@ -47,6 +56,7 @@ const copy = {
     saved: "System settings saved.",
     failed: "Could not save system settings.",
     invalid: "Enter whole numbers and ensure each minimum is not greater than its maximum.",
+    invalidContent: "Each plan needs both descriptions and 1–8 non-empty benefits per language.",
   },
   vi: {
     title: "Cấu hình hệ thống",
@@ -54,6 +64,13 @@ const copy = {
     loadError: "Không thể tải cấu hình hệ thống.",
     planLimits: "Giới hạn theo gói",
     planDetail: "Các giá trị này áp dụng ngay cho entitlement đang hoạt động của từng gói.",
+    planContent: "Nội dung thẻ gói dịch vụ",
+    planContentDetail: "Chỉnh mô tả ngắn và danh sách quyền lợi theo thứ tự hiển thị của từng gói.",
+    taglineVi: "Mô tả ngắn · Tiếng Việt",
+    taglineEn: "Mô tả ngắn · Tiếng Anh",
+    featuresVi: "Quyền lợi · Tiếng Việt",
+    featuresEn: "Quyền lợi · Tiếng Anh",
+    featuresHint: "Mỗi dòng là một quyền lợi, từ 1 đến 8 dòng.",
     accountLimit: "Tài khoản Telegram",
     campaignLimit: "Chiến dịch",
     messageLimit: "Tin nhắn / chiến dịch / ngày",
@@ -82,6 +99,7 @@ const copy = {
     saved: "Đã lưu cấu hình hệ thống.",
     failed: "Không thể lưu cấu hình hệ thống.",
     invalid: "Hãy nhập số nguyên và đảm bảo giá trị tối thiểu không lớn hơn tối đa.",
+    invalidContent: "Mỗi gói cần đủ mô tả và từ 1–8 quyền lợi không để trống cho từng ngôn ngữ.",
   },
 } as const;
 
@@ -140,13 +158,24 @@ export default function AdminSystemSettingsPage() {
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
 
   useEffect(() => {
-    if (settingsQuery.data) setForm(settingsQuery.data);
-  }, [settingsQuery.data]);
+    if (settingsQuery.data && !form) setForm(settingsQuery.data);
+  }, [settingsQuery.data, form]);
 
   const updatePlanLimit = (plan: keyof typeof PLAN_NAMES, field: keyof PlanLimitSettings, value: number | null) => {
     setForm((current) => current ? {
       ...current,
       planLimits: { ...current.planLimits, [plan]: { ...current.planLimits[plan], [field]: value } },
+    } : current);
+  };
+
+  const updatePlanContent = (
+    plan: keyof typeof PLAN_NAMES,
+    field: keyof PlanDisplayContent,
+    value: string | string[],
+  ) => {
+    setForm((current) => current ? {
+      ...current,
+      planContent: { ...current.planContent, [plan]: { ...current.planContent[plan], [field]: value } },
     } : current);
   };
 
@@ -164,8 +193,20 @@ export default function AdminSystemSettingsPage() {
       (Object.entries(PLAN_LIMIT_MAXIMUMS) as Array<[keyof typeof PLAN_LIMIT_MAXIMUMS, number]>)
         .every(([field, maximum]) => limits[field] === null || limits[field] <= maximum)
     ));
+    const validPlanContent = Object.values(form.planContent).every((content) => (
+      [content.tagline, content.taglineEn].every((tagline) => tagline.trim().length >= 1 && tagline.trim().length <= 160)
+      && [content.features, content.featuresEn].every((features) => (
+        features.length >= 1
+        && features.length <= 8
+        && features.every((feature) => feature.trim().length >= 1 && feature.trim().length <= 120)
+      ))
+    ));
     if (!numericValues.every((value) => Number.isInteger(value) && value >= 0) || !validPlanLimits || form.defaultAccountDailyLimit < 1 || defaults.roundDelayMinSeconds > defaults.roundDelayMaxSeconds) {
       setToast({ message: text.invalid, error: true });
+      return;
+    }
+    if (!validPlanContent) {
+      setToast({ message: text.invalidContent, error: true });
       return;
     }
     update.mutate({ data: form }, {
@@ -173,6 +214,7 @@ export default function AdminSystemSettingsPage() {
         setForm(next);
         void queryClient.invalidateQueries({ queryKey: getGetAdminSystemSettingsQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getGetGroupLibraryAccessQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetUpgradeSummaryQueryKey() });
         setToast({ message: text.saved });
       },
       onError: (error) => setToast({ message: localizedErrorMessage(error, language, text.failed), error: true }),
@@ -206,6 +248,63 @@ export default function AdminSystemSettingsPage() {
               </div>
             </div>
           ))}
+        </div>
+      </Panel>
+
+      <Panel className="p-5 sm:p-7">
+        <SectionHeader eyebrow="Upgrade" title={text.planContent} detail={text.planContentDetail} />
+        <div className="grid gap-5 xl:grid-cols-3">
+          {(Object.keys(PLAN_NAMES) as Array<keyof typeof PLAN_NAMES>).map((plan) => {
+            const content = form.planContent[plan];
+            return (
+              <div key={plan} className="rounded-2xl border border-[#e7edf4] bg-[#f8fafc] p-4">
+                <p className="mb-4 font-extrabold tracking-wide text-[#1a2b88]">{PLAN_NAMES[plan]}</p>
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.taglineVi}</span>
+                    <input
+                      value={content.tagline}
+                      maxLength={160}
+                      onChange={(event) => updatePlanContent(plan, "tagline", event.target.value)}
+                      className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]"
+                      data-testid={`plan-content-${plan}-tagline-vi`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.taglineEn}</span>
+                    <input
+                      value={content.taglineEn}
+                      maxLength={160}
+                      onChange={(event) => updatePlanContent(plan, "taglineEn", event.target.value)}
+                      className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]"
+                      data-testid={`plan-content-${plan}-tagline-en`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.featuresVi}</span>
+                    <textarea
+                      rows={7}
+                      value={content.features.join("\n")}
+                      onChange={(event) => updatePlanContent(plan, "features", event.target.value.split("\n"))}
+                      className="w-full resize-y rounded-xl border border-[#dbe2ea] bg-white px-3 py-2.5 text-[13px] font-semibold leading-5 outline-none focus:border-[#1a2b88]"
+                      data-testid={`plan-content-${plan}-features-vi`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.featuresEn}</span>
+                    <textarea
+                      rows={7}
+                      value={content.featuresEn.join("\n")}
+                      onChange={(event) => updatePlanContent(plan, "featuresEn", event.target.value.split("\n"))}
+                      className="w-full resize-y rounded-xl border border-[#dbe2ea] bg-white px-3 py-2.5 text-[13px] font-semibold leading-5 outline-none focus:border-[#1a2b88]"
+                      data-testid={`plan-content-${plan}-features-en`}
+                    />
+                  </label>
+                  <p className="text-[11px] font-medium leading-4 text-[#64748b]">{text.featuresHint}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Panel>
 

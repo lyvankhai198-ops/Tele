@@ -1597,11 +1597,22 @@ components:
       enum: [plus, pro, unlimited]
     Plan:
       type: object
-      required: [code, name, tagline, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit, durationDays]
+      required: [code, name, tagline, taglineEn, features, featuresEn, accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit, durationDays]
       properties:
         code: { $ref: "#/components/schemas/PlanCode" }
         name: { type: string }
-        tagline: { type: string }
+        tagline: { type: string, minLength: 1, maxLength: 160 }
+        taglineEn: { type: string, minLength: 1, maxLength: 160 }
+        features:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 120 }
+        featuresEn:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 120 }
         accountLimit: { type: ["number", "null"] }
         campaignLimit: { type: ["number", "null"] }
         messageDailyLimit: { type: ["number", "null"] }
@@ -1649,6 +1660,22 @@ components:
         campaignLimit: { type: ["number", "null"], minimum: 0 }
         messageDailyLimit: { type: ["number", "null"], minimum: 0 }
         userMessageDailyLimit: { type: ["number", "null"], minimum: 0 }
+    PlanDisplayContent:
+      type: object
+      required: [tagline, taglineEn, features, featuresEn]
+      properties:
+        tagline: { type: string, minLength: 1, maxLength: 160 }
+        taglineEn: { type: string, minLength: 1, maxLength: 160 }
+        features:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 120 }
+        featuresEn:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { type: string, minLength: 1, maxLength: 120 }
     CampaignDefaults:
       type: object
       required: [maxRetries, roundDelayMinSeconds, roundDelayMaxSeconds]
@@ -1673,7 +1700,7 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, planContent, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1682,6 +1709,13 @@ components:
             plus: { $ref: "#/components/schemas/PlanLimitSettings" }
             pro: { $ref: "#/components/schemas/PlanLimitSettings" }
             unlimited: { $ref: "#/components/schemas/PlanLimitSettings" }
+        planContent:
+          type: object
+          required: [plus, pro, unlimited]
+          properties:
+            plus: { $ref: "#/components/schemas/PlanDisplayContent" }
+            pro: { $ref: "#/components/schemas/PlanDisplayContent" }
+            unlimited: { $ref: "#/components/schemas/PlanDisplayContent" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
@@ -1700,6 +1734,13 @@ components:
             plus: { $ref: "#/components/schemas/PlanLimitSettings" }
             pro: { $ref: "#/components/schemas/PlanLimitSettings" }
             unlimited: { $ref: "#/components/schemas/PlanLimitSettings" }
+        planContent:
+          type: object
+          required: [plus, pro, unlimited]
+          properties:
+            plus: { $ref: "#/components/schemas/PlanDisplayContent" }
+            pro: { $ref: "#/components/schemas/PlanDisplayContent" }
+            unlimited: { $ref: "#/components/schemas/PlanDisplayContent" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }

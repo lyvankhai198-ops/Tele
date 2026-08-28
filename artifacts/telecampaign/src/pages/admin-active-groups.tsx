@@ -11,6 +11,7 @@ import {
   useListCampaigns,
   useListDestinations,
   useListTelegramAccounts,
+  useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
   type AdminActiveGroup,
   type Campaign,
@@ -42,6 +43,9 @@ const text = {
   sync: "Đồng bộ thư viện",
   syncing: "Đang đồng bộ...",
   syncFailed: "Không thể đồng bộ thư viện. Vui lòng thử lại.",
+  syncAccountsFailed: "Đã cập nhật thư viện nhưng một hoặc nhiều tài khoản Telegram chưa đồng bộ được.",
+  syncCompleted: (accountCount: number, addedCount: number) =>
+    `Đã đồng bộ ${accountCount} tài khoản Telegram${addedCount > 0 ? ` và thêm ${addedCount} nhóm mới` : ""}.`,
   syncAdded: (count: number) => `Đã thêm ${count} nhóm mới vào thư viện.`,
   syncNoNewGroup: "Không có nhóm mới từ campaign đang chạy.",
   openGroup: "Mở nhóm",
@@ -438,17 +442,13 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const campaigns = useListCampaigns({ query: { queryKey: getListCampaignsQueryKey(), enabled: isAdmin } });
   const syncLibrary = useSyncAdminGroupLibrary({
     mutation: {
-      onSuccess: async (result) => {
-        setSyncFeedback(result.addedCount > 0 ? text.syncAdded(result.addedCount) : text.syncNoNewGroup);
-        setFeedbackIsError(false);
-        await query.refetch();
-      },
       onError: () => {
         setSyncFeedback(text.syncFailed);
         setFeedbackIsError(true);
       },
     },
   });
+  const syncTelegram = useSyncTelegramDestinations();
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
   const directoryQuery = isAdmin ? query : workspaceQuery;
   const pageText = isAdmin ? text : localizedWorkspaceText;
@@ -457,6 +457,33 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     () => groups.filter((group) => groupMatches(group, needle)),
     [groups, needle],
   );
+  const connectedAccounts = useMemo(
+    () => (accounts.data ?? []).filter((account) => account.status === "connected"),
+    [accounts.data],
+  );
+
+  async function handleAdminSync() {
+    setSyncFeedback(null);
+    setFeedbackIsError(false);
+    try {
+      const accountSyncResults = await Promise.allSettled(
+        connectedAccounts.map((account) => syncTelegram.mutateAsync({ accountId: account.id })),
+      );
+      const accountSyncFailed = accountSyncResults.some((result) => result.status === "rejected");
+      await destinations.refetch();
+      const libraryResult = await syncLibrary.mutateAsync();
+      await query.refetch();
+      setSyncFeedback(accountSyncFailed
+        ? text.syncAccountsFailed
+        : connectedAccounts.length > 0
+          ? text.syncCompleted(connectedAccounts.length, libraryResult.addedCount)
+          : (libraryResult.addedCount > 0 ? text.syncAdded(libraryResult.addedCount) : text.syncNoNewGroup));
+      setFeedbackIsError(accountSyncFailed);
+    } catch {
+      setSyncFeedback(text.syncFailed);
+      setFeedbackIsError(true);
+    }
+  }
 
   function openCreateCampaign(
     group: AdminActiveGroup,
@@ -497,11 +524,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           action={isAdmin ? (
             <button
               type="button"
-              onClick={() => {
-                setSyncFeedback(null);
-                syncLibrary.mutate();
-              }}
-              disabled={query.isFetching || syncLibrary.isPending}
+              onClick={() => void handleAdminSync()}
+              disabled={query.isFetching || syncLibrary.isPending || syncTelegram.isPending || accounts.isLoading}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 py-2.5 text-[11px] font-extrabold text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="button-refresh-admin-active-groups"
             >

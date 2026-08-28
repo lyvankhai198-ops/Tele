@@ -5,11 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PlanCode } from './planCode';
 
-export interface Plan {
-  code: PlanCode;
-  name: string;
+export interface PlanDisplayContent {
   /**
      * @minLength 1
      * @maxLength 160
@@ -34,13 +31,4 @@ export interface Plan {
      * @items.maxLength 120
      */
   featuresEn: string[];
-  /** @nullable */
-  accountLimit: number | null;
-  /** @nullable */
-  campaignLimit: number | null;
-  /** @nullable */
-  messageDailyLimit: number | null;
-  /** @nullable */
-  userMessageDailyLimit: number | null;
-  durationDays: number;
 }
