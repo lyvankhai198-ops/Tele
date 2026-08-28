@@ -18,6 +18,7 @@ import {
   X,
   Megaphone,
   UserCircle,
+  LifeBuoy,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -43,11 +44,13 @@ export type PageKey =
   | "license-keys"
   | "admin-system-settings"
   | "admin-operations"
-  | "admin-active-groups";
+  | "admin-active-groups"
+  | "support";
 
 const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean; groupLibraryOnly?: boolean }> = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
   { key: "account", label: "Account", icon: UserCircle, path: "/dashboard/account" },
+  { key: "settings", label: "Settings", icon: Settings2, path: "/dashboard/settings" },
   { key: "accounts", label: "Telegram Accounts", icon: UsersRound, path: "/dashboard/telegram-accounts" },
   { key: "groups", label: "Groups", icon: Users, path: "/dashboard/groups" },
   { key: "templates", label: "Message templates", icon: FileText, path: "/dashboard/templates" },
@@ -55,6 +58,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
   { key: "group-library", label: "Group library", icon: Users, path: "/group-library", groupLibraryOnly: true },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
+  { key: "support", label: "Support", icon: LifeBuoy, path: "/dashboard/support" },
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
 ];
 
@@ -267,8 +271,8 @@ export function Modal({ title, description, children, onClose, wide = false }: {
   return <div className="fixed inset-0 z-50 grid place-items-center bg-[#0f172a]/30 p-4 backdrop-blur-sm"><div className={`max-h-[92dvh] w-full overflow-y-auto rounded-3xl border border-[#eef2f6] bg-white shadow-2xl ${wide ? "max-w-2xl" : "max-w-lg"}`}><div className="flex items-start justify-between border-b border-[#eef2f6] px-6 py-6 sm:px-8"><div><h2 className="text-[19px] font-extrabold text-[#0f172a]">{title}</h2>{description && <p className="mt-2 max-w-lg text-[14px] font-medium text-[#64748b] leading-relaxed">{description}</p>}</div><button onClick={onClose} className="rounded-xl p-2 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors"><X className="h-5 w-5" /></button></div><div className="p-6 sm:p-8">{children}</div></div></div>;
 }
 
-export function Input({ label, value, onChange, placeholder, type = "text", inputMode, min, max, step }: { label?: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search"; min?: number; max?: number; step?: number }) {
-  return <label className="block">{label && <span className="mb-2.5 block text-[13px] font-bold text-[#475569]">{label}</span>}<input type={type} inputMode={inputMode} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} min={min} max={max} step={step} className="w-full rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3.5 text-[15px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 transition-all" /></label>;
+export function Input({ label, value, onChange, placeholder, type = "text", inputMode, autoComplete, min, max, step }: { label?: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search"; autoComplete?: string; min?: number; max?: number; step?: number }) {
+  return <label className="block">{label && <span className="mb-2.5 block text-[13px] font-bold text-[#475569]">{label}</span>}<input type={type} inputMode={inputMode} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} min={min} max={max} step={step} className="w-full rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3.5 text-[15px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 transition-all" /></label>;
 }
 
 export function PrimaryButton({ children, onClick, type = "button", disabled = false }: { children: ReactNode; onClick?: () => void; type?: "button" | "submit"; disabled?: boolean }) {

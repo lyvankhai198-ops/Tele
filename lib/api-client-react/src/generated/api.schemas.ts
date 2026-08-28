@@ -54,6 +54,28 @@ export interface LoginInput {
   password: string;
 }
 
+export interface PasswordChangeInput {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  currentPassword: string;
+  /**
+     * @minLength 10
+     * @maxLength 128
+     */
+  newPassword: string;
+  /**
+     * @minLength 10
+     * @maxLength 128
+     */
+  confirmPassword: string;
+}
+
+export interface RevokeSessionsResult {
+  revokedCount: number;
+}
+
 export interface LegacyOwnerMappingInput {
   /**
      * @minLength 1
@@ -983,6 +1005,23 @@ export interface SystemDefaults {
   defaultTimezone: string;
 }
 
+export interface SupportSettings {
+  /**
+     * @maxLength 512
+     * @nullable
+     */
+  telegramUrl: string | null;
+  /**
+     * @maxLength 512
+     * @nullable
+     */
+  zaloUrl: string | null;
+}
+
+export interface SupportSettingsResponse {
+  supportLinks: SupportSettings;
+}
+
 export type GroupLibraryAccessMinimumJoinPlan = typeof GroupLibraryAccessMinimumJoinPlan[keyof typeof GroupLibraryAccessMinimumJoinPlan];
 
 
@@ -1021,6 +1060,7 @@ export const AdminSystemSettingsGroupLibraryMinimumJoinPlan = {
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
+  supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   /**
@@ -1061,6 +1101,7 @@ export const AdminSystemSettingsInputGroupLibraryMinimumJoinPlan = {
 export interface AdminSystemSettingsInput {
   planLimits: AdminSystemSettingsInputPlanLimits;
   planContent?: AdminSystemSettingsInputPlanContent;
+  supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
   /**

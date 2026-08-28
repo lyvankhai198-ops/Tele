@@ -4,6 +4,7 @@ import {
   getGetAdminSystemSettingsQueryKey,
   getGetGroupLibraryAccessQueryKey,
   getGetUpgradeSummaryQueryKey,
+  getGetSupportSettingsQueryKey,
   type AdminSystemSettings,
   type PlanDisplayContent,
   type PlanLimitSettings,
@@ -57,6 +58,12 @@ const copy = {
     failed: "Could not save system settings.",
     invalid: "Enter whole numbers and ensure each minimum is not greater than its maximum.",
     invalidContent: "Each plan needs both descriptions and 1–8 non-empty benefits per language.",
+    support: "Support channels",
+    supportDetail: "Give users a direct way to reach your team. Leave a field empty to hide that channel.",
+    telegramSupport: "Telegram support link",
+    zaloSupport: "Zalo support link",
+    supportHint: "Only HTTPS links on t.me, telegram.me, or zalo.me are accepted.",
+    supportInvalid: "Enter valid HTTPS support links, or leave them empty.",
   },
   vi: {
     title: "Cấu hình hệ thống",
@@ -100,6 +107,12 @@ const copy = {
     failed: "Không thể lưu cấu hình hệ thống.",
     invalid: "Hãy nhập số nguyên và đảm bảo giá trị tối thiểu không lớn hơn tối đa.",
     invalidContent: "Mỗi gói cần đủ mô tả và từ 1–8 quyền lợi không để trống cho từng ngôn ngữ.",
+    support: "Kênh hỗ trợ",
+    supportDetail: "Cung cấp cách liên hệ trực tiếp cho user. Để trống một ô để ẩn kênh đó.",
+    telegramSupport: "Link hỗ trợ Telegram",
+    zaloSupport: "Link hỗ trợ Zalo",
+    supportHint: "Chỉ chấp nhận link HTTPS thuộc t.me, telegram.me hoặc zalo.me.",
+    supportInvalid: "Hãy nhập link HTTPS hỗ trợ hợp lệ hoặc để trống.",
   },
 } as const;
 
@@ -111,6 +124,17 @@ const PLAN_LIMIT_MAXIMUMS = {
   messageDailyLimit: 10_000_000,
   userMessageDailyLimit: 100_000_000,
 } as const;
+
+function validOptionalSupportUrl(value: string, channel: "telegram" | "zalo"): boolean {
+  if (!value.trim()) return true;
+  try {
+    const url = new URL(value.trim());
+    const hostnames = channel === "telegram" ? ["t.me", "telegram.me"] : ["zalo.me"];
+    return url.protocol === "https:" && hostnames.includes(url.hostname.toLowerCase()) && url.pathname.length > 1 && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
   return <button type="button" onClick={onChange} aria-label={label} className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#1a2b88]" : "bg-[#cbd5e1]"}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${checked ? "left-6" : "left-1"}`} /></button>;
@@ -209,12 +233,17 @@ export default function AdminSystemSettingsPage() {
       setToast({ message: text.invalidContent, error: true });
       return;
     }
+    if (!validOptionalSupportUrl(form.supportLinks.telegramUrl ?? "", "telegram") || !validOptionalSupportUrl(form.supportLinks.zaloUrl ?? "", "zalo")) {
+      setToast({ message: text.supportInvalid, error: true });
+      return;
+    }
     update.mutate({ data: form }, {
       onSuccess: (next) => {
         setForm(next);
         void queryClient.invalidateQueries({ queryKey: getGetAdminSystemSettingsQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getGetGroupLibraryAccessQueryKey() });
         void queryClient.invalidateQueries({ queryKey: getGetUpgradeSummaryQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetSupportSettingsQueryKey() });
         setToast({ message: text.saved });
       },
       onError: (error) => setToast({ message: localizedErrorMessage(error, language, text.failed), error: true }),
@@ -346,6 +375,35 @@ export default function AdminSystemSettingsPage() {
           </div>
         </Panel>
       </div>
+
+      <Panel className="p-5 sm:p-7">
+        <SectionHeader eyebrow="Support" title={text.support} detail={text.supportDetail} />
+        <div className="grid gap-5 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.telegramSupport}</span>
+            <input
+              type="url"
+              value={form.supportLinks.telegramUrl ?? ""}
+              onChange={(event) => setForm({ ...form, supportLinks: { ...form.supportLinks, telegramUrl: event.target.value } })}
+              placeholder="https://t.me/your_support"
+              className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]"
+              data-testid="support-telegram-url"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.zaloSupport}</span>
+            <input
+              type="url"
+              value={form.supportLinks.zaloUrl ?? ""}
+              onChange={(event) => setForm({ ...form, supportLinks: { ...form.supportLinks, zaloUrl: event.target.value } })}
+              placeholder="https://zalo.me/your_support"
+              className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]"
+              data-testid="support-zalo-url"
+            />
+          </label>
+        </div>
+        <p className="mt-3 text-[11px] font-medium text-[#64748b]">{text.supportHint}</p>
+      </Panel>
 
       <div className="flex justify-end"><PrimaryButton onClick={save} disabled={update.isPending}><Save className="h-4 w-4" />{update.isPending ? text.saving : text.save}</PrimaryButton></div>
     </div>

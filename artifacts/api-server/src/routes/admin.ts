@@ -92,7 +92,7 @@ import {
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
-import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
+import { getSystemSettings, isSupportUrl, updateSystemSettings } from "../lib/system-settings";
 import {
   pauseCampaignsOverCurrentQuotaAfterSettingsUpdate,
   resumeQuotaPausedCampaignsAfterSettingsUpdate,
@@ -685,6 +685,17 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     ...parsed.data,
     planContent: parsed.data.planContent ?? previousSettings.planContent,
   };
+  const supportLinks = {
+    telegramUrl: parsed.data.supportLinks.telegramUrl?.trim() || null,
+    zaloUrl: parsed.data.supportLinks.zaloUrl?.trim() || null,
+  };
+  if (
+    (supportLinks.telegramUrl !== null && !isSupportUrl(supportLinks.telegramUrl, "telegram"))
+    || (supportLinks.zaloUrl !== null && !isSupportUrl(supportLinks.zaloUrl, "zalo"))
+  ) {
+    return void sendError(res, 400, "Link hỗ trợ phải là HTTPS hợp lệ trên t.me, telegram.me hoặc zalo.me.");
+  }
+  settings.supportLinks = supportLinks;
   const allLimits = Object.values(settings.planLimits);
   const allIntegerLimits = allLimits.every((limit) => (
     (Object.entries(PLAN_LIMIT_MAXIMUMS) as Array<[keyof typeof PLAN_LIMIT_MAXIMUMS, number]>)

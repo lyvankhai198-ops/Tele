@@ -62,6 +62,30 @@ export const LoginAuthResponse = zod.object({
 export const LogoutAuthResponse = zod.void()
 
 
+export const changeAuthPasswordBodyCurrentPasswordMax = 128;
+
+export const changeAuthPasswordBodyNewPasswordMin = 10;
+export const changeAuthPasswordBodyNewPasswordMax = 128;
+
+export const changeAuthPasswordBodyConfirmPasswordMin = 10;
+export const changeAuthPasswordBodyConfirmPasswordMax = 128;
+
+
+
+export const ChangeAuthPasswordBody = zod.object({
+  "currentPassword": zod.string().min(1).max(changeAuthPasswordBodyCurrentPasswordMax),
+  "newPassword": zod.string().min(changeAuthPasswordBodyNewPasswordMin).max(changeAuthPasswordBodyNewPasswordMax),
+  "confirmPassword": zod.string().min(changeAuthPasswordBodyConfirmPasswordMin).max(changeAuthPasswordBodyConfirmPasswordMax)
+})
+
+export const ChangeAuthPasswordResponse = zod.void()
+
+
+export const RevokeOtherAuthSessionsResponse = zod.object({
+  "revokedCount": zod.number()
+})
+
+
 export const GetAuthUserResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
@@ -999,6 +1023,20 @@ export const GetSystemDefaultsResponse = zod.object({
 })
 
 
+export const getSupportSettingsResponseSupportLinksTelegramUrlMax = 512;
+
+export const getSupportSettingsResponseSupportLinksZaloUrlMax = 512;
+
+
+
+export const GetSupportSettingsResponse = zod.object({
+  "supportLinks": zod.object({
+  "telegramUrl": zod.string().max(getSupportSettingsResponseSupportLinksTelegramUrlMax).nullable(),
+  "zaloUrl": zod.string().max(getSupportSettingsResponseSupportLinksZaloUrlMax).nullable()
+})
+})
+
+
 export const GetGroupLibraryAccessResponse = zod.object({
   "visible": zod.boolean(),
   "minimumJoinPlan": zod.enum(['pro', 'unlimited']),
@@ -1164,6 +1202,10 @@ export const getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax
 
 export const getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax = 8;
 
+export const getAdminSystemSettingsResponseSupportLinksTelegramUrlMax = 512;
+
+export const getAdminSystemSettingsResponseSupportLinksZaloUrlMax = 512;
+
 export const getAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
 export const getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
@@ -1219,6 +1261,10 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "features": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesMax),
   "featuresEn": zod.array(zod.string().min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax)).min(1).max(getAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax)
 })
+}),
+  "supportLinks": zod.object({
+  "telegramUrl": zod.string().max(getAdminSystemSettingsResponseSupportLinksTelegramUrlMax).nullable(),
+  "zaloUrl": zod.string().max(getAdminSystemSettingsResponseSupportLinksZaloUrlMax).nullable()
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
@@ -1294,6 +1340,10 @@ export const updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnItemMax 
 
 export const updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnMax = 8;
 
+export const updateAdminSystemSettingsBodySupportLinksTelegramUrlMax = 512;
+
+export const updateAdminSystemSettingsBodySupportLinksZaloUrlMax = 512;
+
 export const updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax = 100000;
 
 export const updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin = 0;
@@ -1350,6 +1400,10 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsBodyPlanContentUnlimitedFeaturesEnMax)
 })
 }).optional(),
+  "supportLinks": zod.object({
+  "telegramUrl": zod.string().max(updateAdminSystemSettingsBodySupportLinksTelegramUrlMax).nullable(),
+  "zaloUrl": zod.string().max(updateAdminSystemSettingsBodySupportLinksZaloUrlMax).nullable()
+}),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
@@ -1423,6 +1477,10 @@ export const updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItem
 
 export const updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax = 8;
 
+export const updateAdminSystemSettingsResponseSupportLinksTelegramUrlMax = 512;
+
+export const updateAdminSystemSettingsResponseSupportLinksZaloUrlMax = 512;
+
 export const updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
 export const updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
@@ -1478,6 +1536,10 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "features": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesMax),
   "featuresEn": zod.array(zod.string().min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnItemMax)).min(1).max(updateAdminSystemSettingsResponsePlanContentUnlimitedFeaturesEnMax)
 })
+}),
+  "supportLinks": zod.object({
+  "telegramUrl": zod.string().max(updateAdminSystemSettingsResponseSupportLinksTelegramUrlMax).nullable(),
+  "zaloUrl": zod.string().max(updateAdminSystemSettingsResponseSupportLinksZaloUrlMax).nullable()
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),

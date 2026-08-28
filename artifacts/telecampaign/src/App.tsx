@@ -35,6 +35,7 @@ import AdminLicenseKeysPage from '@/pages/admin-license-keys';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
 import AdminActiveGroupsPage from '@/pages/admin-active-groups';
+import SupportPage from '@/pages/support';
 
 const queryClient = new QueryClient();
 
@@ -413,7 +414,8 @@ function Router() {
         <Route path="/dashboard/calendar" component={() => <WorkspaceRoute><Calendar /></WorkspaceRoute>} />
         <Route path="/dashboard/logs" component={() => <WorkspaceRoute><Logs /></WorkspaceRoute>} />
         <Route path="/dashboard/account" component={() => <WorkspaceRoute><Account /></WorkspaceRoute>} />
-        <Route path="/dashboard/settings" component={() => <WorkspaceRoute><Settings /></WorkspaceRoute>} />
+        <Route path="/dashboard/settings" component={() => <ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/dashboard/support" component={() => <WorkspaceRoute><SupportPage /></WorkspaceRoute>} />
         <Route path="/upgrade" component={() => <ProtectedRoute><Upgrade /></ProtectedRoute>} />
         <Route path="/admin" component={() => <AdminRoute><AdminDashboardPage /></AdminRoute>} />
         <Route path="/admin/notifications" component={() => <AdminRoute><AdminNotificationsPage /></AdminRoute>} />

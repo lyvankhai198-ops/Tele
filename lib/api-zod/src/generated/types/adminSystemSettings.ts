@@ -9,10 +9,12 @@ import type { AdminSystemSettingsGroupLibraryMinimumJoinPlan } from './adminSyst
 import type { AdminSystemSettingsPlanContent } from './adminSystemSettingsPlanContent';
 import type { AdminSystemSettingsPlanLimits } from './adminSystemSettingsPlanLimits';
 import type { CampaignDefaults } from './campaignDefaults';
+import type { SupportSettings } from './supportSettings';
 
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
+  supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   /**

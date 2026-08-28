@@ -73,6 +73,31 @@ paths:
       tags: [auth]
       responses:
         "204": { description: Signed out }
+  /auth/change-password:
+    post:
+      operationId: changeAuthPassword
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordChangeInput" }
+      responses:
+        "204": { description: Password changed }
+        "400": { description: Invalid password data }
+        "401": { description: Authentication is required or current password is invalid }
+        "429": { description: Too many password-change attempts }
+  /auth/revoke-other-sessions:
+    post:
+      operationId: revokeOtherAuthSessions
+      tags: [auth]
+      responses:
+        "200":
+          description: Other sessions revoked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RevokeSessionsResult" }
+        "401": { description: Authentication is required }
   /auth/me:
     get:
       operationId: getAuthUser
@@ -538,6 +563,17 @@ paths:
               schema: { $ref: "#/components/schemas/SystemDefaults" }
         "401": { description: Authentication is required }
         "503": { description: Ownership migration is pending }
+  /support:
+    get:
+      operationId: getSupportSettings
+      tags: [settings]
+      responses:
+        "200":
+          description: Configured support channels for the current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportSettingsResponse" }
+        "401": { description: Authentication is required }
   /group-library/access:
     get:
       operationId: getGroupLibraryAccess
@@ -1187,6 +1223,18 @@ components:
       properties:
         username: { type: string, minLength: 1, maxLength: 128 }
         password: { type: string, minLength: 1, maxLength: 128 }
+    PasswordChangeInput:
+      type: object
+      required: [currentPassword, newPassword, confirmPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 128 }
+        newPassword: { type: string, minLength: 10, maxLength: 128 }
+        confirmPassword: { type: string, minLength: 10, maxLength: 128 }
+    RevokeSessionsResult:
+      type: object
+      required: [revokedCount]
+      properties:
+        revokedCount: { type: number }
     LegacyOwnerMappingInput:
       type: object
       required: [legacyOwnerId, targetUserId]
@@ -1708,6 +1756,17 @@ components:
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
+    SupportSettings:
+      type: object
+      required: [telegramUrl, zaloUrl]
+      properties:
+        telegramUrl: { type: ["string", "null"], maxLength: 512 }
+        zaloUrl: { type: ["string", "null"], maxLength: 512 }
+    SupportSettingsResponse:
+      type: object
+      required: [supportLinks]
+      properties:
+        supportLinks: { $ref: "#/components/schemas/SupportSettings" }
     GroupLibraryAccess:
       type: object
       required: [visible, minimumJoinPlan, canView, canOpenLinks]
@@ -1718,7 +1777,7 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, planContent, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1734,6 +1793,7 @@ components:
             plus: { $ref: "#/components/schemas/PlanDisplayContent" }
             pro: { $ref: "#/components/schemas/PlanDisplayContent" }
             unlimited: { $ref: "#/components/schemas/PlanDisplayContent" }
+        supportLinks: { $ref: "#/components/schemas/SupportSettings" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
@@ -1743,7 +1803,7 @@ components:
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminSystemSettingsInput:
       type: object
-      required: [planLimits, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1759,6 +1819,7 @@ components:
             plus: { $ref: "#/components/schemas/PlanDisplayContent" }
             pro: { $ref: "#/components/schemas/PlanDisplayContent" }
             unlimited: { $ref: "#/components/schemas/PlanDisplayContent" }
+        supportLinks: { $ref: "#/components/schemas/SupportSettings" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }

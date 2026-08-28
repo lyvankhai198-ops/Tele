@@ -73,12 +73,15 @@ import type {
   MessageTemplate,
   MessageTemplateInput,
   MessageTemplateUpdateInput,
+  PasswordChangeInput,
   Proxy,
   ProxyTestResponse,
   PurchaseSettings,
   PurchaseSettingsInput,
   RegistrationInput,
+  RevokeSessionsResult,
   Subscription,
+  SupportSettingsResponse,
   SyncResult,
   SystemDefaults,
   TelegramAccount,
@@ -392,6 +395,136 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getLogoutAuthMutationOptions(options));
+    }
+
+export const getChangeAuthPasswordUrl = () => {
+
+
+
+
+  return `/api/auth/change-password`
+}
+
+export const changeAuthPassword = async (passwordChangeInput: PasswordChangeInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getChangeAuthPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passwordChangeInput)
+  }
+);}
+
+
+
+
+
+export const getChangeAuthPasswordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeAuthPassword>>, TError,{data: BodyType<PasswordChangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeAuthPassword>>, TError,{data: BodyType<PasswordChangeInput>}, TContext> => {
+
+const mutationKey = ['changeAuthPassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeAuthPassword>>, {data: BodyType<PasswordChangeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  changeAuthPassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeAuthPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof changeAuthPassword>>>
+    export type ChangeAuthPasswordMutationBody = BodyType<PasswordChangeInput>
+    export type ChangeAuthPasswordMutationError = ErrorType<void>
+
+    export const useChangeAuthPassword = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeAuthPassword>>, TError,{data: BodyType<PasswordChangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeAuthPassword>>,
+        TError,
+        {data: BodyType<PasswordChangeInput>},
+        TContext
+      > => {
+      return useMutation(getChangeAuthPasswordMutationOptions(options));
+    }
+
+export const getRevokeOtherAuthSessionsUrl = () => {
+
+
+
+
+  return `/api/auth/revoke-other-sessions`
+}
+
+export const revokeOtherAuthSessions = async ( options?: Parameters<typeof customFetch>[1]): Promise<RevokeSessionsResult> => {
+
+  return customFetch<RevokeSessionsResult>(getRevokeOtherAuthSessionsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeOtherAuthSessionsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeOtherAuthSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeOtherAuthSessions>>, TError,void, TContext> => {
+
+const mutationKey = ['revokeOtherAuthSessions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeOtherAuthSessions>>, void> = () => {
+
+
+          return  revokeOtherAuthSessions(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeOtherAuthSessionsMutationResult = NonNullable<Awaited<ReturnType<typeof revokeOtherAuthSessions>>>
+
+    export type RevokeOtherAuthSessionsMutationError = ErrorType<void>
+
+    export const useRevokeOtherAuthSessions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeOtherAuthSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeOtherAuthSessions>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRevokeOtherAuthSessionsMutationOptions(options));
     }
 
 export const getGetAuthUserUrl = () => {
@@ -2705,6 +2838,77 @@ export function useGetSystemDefaults<TData = Awaited<ReturnType<typeof getSystem
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSystemDefaultsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSupportSettingsUrl = () => {
+
+
+
+
+  return `/api/support`
+}
+
+export const getSupportSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<SupportSettingsResponse> => {
+
+  return customFetch<SupportSettingsResponse>(getGetSupportSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupportSettingsQueryKey = () => {
+    return [
+    `/api/support`
+    ] as const;
+    }
+
+
+export const getGetSupportSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getSupportSettings>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupportSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportSettings>>> = ({ signal }) => getSupportSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupportSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupportSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getSupportSettings>>>
+export type GetSupportSettingsQueryError = ErrorType<void>
+
+
+
+export function useGetSupportSettings<TData = Awaited<ReturnType<typeof getSupportSettings>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupportSettingsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

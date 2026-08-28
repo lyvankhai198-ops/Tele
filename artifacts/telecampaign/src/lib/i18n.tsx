@@ -24,6 +24,33 @@ const translations: Record<string, string> = {
   "Calendar": "Lịch đăng",
   "Activity log": "Nhật ký hoạt động",
   "Settings": "Cài đặt",
+  "Personal settings": "Cài đặt cá nhân",
+  "Manage your account security and sign-in sessions.": "Quản lý bảo mật tài khoản và các phiên đăng nhập.",
+  "Account information": "Thông tin tài khoản",
+  "Your username is used to sign in to TeleCampaign.": "Tên đăng nhập này được dùng để truy cập TeleCampaign.",
+  "User": "Người dùng",
+  "Account security": "Bảo mật tài khoản",
+  "Change your password regularly and revoke sessions you do not recognize.": "Thường xuyên đổi mật khẩu và thu hồi những phiên đăng nhập bạn không nhận ra.",
+  "Change password": "Đổi mật khẩu",
+  "Current password": "Mật khẩu hiện tại",
+  "Current password placeholder": "Nhập mật khẩu hiện tại",
+  "New password": "Mật khẩu mới",
+  "New password placeholder": "Nhập mật khẩu mới",
+  "Confirm new password": "Xác nhận mật khẩu mới",
+  "Confirm new password placeholder": "Nhập lại mật khẩu mới",
+  "At least 10 characters with both letters and numbers.": "Ít nhất 10 ký tự, gồm cả chữ cái và số.",
+  "Changing password…": "Đang đổi mật khẩu...",
+  "Password changed successfully. Other sessions were signed out.": "Đổi mật khẩu thành công. Các phiên khác đã được đăng xuất.",
+  "Could not change password. Please try again.": "Không thể đổi mật khẩu. Vui lòng thử lại.",
+  "Revoke other sessions": "Thu hồi phiên khác",
+  "Sign out every other device while keeping this session active.": "Đăng xuất mọi thiết bị khác nhưng vẫn giữ phiên hiện tại.",
+  "Your current session will remain active.": "Phiên hiện tại của bạn vẫn hoạt động.",
+  "Changing your password also signs out other sessions.": "Đổi mật khẩu cũng sẽ đăng xuất các phiên khác.",
+  "Revoke other sessions?": "Thu hồi các phiên khác?",
+  "This will sign out every other device. Your current session will remain active.": "Thao tác này sẽ đăng xuất mọi thiết bị khác. Phiên hiện tại vẫn được giữ.",
+  "No other sessions were active.": "Không có phiên đăng nhập khác đang hoạt động.",
+  "Other sessions revoked.": "Đã thu hồi các phiên đăng nhập khác.",
+  "Could not revoke other sessions. Please try again.": "Không thể thu hồi các phiên khác. Vui lòng thử lại.",
   "Help center": "Trung tâm trợ giúp",
   "System status": "Trạng thái hệ thống",
   "All services operational": "Tất cả dịch vụ đang hoạt động",
@@ -325,6 +352,15 @@ const translations: Record<string, string> = {
   "No purchase link is configured. Users will be told to contact an administrator.": "Chưa cấu hình link mua key. Người dùng sẽ được yêu cầu liên hệ quản trị viên.",
   "Buy key": "Mua key",
   "Purchasing is not configured yet. Please contact an administrator to get a license key.": "Kênh mua key chưa được cấu hình. Vui lòng liên hệ quản trị viên để nhận license key.",
+  "Support": "Hỗ trợ",
+  "Contact support": "Liên hệ hỗ trợ",
+  "Reach the TeleCampaign team through an available support channel.": "Liên hệ đội ngũ TeleCampaign qua một kênh hỗ trợ đang hoạt động.",
+  "Telegram support": "Hỗ trợ Telegram",
+  "Zalo support": "Hỗ trợ Zalo",
+  "Open Telegram": "Mở Telegram",
+  "Open Zalo": "Mở Zalo",
+  "No support channels are configured yet.": "Hiện chưa có kênh hỗ trợ nào được cấu hình.",
+  "Could not load support settings. Please try again later.": "Không thể tải cấu hình hỗ trợ. Vui lòng thử lại sau.",
   // Auth / login shell
   "Telegram Campaign Manager": "Quản trị Chiến dịch Telegram",
   "Telegram Manager": "Quản trị Telegram",
@@ -470,7 +506,7 @@ const translations: Record<string, string> = {
  */
 export function localizedErrorMessage(error: unknown, language: Language, fallback: string): string {
   const message = error instanceof Error ? error.message.trim() : "";
-  const cleanMessage = message.replace(/^HTTP \d{3} [^:]+:\s*/, "");
+  const cleanMessage = message.replace(/^HTTP \d{3}(?: [^:]*)?:\s*/, "");
   return language === "vi" && cleanMessage ? cleanMessage : fallback;
 }
 

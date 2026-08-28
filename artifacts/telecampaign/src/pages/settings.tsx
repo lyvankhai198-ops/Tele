@@ -1,34 +1,199 @@
-import { useState } from "react";
-import { BellRing, Check, ChevronRight, KeyRound, LockKeyhole, LogOut, Mail, Save, ShieldCheck, Smartphone, Terminal } from "lucide-react";
-import { AppLayout, Input, Modal, PageIntro, Panel, PrimaryButton, QuietButton, SectionHeader, StatusBadge, Toast } from "@/components/layout/AppLayout";
-import { useLanguage } from "@/lib/i18n";
+import { useState, type FormEvent } from "react";
+import { KeyRound, LoaderCircle, LogOut, ShieldCheck, UserCircle } from "lucide-react";
+import { useChangeAuthPassword, useRevokeOtherAuthSessions } from "@workspace/api-client-react";
+import { AppLayout, Input, Modal, PageIntro, Panel, PrimaryButton, QuietButton, SectionHeader, Toast } from "@/components/layout/AppLayout";
+import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
-  return <button onClick={onChange} className="flex items-center gap-3 text-left" aria-label={`Toggle ${label}`}><span className={`relative h-5 w-9 rounded-full border transition ${checked ? "border-[#2c8b68] bg-[#1b6a50]" : "border-[#41536a] bg-[#243446]"}`}><span className={`absolute top-[3px] h-3 w-3 rounded-full bg-[#e8f3fa] transition ${checked ? "left-[18px]" : "left-[3px]"}`} /></span><span className="sr-only">{label}</span></button>;
+function ErrorNotice({ message }: { message: string | null }) {
+  if (!message) return null;
+  return <p role="alert" className="rounded-2xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[13px] font-semibold leading-5 text-[#be123c]">{message}</p>;
 }
 
 export default function Settings() {
-  const [tab, setTab] = useState("Security");
-  const [twoFactor, setTwoFactor] = useState(true);
-  const [alerts, setAlerts] = useState(true);
-  const [weekly, setWeekly] = useState(false);
+  const { user } = useAuth();
+  const { language, t } = useLanguage();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState(false);
-  const [integration, setIntegration] = useState(false);
-  const { t } = useLanguage();
-  
-   return <AppLayout activePage="settings" title={t("Settings")} subtitle={t("Workspace preferences and secure integration controls")}>
-     <PageIntro kicker={t("Workspace control")} heading={t("Settings")} detail={t("Keep the workspace aligned with your team’s operating rhythm. Changes save locally in this preview.")} action={<PrimaryButton onClick={() => setToast(t("Settings saved"))}><Save className="h-4 w-4" />{t("Save changes")}</PrimaryButton>} />
-    <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-       <Panel className="h-fit p-2"><div className="p-3 font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-[#627e98]">{t("Workspace settings")}</div>{[["Security", LockKeyhole], ["Notifications", BellRing], ["Telegram integration", Terminal]].map(([label, Icon]) => <button key={label as string} onClick={() => setTab(label as string)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[12px] font-medium transition ${tab === label ? "bg-[#193a5a] text-[#e1f1fb]" : "text-[#8299ae] hover:bg-[#16293a] hover:text-[#d6e6f0]"}`}><Icon className={`h-4 w-4 ${tab === label ? "text-[#71c2fa]" : "text-[#617e98]"}`} />{t(label as string)}<ChevronRight className={`ml-auto h-3.5 w-3.5 ${tab === label ? "text-[#70bdf1]" : "text-[#526d86]"}`} /></button>)}</Panel>
-      <div className="space-y-5">
-         {tab === "Security" && <><Panel className="p-5 sm:p-6"><SectionHeader eyebrow={t("Access policy")} title={t("Security")} detail={t("Your workspace is protected by least-privilege access and an auditable activity log.")} /><div className="space-y-1 divide-y divide-[#21364a]"><div className="flex items-center gap-4 py-4 first:pt-0"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#174b3f] text-[#83dbae]"><ShieldCheck className="h-4 w-4" /></span><div className="flex-1"><p className="text-[12px] font-semibold text-[#dcebf3]">{t("Two-factor authentication")}</p><p className="mt-1 text-[11px] text-[#728ca3]">{t("Required for all workspace owners and publishers.")}</p></div><Toggle checked={twoFactor} onChange={() => setTwoFactor((value) => !value)} label={t("two-factor authentication")} /></div><div className="flex items-center gap-4 py-4"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#194267] text-[#8dcef6]"><KeyRound className="h-4 w-4" /></span><div className="flex-1"><p className="text-[12px] font-semibold text-[#dcebf3]">{t("Session timeout")}</p><p className="mt-1 text-[11px] text-[#728ca3]">{t("Sign out after 30 minutes of inactivity.")}</p></div><button onClick={() => setToast(t("Session timeout options opened"))} className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[#75bff1]">30 min</button></div><div className="flex items-center gap-4 py-4 last:pb-0"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#3f3526] text-[#e7b772]"><Smartphone className="h-4 w-4" /></span><div className="flex-1"><p className="text-[12px] font-semibold text-[#dcebf3]">{t("Active sessions")}</p><p className="mt-1 text-[11px] text-[#728ca3]">2 trusted devices · {t("Last sign-in today")}, 08:42 ICT</p></div><button onClick={() => setConfirm(true)} className="font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[#e99aa7] hover:text-[#ffbdc6]">{t("Revoke all")}</button></div></div></Panel><Panel className="p-5 sm:p-6"><SectionHeader eyebrow={t("Profile")} title={t("Account details")} detail={t("The workspace owner shown in audit events.")} /><div className="grid gap-4 sm:grid-cols-2"><Input label={t("Full name")} value="Minh Pham" onChange={() => undefined} /><Input label={t("Work email")} value="minh@northstar.community" onChange={() => undefined} type="email" /></div></Panel></>}
-         {tab === "Notifications" && <Panel className="p-5 sm:p-6"><SectionHeader eyebrow={t("Keep informed")} title={t("Notifications")} detail={t("Choose which operational signals deserve your attention.")} /><div className="space-y-1 divide-y divide-[#21364a]"><div className="flex items-center gap-4 py-4 first:pt-0"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#194267] text-[#8dcef6]"><BellRing className="h-4 w-4" /></span><div className="flex-1"><p className="text-[12px] font-semibold text-[#dcebf3]">{t("Delivery and permission alerts")}</p><p className="mt-1 text-[11px] text-[#728ca3]">{t("Get notified when a post fails or a destination needs review.")}</p></div><Toggle checked={alerts} onChange={() => setAlerts((value) => !value)} label={t("delivery and permission alerts")} /></div><div className="flex items-center gap-4 py-4"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#3f3526] text-[#e7b772]"><Mail className="h-4 w-4" /></span><div className="flex-1"><p className="text-[12px] font-semibold text-[#dcebf3]">{t("Weekly workspace summary")}</p><p className="mt-1 text-[11px] text-[#728ca3]">{t("A Monday digest of delivery, reach, and pending reviews.")}</p></div><Toggle checked={weekly} onChange={() => setWeekly((value) => !value)} label={t("weekly workspace summary")} /></div></div><div className="mt-6 rounded-xl border border-[#2a465e] bg-[#0e1b2a] p-4"><p className="text-[12px] font-semibold text-[#d7e7f1]">{t("Notification destination")}</p><p className="mt-1 text-[11px] text-[#718ba4]">minh@northstar.community</p><button onClick={() => setToast(t("Email destination editing opened"))} className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-[#74c1f2]">{t("Change email")}</button></div></Panel>}
-         {tab === "Telegram integration" && <><Panel className="border-[#665035] bg-[#182436] p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#614727] text-[#efc181]"><Terminal className="h-5 w-5" /></span><div className="flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-[16px] font-semibold text-[#f0e7d8]">{t("Telegram integration is not configured")}</h2><StatusBadge status="warning" label={t("Action needed")} /></div><p className="mt-2 max-w-xl text-[12px] leading-5 text-[#c0a881]">{t("Configure")} <strong className="font-mono text-[#e6c48f]">TELEGRAM_API_ID</strong> {t("and")} <strong className="font-mono text-[#e6c48f]">TELEGRAM_API_HASH</strong> {t("to connect an account.")}</p><p className="mt-3 text-[11px] leading-5 text-[#9d896b]">{t("These values belong in your server environment. Never paste them, a session string, password, or verification code into the browser.")}</p></div><PrimaryButton onClick={() => setIntegration(true)}>{t("Configure integration")}</PrimaryButton></div></Panel><Panel className="p-5 sm:p-6"><SectionHeader eyebrow={t("Integration guide")} title={t("Before you connect")} detail={t("A safe checklist for your Telegram administrator.")} /><div className="space-y-3">{["Add API credentials to the server environment, not the client.", "Connect only identities you are authorized to operate.", "Review posting permission for every destination before scheduling."].map((item, index) => <div key={item} className="flex items-start gap-3 rounded-xl border border-[#2a4359] bg-[#0e1b2a] p-3.5"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#1c5079] font-mono text-[9px] text-[#a7dcfa]">{index + 1}</span><p className="text-[11px] leading-5 text-[#9bb2c3]">{t(item)}</p><Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-[#6fcb9b]" /></div>)}</div></Panel></>}
+
+  const changePasswordMutation = useChangeAuthPassword();
+  const revokeSessionsMutation = useRevokeOtherAuthSessions();
+
+  function clearPasswordMessages() {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+  }
+
+  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    clearPasswordMessages();
+    if (newPassword !== confirmPassword) {
+      setPasswordError(t("Passwords do not match"));
+      return;
+    }
+    try {
+      await changePasswordMutation.mutateAsync({
+        data: { currentPassword, newPassword, confirmPassword },
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess(t("Password changed successfully. Other sessions were signed out."));
+    } catch (error) {
+      setPasswordError(localizedErrorMessage(error, language, t("Could not change password. Please try again.")));
+    }
+  }
+
+  async function revokeOtherSessions() {
+    try {
+      const result = await revokeSessionsMutation.mutateAsync();
+      setShowRevokeConfirm(false);
+      setToast(result.revokedCount > 0 ? t("Other sessions revoked.") : t("No other sessions were active."));
+    } catch (error) {
+      setShowRevokeConfirm(false);
+      setToast(localizedErrorMessage(error, language, t("Could not revoke other sessions. Please try again.")));
+    }
+  }
+
+  return (
+    <AppLayout activePage="settings" title={t("Settings")} subtitle={t("Manage your account security and sign-in sessions.")}>
+      <PageIntro
+        kicker={t("Personal settings")}
+        heading={t("Settings")}
+        detail={t("Manage your account security and sign-in sessions.")}
+      />
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
+          <Panel className="p-5 sm:p-7">
+            <SectionHeader
+              eyebrow={t("Account information")}
+              title={t("Account")}
+              detail={t("Your username is used to sign in to TeleCampaign.")}
+            />
+            <div className="flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e8edff] text-[#1a2b88]">
+                <UserCircle className="h-6 w-6" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-extrabold text-[#0f172a]">{user?.username ?? "—"}</p>
+                <p className="mt-1 text-[12px] font-semibold text-[#64748b]">{user?.role === "admin" ? "Admin" : t("User")}</p>
+              </div>
+            </div>
+          </Panel>
+
+          <Panel className="p-5 sm:p-7">
+            <SectionHeader
+              eyebrow={t("Account security")}
+              title={t("Change password")}
+              detail={t("Change your password regularly and revoke sessions you do not recognize.")}
+            />
+            <form className="space-y-4" onSubmit={submitPassword}>
+              <input
+                type="text"
+                name="username"
+                value={user?.username ?? ""}
+                autoComplete="username"
+                readOnly
+                tabIndex={-1}
+                className="sr-only"
+              />
+              <Input
+                label={t("Current password")}
+                value={currentPassword}
+                onChange={setCurrentPassword}
+                placeholder={t("Current password placeholder")}
+                type="password"
+                autoComplete="current-password"
+              />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  label={t("New password")}
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  placeholder={t("New password placeholder")}
+                  type="password"
+                  autoComplete="new-password"
+                />
+                <Input
+                  label={t("Confirm new password")}
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  placeholder={t("Confirm new password placeholder")}
+                  type="password"
+                  autoComplete="new-password"
+                />
+              </div>
+              <p className="text-[12px] font-semibold text-[#64748b]">{t("At least 10 characters with both letters and numbers.")}</p>
+              <ErrorNotice message={passwordError} />
+              {passwordSuccess && <p role="status" className="rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3 text-[13px] font-semibold leading-5 text-[#15803d]">{passwordSuccess}</p>}
+              <div className="flex justify-end pt-2">
+                <PrimaryButton type="submit" disabled={changePasswordMutation.isPending}>
+                  {changePasswordMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {changePasswordMutation.isPending ? t("Changing password…") : t("Change password")}
+                </PrimaryButton>
+              </div>
+            </form>
+          </Panel>
+        </div>
+
+        <Panel className="h-fit p-5 sm:p-7">
+          <SectionHeader
+            eyebrow={t("Active sessions")}
+            title={t("Sign-in sessions")}
+            detail={t("Sign out every other device while keeping this session active.")}
+          />
+          <div className="rounded-2xl border border-[#dbeafe] bg-[#eff6ff] p-4">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]">
+                <ShieldCheck className="h-4 w-4" />
+              </span>
+              <p className="text-[12px] font-semibold leading-5 text-[#1e40af]">{t("Your current session will remain active.")}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowRevokeConfirm(true)}
+            disabled={revokeSessionsMutation.isPending}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#fecdd3] bg-white px-4 py-3 text-[13px] font-extrabold text-[#be123c] transition hover:bg-[#fff1f2] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {revokeSessionsMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+            {t("Revoke other sessions")}
+          </button>
+          <div className="mt-5 flex items-start gap-3 border-t border-[#eef2f6] pt-5 text-[12px] font-semibold leading-5 text-[#64748b]">
+            <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-[#64748b]" />
+            <p>{t("Changing your password also signs out other sessions.")}</p>
+          </div>
+        </Panel>
       </div>
-    </div>
-     {confirm && <Modal title={t("Revoke all active sessions?")} description={t("This signs out every trusted device except the one you are using now. You can sign in again after confirmation.")} onClose={() => setConfirm(false)}><div className="flex justify-end gap-2"><QuietButton onClick={() => setConfirm(false)}>{t("Cancel")}</QuietButton><button onClick={() => { setConfirm(false); setToast(t("All other sessions revoked")); }} className="inline-flex items-center gap-2 rounded-xl bg-[#8f3f51] px-4 py-2.5 text-[12px] font-semibold text-[#ffedf0] hover:bg-[#a74a5d]"><LogOut className="h-3.5 w-3.5" />{t("Revoke sessions")}</button></div></Modal>}
-     {integration && <Modal title={t("Configure Telegram integration")} description={t("Environment configuration is managed on your server. This screen intentionally never accepts or displays secret values.")} onClose={() => setIntegration(false)}><div className="space-y-4"><div className="rounded-xl border border-[#2c465d] bg-[#0d1b2a] p-4 font-mono text-[11px] leading-6 text-[#9bb5c8]"><div><span className="text-[#6a88a2]">TELEGRAM_API_ID</span> <span className="text-[#d0dfeb]">→ {t("server environment")}</span></div><div><span className="text-[#6a88a2]">TELEGRAM_API_HASH</span> <span className="text-[#d0dfeb]">→ {t("server environment")}</span></div></div><p className="text-[12px] leading-5 text-[#8299ae]">{t("Ask your administrator to add both values, then refresh the integration status.")} {t("No credentials, session strings, passwords, or verification codes are shown here.")}</p><div className="flex justify-end gap-2"><QuietButton onClick={() => setIntegration(false)}>{t("Close")}</QuietButton><PrimaryButton onClick={() => { setIntegration(false); setToast(t("Integration status refresh requested")); }}>{t("Refresh status")}</PrimaryButton></div></div></Modal>}
-    {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
-  </AppLayout>;
+
+      {showRevokeConfirm && (
+        <Modal
+          title={t("Revoke other sessions?")}
+          description={t("This will sign out every other device. Your current session will remain active.")}
+          onClose={() => setShowRevokeConfirm(false)}
+        >
+          <div className="flex justify-end gap-2">
+            <QuietButton onClick={() => setShowRevokeConfirm(false)}>{t("Cancel")}</QuietButton>
+            <button
+              type="button"
+              onClick={() => void revokeOtherSessions()}
+              disabled={revokeSessionsMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#be123c] px-5 py-3 text-[14px] font-extrabold text-white transition hover:bg-[#9f1239] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {revokeSessionsMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              <LogOut className="h-4 w-4" />
+              {t("Revoke other sessions")}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
+    </AppLayout>
+  );
 }

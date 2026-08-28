@@ -19,9 +19,15 @@ export type ConfiguredPlanContent = {
   featuresEn: string[];
 };
 
+export type SupportSettings = {
+  telegramUrl: string | null;
+  zaloUrl: string | null;
+};
+
 export type SystemSettings = {
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
   planContent: Record<PlanCode, ConfiguredPlanContent>;
+  supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: "pro" | "unlimited";
   defaultAccountDailyLimit: number;
@@ -38,6 +44,7 @@ export type SystemSettings = {
 type StoredSystemSettings = {
   planLimits?: Partial<Record<PlanCode, Partial<ConfiguredPlanLimits>>>;
   planContent?: Partial<Record<PlanCode, Partial<ConfiguredPlanContent>>>;
+  supportLinks?: Partial<SupportSettings>;
   groupLibraryVisibleToUsers?: unknown;
   groupLibraryMinimumJoinPlan?: unknown;
   defaultAccountDailyLimit?: unknown;
@@ -115,6 +122,10 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
       ],
     },
   },
+  supportLinks: {
+    telegramUrl: null,
+    zaloUrl: null,
+  },
   groupLibraryVisibleToUsers: false,
   groupLibraryMinimumJoinPlan: "pro",
   defaultAccountDailyLimit: 200,
@@ -127,6 +138,31 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   maintenanceMode: false,
   defaultTimezone: "Asia/Ho_Chi_Minh",
 };
+
+export function isSupportUrl(value: string, channel: "telegram" | "zalo"): boolean {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    const allowedHostnames = channel === "telegram"
+      ? ["t.me", "telegram.me"]
+      : ["zalo.me"];
+    return (
+      url.protocol === "https:"
+      && allowedHostnames.includes(hostname)
+      && url.pathname.length > 1
+      && !url.username
+      && !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function normalizedSupportUrl(value: unknown, channel: "telegram" | "zalo"): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed && isSupportUrl(trimmed, channel) ? trimmed : null;
+}
 
 function isFiniteInteger(value: unknown, min: number, max: number): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
@@ -213,6 +249,10 @@ function parseSettings(value: string | undefined): SystemSettings {
         plus: normalizedPlanContent(planContent.plus, DEFAULT_SYSTEM_SETTINGS.planContent.plus),
         pro: normalizedPlanContent(planContent.pro, DEFAULT_SYSTEM_SETTINGS.planContent.pro),
         unlimited: normalizedPlanContent(planContent.unlimited, DEFAULT_SYSTEM_SETTINGS.planContent.unlimited),
+      },
+      supportLinks: {
+        telegramUrl: normalizedSupportUrl(raw.supportLinks?.telegramUrl, "telegram"),
+        zaloUrl: normalizedSupportUrl(raw.supportLinks?.zaloUrl, "zalo"),
       },
       groupLibraryVisibleToUsers: typeof raw.groupLibraryVisibleToUsers === "boolean"
         ? raw.groupLibraryVisibleToUsers

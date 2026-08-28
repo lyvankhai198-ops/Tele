@@ -14,6 +14,7 @@ import {
   GetDashboardResponse,
   GetUpgradeSummaryResponse,
   GetSystemDefaultsResponse,
+  GetSupportSettingsResponse,
   GetGroupLibraryAccessResponse,
   GetGroupLibraryResponse,
   GetTelegramConfigResponse,
@@ -448,6 +449,11 @@ router.get("/system-defaults", async (_req, res): Promise<void> => {
     campaignDefaults: settings.campaignDefaults,
     defaultTimezone: settings.defaultTimezone,
   }));
+});
+
+router.get("/support", async (_req, res): Promise<void> => {
+  const settings = await getSystemSettings();
+  res.json(GetSupportSettingsResponse.parse({ supportLinks: settings.supportLinks }));
 });
 
 router.get("/account", async (req, res): Promise<void> => {

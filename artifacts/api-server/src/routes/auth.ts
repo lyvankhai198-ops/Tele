@@ -1,6 +1,6 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { timingSafeEqual } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import {
   GetAuthUserResponse,
   MigrateLegacyAuthOwnerBody,
@@ -9,6 +9,8 @@ import {
   LoginAuthResponse,
   RegisterAuthBody,
   RegisterAuthResponse,
+  ChangeAuthPasswordBody,
+  RevokeOtherAuthSessionsResponse,
 } from "@workspace/api-zod";
 import { appUsersTable, authSessionsTable, db, subscriptionsTable } from "@workspace/db";
 import {
@@ -40,6 +42,8 @@ const MAX_TRACKED_KEYS = 10_000;
 const credentialAttempts = new Map<string, { count: number; resetAt: number }>();
 const loginIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const registrationIpAttempts = new Map<string, { count: number; resetAt: number }>();
+const passwordChangeUserAttempts = new Map<string, { count: number; resetAt: number }>();
+const passwordChangeIpAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function attemptKey(req: any, username: string): string {
   return `${req.ip ?? "unknown"}:${username}`;
@@ -84,8 +88,42 @@ function registerAttempt(map: Map<string, { count: number; resetAt: number }>, k
   map.set(key, { ...current, count: current.count + 1 });
 }
 
+function reserveAttempt(map: Map<string, { count: number; resetAt: number }>, key: string, maximum: number): boolean {
+  pruneExpired(map);
+  const now = Date.now();
+  const current = map.get(key);
+  if (current && current.resetAt > now && current.count >= maximum) return false;
+  if (!current || current.resetAt <= now) {
+    map.set(key, { count: 1, resetAt: now + ATTEMPT_WINDOW_MS });
+  } else {
+    map.set(key, { ...current, count: current.count + 1 });
+  }
+  return true;
+}
+
+function refundAttempt(map: Map<string, { count: number; resetAt: number }>, key: string): void {
+  const current = map.get(key);
+  if (!current) return;
+  if (current.count <= 1) {
+    map.delete(key);
+    return;
+  }
+  map.set(key, { ...current, count: current.count - 1 });
+}
+
 function clearCredentialFailures(key: string): void {
   credentialAttempts.delete(key);
+}
+
+async function recordAuthActivityBestEffort(
+  req: Request,
+  activity: Parameters<typeof recordActivity>[0],
+): Promise<void> {
+  try {
+    await recordActivity(activity);
+  } catch (error) {
+    req.log.error({ err: error, event: activity.event }, "Unable to record authentication activity");
+  }
 }
 
 function setSessionCookie(res: any, token: string): void {
@@ -210,25 +248,37 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .select()
-    .from(appUsersTable)
-    .where(eq(appUsersTable.usernameNormalized, username))
-    .limit(1);
-  const valid = user ? await verifyPassword(parsed.data.password, user.passwordHash) : false;
-  if (!valid || !user) {
+  const token = createSessionToken();
+  const user = await db.transaction(async (tx) => {
+    const [candidate] = await tx
+      .select({ id: appUsersTable.id })
+      .from(appUsersTable)
+      .where(eq(appUsersTable.usernameNormalized, username))
+      .limit(1);
+    if (!candidate) return null;
+
+    await tx.execute(sql`SELECT 1 FROM ${appUsersTable} WHERE ${appUsersTable.id} = ${candidate.id} FOR UPDATE`);
+    const [lockedUser] = await tx
+      .select()
+      .from(appUsersTable)
+      .where(eq(appUsersTable.id, candidate.id))
+      .limit(1);
+    if (!lockedUser || !(await verifyPassword(parsed.data.password, lockedUser.passwordHash))) return null;
+
+    await tx.insert(authSessionsTable).values({
+      userId: lockedUser.id,
+      tokenHash: hashSessionToken(token),
+      expiresAt: sessionExpiresAt(),
+    });
+    return lockedUser;
+  });
+  if (!user) {
     registerAttempt(credentialAttempts, credentialKey);
     registerAttempt(loginIpAttempts, loginIp);
     res.status(401).json({ error: "Tên đăng nhập hoặc mật khẩu không đúng" });
     return;
   }
 
-  const token = createSessionToken();
-  await db.insert(authSessionsTable).values({
-    userId: user.id,
-    tokenHash: hashSessionToken(token),
-    expiresAt: sessionExpiresAt(),
-  });
   clearCredentialFailures(credentialKey);
   const authenticatedUser = await resolveAuthenticatedUser({
     id: user.id,
@@ -253,6 +303,160 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
   }
   clearSessionCookie(res);
   res.sendStatus(204);
+});
+
+router.post("/auth/change-password", requireSession, async (req, res): Promise<void> => {
+  const parsed = ChangeAuthPasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Thông tin mật khẩu không hợp lệ" });
+    return;
+  }
+
+  const passwordError = validatePassword(parsed.data.newPassword);
+  if (passwordError) {
+    res.status(400).json({ error: passwordError });
+    return;
+  }
+  if (parsed.data.newPassword !== parsed.data.confirmPassword) {
+    res.status(400).json({ error: "Mật khẩu xác nhận không khớp" });
+    return;
+  }
+
+  const currentToken = req.cookies?.[SESSION_COOKIE_NAME];
+  if (typeof currentToken !== "string" || !currentToken) {
+    res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+
+  const passwordUserKey = req.userId!;
+  const passwordIpKey = ipKey(req);
+  if (!reserveAttempt(passwordChangeUserAttempts, passwordUserKey, MAX_CREDENTIAL_ATTEMPTS)) {
+    res.status(429).json({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+  if (!reserveAttempt(passwordChangeIpAttempts, passwordIpKey, MAX_LOGIN_IP_ATTEMPTS)) {
+    refundAttempt(passwordChangeUserAttempts, passwordUserKey);
+    res.status(429).json({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+
+  const currentTokenHash = hashSessionToken(currentToken);
+  let outcome: "unauthorized" | "invalid-password" | "changed";
+  try {
+    outcome = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM ${appUsersTable} WHERE ${appUsersTable.id} = ${req.userId!} FOR UPDATE`);
+      const [session] = await tx.select({ id: authSessionsTable.id })
+        .from(authSessionsTable)
+        .where(and(
+          eq(authSessionsTable.userId, req.userId!),
+          eq(authSessionsTable.tokenHash, currentTokenHash),
+          isNull(authSessionsTable.invalidatedAt),
+          gt(authSessionsTable.expiresAt, new Date()),
+        ))
+        .limit(1);
+      if (!session) return "unauthorized" as const;
+
+      const [user] = await tx.select({ passwordHash: appUsersTable.passwordHash })
+        .from(appUsersTable)
+        .where(eq(appUsersTable.id, req.userId!))
+        .limit(1);
+      if (!user || !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
+        return "invalid-password" as const;
+      }
+
+      const passwordHash = await hashPassword(parsed.data.newPassword);
+      await tx.update(appUsersTable)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(appUsersTable.id, req.userId!));
+      await tx.update(authSessionsTable)
+        .set({ invalidatedAt: new Date() })
+        .where(and(
+          eq(authSessionsTable.userId, req.userId!),
+          ne(authSessionsTable.tokenHash, currentTokenHash),
+          isNull(authSessionsTable.invalidatedAt),
+        ));
+      return "changed" as const;
+    });
+  } catch (error) {
+    refundAttempt(passwordChangeUserAttempts, passwordUserKey);
+    refundAttempt(passwordChangeIpAttempts, passwordIpKey);
+    throw error;
+  }
+
+  if (outcome === "unauthorized") {
+    refundAttempt(passwordChangeUserAttempts, passwordUserKey);
+    refundAttempt(passwordChangeIpAttempts, passwordIpKey);
+    res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+  if (outcome === "invalid-password") {
+    await recordAuthActivityBestEffort(req, {
+      ownerUserId: req.userId!,
+      event: "auth.password_change_failed",
+      message: "Rejected a password change because the current password was invalid",
+      level: "warning",
+      metadata: { ip: req.ip ?? null },
+    });
+    res.status(401).json({ error: "Mật khẩu hiện tại không đúng" });
+    return;
+  }
+
+  passwordChangeUserAttempts.delete(passwordUserKey);
+  refundAttempt(passwordChangeIpAttempts, passwordIpKey);
+  await recordAuthActivityBestEffort(req, {
+    ownerUserId: req.userId!,
+    event: "auth.password_changed",
+    message: "Changed account password and signed out other sessions",
+    level: "success",
+  });
+  res.sendStatus(204);
+});
+
+router.post("/auth/revoke-other-sessions", requireSession, async (req, res): Promise<void> => {
+  const currentToken = req.cookies?.[SESSION_COOKIE_NAME];
+  if (typeof currentToken !== "string" || !currentToken) {
+    res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+
+  const currentTokenHash = hashSessionToken(currentToken);
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT 1 FROM ${appUsersTable} WHERE ${appUsersTable.id} = ${req.userId!} FOR UPDATE`);
+    const [session] = await tx.select({ id: authSessionsTable.id })
+      .from(authSessionsTable)
+      .where(and(
+        eq(authSessionsTable.userId, req.userId!),
+        eq(authSessionsTable.tokenHash, currentTokenHash),
+        isNull(authSessionsTable.invalidatedAt),
+        gt(authSessionsTable.expiresAt, new Date()),
+      ))
+      .limit(1);
+    if (!session) return null;
+
+    return tx.update(authSessionsTable)
+      .set({ invalidatedAt: new Date() })
+      .where(and(
+        eq(authSessionsTable.userId, req.userId!),
+        ne(authSessionsTable.tokenHash, currentTokenHash),
+        isNull(authSessionsTable.invalidatedAt),
+      ))
+      .returning({ id: authSessionsTable.id });
+  });
+  if (!outcome) {
+    res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+
+  if (outcome.length > 0) {
+    await recordAuthActivityBestEffort(req, {
+      ownerUserId: req.userId!,
+      event: "auth.sessions_revoked",
+      message: `Revoked ${outcome.length} other account session${outcome.length === 1 ? "" : "s"}`,
+      level: "info",
+      metadata: { revokedCount: outcome.length },
+    });
+  }
+  res.json(RevokeOtherAuthSessionsResponse.parse({ revokedCount: outcome.length }));
 });
 
 router.get("/auth/me", requireSession, (req, res): void => {
