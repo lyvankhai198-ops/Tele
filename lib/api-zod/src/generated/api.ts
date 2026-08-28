@@ -1020,6 +1020,7 @@ export const GetGroupLibraryResponse = zod.object({
   "telegramLink": zod.string().nullable(),
   "kind": zod.string(),
   "memberCount": zod.number().nullable(),
+  "isPublished": zod.boolean(),
   "roundDelays": zod.array(zod.object({
   "minSeconds": zod.number(),
   "maxSeconds": zod.number(),
@@ -1785,6 +1786,7 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
   "telegramLink": zod.string().nullable(),
   "kind": zod.string(),
   "memberCount": zod.number().nullable(),
+  "isPublished": zod.boolean(),
   "roundDelays": zod.array(zod.object({
   "minSeconds": zod.number(),
   "maxSeconds": zod.number(),
@@ -1801,6 +1803,15 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
 export const SyncAdminGroupLibraryResponse = zod.object({
   "addedCount": zod.number(),
   "candidateCount": zod.number()
+})
+
+
+export const ImportAdminGroupLibraryEntryParams = zod.object({
+  "telegramId": zod.coerce.string()
+})
+
+export const ImportAdminGroupLibraryEntryResponse = zod.object({
+  "imported": zod.boolean()
 })
 
 

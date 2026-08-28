@@ -31,6 +31,8 @@ import {
   GetAdminOperationsResponse,
   GetAdminActiveGroupDirectoryResponse,
   SyncAdminGroupLibraryResponse,
+  ImportAdminGroupLibraryEntryParams,
+  ImportAdminGroupLibraryEntryResponse,
   UpdateAdminCampaignStatusParams,
   UpdateAdminCampaignStatusBody,
   UpdateAdminCampaignStatusResponse,
@@ -82,7 +84,11 @@ import {
   revealAdminLicenseKey,
 } from "../lib/subscriptions";
 import { getAdminUserSupport, getAdminUserSupportCampaignTargets } from "../lib/admin-user-support";
-import { getAdminActiveGroupDirectory, syncAdminGroupLibrary } from "../lib/admin-active-group-directory";
+import {
+  getAdminActiveGroupDirectory,
+  importAdminGroupLibraryEntry,
+  syncAdminGroupLibrary,
+} from "../lib/admin-active-group-directory";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
@@ -126,6 +132,14 @@ router.get("/admin/active-groups", async (_req, res): Promise<void> => {
 
 router.post("/admin/active-groups", async (_req, res): Promise<void> => {
   res.status(201).json(SyncAdminGroupLibraryResponse.parse(await syncAdminGroupLibrary()));
+});
+
+router.post("/admin/active-groups/:telegramId/import", async (req, res): Promise<void> => {
+  const params = ImportAdminGroupLibraryEntryParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const result = await importAdminGroupLibraryEntry(params.data.telegramId);
+  if (!result) return void sendError(res, 404, "Nhóm chưa được phát hiện trong thư viện admin.");
+  res.json(ImportAdminGroupLibraryEntryResponse.parse(result));
 });
 
 router.get("/admin/notifications", async (_req, res): Promise<void> => {

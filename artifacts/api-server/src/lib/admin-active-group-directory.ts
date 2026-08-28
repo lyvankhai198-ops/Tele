@@ -19,6 +19,7 @@ export type SavedGroupRow = {
   username: string | null;
   kind: string;
   memberCount: number | null;
+  isPublished?: boolean;
   roundDelayMinSeconds: number | null;
   roundDelayMaxSeconds: number | null;
 };
@@ -48,6 +49,7 @@ export type AdminActiveGroupDirectoryRecord = {
     telegramLink: string | null;
     kind: string;
     memberCount: number | null;
+    isPublished: boolean;
     roundDelays: Array<{
       minSeconds: number;
       maxSeconds: number;
@@ -110,6 +112,7 @@ export function aggregateSavedGroupRows(
     telegramLink: string | null;
     kind: string;
     memberCount: number | null;
+    isPublished: boolean;
     roundDelays: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"];
   }>();
 
@@ -121,6 +124,7 @@ export function aggregateSavedGroupRows(
       telegramLink: destinationLink(row.username),
       kind: row.kind,
       memberCount: row.memberCount,
+      isPublished: row.isPublished !== false,
       roundDelays: [],
     };
     if (
@@ -204,13 +208,35 @@ export async function syncAdminGroupLibrary(): Promise<{ addedCount: number; can
       kind: candidate.kind,
       memberCount: candidate.memberCount,
       sourceDestinationId: candidate.sourceDestinationId,
+      isPublished: false,
     })))
     .onConflictDoNothing({ target: groupLibraryEntriesTable.telegramId })
     .returning({ id: groupLibraryEntriesTable.id });
   return { addedCount: inserted.length, candidateCount: candidates.length };
 }
 
-export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDirectoryRecord> {
+export async function importAdminGroupLibraryEntry(telegramId: string): Promise<{ imported: true } | null> {
+  const [entry] = await db.select({
+    id: groupLibraryEntriesTable.id,
+    isPublished: groupLibraryEntriesTable.isPublished,
+  }).from(groupLibraryEntriesTable)
+    .where(eq(groupLibraryEntriesTable.telegramId, telegramId))
+    .limit(1);
+  if (!entry) return null;
+  if (!entry.isPublished) {
+    await db.update(groupLibraryEntriesTable)
+      .set({ isPublished: true, updatedAt: new Date() })
+      .where(eq(groupLibraryEntriesTable.id, entry.id));
+  }
+  return { imported: true };
+}
+
+export async function getAdminActiveGroupDirectory(
+  options: { includeUnpublished?: boolean } = {},
+): Promise<AdminActiveGroupDirectoryRecord> {
+  const visibilityCondition = options.includeUnpublished === false
+    ? eq(groupLibraryEntriesTable.isPublished, true)
+    : undefined;
   const [rows, delayOutcomeRows] = await Promise.all([
     db.select({
       telegramId: groupLibraryEntriesTable.telegramId,
@@ -218,6 +244,7 @@ export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDi
       username: groupLibraryEntriesTable.username,
       kind: groupLibraryEntriesTable.kind,
       memberCount: groupLibraryEntriesTable.memberCount,
+      isPublished: groupLibraryEntriesTable.isPublished,
       roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
       roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
     }).from(groupLibraryEntriesTable)
@@ -232,6 +259,7 @@ export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDi
       ))
       .where(and(
         inArray(groupLibraryEntriesTable.kind, ["group", "forum"]),
+        visibilityCondition,
       ))
       .orderBy(desc(groupLibraryEntriesTable.updatedAt), asc(groupLibraryEntriesTable.title)),
     db.select({
@@ -250,6 +278,7 @@ export async function getAdminActiveGroupDirectory(): Promise<AdminActiveGroupDi
       .where(and(
         inArray(groupLibraryEntriesTable.kind, ["group", "forum"]),
         inArray(campaignTargetsTable.status, ["sent", "failed", "requires_review"]),
+        visibilityCondition,
       ))
       .groupBy(
         destinationsTable.telegramId,

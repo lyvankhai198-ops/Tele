@@ -172,6 +172,7 @@ export const groupLibraryEntriesTable = pgTable("group_library_entries", {
   kind: text("kind").notNull().default("group"),
   memberCount: integer("member_count"),
   sourceDestinationId: uuid("source_destination_id").references(() => destinationsTable.id, { onDelete: "set null" }),
+  isPublished: boolean("is_published").notNull().default(true),
   firstCapturedAt: timestamp("first_captured_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

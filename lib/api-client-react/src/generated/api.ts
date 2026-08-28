@@ -26,6 +26,7 @@ import type {
   AdminActiveGroupDirectory,
   AdminCampaignCloneInput,
   AdminCampaignStatusInput,
+  AdminGroupLibraryImportResult,
   AdminGroupLibrarySyncResult,
   AdminLicenseKey,
   AdminLicenseKeySecret,
@@ -4087,6 +4088,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSyncAdminGroupLibraryMutationOptions(options));
+    }
+
+export const getImportAdminGroupLibraryEntryUrl = (telegramId: string,) => {
+
+
+
+
+  return `/api/admin/active-groups/${telegramId}/import`
+}
+
+export const importAdminGroupLibraryEntry = async (telegramId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupLibraryImportResult> => {
+
+  return customFetch<AdminGroupLibraryImportResult>(getImportAdminGroupLibraryEntryUrl(telegramId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getImportAdminGroupLibraryEntryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importAdminGroupLibraryEntry>>, TError,{telegramId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importAdminGroupLibraryEntry>>, TError,{telegramId: string}, TContext> => {
+
+const mutationKey = ['importAdminGroupLibraryEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importAdminGroupLibraryEntry>>, {telegramId: string}> = (props) => {
+          const {telegramId} = props ?? {};
+
+          return  importAdminGroupLibraryEntry(telegramId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportAdminGroupLibraryEntryMutationResult = NonNullable<Awaited<ReturnType<typeof importAdminGroupLibraryEntry>>>
+
+    export type ImportAdminGroupLibraryEntryMutationError = ErrorType<void>
+
+    export const useImportAdminGroupLibraryEntry = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importAdminGroupLibraryEntry>>, TError,{telegramId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importAdminGroupLibraryEntry>>,
+        TError,
+        {telegramId: string},
+        TContext
+      > => {
+      return useMutation(getImportAdminGroupLibraryEntryMutationOptions(options));
     }
 
 export const getListAdminNotificationsUrl = () => {

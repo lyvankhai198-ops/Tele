@@ -11,6 +11,7 @@ import {
   useListCampaigns,
   useListDestinations,
   useListTelegramAccounts,
+  useImportAdminGroupLibraryEntry,
   useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
   type AdminActiveGroup,
@@ -45,10 +46,15 @@ const text = {
   syncFailed: "Không thể đồng bộ thư viện. Vui lòng thử lại.",
   syncAccountsFailed: "Đã cập nhật thư viện nhưng một hoặc nhiều tài khoản Telegram chưa đồng bộ được.",
   syncCompleted: (accountCount: number, addedCount: number) =>
-    `Đã đồng bộ ${accountCount} tài khoản Telegram${addedCount > 0 ? ` và thêm ${addedCount} nhóm mới` : ""}.`,
-    noConnectedAccounts: "Chưa có tài khoản Telegram đã kết nối để đồng bộ.",
-  syncAdded: (count: number) => `Đã thêm ${count} nhóm mới vào thư viện.`,
-  syncNoNewGroup: "Không có nhóm mới từ campaign đang chạy.",
+    `Đã đồng bộ ${accountCount} tài khoản Telegram${addedCount > 0 ? ` và phát hiện ${addedCount} nhóm mới đang chờ import` : ""}.`,
+  noConnectedAccounts: "Chưa có tài khoản Telegram đã kết nối để đồng bộ.",
+  syncAdded: (count: number) => `Đã phát hiện ${count} nhóm mới. Hãy import từng nhóm vào thư viện.`,
+  syncNoNewGroup: "Không phát hiện nhóm mới từ campaign đang chạy.",
+  newGroup: "Mới",
+  importGroup: "Import vào thư viện",
+  importingGroup: "Đang import...",
+  importSuccess: (title: string) => `Đã import “${title}” vào thư viện user.`,
+  importFailed: "Không thể import nhóm vào thư viện. Vui lòng thử lại.",
   openGroup: "Mở nhóm",
   privateGroup: "Nhóm riêng tư · Chưa có link tham gia",
   group: "Nhóm",
@@ -200,6 +206,9 @@ type GroupCardProps = {
   accountDataLoading: boolean;
   onCreate: (group: AdminActiveGroup, delay?: AdminActiveGroup["roundDelays"][number], preferredAccountId?: string) => void;
   onEdit: (campaign: Campaign) => void;
+  onImport: (group: AdminActiveGroup) => void;
+  importDisabled: boolean;
+  importing: boolean;
   mode: "admin" | "workspace";
   canOpenLinks: boolean;
   openGroupLabel: string;
@@ -237,6 +246,9 @@ function GroupCard({
   accountDataLoading,
   onCreate,
   onEdit,
+  onImport,
+  importDisabled,
+  importing,
   mode,
   canOpenLinks,
   openGroupLabel,
@@ -303,6 +315,14 @@ function GroupCard({
             <span className="rounded-full bg-[#eff6ff] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#1d4ed8]">
               {group.kind === "forum" ? forumLabel : groupLabel}
             </span>
+            {isAdmin && !group.isPublished && (
+              <span
+                className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#c2410c]"
+                data-testid={`badge-new-admin-active-group-${group.id}`}
+              >
+                {text.newGroup}
+              </span>
+            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[#64748b]">
             {group.username && <span>@{group.username.replace(/^@/, "")}</span>}
@@ -310,6 +330,18 @@ function GroupCard({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {isAdmin && !group.isPublished && (
+            <button
+              type="button"
+              onClick={() => onImport(group)}
+              disabled={importDisabled}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#86efac] bg-[#f0fdf4] px-2.5 py-1.5 text-[10px] font-extrabold text-[#047857] transition hover:bg-[#dcfce7] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid={`button-import-admin-active-group-${group.id}`}
+            >
+              {importing && <LoaderCircle className="h-3 w-3 animate-spin" />}
+              {importing ? text.importingGroup : text.importGroup}
+            </button>
+          )}
           {group.telegramLink && (isAdmin || canOpenLinks) ? (
             <a
               href={group.telegramLink}
@@ -475,6 +507,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const [search, setSearch] = useState("");
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [feedbackIsError, setFeedbackIsError] = useState(false);
+  const [importingGroupId, setImportingGroupId] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState<{
     editingCampaign: Campaign | null;
     prefill?: CampaignFormPrefill;
@@ -502,6 +535,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     },
   });
   const syncTelegram = useSyncTelegramDestinations();
+  const importGroup = useImportAdminGroupLibraryEntry();
   const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
   const directoryQuery = isAdmin ? query : workspaceQuery;
@@ -545,6 +579,22 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     } catch {
       setSyncFeedback(isAdmin ? text.syncFailed : localizedWorkspaceText.syncFailed);
       setFeedbackIsError(true);
+    }
+  }
+
+  async function handleImport(group: AdminActiveGroup) {
+    setImportingGroupId(group.id);
+    setSyncFeedback(null);
+    setFeedbackIsError(false);
+    try {
+      await importGroup.mutateAsync({ telegramId: group.id });
+      await query.refetch();
+      setSyncFeedback(text.importSuccess(group.title));
+    } catch {
+      setSyncFeedback(text.importFailed);
+      setFeedbackIsError(true);
+    } finally {
+      setImportingGroupId(null);
     }
   }
 
@@ -675,6 +725,9 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 accountDataLoading={accounts.isLoading || destinations.isLoading || campaigns.isLoading}
                 onCreate={openCreateCampaign}
                 onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
+                onImport={(selectedGroup) => void handleImport(selectedGroup)}
+                importDisabled={importGroup.isPending}
+                importing={importGroup.isPending && importingGroupId === group.id}
                 mode={mode}
                 canOpenLinks={groupLibraryAccess.data?.canOpenLinks === true}
                 openGroupLabel={isAdmin ? text.openGroup : localizedWorkspaceText.openGroup}

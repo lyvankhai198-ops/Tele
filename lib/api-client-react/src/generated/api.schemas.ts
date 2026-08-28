@@ -1471,6 +1471,7 @@ export interface AdminActiveGroup {
   kind: string;
   /** @nullable */
   memberCount: number | null;
+  isPublished: boolean;
   roundDelays: AdminGroupRoundDelay[];
 }
 
@@ -1481,6 +1482,10 @@ export interface AdminActiveGroupDirectory {
 export interface AdminGroupLibrarySyncResult {
   addedCount: number;
   candidateCount: number;
+}
+
+export interface AdminGroupLibraryImportResult {
+  imported: boolean;
 }
 
 export interface AdminSubscriptionUpdateInput {

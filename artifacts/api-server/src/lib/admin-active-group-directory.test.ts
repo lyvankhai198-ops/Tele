@@ -51,6 +51,7 @@ assert.equal(directory.groups.length, 2);
 const techGroup = directory.groups.find((group) => group.id === "-100123");
 assert.ok(techGroup);
 assert.equal(techGroup.telegramLink, "https://t.me/tech_forum");
+assert.equal(techGroup.isPublished, true);
 assert.deepEqual(
   techGroup.roundDelays.map((delay) => [
     delay.minSeconds,
@@ -68,6 +69,18 @@ const privateGroup = directory.groups.find((group) => group.id === "-100987");
 assert.ok(privateGroup);
 assert.equal(privateGroup.telegramLink, null);
 assert.deepEqual(privateGroup.roundDelays, []);
+
+const pendingDirectory = aggregateSavedGroupRows([{
+  telegramId: "-100555",
+  title: "Nhóm mới chờ import",
+  username: null,
+  kind: "group",
+  memberCount: null,
+  isPublished: false,
+  roundDelayMinSeconds: null,
+  roundDelayMaxSeconds: null,
+}]);
+assert.equal(pendingDirectory.groups[0]?.isPublished, false);
 
 const rankedDirectory = aggregateSavedGroupRows(rows, [
   {

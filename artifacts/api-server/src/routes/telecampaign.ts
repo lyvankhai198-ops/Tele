@@ -571,7 +571,7 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
     subscription?.status === "active"
     && planMeetsGroupLibraryMinimum(subscription.plan, settings.groupLibraryMinimumJoinPlan)
   );
-  const directory = await getAdminActiveGroupDirectory();
+  const directory = await getAdminActiveGroupDirectory({ includeUnpublished: false });
   res.json(GetGroupLibraryResponse.parse({
     groups: directory.groups.map((group) => ({
       ...group,

@@ -825,12 +825,30 @@ paths:
       tags: [admin]
       responses:
         "201":
-          description: Number of new groups added from running campaigns
+          description: Number of new groups discovered from running campaigns and waiting for admin import
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminGroupLibrarySyncResult" }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
+  /admin/active-groups/{telegramId}/import:
+    post:
+      operationId: importAdminGroupLibraryEntry
+      tags: [admin]
+      parameters:
+        - name: telegramId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Group was made visible in the user group library
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupLibraryImportResult" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Group was not discovered by the administrator }
   /admin/notifications:
     get:
       operationId: listAdminNotifications
@@ -2109,7 +2127,7 @@ components:
         isPreferred: { type: boolean }
     AdminActiveGroup:
       type: object
-      required: [id, title, username, telegramLink, kind, memberCount, roundDelays]
+      required: [id, title, username, telegramLink, kind, memberCount, isPublished, roundDelays]
       properties:
         id: { type: string }
         title: { type: string }
@@ -2117,6 +2135,7 @@ components:
         telegramLink: { type: ["string", "null"] }
         kind: { type: string }
         memberCount: { type: ["number", "null"] }
+        isPublished: { type: boolean }
         roundDelays:
           type: array
           items: { $ref: "#/components/schemas/AdminGroupRoundDelay" }
@@ -2133,6 +2152,11 @@ components:
       properties:
         addedCount: { type: number }
         candidateCount: { type: number }
+    AdminGroupLibraryImportResult:
+      type: object
+      required: [imported]
+      properties:
+        imported: { type: boolean }
     AdminSubscriptionUpdateInput:
       type: object
       required: [plan, durationDays]

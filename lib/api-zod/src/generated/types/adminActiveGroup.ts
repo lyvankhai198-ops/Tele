@@ -17,5 +17,6 @@ export interface AdminActiveGroup {
   kind: string;
   /** @nullable */
   memberCount: number | null;
+  isPublished: boolean;
   roundDelays: AdminGroupRoundDelay[];
 }
