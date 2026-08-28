@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   aggregateSavedGroupRows,
   dedupeRunningGroupLibraryCandidates,
+  redactGroupLibraryGroups,
   type SavedGroupRow,
 } from "./admin-active-group-directory";
 
@@ -143,5 +144,18 @@ const candidates = dedupeRunningGroupLibraryCandidates([
 assert.equal(candidates.length, 2);
 assert.equal(candidates[0]?.sourceDestinationId, "destination-one");
 assert.equal(candidates[1]?.telegramId, "-100555");
+
+const lockedGroups = redactGroupLibraryGroups(directory.groups, false);
+assert.equal(lockedGroups.length, directory.groups.length);
+assert.equal(lockedGroups[0]?.id, "locked-group-1");
+assert.notEqual(lockedGroups[0]?.id, directory.groups[0]?.id);
+assert.equal(lockedGroups[0]?.title, "••••••••••");
+assert.equal(lockedGroups[0]?.username, null);
+assert.equal(lockedGroups[0]?.telegramLink, null);
+assert.equal(lockedGroups[0]?.kind, "");
+assert.equal(lockedGroups[0]?.memberCount, directory.groups[0]?.memberCount);
+assert.equal(lockedGroups[0]?.isPublished, true);
+assert.deepEqual(lockedGroups[0]?.roundDelays, []);
+assert.strictEqual(redactGroupLibraryGroups(directory.groups, true), directory.groups);
 
 console.log("Admin group library aggregation and one-time import checks passed.");

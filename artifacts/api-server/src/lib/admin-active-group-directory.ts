@@ -62,6 +62,23 @@ export type AdminActiveGroupDirectoryRecord = {
   }>;
 };
 
+export function redactGroupLibraryGroups(
+  groups: AdminActiveGroupDirectoryRecord["groups"],
+  canOpenLinks: boolean,
+): AdminActiveGroupDirectoryRecord["groups"] {
+  if (canOpenLinks) return groups;
+  return groups.map((group, index) => ({
+    ...group,
+    id: `locked-group-${index + 1}`,
+    title: "••••••••••",
+    username: null,
+    telegramLink: null,
+    kind: "",
+    isPublished: true,
+    roundDelays: [],
+  }));
+}
+
 function delayKey(telegramId: string, minSeconds: number, maxSeconds: number): string {
   return `${telegramId}:${minSeconds}:${maxSeconds}`;
 }

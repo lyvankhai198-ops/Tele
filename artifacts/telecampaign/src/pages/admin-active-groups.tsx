@@ -535,8 +535,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const pageText = isAdmin ? text : localizedWorkspaceText;
   const needle = search.trim().toLowerCase();
   const filteredGroups = useMemo(
-    () => groups.filter((group) => groupMatches(group, needle)),
-    [groups, needle],
+    () => (isAdmin || canOpenLinks) ? groups.filter((group) => groupMatches(group, needle)) : groups,
+    [canOpenLinks, groups, isAdmin, needle],
   );
   const connectedAccounts = useMemo(
     () => (accounts.data ?? []).filter((account) => account.status === "connected"),
@@ -668,18 +668,20 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           </Panel>
         </div>
 
-        <Panel className="p-4 sm:p-5">
-          <label className="relative block">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={pageText.search}
-              className="h-10 w-full rounded-xl border border-[#dbe2ea] pl-9 pr-3 text-[12px] font-semibold outline-none transition focus:border-[#1a2b88]"
-              data-testid="input-search-admin-active-groups"
-            />
-          </label>
-        </Panel>
+        {(isAdmin || canOpenLinks) && (
+          <Panel className="p-4 sm:p-5">
+            <label className="relative block">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={pageText.search}
+                className="h-10 w-full rounded-xl border border-[#dbe2ea] pl-9 pr-3 text-[12px] font-semibold outline-none transition focus:border-[#1a2b88]"
+                data-testid="input-search-admin-active-groups"
+              />
+            </label>
+          </Panel>
+        )}
 
         {!isAdmin && !groupLibraryAccess.data?.canOpenLinks && (
           <Panel className="border-[#fde68a] bg-[#fffbeb] p-5">

@@ -109,7 +109,7 @@ import {
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
-import { getAdminActiveGroupDirectory } from "../lib/admin-active-group-directory";
+import { getAdminActiveGroupDirectory, redactGroupLibraryGroups } from "../lib/admin-active-group-directory";
 import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
@@ -567,13 +567,7 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
   );
   const directory = await getAdminActiveGroupDirectory({ includeUnpublished: false });
   res.json(GetGroupLibraryResponse.parse({
-    groups: directory.groups.map((group) => ({
-      ...group,
-      title: canOpenLinks ? group.title : "••••••••••",
-      username: canOpenLinks ? group.username : null,
-      telegramLink: canOpenLinks ? group.telegramLink : null,
-      roundDelays: canOpenLinks ? group.roundDelays : [],
-    })),
+    groups: redactGroupLibraryGroups(directory.groups, canOpenLinks),
   }));
 });
 
