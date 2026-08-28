@@ -206,7 +206,7 @@
 }
 
 .admin-notices-list {
-  max-height: min(760px, calc(100vh - 220px));
+  max-height: min(600px, calc(100vh - 280px));
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-right: 0.5rem;
