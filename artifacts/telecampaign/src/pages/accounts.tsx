@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   ChevronDown,
+  ExternalLink,
   HelpCircle,
   Key,
   LoaderCircle,
@@ -80,6 +81,9 @@ const copy = {
     saveStepDescription: "The account appears in the list with its saved limit and login status.",
     addTitle: "Add Telegram account",
     addDescription: "Enter the Telegram account details below.",
+    apiHelpTitle: "Don't have API credentials yet?",
+    apiHelpDescription: "Sign in with your Telegram account, open API development tools, and copy the API ID and API Hash for your application.",
+    apiHelpLink: "Get API ID & Hash at my.telegram.org",
     apiId: "api_id",
     apiHash: "api_hash",
     phoneNumber: "Telegram phone number",
@@ -151,6 +155,9 @@ const copy = {
     saveStepDescription: "Tài khoản sẽ xuất hiện trong danh sách với limit và trạng thái đăng nhập.",
     addTitle: "Thêm tài khoản Telegram",
     addDescription: "Nhập thông tin tài khoản Telegram bên dưới.",
+    apiHelpTitle: "Chưa có API ID và API Hash?",
+    apiHelpDescription: "Đăng nhập bằng tài khoản Telegram của bạn, mở API development tools, tạo application rồi sao chép API ID và API Hash.",
+    apiHelpLink: "Lấy API ID & Hash tại my.telegram.org",
     apiId: "api_id",
     apiHash: "api_hash",
     phoneNumber: "Số điện thoại Telegram",
@@ -544,6 +551,27 @@ export default function Accounts() {
       {showAddModal && (
         <AccountsDialog title={text.addTitle} description={text.addDescription} onClose={closeAddModal} testId="telegram-accounts-add-dialog">
           <form className="space-y-5" onSubmit={saveAccount}>
+            <div className="rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-4" data-testid="telegram-api-help">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#0284c7] shadow-sm">
+                  <Key className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-extrabold text-[#0f172a]">{text.apiHelpTitle}</p>
+                  <p className="mt-1 text-[12px] font-medium leading-relaxed text-[#475569]">{text.apiHelpDescription}</p>
+                  <a
+                    href="https://my.telegram.org/apps"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-extrabold text-[#0284c7] underline decoration-[#7dd3fc] underline-offset-2 transition-colors hover:text-[#0369a1]"
+                    data-testid="telegram-api-help-link"
+                  >
+                    {text.apiHelpLink}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
             <Input label={text.apiId} value={apiId} onChange={setApiId} placeholder="12345678" type="number" />
             <Input label={text.apiHash} value={apiHash} onChange={setApiHash} placeholder="0123456789abcdef" type="password" />
             <Input label={text.phoneNumber} value={phone} onChange={setPhone} placeholder={text.phonePlaceholder} type="tel" />
