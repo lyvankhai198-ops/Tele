@@ -9,7 +9,10 @@ import {
   Plus,
   Search,
   Trash2,
+  RefreshCw,
+  RotateCcw,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import type { Campaign, MessageTemplate } from "@workspace/api-client-react";
 import {
   deleteCampaign,
@@ -22,6 +25,8 @@ import {
   useListTelegramSavedMessages,
   useUpdateMessageTemplate,
   useUpdateCampaignStatus,
+  useRetryCampaignTarget,
+  useSyncTelegramDestinations,
 } from "@workspace/api-client-react";
 import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
@@ -138,6 +143,13 @@ const copy = {
     detailErrorEmpty: "No delivery errors recorded.",
     detailErrorAttempts: "attempts",
     detailErrorNextRetry: "Next retry:",
+    recoveryRetry: "Retry delivery",
+    recoveryReconnect: "Reconnect account",
+    recoverySync: "Sync groups & permissions",
+    recoveryProxy: "Check proxy",
+    recoveryReview: "Review in Telegram before retrying",
+    recoveryDone: "Recovery action completed.",
+    recoveryAccount: "Account:",
     genericError: "Could not complete the operation. Please try again.",
   },
   vi: {
@@ -247,6 +259,13 @@ const copy = {
     detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
     detailErrorAttempts: "lần thử",
     detailErrorNextRetry: "Lần thử tiếp:",
+    recoveryRetry: "Thử gửi lại",
+    recoveryReconnect: "Kết nối lại tài khoản",
+    recoverySync: "Đồng bộ nhóm & quyền",
+    recoveryProxy: "Kiểm tra proxy",
+    recoveryReview: "Kiểm tra trên Telegram trước khi thử lại",
+    recoveryDone: "Đã hoàn tất thao tác khắc phục.",
+    recoveryAccount: "Tài khoản:",
     genericError: "Không thể hoàn tất thao tác. Vui lòng thử lại.",
   },
 } as const;
@@ -322,12 +341,43 @@ function resumesAfterDailyQuota(campaign: Campaign) {
   ));
 }
 
+function recoveryReason(error: Campaign["errors"][number], language: "en" | "vi", fallback: string) {
+  const reasons = {
+    session: {
+      en: "The Telegram login session is no longer valid. Reconnect this account, then retry.",
+      vi: "Phiên đăng nhập Telegram đã hết hiệu lực. Hãy kết nối lại tài khoản rồi thử gửi lại.",
+    },
+    permission: {
+      en: "This account no longer has permission to post here. Restore posting permission in Telegram, then sync.",
+      vi: "Tài khoản không còn quyền đăng tại nhóm này. Hãy cấp lại quyền trên Telegram rồi đồng bộ.",
+    },
+    destination: {
+      en: "This group or topic is no longer available to the account. Confirm membership, then sync groups.",
+      vi: "Nhóm hoặc chủ đề không còn khả dụng với tài khoản. Hãy kiểm tra tư cách thành viên rồi đồng bộ nhóm.",
+    },
+    flood_wait: {
+      en: "Telegram is rate-limiting this account. Wait until the displayed time; TeleCampaign will not retry early.",
+      vi: "Telegram đang giới hạn tần suất tài khoản. Hãy chờ đến thời gian hiển thị; TeleCampaign sẽ không thử lại sớm.",
+    },
+    proxy_network: {
+      en: "The proxy or network connection failed. Check it before retrying. Interrupted responses remain review-only.",
+      vi: "Kết nối proxy hoặc mạng bị lỗi. Hãy kiểm tra trước khi thử lại. Phản hồi bị gián đoạn vẫn phải xem xét thủ công.",
+    },
+    unknown: {
+      en: "Telegram did not confirm the outcome. Review the destination in Telegram to avoid sending a duplicate.",
+      vi: "Telegram chưa xác nhận kết quả. Hãy kiểm tra trực tiếp trên Telegram để tránh gửi trùng.",
+    },
+  } as const;
+  return error.errorCategory ? reasons[error.errorCategory]?.[language] ?? fallback : localizedDeliveryErrorMessage(error.lastError, language, fallback);
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function Campaigns() {
   const { language } = useLanguage();
   const c = copy[language];
+  const [, setLocation] = useLocation();
 
   const campaigns = useListCampaigns();
   const accounts = useListTelegramAccounts();
@@ -335,6 +385,8 @@ export default function Campaigns() {
   const cloneCampaign = useCloneCampaign();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
+  const retryTarget = useRetryCampaignTarget();
+  const syncDestinations = useSyncTelegramDestinations();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -478,6 +530,29 @@ export default function Campaigns() {
       await deleteCampaign(campaign.id);
       await campaigns.refetch();
       setToast(c.toastDeleted);
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
+  async function retryDelivery(targetId: string) {
+    try {
+      const updated = await retryTarget.mutateAsync({ targetId });
+      setDetails(updated);
+      await campaigns.refetch();
+      setToast(c.recoveryDone);
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
+  async function syncRecoveryAccount(accountId: string) {
+    try {
+      await syncDestinations.mutateAsync({ accountId });
+      const refreshed = await campaigns.refetch();
+      const updated = refreshed.data?.find((campaign) => campaign.id === details?.id);
+      if (updated) setDetails(updated);
+      setToast(c.recoveryDone);
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
     }
@@ -796,7 +871,7 @@ export default function Campaigns() {
                          <h3 className="mb-2 text-[13px] font-extrabold text-[#92400e]">{c.detailWaitingTitle}</h3>
                          <div className="space-y-2">
                            {waiting.map((error) => (
-                              <div key={`${error.destinationId}-${error.status}-${error.attempts}-${retryTimestamp(error.nextAttemptAt)}`} className="rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3 text-[12px] text-[#92400e]">
+                              <div key={error.targetId} className="rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3 text-[12px] text-[#92400e]">
                                <div className="flex items-start justify-between gap-3">
                                  <strong>{error.destinationTitle}</strong>
                                  <span className="shrink-0 font-bold">{c.detailWaitingStatus}</span>
@@ -814,13 +889,35 @@ export default function Campaigns() {
                          <h3 className="mb-2 text-[13px] font-extrabold text-[#be123c]">{c.detailErrorTitle}</h3>
                          <div className="space-y-2">
                            {failures.map((error) => (
-                             <div key={`${error.destinationId}-${error.status}-${error.attempts}-${retryTimestamp(error.nextAttemptAt)}`} className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-3 text-[12px] text-[#881337]">
+                             <div key={error.targetId} className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] p-3 text-[12px] text-[#881337]">
                                <div className="flex items-start justify-between gap-3">
-                                 <strong>{error.destinationTitle}</strong>
-                                 <span className="shrink-0 font-bold">{error.attempts} {c.detailErrorAttempts}</span>
+                                  <div>
+                                    <strong>{error.destinationTitle}</strong>
+                                    <span className="mt-0.5 block text-[11px] font-semibold text-[#9f1239]">{c.recoveryAccount} {error.accountName}</span>
+                                  </div>
+                                  <span className="shrink-0 rounded-full bg-white px-2 py-1 font-bold">{error.attempts}/{details.maxRetries} {c.detailErrorAttempts}</span>
                                </div>
-                               <p className="mt-1 break-words font-medium">{localizedDeliveryErrorMessage(error.lastError, language, c.genericError)}</p>
+                                <p className="mt-2 break-words font-medium">{recoveryReason(error, language, c.genericError)}</p>
                                {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {error.errorCategory === "session" && (
+                                    <button type="button" onClick={() => setLocation("/dashboard/telegram-accounts")} className="rounded-lg bg-[#be123c] px-3 py-2 font-extrabold text-white">{c.recoveryReconnect}</button>
+                                  )}
+                                  {(error.errorCategory === "permission" || error.errorCategory === "destination") && (
+                                    <button type="button" disabled={syncDestinations.isPending} onClick={() => void syncRecoveryAccount(error.accountId)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#be123c] px-3 py-2 font-extrabold text-white disabled:opacity-50">
+                                      <RefreshCw className={`h-3.5 w-3.5 ${syncDestinations.isPending ? "animate-spin" : ""}`} />{c.recoverySync}
+                                    </button>
+                                  )}
+                                  {error.errorCategory === "proxy_network" && (
+                                    <button type="button" onClick={() => setLocation("/dashboard/proxy")} className="rounded-lg bg-[#be123c] px-3 py-2 font-extrabold text-white">{c.recoveryProxy}</button>
+                                  )}
+                                  {error.retryAllowed && (
+                                    <button type="button" disabled={retryTarget.isPending} onClick={() => void retryDelivery(error.targetId)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#be123c] bg-white px-3 py-2 font-extrabold text-[#be123c] disabled:opacity-50">
+                                      <RotateCcw className={`h-3.5 w-3.5 ${retryTarget.isPending ? "animate-spin" : ""}`} />{c.recoveryRetry}
+                                    </button>
+                                  )}
+                                  {error.status === "requires_review" && <span className="rounded-lg bg-[#ffe4e6] px-3 py-2 font-extrabold">{c.recoveryReview}</span>}
+                                </div>
                              </div>
                            ))}
                          </div>

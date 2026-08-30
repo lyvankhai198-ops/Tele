@@ -25,6 +25,7 @@ import {
 } from "./campaign-schedule";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
 import { getDatabaseNow } from "./database-clock";
+import { classifyTelegramError, type TelegramErrorCategory } from "./telegram-errors";
 import {
   getUserDailyQuotaUsage,
   releaseUserDailyQuota,
@@ -667,11 +668,14 @@ export function campaignCloneMode(campaign: Pick<typeof campaignsTable.$inferSel
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
   const [targets, subscription, settings] = await Promise.all([
     db.select({
-    target: campaignTargetsTable,
-    destinationTitle: destinationsTable.title,
-  }).from(campaignTargetsTable)
-    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .where(eq(campaignTargetsTable.campaignId, campaign.id)),
+      target: campaignTargetsTable,
+      destinationTitle: destinationsTable.title,
+      accountId: telegramAccountsTable.id,
+      accountName: telegramAccountsTable.name,
+    }).from(campaignTargetsTable)
+      .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .innerJoin(telegramAccountsTable, eq(destinationsTable.accountId, telegramAccountsTable.id))
+      .where(eq(campaignTargetsTable.campaignId, campaign.id)),
     getSubscription(campaign.ownerUserId),
     getSystemSettings(),
   ]);
@@ -718,13 +722,19 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
       reservedToday,
     },
     errors: [...errorTargets, ...waitingTargets]
-      .map(({ target, destinationTitle }) => ({
+      .map(({ target, destinationTitle, accountId, accountName }) => ({
+        targetId: target.id,
         destinationId: target.destinationId,
         destinationTitle,
+        accountId,
+        accountName,
         status: target.status,
         attempts: target.attempts,
         lastError: target.lastError,
         nextAttemptAt: target.nextAttemptAt,
+        errorCategory: target.errorCategory as TelegramErrorCategory | null,
+        lastErrorAt: target.lastErrorAt,
+        retryAllowed: target.status === "failed" && target.attempts < campaign.maxRetries,
       }))
       .sort((a, b) => {
         const aTime = a.nextAttemptAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
@@ -732,6 +742,118 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
         return aTime - bTime || a.destinationTitle.localeCompare(b.destinationTitle);
       }),
   };
+}
+
+export async function retryCampaignTargetForUser(input: {
+  ownerUserId: string;
+  targetId: string;
+}) {
+  const outcome = await db.transaction(async (tx) => {
+    const [candidate] = await tx.select({
+      target: campaignTargetsTable,
+      campaign: campaignsTable,
+      destination: destinationsTable,
+      account: telegramAccountsTable,
+    }).from(campaignTargetsTable)
+      .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+      .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .innerJoin(telegramAccountsTable, eq(destinationsTable.accountId, telegramAccountsTable.id))
+      .where(and(
+        eq(campaignTargetsTable.id, input.targetId),
+        eq(campaignsTable.ownerUserId, input.ownerUserId),
+        eq(telegramAccountsTable.ownerUserId, input.ownerUserId),
+      ))
+      .limit(1);
+    if (!candidate) {
+      return { kind: "error" as const, status: 404, message: "Campaign target not found." };
+    }
+
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.campaign.id} FOR UPDATE`);
+    await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.id} = ${candidate.target.id} FOR UPDATE`);
+    const [target] = await tx.select().from(campaignTargetsTable)
+      .where(eq(campaignTargetsTable.id, candidate.target.id));
+    if (!target || target.status !== "failed") {
+      return {
+        kind: "error" as const,
+        status: 409,
+        message: target?.status === "requires_review"
+          ? "This delivery may already have reached Telegram. Review it before taking any retry action."
+          : "Only a confirmed failed delivery can be retried.",
+      };
+    }
+    if (target.attempts >= candidate.campaign.maxRetries) {
+      return { kind: "error" as const, status: 409, message: "This delivery reached its retry limit." };
+    }
+    if (!["queued", "running", "completed", "completed_with_errors"].includes(candidate.campaign.status)) {
+      return { kind: "error" as const, status: 409, message: "Resume the campaign before retrying this delivery." };
+    }
+    if (candidate.account.status !== "connected" || !candidate.account.sessionEncrypted) {
+      return { kind: "error" as const, status: 409, message: "Reconnect the Telegram account before retrying." };
+    }
+    if (!candidate.destination.canPost) {
+      return { kind: "error" as const, status: 409, message: "Sync the destination and restore posting permission before retrying." };
+    }
+    if (target.errorCategory === "unknown") {
+      return { kind: "error" as const, status: 409, message: "This delivery result is uncertain and cannot be retried automatically." };
+    }
+
+    const retriedAt = new Date();
+    const [retriedTarget] = await tx.update(campaignTargetsTable).set({
+      status: "pending",
+      quotaReservedAt: null,
+      nextAttemptAt: retriedAt,
+      lastError: null,
+      errorCategory: null,
+      lastErrorAt: null,
+      updatedAt: retriedAt,
+    }).where(and(
+      eq(campaignTargetsTable.id, target.id),
+      eq(campaignTargetsTable.status, "failed"),
+      eq(campaignTargetsTable.attempts, target.attempts),
+    )).returning();
+    if (!retriedTarget) {
+      return { kind: "error" as const, status: 409, message: "This delivery changed while retrying. Refresh and try again." };
+    }
+
+    const shouldResume = ["completed", "completed_with_errors"].includes(candidate.campaign.status);
+    const [campaign] = shouldResume
+      ? await tx.update(campaignsTable).set({
+        status: "queued",
+        pauseReason: null,
+        updatedAt: retriedAt,
+      }).where(and(
+        eq(campaignsTable.id, candidate.campaign.id),
+        eq(campaignsTable.status, candidate.campaign.status),
+      )).returning()
+      : [candidate.campaign];
+    if (!campaign) {
+      return { kind: "error" as const, status: 409, message: "The campaign changed while retrying. Refresh and try again." };
+    }
+    return {
+      kind: "success" as const,
+      campaign,
+      target: retriedTarget,
+      accountId: candidate.account.id,
+      previousErrorCategory: target.errorCategory,
+    };
+  });
+
+  if (outcome.kind === "error") return outcome;
+  await recordActivity({
+    ownerUserId: input.ownerUserId,
+    event: "campaign.target.retried",
+    level: "info",
+    campaignId: outcome.campaign.id,
+    targetId: outcome.target.id,
+    accountId: outcome.accountId,
+    message: "A confirmed failed Telegram delivery was queued for a limited retry.",
+    metadata: {
+      previousErrorCategory: outcome.previousErrorCategory,
+      attempts: outcome.target.attempts,
+      maxRetries: outcome.campaign.maxRetries,
+    },
+  });
+  return outcome;
 }
 
 async function finalizeCampaignIfTerminal(campaignId: string) {
@@ -756,6 +878,8 @@ async function markTargetForReview(targetId: string, reason: string) {
         status: "requires_review",
         nextAttemptAt: null,
         lastError: reason,
+        errorCategory: "unknown",
+        lastErrorAt: new Date(),
         updatedAt: new Date(),
       }).where(and(eq(campaignTargetsTable.id, targetId), eq(campaignTargetsTable.status, "sending")))
         .returning({ campaignId: campaignTargetsTable.campaignId });
@@ -958,13 +1082,14 @@ export async function processNextCampaignTarget() {
       logger.error({ err: error, targetId: job.target.id }, "Post-send processing failed; refusing an automatic retry");
       return true;
     }
-    const message = error instanceof Error ? error.message : "Telegram delivery failed";
-    const floodSeconds = Number((error as { seconds?: number }).seconds);
-    const hasSupportedFloodWait = Number.isFinite(floodSeconds) && floodSeconds > 0 && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
-    // FLOOD_WAIT is a known Telegram pre-send rejection. Other errors may
-    // have accepted the message before the client lost its response, so their
-    // reservations remain until a human resolves the target.
-    const knownPreSendRejection = hasSupportedFloodWait;
+    const classified = classifyTelegramError(error);
+    const floodSeconds = classified.floodWaitSeconds ?? 0;
+    const hasSupportedFloodWait = classified.category === "flood_wait"
+      && floodSeconds > 0
+      && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
+    // Only deterministic Telegram rejections release reservations. Unknown
+    // and interrupted responses remain review-only to avoid duplicate sends.
+    const knownPreSendRejection = classified.safeToRetry;
     if (knownPreSendRejection && userQuotaReservation) {
       await releaseUserDailyQuota({
         ownerUserId: job.campaign.ownerUserId,
@@ -977,7 +1102,7 @@ export async function processNextCampaignTarget() {
     const retryAt = hasSupportedFloodWait
       ? new Date(Date.now() + floodSeconds * 1000)
       : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
-    const canRetry = job.target.attempts + 1 < job.campaign.maxRetries && hasSupportedFloodWait;
+    const canRetry = claimed.attempts < job.campaign.maxRetries && hasSupportedFloodWait;
     if (hasSupportedFloodWait) {
       await db.update(telegramAccountsTable).set({
         cooldownUntil: retryAt,
@@ -985,10 +1110,14 @@ export async function processNextCampaignTarget() {
       }).where(eq(telegramAccountsTable.id, job.destination.accountId));
     }
     const targetUpdate = {
-      status: knownPreSendRejection && canRetry ? "pending" : "requires_review",
+      status: knownPreSendRejection
+        ? canRetry ? "pending" : "failed"
+        : "requires_review",
       ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
       nextAttemptAt: knownPreSendRejection && canRetry ? retryAt : null,
-      lastError: message.slice(0, 500),
+      lastError: classified.safeMessage,
+      errorCategory: classified.category,
+      lastErrorAt: new Date(),
       updatedAt: new Date(),
     };
     await db.update(campaignTargetsTable).set(targetUpdate).where(and(
@@ -999,7 +1128,7 @@ export async function processNextCampaignTarget() {
       event: hasSupportedFloodWait ? "campaign.target.rate_limited" : "campaign.target.failed",
       message: hasSupportedFloodWait
         ? `Telegram requested a ${floodSeconds}s delay; delivery was postponed.`
-        : `Delivery to "${job.destination.title}" could not be confirmed; manual review is required to avoid a duplicate send.`,
+        : classified.safeMessage,
       level: hasSupportedFloodWait || canRetry ? "warning" : "error",
       campaignId: job.campaign.id,
       targetId: job.target.id,
@@ -1008,6 +1137,9 @@ export async function processNextCampaignTarget() {
       metadata: {
         retryAt: knownPreSendRejection && canRetry ? retryAt.toISOString() : null,
         quotaReservationRetained: !knownPreSendRejection,
+        errorCategory: classified.category,
+        recoveryAction: classified.recoveryAction,
+        retryAllowed: knownPreSendRejection && !canRetry && claimed.attempts < job.campaign.maxRetries,
       },
     });
   } finally {
@@ -1032,6 +1164,8 @@ export function startCampaignWorker() {
         status: "requires_review",
         nextAttemptAt: null,
         lastError: "Delivery state is unknown after an interrupted worker; manual review is required to avoid duplicate sends.",
+        errorCategory: "unknown",
+        lastErrorAt: new Date(),
         updatedAt: new Date(),
       }).where(and(
         eq(campaignTargetsTable.status, "sending"),

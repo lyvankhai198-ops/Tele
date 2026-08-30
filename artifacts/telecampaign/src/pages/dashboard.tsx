@@ -61,11 +61,11 @@ export default function Dashboard() {
     );
   }
 
-  const { metrics, adminNotifications, recentCampaigns, recentActivity } = data;
+  const { metrics, adminNotifications, recentCampaigns, recentActivity, onboarding } = data;
   const expiresAt = upgradeSummary?.subscription.expiresAt ? new Date(upgradeSummary.subscription.expiresAt) : null;
   const remainingHours = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000))) : null;
   const showExpiryNotice = upgradeSummary?.subscription.status === "active" && remainingHours !== null && remainingHours <= 24;
-  const showQuickSend = metrics.campaigns < 3;
+  const showQuickSend = onboarding.quickSendEligible;
   const expiryNotice = language === "vi"
     ? `Thời gian sử dụng còn ${remainingHours} giờ. Hãy mua license key để không bị gián đoạn.`
     : `${remainingHours} hour${remainingHours === 1 ? "" : "s"} remaining. Buy a license key to avoid interruption.`;
@@ -87,7 +87,7 @@ export default function Dashboard() {
           </button>
         </section>
       )}
-      
+
       {/* Metric Cards Grid */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-8" data-testid="dashboard-metrics">
         <DashboardMetricCard label={t("Telegram Accounts")} value={metrics.telegramAccounts} icon={Users} iconColor="text-[#2563eb]" iconBg="bg-[#eff6ff]" />

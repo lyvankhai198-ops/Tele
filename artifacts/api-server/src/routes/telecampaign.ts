@@ -66,6 +66,8 @@ import {
   UpdateCampaignStatusBody,
   UpdateCampaignStatusParams,
   UpdateCampaignStatusResponse,
+  RetryCampaignTargetParams,
+  RetryCampaignTargetResponse,
 } from "@workspace/api-zod";
 import {
   activityLogsTable,
@@ -80,7 +82,12 @@ import {
   proxiesTable,
   telegramAccountsTable,
 } from "@workspace/db";
-import { campaignCloneMode, campaignSummary, rebaseCampaignScheduleForResume } from "../lib/campaigns";
+import {
+  campaignCloneMode,
+  campaignSummary,
+  rebaseCampaignScheduleForResume,
+  retryCampaignTargetForUser,
+} from "../lib/campaigns";
 import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration } from "../lib/telegram-config";
@@ -115,6 +122,7 @@ import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
 import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
+import { buildOnboardingSummary } from "../lib/onboarding";
 
 const router: IRouter = Router();
 const activityDestinationAccounts = alias(telegramAccountsTable, "activity_destination_accounts");
@@ -701,6 +709,9 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     recentCampaignRows,
     recentActivity,
     adminNotificationRows,
+    onboardingAccounts,
+    onboardingDestinations,
+    onboardingCampaigns,
   ] = await Promise.all([
     db.select({ value: count() }).from(telegramAccountsTable).where(and(eq(telegramAccountsTable.ownerUserId, ownerUserId), isNull(telegramAccountsTable.deletedAt))),
     db.select({ value: count() }).from(destinationsTable)
@@ -749,7 +760,32 @@ router.get("/dashboard", async (req, res): Promise<void> => {
       ))
       .orderBy(desc(adminNotificationsTable.pinned), desc(sql`coalesce(${adminNotificationsTable.publishedAt}, ${adminNotificationsTable.scheduledAt}, ${adminNotificationsTable.createdAt})`))
       .limit(8),
+    db.select({
+      status: telegramAccountsTable.status,
+      lastSyncAt: telegramAccountsTable.lastSyncAt,
+    }).from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.ownerUserId, ownerUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    )),
+    db.select({
+      canPost: destinationsTable.canPost,
+      permissionCheckedAt: destinationsTable.permissionCheckedAt,
+    }).from(destinationsTable)
+      .innerJoin(telegramAccountsTable, eq(destinationsTable.accountId, telegramAccountsTable.id))
+      .where(and(
+        eq(telegramAccountsTable.ownerUserId, ownerUserId),
+        isNull(telegramAccountsTable.deletedAt),
+      )),
+    db.select({ status: campaignsTable.status }).from(campaignsTable)
+      .where(eq(campaignsTable.ownerUserId, ownerUserId)),
   ]);
+
+  const onboarding = buildOnboardingSummary({
+    accounts: onboardingAccounts,
+    destinations: onboardingDestinations,
+    messageTemplateCount: messageTemplates.value,
+    campaigns: onboardingCampaigns,
+  });
 
   res.json(GetDashboardResponse.parse({
     metrics: {
@@ -771,8 +807,11 @@ router.get("/dashboard", async (req, res): Promise<void> => {
       targetAttempts: null,
       targetLastError: null,
       targetNextAttemptAt: null,
+      targetErrorCategory: null,
+      targetLastErrorAt: null,
     })),
     adminNotifications: adminNotificationRows.filter((notification) => isNotificationActive(notification)).map(adminNotificationResponse),
+      onboarding,
   }));
 });
 
@@ -2014,6 +2053,17 @@ router.delete("/campaigns/:campaignId", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+router.post("/campaign-targets/:targetId/retry", async (req, res): Promise<void> => {
+  const params = RetryCampaignTargetParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const outcome = await retryCampaignTargetForUser({
+    ownerUserId: currentUserId(req),
+    targetId: params.data.targetId,
+  });
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  res.json(RetryCampaignTargetResponse.parse(await campaignSummary(outcome.campaign)));
+});
+
 router.get("/calendar", async (req, res): Promise<void> => {
   const parsed = ListCalendarItemsQueryParams.safeParse(req.query);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
@@ -2049,6 +2099,8 @@ router.get("/activity", async (req, res): Promise<void> => {
     targetAttempts: campaignTargetsTable.attempts,
     targetLastError: campaignTargetsTable.lastError,
     targetNextAttemptAt: campaignTargetsTable.nextAttemptAt,
+    targetErrorCategory: campaignTargetsTable.errorCategory,
+    targetLastErrorAt: campaignTargetsTable.lastErrorAt,
   }).from(activityLogsTable)
     .leftJoin(campaignsTable, and(
       eq(activityLogsTable.campaignId, campaignsTable.id),

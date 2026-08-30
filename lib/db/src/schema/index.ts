@@ -154,6 +154,8 @@ export const campaignTargetsTable = pgTable(
     quotaReservedAt: timestamp("quota_reserved_at", { withTimezone: true }),
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
     lastError: text("last_error"),
+    errorCategory: text("error_category"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
     sentMessageId: text("sent_message_id"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

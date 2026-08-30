@@ -25,6 +25,7 @@ const eventLabels: Record<string, { vi: string; en: string }> = {
   "campaign.target.sent": { vi: "Đã gửi tin nhắn", en: "Message delivered" },
   "campaign.target.failed": { vi: "Chưa xác nhận được lượt gửi", en: "Delivery needs attention" },
   "campaign.target.rate_limited": { vi: "Telegram yêu cầu chờ", en: "Telegram requested a delay" },
+  "campaign.target.retried": { vi: "Đã xếp lịch thử gửi lại", en: "Delivery retry queued" },
   "campaign.paused.subscription_expired": { vi: "Chiến dịch đã tạm dừng", en: "Campaign paused" },
   "campaign.paused.daily_quota_reached": { vi: "Đã đạt giới hạn gửi trong ngày", en: "Daily message limit reached" },
   "campaign.resumed.daily_quota_reset": { vi: "Đã tự động chạy lại chiến dịch", en: "Campaign resumed automatically" },
@@ -115,6 +116,7 @@ function userMessage(log: ActivityLog, language: "vi" | "en") {
   if (language === "en") return log.message;
 
   if (log.event === "campaign.target.failed") {
+    if (log.targetErrorCategory) return recoveryCause(log.targetErrorCategory, language);
     return log.destinationTitle
       ? `Không thể xác nhận việc gửi đến “${log.destinationTitle}”. Hãy kiểm tra chi tiết để tránh gửi trùng.`
       : "Không thể xác nhận việc gửi. Hãy kiểm tra chi tiết để tránh gửi trùng.";
@@ -137,6 +139,48 @@ function userMessage(log: ActivityLog, language: "vi" | "en") {
     return `Đã gửi tin nhắn đến “${log.destinationTitle}”.`;
   }
   return log.message;
+}
+
+function recoveryCause(category: ActivityLog["targetErrorCategory"], language: "vi" | "en") {
+  const copy = {
+    session: {
+      vi: "Phiên Telegram đã hết hiệu lực. Hãy kết nối lại tài khoản trước khi thử gửi lại.",
+      en: "The Telegram session is no longer valid. Reconnect the account before retrying.",
+    },
+    permission: {
+      vi: "Tài khoản không còn quyền đăng tại điểm đến này. Hãy cấp lại quyền trên Telegram rồi đồng bộ.",
+      en: "The account no longer has posting permission. Restore it in Telegram, then sync.",
+    },
+    destination: {
+      vi: "Nhóm hoặc chủ đề không còn khả dụng. Hãy kiểm tra tư cách thành viên rồi đồng bộ nhóm.",
+      en: "The group or topic is unavailable. Confirm membership, then sync destinations.",
+    },
+    flood_wait: {
+      vi: "Telegram đang giới hạn tần suất. Lượt gửi chỉ được thử lại sau thời gian cho phép.",
+      en: "Telegram is rate-limiting this account. The delivery will wait until the allowed time.",
+    },
+    proxy_network: {
+      vi: "Kết nối proxy hoặc mạng bị lỗi. Hãy kiểm tra kết nối; phản hồi gián đoạn phải được xem xét thủ công.",
+      en: "The proxy or network failed. Check the connection; interrupted responses require manual review.",
+    },
+    unknown: {
+      vi: "Telegram chưa xác nhận kết quả. Hãy kiểm tra trực tiếp để tránh gửi trùng.",
+      en: "Telegram did not confirm the outcome. Review it directly to avoid a duplicate.",
+    },
+  } as const;
+  return category ? copy[category]?.[language] ?? "" : "";
+}
+
+function recoveryLabel(category: ActivityLog["targetErrorCategory"], language: "vi" | "en") {
+  const labels = {
+    session: { vi: "Kết nối lại tài khoản", en: "Reconnect account" },
+    permission: { vi: "Kiểm tra quyền và đồng bộ", en: "Check permission and sync" },
+    destination: { vi: "Đồng bộ lại nhóm", en: "Sync destinations" },
+    flood_wait: { vi: "Chờ đến thời gian cho phép", en: "Wait until allowed" },
+    proxy_network: { vi: "Kiểm tra proxy hoặc mạng", en: "Check proxy or network" },
+    unknown: { vi: "Kiểm tra thủ công, không tự retry", en: "Review manually; do not auto-retry" },
+  } as const;
+  return category ? labels[category]?.[language] ?? "" : "";
 }
 
 function metadataText(value: unknown) {
@@ -274,7 +318,10 @@ export default function Logs() {
                           {log.targetStatus && <DetailRow label={t("Target status")} value={targetStatusLabel(log.targetStatus, language)} />}
                           {typeof log.targetAttempts === "number" && <DetailRow label={t("Attempts")} value={String(log.targetAttempts)} />}
                           {log.targetNextAttemptAt && <DetailRow label={t("Next retry")} value={formatDate(log.targetNextAttemptAt, language)} />}
-                          {log.targetLastError && <DetailRow label={t("Last error")} value={log.targetLastError} emphasis />}
+                          {log.targetErrorCategory && <DetailRow label={language === "vi" ? "Nhóm lỗi" : "Error type"} value={log.targetErrorCategory.replace("_", " ")} emphasis />}
+                          {log.targetLastError && <DetailRow label={t("Last error")} value={recoveryCause(log.targetErrorCategory, language) || log.targetLastError} emphasis />}
+                          {log.targetLastErrorAt && <DetailRow label={language === "vi" ? "Ghi nhận lúc" : "Detected at"} value={formatDate(log.targetLastErrorAt, language)} />}
+                          {log.targetErrorCategory && <DetailRow label={language === "vi" ? "Cách khắc phục" : "Recommended action"} value={recoveryLabel(log.targetErrorCategory, language)} emphasis />}
                           {!log.targetStatus && <p className="text-[12px] leading-5 text-[#64748b]">{t("This record is not tied to a delivery target.")}</p>}
                         </DetailSection>
                       </div>

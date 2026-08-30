@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActivityLogMetadata } from './activityLogMetadata';
+import type { ActivityLogTargetErrorCategory } from './activityLogTargetErrorCategory';
 
 export interface ActivityLog {
   id: string;
@@ -37,4 +38,8 @@ export interface ActivityLog {
   targetLastError: string | null;
   /** @nullable */
   targetNextAttemptAt: Date | null;
+  /** @nullable */
+  targetErrorCategory: ActivityLogTargetErrorCategory;
+  /** @nullable */
+  targetLastErrorAt: Date | null;
 }

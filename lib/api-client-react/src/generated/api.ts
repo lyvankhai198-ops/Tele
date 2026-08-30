@@ -2481,6 +2481,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCloneCampaignMutationOptions(options));
     }
 
+export const getRetryCampaignTargetUrl = (targetId: string,) => {
+
+
+
+
+  return `/api/campaign-targets/${targetId}/retry`
+}
+
+export const retryCampaignTarget = async (targetId: string, options?: Parameters<typeof customFetch>[1]): Promise<Campaign> => {
+
+  return customFetch<Campaign>(getRetryCampaignTargetUrl(targetId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryCampaignTargetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCampaignTarget>>, TError,{targetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryCampaignTarget>>, TError,{targetId: string}, TContext> => {
+
+const mutationKey = ['retryCampaignTarget'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryCampaignTarget>>, {targetId: string}> = (props) => {
+          const {targetId} = props ?? {};
+
+          return  retryCampaignTarget(targetId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryCampaignTargetMutationResult = NonNullable<Awaited<ReturnType<typeof retryCampaignTarget>>>
+
+    export type RetryCampaignTargetMutationError = ErrorType<void>
+
+    export const useRetryCampaignTarget = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCampaignTarget>>, TError,{targetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryCampaignTarget>>,
+        TError,
+        {targetId: string},
+        TContext
+      > => {
+      return useMutation(getRetryCampaignTargetMutationOptions(options));
+    }
+
 export const getListCalendarItemsUrl = (params?: ListCalendarItemsParams,) => {
   const normalizedParams = new URLSearchParams();
 
