@@ -134,16 +134,9 @@ const copy = {
     cloneRunCancel: "Cancel",
     cloneRunMissing: "Choose a Saved Message before running this campaign.",
     clonedFieldsFixed: "The Telegram account and forward template are fixed for this cloned campaign. Choose the Saved Message when you run it.",
-    detailWaitingSectionTitle: "Delivery status",
     detailWaitingTitle: "Waiting to send",
     detailWaitingStatus: "Waiting",
-    detailWaitingMessage: "The campaign will retry automatically when the scheduled wait is over.",
-    detailQueueTitle: "Delivery queue",
-    detailQueueStatus: "Queued",
-    detailQueueMessage: "The scheduled time has arrived. This delivery is waiting for the worker to process it.",
-    detailFloodWaitTitle: "Telegram rate limit",
-    detailFloodWaitStatus: "Cooldown",
-    detailFloodWaitMessage: "Telegram is temporarily limiting this account. It will be tried again after the cooldown.",
+    detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
     detailWaitingCountdown: "Send countdown:",
     detailNextSend: "Next send:",
     detailErrorTitle: "Delivery errors",
@@ -257,16 +250,9 @@ const copy = {
     cloneRunCancel: "Hủy",
     cloneRunMissing: "Hãy chọn Tin nhắn đã lưu trước khi chạy chiến dịch này.",
     clonedFieldsFixed: "Tài khoản Telegram và mẫu forward được cố định cho bản clone này. Hãy chọn Tin nhắn đã lưu khi chạy chiến dịch.",
-    detailWaitingSectionTitle: "Trạng thái gửi",
     detailWaitingTitle: "Đang chờ gửi",
     detailWaitingStatus: "Đang chờ",
-    detailWaitingMessage: "Chiến dịch sẽ tự động thử lại khi hết thời gian chờ.",
-    detailQueueTitle: "Đang xếp hàng gửi",
-    detailQueueStatus: "Xếp hàng",
-    detailQueueMessage: "Đã tới thời điểm gửi. Target đang chờ worker xử lý theo thứ tự an toàn.",
-    detailFloodWaitTitle: "Telegram giới hạn tần suất",
-    detailFloodWaitStatus: "Đang cooldown",
-    detailFloodWaitMessage: "Telegram đang tạm giới hạn tài khoản. Hệ thống sẽ thử lại sau khi hết cooldown.",
+    detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
     detailWaitingCountdown: "Đếm ngược lần gửi:",
     detailNextSend: "Lần gửi tiếp:",
     detailErrorTitle: "Chi tiết lỗi gửi",
@@ -297,10 +283,6 @@ function formatSchedule(value: Date | string | null, language: "en" | "vi") {
 
 function isWaitingRetry(error: Campaign["errors"][number]) {
   return error.status === "pending" && Boolean(error.nextAttemptAt);
-}
-
-function isDueRetry(error: Campaign["errors"][number]) {
-  return Boolean(error.nextAttemptAt && new Date(error.nextAttemptAt).getTime() <= Date.now());
 }
 
 function formatCountdown(milliseconds: number) {
@@ -886,17 +868,16 @@ export default function Campaigns() {
                    <>
                      {waiting.length > 0 && (
                        <div className="mb-4">
-                          <h3 className="mb-2 text-[13px] font-extrabold text-[#92400e]">{c.detailWaitingSectionTitle}</h3>
+                         <h3 className="mb-2 text-[13px] font-extrabold text-[#92400e]">{c.detailWaitingTitle}</h3>
                          <div className="space-y-2">
-                            {waiting.map((error) => (
-                               <div key={error.targetId} className={`rounded-xl border p-3 text-[12px] ${isDueRetry(error) ? "border-[#bfdbfe] bg-[#eff6ff] text-[#1e3a8a]" : error.errorCategory === "flood_wait" ? "border-[#fed7aa] bg-[#fff7ed] text-[#9a3412]" : "border-[#fde68a] bg-[#fffbeb] text-[#92400e]"}`}>
+                           {waiting.map((error) => (
+                              <div key={error.targetId} className="rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3 text-[12px] text-[#92400e]">
                                <div className="flex items-start justify-between gap-3">
                                  <strong>{error.destinationTitle}</strong>
-                                  <span className="shrink-0 font-bold">{isDueRetry(error) ? c.detailQueueStatus : error.errorCategory === "flood_wait" ? c.detailFloodWaitStatus : c.detailWaitingStatus}</span>
+                                 <span className="shrink-0 font-bold">{c.detailWaitingStatus}</span>
                                </div>
-                                <p className="mt-2 text-[13px] font-extrabold">{isDueRetry(error) ? c.detailQueueTitle : error.errorCategory === "flood_wait" ? c.detailFloodWaitTitle : c.detailWaitingTitle}</p>
-                                {!isDueRetry(error) && <p className="mt-1 text-[16px]">{c.detailWaitingCountdown} <RetryCountdown nextAttemptAt={error.nextAttemptAt!} /></p>}
-                                <p className="mt-1 font-medium">{isDueRetry(error) ? c.detailQueueMessage : error.errorCategory === "flood_wait" ? c.detailFloodWaitMessage : c.detailWaitingMessage}</p>
+                               <p className="mt-2 text-[16px]">{c.detailWaitingCountdown} <RetryCountdown nextAttemptAt={error.nextAttemptAt!} /></p>
+                               <p className="mt-1 font-medium">{c.detailWaitingMessage}</p>
                                 {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailNextSend} {formatSchedule(error.nextAttemptAt, language)}</p>}
                              </div>
                            ))}

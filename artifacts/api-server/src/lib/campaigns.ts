@@ -36,10 +36,6 @@ import {
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
-// Delivery concurrency is scoped to Telegram accounts: one account may have
-// one in-flight delivery, while independent accounts can make progress in
-// parallel without creating a global campaign queue.
-const DELIVERY_WORKER_CONCURRENCY = 32;
 
 /**
  * Older campaigns could be created after their selected schedule had already
@@ -895,26 +891,7 @@ async function markTargetForReview(targetId: string, reason: string) {
   }
 }
 
-async function listReadyDeliveryAccountIds(now: Date) {
-  const rows = await db.selectDistinct({ accountId: destinationsTable.accountId })
-    .from(campaignTargetsTable)
-    .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
-    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-    .innerJoin(telegramAccountsTable, eq(destinationsTable.accountId, telegramAccountsTable.id))
-    .where(and(
-      inArray(campaignsTable.status, ["queued", "running"]),
-      eq(campaignTargetsTable.status, "pending"),
-      or(lte(campaignTargetsTable.nextAttemptAt, now), isNull(campaignTargetsTable.nextAttemptAt)),
-      or(lte(campaignsTable.scheduledAt, now), isNull(campaignsTable.scheduledAt)),
-      or(lte(telegramAccountsTable.cooldownUntil, now), isNull(telegramAccountsTable.cooldownUntil)),
-      or(lte(telegramAccountsTable.deliveryLeaseUntil, now), isNull(telegramAccountsTable.deliveryLeaseUntil)),
-      isNull(telegramAccountsTable.deletedAt),
-    ))
-    .limit(DELIVERY_WORKER_CONCURRENCY);
-  return rows.map((row) => row.accountId);
-}
-
-export async function processNextCampaignTarget(accountId?: string) {
+export async function processNextCampaignTarget() {
   const now = await getDatabaseNow();
   const candidates = await db.select({
     target: campaignTargetsTable,
@@ -941,11 +918,6 @@ export async function processNextCampaignTarget(accountId?: string) {
         lte(telegramAccountsTable.cooldownUntil, now),
         isNull(telegramAccountsTable.cooldownUntil),
       ),
-      or(
-        lte(telegramAccountsTable.deliveryLeaseUntil, now),
-        isNull(telegramAccountsTable.deliveryLeaseUntil),
-      ),
-      accountId ? eq(destinationsTable.accountId, accountId) : undefined,
       isNull(telegramAccountsTable.deletedAt),
     ))
     .orderBy(asc(campaignTargetsTable.nextAttemptAt))
@@ -1054,30 +1026,31 @@ export async function processNextCampaignTarget(accountId?: string) {
       );
       return true;
     }
-    const quota = await withOwnerDeliveryLock(
-      job.campaign.ownerUserId,
-      () => pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts),
-    );
-    if (quota.pausedForQuota) return true;
-    userQuotaReservation = quota.userQuotaReservation;
-    const messageId = isDevelopmentDemoTelegramAccount(job.account)
-      ? `development-demo-${job.target.id}`
-      : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
-        ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
-        : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
-    telegramAcceptedDelivery = true;
-    const [persisted] = await db.update(campaignTargetsTable).set({
-      status: "sent",
-      sentMessageId: messageId,
-      sentAt: new Date(),
-      nextAttemptAt: null,
-      lastError: null,
-      updatedAt: new Date(),
-    }).where(and(
-      eq(campaignTargetsTable.id, job.target.id),
-      eq(campaignTargetsTable.status, "sending"),
-    )).returning({ id: campaignTargetsTable.id });
-    if (!persisted) {
+    const delivery = await withOwnerDeliveryLock(job.campaign.ownerUserId, async () => {
+      const quota = await pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts);
+      if (quota.pausedForQuota) return quota;
+      userQuotaReservation = quota.userQuotaReservation;
+      const messageId = isDevelopmentDemoTelegramAccount(job.account)
+        ? `development-demo-${job.target.id}`
+        : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
+          ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
+          : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
+      telegramAcceptedDelivery = true;
+      const [persisted] = await db.update(campaignTargetsTable).set({
+        status: "sent",
+        sentMessageId: messageId,
+        sentAt: new Date(),
+        nextAttemptAt: null,
+        lastError: null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(campaignTargetsTable.id, job.target.id),
+        eq(campaignTargetsTable.status, "sending"),
+      )).returning({ id: campaignTargetsTable.id });
+      return { pausedForQuota: false as const, persisted: Boolean(persisted) };
+    });
+    if (delivery.pausedForQuota) return true;
+    if (!delivery.persisted) {
       await markTargetForReview(
         job.target.id,
         "Telegram accepted delivery but database confirmation was interrupted; manual review is required to avoid a duplicate send.",
@@ -1200,9 +1173,11 @@ export function startCampaignWorker() {
       )).returning({ campaignId: campaignTargetsTable.campaignId });
       await Promise.all([...new Set(stalled.map((target) => target.campaignId))].map(finalizeCampaignIfTerminal));
       await resumeDailyQuotaPausedCampaigns();
-      await resumeSubscriptionExpiryPausedCampaigns();
-      const readyAccountIds = await listReadyDeliveryAccountIds(await getDatabaseNow());
-      await Promise.all(readyAccountIds.map((accountId) => processNextCampaignTarget(accountId)));
+       await resumeSubscriptionExpiryPausedCampaigns();
+       await resumeDailyQuotaPausedCampaigns();
+      while (await processNextCampaignTarget()) {
+        // Process one delivery at a time to honor Telegram limits.
+      }
     } catch (err) {
       logger.error({ err }, "Campaign worker failed");
     }
