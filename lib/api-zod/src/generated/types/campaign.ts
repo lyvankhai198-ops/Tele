@@ -34,6 +34,8 @@ export interface Campaign {
   status: string;
   /** @nullable */
   scheduledAt: Date | null;
+  /** @nullable */
+  cooldownUntil: Date | null;
   timezone: string;
   maxRetries: number;
   repeatCount: number;

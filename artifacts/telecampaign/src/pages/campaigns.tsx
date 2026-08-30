@@ -103,6 +103,9 @@ const copy = {
     detailRounds: "rounds",
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
+    cooldownTitle: "Telegram account is temporarily rate-limited",
+    cooldownMessage: "This campaign will automatically continue at:",
+    cooldownRemaining: "Time remaining:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
     detailLiveForwardContent: "Current content from Saved Messages",
     detailLiveForwardLoading: "Loading the current Saved Message…",
@@ -212,6 +215,9 @@ const copy = {
     detailRounds: "vòng",
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
+    cooldownTitle: "Tài khoản Telegram đang bị giới hạn tạm thời",
+    cooldownMessage: "Chiến dịch sẽ tự động chạy lại lúc:",
+    cooldownRemaining: "Thời gian còn lại:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
     detailLiveForwardContent: "Nội dung hiện tại từ Tin nhắn đã lưu",
     detailLiveForwardLoading: "Đang tải nội dung Tin nhắn đã lưu hiện tại...",
@@ -289,6 +295,39 @@ function RetryCountdown({ nextAttemptAt }: { nextAttemptAt: Date | string }) {
   }, [nextAttemptAt]);
 
   return <span className="font-black tabular-nums">{formatCountdown(remaining)}</span>;
+}
+
+function AccountCooldownNotice({
+  until,
+  language,
+  c,
+}: {
+  until: Date | string | null | undefined;
+  language: "en" | "vi";
+  c: (typeof copy)["en"] | (typeof copy)["vi"];
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const cooldownMs = until ? new Date(until).getTime() : NaN;
+
+  useEffect(() => {
+    if (!Number.isFinite(cooldownMs) || cooldownMs <= Date.now()) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownMs]);
+
+  if (!Number.isFinite(cooldownMs) || cooldownMs <= now) return null;
+
+  return (
+    <div className="rounded-xl border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-[#9a3412]" role="status">
+      <p className="text-[12px] font-black">{c.cooldownTitle}</p>
+      <p className="mt-1 text-[13px] font-semibold">
+        {c.cooldownMessage} <strong>{formatSchedule(until ?? null, language)}</strong>
+      </p>
+      <p className="mt-1 text-[12px] font-bold">
+        {c.cooldownRemaining} <span className="font-black tabular-nums">{formatCountdown(cooldownMs - now)}</span>
+      </p>
+    </div>
+  );
 }
 
 function statusLabel(status: string, c: (typeof copy)["en"] | (typeof copy)["vi"]) {
@@ -753,6 +792,7 @@ export default function Campaigns() {
               <p className="mt-1"><b>{c.detailDelayRound}</b> {details.roundDelayMinSeconds}–{details.roundDelayMaxSeconds}s</p>
               <p className="mt-1"><b>{c.detailSchedule}</b> {formatSchedule(details.scheduledAt, language)}</p>
             </div>
+             <AccountCooldownNotice until={details.cooldownUntil} language={language} c={c} />
              {details.templateMode === "forward" ? (
                <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e2e8f0] p-4 text-[#334155]">
                  <span className="font-medium">{c.detailForwardNote}</span>

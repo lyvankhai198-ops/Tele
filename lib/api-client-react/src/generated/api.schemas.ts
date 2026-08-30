@@ -362,6 +362,8 @@ export interface Campaign {
   status: string;
   /** @nullable */
   scheduledAt: string | null;
+  /** @nullable */
+  cooldownUntil: string | null;
   timezone: string;
   maxRetries: number;
   repeatCount: number;

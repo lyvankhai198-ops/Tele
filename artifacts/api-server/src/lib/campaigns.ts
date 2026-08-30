@@ -665,7 +665,7 @@ export function campaignCloneMode(campaign: Pick<typeof campaignsTable.$inferSel
 }
 
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
-  const [targets, subscription, settings] = await Promise.all([
+  const [targets, subscription, settings, account] = await Promise.all([
     db.select({
     target: campaignTargetsTable,
     destinationTitle: destinationsTable.title,
@@ -674,6 +674,16 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
     .where(eq(campaignTargetsTable.campaignId, campaign.id)),
     getSubscription(campaign.ownerUserId),
     getSystemSettings(),
+    campaign.telegramAccountId
+      ? db.select({ cooldownUntil: telegramAccountsTable.cooldownUntil })
+        .from(telegramAccountsTable)
+        .where(and(
+          eq(telegramAccountsTable.id, campaign.telegramAccountId),
+          eq(telegramAccountsTable.ownerUserId, campaign.ownerUserId),
+          isNull(telegramAccountsTable.deletedAt),
+        ))
+        .limit(1)
+      : Promise.resolve([]),
   ]);
   const timezone = settings.defaultTimezone;
   const today = new Date();
@@ -706,6 +716,7 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
   return {
     ...campaign,
     cloneMode: campaignCloneMode(campaign),
+    cooldownUntil: account[0]?.cooldownUntil ?? null,
     targetCount: targets.length,
     destinationIds: [...new Set(targets.map(({ target }) => target.destinationId))],
     sentCount: targets.filter(({ target }) => target.status === "sent").length,
