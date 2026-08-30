@@ -465,7 +465,8 @@ router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res)
     const sourceTargetRows = await tx.select({ destinationId: campaignTargetsTable.destinationId })
       .from(campaignTargetsTable)
       .where(eq(campaignTargetsTable.campaignId, sourceCampaign.id));
-    const sourceDestinationIds = [...new Set(sourceTargetRows.map((row) => row.destinationId))];
+    const sourceDestinationIds = sourceCampaign.destinationIds
+      ?? [...new Set(sourceTargetRows.map((row) => row.destinationId))];
     const sourceDestinations = sourceDestinationIds.length
       ? await tx.select().from(destinationsTable).where(inArray(destinationsTable.id, sourceDestinationIds))
       : [];
@@ -544,6 +545,10 @@ router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res)
         })),
       ).flat());
     }
+    const [updatedClone] = await tx.update(campaignsTable)
+      .set({ destinationIds: clonedDestinationIds })
+      .where(eq(campaignsTable.id, clone.id))
+      .returning();
     await tx.insert(activityLogsTable).values([
       {
         ownerUserId: adminUserId,
@@ -563,7 +568,7 @@ router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res)
         metadata: { clonedCampaignId: clone.id, adminUserId },
       },
     ]);
-    return { kind: "success" as const, campaign: clone };
+    return { kind: "success" as const, campaign: updatedClone ?? clone };
   });
   if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
   res.status(201).json(CloneAdminUserCampaignResponse.parse(await campaignSummary(outcome.campaign)));

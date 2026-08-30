@@ -59,6 +59,7 @@ const copy = {
     searchGroupPlaceholder: "Search groups…",
     pickAccountHint: "Select a Telegram account to see active groups.",
     noGroupsHint: "No groups with posting permission.",
+    unavailableDestination: "No posting permission",
     generalTopic: "General",
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
@@ -91,6 +92,7 @@ const copy = {
     searchGroupPlaceholder: "Tìm nhóm...",
     pickAccountHint: "Chọn tài khoản Telegram để hiển thị nhóm đang hoạt động.",
     noGroupsHint: "Không có nhóm nào được phép gửi.",
+    unavailableDestination: "Không có quyền đăng",
     generalTopic: "Chung",
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
@@ -185,7 +187,7 @@ export function CampaignFormModal({
         destination.accountId === form.accountId
         && (
           destination.canPost
-          || Boolean(editingCampaign?.clonedFromCampaignId && form.destinationIds.includes(destination.id))
+          || Boolean(editingCampaign && form.destinationIds.includes(destination.id))
         )
         && (!needle
           || destination.title.toLowerCase().includes(needle)
@@ -249,21 +251,6 @@ export function CampaignFormModal({
     form.accountId,
     prefill?.destinationTelegramId,
   ]);
-
-  useEffect(() => {
-    if (!editingCampaign || editingCampaign.clonedFromCampaignId || !destinations.data) return;
-    const verifiedDestinationIds = new Set(
-      destinations.data
-        .filter((destination) => destination.canPost)
-        .map((destination) => destination.id),
-    );
-    setForm((current) => {
-      const destinationIds = current.destinationIds.filter((id) => verifiedDestinationIds.has(id));
-      return destinationIds.length === current.destinationIds.length
-        ? current
-        : { ...current, destinationIds };
-    });
-  }, [destinations.data, editingCampaign]);
 
   function changeAccount(accountId: string) {
     setForm((current) => ({ ...current, accountId, templateId: "", destinationIds: [] }));
@@ -408,7 +395,7 @@ export function CampaignFormModal({
                           <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
                           <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c.generalTopic)}</span>
                           {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
-                          {!destination.canPost && editingCampaign?.clonedFromCampaignId && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]">Chưa xác minh</span>}
+                           {!destination.canPost && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]">{c.unavailableDestination}</span>}
                         </button>
                       ))
                     : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">{c.noGroupsHint}</p>}

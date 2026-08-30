@@ -691,7 +691,7 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
     ...campaign,
     cloneMode: campaignCloneMode(campaign),
     targetCount: targets.length,
-    destinationIds: [...new Set(targets.map(({ target }) => target.destinationId))],
+    destinationIds: campaign.destinationIds ?? [...new Set(targets.map(({ target }) => target.destinationId))],
     sentCount: targets.filter(({ target }) => target.status === "sent").length,
     failedCount: targets.filter(({ target }) => ["failed", "requires_review"].includes(target.status)).length,
     dailyQuota: {

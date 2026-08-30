@@ -127,6 +127,7 @@ export const campaignsTable = pgTable("campaigns", {
   templateSourceMessageId: text("template_source_message_id"),
   clonedFromCampaignId: uuid("cloned_from_campaign_id"),
   clonedFromUserId: text("cloned_from_user_id"),
+  destinationIds: uuid("destination_ids").array(),
   mediaUrl: text("media_url"),
   status: text("status").notNull().default("draft"),
   pauseReason: text("pause_reason"),

@@ -1478,6 +1478,7 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     templateMode,
     templateSourceAccountId,
     templateSourceMessageId,
+    destinationIds,
     mediaUrl: parsed.data.mediaUrl ?? null,
     scheduledAt,
     scheduleAnchorAt: initialRoundStartAt,
@@ -1556,7 +1557,8 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
     const sourceTargets = await tx.select({ destinationId: campaignTargetsTable.destinationId })
       .from(campaignTargetsTable)
       .where(eq(campaignTargetsTable.campaignId, sourceCampaign.id));
-    const sourceDestinationIds = [...new Set(sourceTargets.map((target) => target.destinationId))];
+    const sourceDestinationIds = sourceCampaign.destinationIds
+      ?? [...new Set(sourceTargets.map((target) => target.destinationId))];
     const sourceDestinations = sourceDestinationIds.length
       ? await tx.select().from(destinationsTable).where(inArray(destinationsTable.id, sourceDestinationIds))
       : [];
@@ -1599,6 +1601,7 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
       templateSourceMessageId,
       clonedFromCampaignId: sourceCampaign.id,
       clonedFromUserId: ownerUserId,
+      destinationIds: clonedDestinationIds,
       mediaUrl: null,
       status: "draft",
       scheduledAt: sourceCampaign.scheduledAt,
@@ -1855,6 +1858,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         templateMode: template.mode,
         templateSourceAccountId: template.sourceAccountId,
         templateSourceMessageId: template.sourceMessageId,
+        destinationIds,
         scheduledAt,
         scheduleAnchorAt,
         timezone: parsed.data.timezone ?? lockedCampaign.timezone,
