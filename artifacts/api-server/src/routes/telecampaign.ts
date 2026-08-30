@@ -1916,10 +1916,17 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     )) {
       return void sendError(res, 409, "Select a Saved Message from this campaign's Telegram account before running.");
     }
-    const targetDestinations = await db.select({ destination: destinationsTable }).from(campaignTargetsTable)
-      .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
-      .where(eq(campaignTargetsTable.campaignId, existing.id));
-    if (!targetDestinations.length || targetDestinations.some(({ destination }) => (
+    const configuredDestinationIds = existing.destinationIds === null
+      ? [...new Set((await db.select({ destinationId: campaignTargetsTable.destinationId }).from(campaignTargetsTable)
+        .where(eq(campaignTargetsTable.campaignId, existing.id))).map(({ destinationId }) => destinationId))]
+      : [...new Set(existing.destinationIds)];
+    const targetDestinations = configuredDestinationIds.length
+      ? await db.select({ destination: destinationsTable }).from(destinationsTable)
+        .where(inArray(destinationsTable.id, configuredDestinationIds))
+      : [];
+    if (!configuredDestinationIds.length
+      || targetDestinations.length !== configuredDestinationIds.length
+      || targetDestinations.some(({ destination }) => (
       destination.accountId !== existing.telegramAccountId || !destination.canPost
     ))) {
       return void sendError(res, 409, "Every destination must be synced and have verified posting permission before running.");
