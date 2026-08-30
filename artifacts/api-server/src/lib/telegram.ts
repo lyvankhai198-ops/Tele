@@ -1,5 +1,7 @@
 import { Api, TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
+import { Logger as GramJsLogger } from "telegram/extensions/index.js";
+import { LogLevel } from "telegram/extensions/Logger.js";
 import { db, destinationsTable, proxiesTable, telegramAccountsTable } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "./crypto";
@@ -8,6 +10,25 @@ import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 import { logger } from "./logger";
+import { runTelegramAccountSyncOnce } from "./telegram-operation-guard";
+
+const TELEGRAM_CONNECTION_RETRIES = 3;
+const TELEGRAM_RETRY_DELAY_MS = 5_000;
+const TELEGRAM_ERROR_LOG_INTERVAL_MS = 60_000;
+const TELEGRAM_ERROR_LOG_MAX_KEYS = 500;
+
+type TelegramClientOperation = "login" | "sync" | "saved_messages" | "send" | "forward";
+type TelegramClientContext = {
+  accountId?: string;
+  proxyId?: string | null;
+  operation: TelegramClientOperation;
+};
+
+const telegramErrorLogs = new Map<string, {
+  lastLoggedAt: number;
+  suppressed: number;
+}>();
+const silentGramJsLogger = new GramJsLogger(LogLevel.NONE);
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -34,16 +55,76 @@ export type TelegramCredentials = { apiId: number; apiHash: string };
 export type TelegramLoginUser = { id: string; username: string | null; phone: string | null; name: string | null };
 export const DEVELOPMENT_DEMO_TELEGRAM_PHONE = "+84987654321";
 
-export function createTelegramClient(session = "", credentials?: TelegramCredentials, proxy?: TelegramProxyConfig) {
+function installTelegramErrorHandler(client: TelegramClient, context: TelegramClientContext) {
+  client.onError = async (error) => {
+    const now = Date.now();
+    const details = [
+      error.name,
+      error.message,
+      (error as { errorMessage?: unknown }).errorMessage,
+      (error as { code?: unknown }).code,
+    ].filter((value): value is string | number => typeof value === "string" || typeof value === "number")
+      .join(" ")
+      .toUpperCase();
+    const errorSummary = details.includes("TIMEOUT")
+      ? "timeout"
+      : details.includes("FLOOD")
+        ? "rate_limited"
+        : details.includes("AUTH_KEY") || details.includes("SESSION")
+          ? "session_error"
+          : details.includes("PROXY")
+            ? "proxy_error"
+            : details.includes("ECONN") || details.includes("SOCKET") || details.includes("NETWORK")
+              ? "network_error"
+              : "telegram_client_error";
+    const key = [
+      context.accountId ?? "unassigned",
+      context.proxyId ?? "direct",
+      context.operation,
+      errorSummary,
+    ].join(":");
+    const previous = telegramErrorLogs.get(key);
+    if (previous && now - previous.lastLoggedAt < TELEGRAM_ERROR_LOG_INTERVAL_MS) {
+      previous.suppressed += 1;
+      return;
+    }
+    const suppressedCount = previous?.suppressed ?? 0;
+    if (telegramErrorLogs.size >= TELEGRAM_ERROR_LOG_MAX_KEYS && !telegramErrorLogs.has(key)) {
+      const oldestKey = telegramErrorLogs.keys().next().value;
+      if (oldestKey) telegramErrorLogs.delete(oldestKey);
+    }
+    telegramErrorLogs.set(key, { lastLoggedAt: now, suppressed: 0 });
+    logger.warn({
+      errorSummary,
+      accountId: context.accountId,
+      proxyId: context.proxyId,
+      operation: context.operation,
+      suppressedCount,
+    }, "Telegram client background error");
+  };
+}
+
+export function createTelegramClient(
+  session = "",
+  credentials?: TelegramCredentials,
+  proxy?: TelegramProxyConfig,
+  context: TelegramClientContext = { operation: "login" },
+) {
   const { apiId, apiHash } = credentials ?? requireTelegramConfiguration();
-  return new TelegramClient(new StringSession(session), apiId, apiHash, {
-    connectionRetries: 5,
+  const client = new TelegramClient(new StringSession(session), apiId, apiHash, {
+    connectionRetries: TELEGRAM_CONNECTION_RETRIES,
+    reconnectRetries: TELEGRAM_CONNECTION_RETRIES,
+    retryDelay: TELEGRAM_RETRY_DELAY_MS,
+    autoReconnect: true,
+    baseLogger: silentGramJsLogger,
     useWSS: false,
     ...(proxy ? {
       proxy: proxy as any,
       networkSocket: TelegramProxySocket as unknown as typeof import("telegram/extensions/index.js").PromisedNetSockets,
     } : {}),
   });
+  installTelegramErrorHandler(client, context);
+  return client;
 }
 
 export function credentialsForAccount(account: typeof telegramAccountsTable.$inferSelect): TelegramCredentials {
@@ -86,8 +167,13 @@ async function invalidateTelegramSession(accountId: string): Promise<void> {
   ));
 }
 
-export async function startTelegramPhoneLogin(credentials: TelegramCredentials, phone: string, proxy?: TelegramProxyConfig) {
-  const client = createTelegramClient("", credentials, proxy);
+export async function startTelegramPhoneLogin(
+  credentials: TelegramCredentials,
+  phone: string,
+  proxy?: TelegramProxyConfig,
+  context: Omit<TelegramClientContext, "operation"> = {},
+) {
+  const client = createTelegramClient("", credentials, proxy, { ...context, operation: "login" });
   try {
     await client.connect();
     const result = await client.sendCode(credentials, phone);
@@ -108,11 +194,15 @@ export async function confirmTelegramPhoneCode(input: {
   session: string;
   code: string;
   proxy?: TelegramProxyConfig;
+  context?: Omit<TelegramClientContext, "operation">;
 }): Promise<
   | { status: "connected"; session: string; user: TelegramLoginUser }
   | { status: "requires_2fa"; session: string }
 > {
-  const client = createTelegramClient(input.session, input.credentials, input.proxy);
+  const client = createTelegramClient(input.session, input.credentials, input.proxy, {
+    ...input.context,
+    operation: "login",
+  });
   try {
     await client.connect();
     await client.invoke(new Api.auth.SignIn({
@@ -134,8 +224,12 @@ export async function confirmTelegramTwoFactorPassword(input: {
   session: string;
   password: string;
   proxy?: TelegramProxyConfig;
+  context?: Omit<TelegramClientContext, "operation">;
 }): Promise<{ session: string; user: TelegramLoginUser }> {
-  const client = createTelegramClient(input.session, input.credentials, input.proxy);
+  const client = createTelegramClient(input.session, input.credentials, input.proxy, {
+    ...input.context,
+    operation: "login",
+  });
   try {
     await client.connect();
     await client.signInWithPassword(input.credentials, {
@@ -284,7 +378,11 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   );
 }
 
-export async function getAccountClient(accountId: string, ownerUserId?: string): Promise<{
+export async function getAccountClient(
+  accountId: string,
+  ownerUserId?: string,
+  operation: Exclude<TelegramClientOperation, "login"> = "sync",
+): Promise<{
   client: TelegramClient;
   account: typeof telegramAccountsTable.$inferSelect;
 }> {
@@ -300,7 +398,11 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     throw new Error("Telegram account has not completed authorization");
   }
   const proxy = await getTelegramProxyConfig(account);
-  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy);
+  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy, {
+    accountId: account.id,
+    proxyId: account.proxyId,
+    operation,
+  });
   try {
     await client.connect();
     const currentUser = await getCurrentUser(client);
@@ -336,8 +438,8 @@ export async function getTelegramProxyConfig(account: typeof telegramAccountsTab
   };
 }
 
-export async function syncAccountDestinations(accountId: string) {
-  const { client, account } = await getAccountClient(accountId);
+async function syncAccountDestinationsUnlocked(accountId: string) {
+  const { client, account } = await getAccountClient(accountId, undefined, "sync");
   let count = 0;
   try {
     const previousDestinations = await db.select().from(destinationsTable)
@@ -476,6 +578,10 @@ export async function syncAccountDestinations(accountId: string) {
   }
 }
 
+export function syncAccountDestinations(accountId: string) {
+  return runTelegramAccountSyncOnce(accountId, () => syncAccountDestinationsUnlocked(accountId));
+}
+
 function toTelegramSavedMessage(message: any) {
   if (!message?.id || !(message.message || message.media)) return null;
   return {
@@ -487,7 +593,7 @@ function toTelegramSavedMessage(message: any) {
 }
 
 export async function listTelegramSavedMessages(accountId: string) {
-  const { client, account } = await getAccountClient(accountId);
+  const { client, account } = await getAccountClient(accountId, undefined, "saved_messages");
   try {
     const messages = await client.getMessages("me", { limit: 100 });
     return messages
@@ -508,7 +614,7 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
   if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
     throw new Error("The saved Telegram message ID is invalid");
   }
-  const { client, account } = await getAccountClient(accountId);
+  const { client, account } = await getAccountClient(accountId, undefined, "saved_messages");
   try {
     const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
     return messages
@@ -525,7 +631,7 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
 }
 
 export async function sendTelegramMessage(accountId: string, destinationId: string, content: string, ownerUserId: string) {
-  const { client, account } = await getAccountClient(accountId, ownerUserId);
+  const { client, account } = await getAccountClient(accountId, ownerUserId, "send");
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
@@ -546,7 +652,7 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
 }
 
 export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
-  const { client, account } = await getAccountClient(accountId, ownerUserId);
+  const { client, account } = await getAccountClient(accountId, ownerUserId, "forward");
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
