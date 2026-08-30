@@ -142,7 +142,7 @@ export function AppLayout({
         <div className="p-4 border-t border-[#eef2f6]">
           <div className="border border-[#eef2f6] rounded-2xl p-2.5 bg-[#f8fafc]">
             <div className="flex items-center gap-2 px-2 pb-2.5 text-[11px] font-extrabold text-[#64748b] uppercase tracking-wider">
-              {t("Language")}
+              NGÔN NGỮ / LANGUAGE
             </div>
             {isAdminSection ? (
               <div className="flex items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white py-2 text-xs font-extrabold text-[#1a2b88]" data-testid="admin-language-vi">
