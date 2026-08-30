@@ -99,9 +99,32 @@ export default function Dashboard() {
           </button>
         </section>
       )}
+
+      <section className="national-day-page-intro" aria-labelledby="national-day-dashboard-title">
+        <div>
+          <p className="national-day-page-kicker">
+            <span aria-hidden="true" />
+            {language === "vi" ? "Trung tâm điều phối" : "Command center"}
+          </p>
+          <h1 id="national-day-dashboard-title">
+            {language === "vi" ? "Chào buổi sáng." : "Good morning."}
+            <strong>{language === "vi" ? " Giữ nhịp kết nối." : " Keep connection moving."}</strong>
+          </h1>
+          <p>
+            {language === "vi"
+              ? "Mọi thứ cần để gửi đúng thông điệp, đến đúng nhóm, trong tuần lễ Quốc khánh."
+              : "Everything you need to send the right message to the right groups during National Day week."}
+          </p>
+        </div>
+        <button type="button" onClick={() => setLocation("/dashboard/campaigns")}>
+          <Megaphone className="h-4 w-4" />
+          {language === "vi" ? "Xem chiến dịch" : "View campaigns"}
+          <ArrowRight className="h-4 w-4" />
+        </button>
+      </section>
       
       {/* Metric Cards Grid */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-8" data-testid="dashboard-metrics">
+      <div className="national-day-dashboard-metrics grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-8" data-testid="dashboard-metrics">
         <DashboardMetricCard label={t("Telegram Accounts")} value={metrics.telegramAccounts} icon={Users} iconColor="text-[#2563eb]" iconBg="bg-[#eff6ff]" />
         <DashboardMetricCard label={t("Active Groups")} value={metrics.activeGroups} icon={LayoutGrid} iconColor="text-[#059669]" iconBg="bg-[#ecfdf5]" />
         <DashboardMetricCard label={t("Message Templates")} value={metrics.messageTemplates} icon={FileText} iconColor="text-[#7c3aed]" iconBg="bg-[#f5f3ff]" />

@@ -234,6 +234,368 @@
   box-shadow: 0 10px 24px rgba(30, 64, 175, 0.1);
 }
 
+.national-day-page-intro {
+  display: none;
+}
+
+.national-day-shell {
+  --nd-ink: #172b3a;
+  --nd-muted: #6b7d88;
+  --nd-paper: #f4f2ed;
+  --nd-surface: #fbfaf7;
+  --nd-line: #dfe3df;
+  --nd-red: #b5232b;
+  --nd-red-deep: #8f1d28;
+  --nd-gold: #d6a746;
+  background: var(--nd-paper);
+  color: var(--nd-ink);
+}
+
+.national-day-grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+}
+
+.national-day-sidebar {
+  border-color: #294857 !important;
+  background: #172b3a !important;
+  color: #dce7e7;
+  box-shadow: 12px 0 40px rgba(23, 43, 58, 0.08);
+}
+
+.national-day-sidebar > div:first-child {
+  border-color: #294857 !important;
+}
+
+.national-day-sidebar > div:first-child img {
+  border-radius: 12px;
+  background: #b5232b;
+  box-shadow: 0 6px 18px rgba(181, 35, 43, 0.3);
+}
+
+.national-day-sidebar > div:first-child span,
+.national-day-sidebar > div:first-child button {
+  color: #faf7ee !important;
+}
+
+.national-day-sidebar > div:last-child {
+  border-color: #294857 !important;
+}
+
+.national-day-nav-item {
+  color: #9ab0b1;
+}
+
+.national-day-nav-item:hover {
+  color: #eef4ee;
+  background: #213d4a;
+}
+
+.national-day-nav-selected {
+  color: #fff9ed;
+  background: #294957;
+  box-shadow: inset 3px 0 0 #d6a746;
+}
+
+.national-day-nav-icon {
+  color: #739093;
+}
+
+.national-day-nav-icon-selected {
+  color: #f0c860;
+}
+
+.national-day-language {
+  border-color: #365967 !important;
+  background: #1c3948 !important;
+}
+
+.national-day-language > div:first-child {
+  color: #91adae !important;
+}
+
+.national-day-main {
+  background:
+    radial-gradient(circle at 92% 2%, rgba(214, 167, 70, 0.1), transparent 26rem),
+    var(--nd-paper);
+}
+
+.national-day-header {
+  border-color: #dfe3df !important;
+  background: rgba(244, 242, 237, 0.92) !important;
+}
+
+.national-day-header h1 {
+  color: var(--nd-ink) !important;
+}
+
+.national-day-upgrade {
+  background: var(--nd-red) !important;
+  box-shadow: 0 8px 20px rgba(181, 35, 43, 0.18) !important;
+}
+
+.national-day-upgrade:hover {
+  background: var(--nd-red-deep) !important;
+}
+
+.national-day-hero {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid #d3b86a;
+  color: #fff9ec;
+  background:
+    linear-gradient(115deg, #941d28 0%, #b5232b 48%, #a41f2a 100%);
+  box-shadow: 0 8px 30px rgba(143, 29, 40, 0.12);
+}
+
+.national-day-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 15%, rgba(255, 244, 199, 0.08) 50%, transparent 76%);
+  transform: translateX(-100%);
+  animation: national-day-light-sweep 8s ease-in-out infinite;
+}
+
+.national-day-hero-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(243, 215, 125, 0.62);
+  border-radius: 16px;
+  color: #f2ca58;
+  background: #8f1d28;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.12), 0 8px 26px rgba(94, 12, 22, 0.18);
+  animation: national-day-mark-glow 4.8s ease-in-out infinite;
+}
+
+.national-day-eyebrow {
+  color: #f5dc8b;
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.national-day-hero-status {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(232, 201, 101, 0.4);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: #f7e4a6;
+  background: rgba(143, 29, 40, 0.42);
+  font-family: var(--app-font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.national-day-hero-orbit {
+  position: absolute;
+  border: 1px solid rgba(239, 207, 119, 0.2);
+  border-radius: 999px;
+}
+
+.national-day-hero-orbit-one {
+  width: 260px;
+  height: 260px;
+  right: -80px;
+  top: -128px;
+}
+
+.national-day-hero-orbit-two {
+  width: 190px;
+  height: 190px;
+  right: 52px;
+  top: -95px;
+}
+
+.national-day-hero-particle {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #f2d783;
+  animation: national-day-particle-float 8s ease-in-out infinite;
+}
+
+.national-day-hero-particle-one {
+  left: 11%;
+  top: 18px;
+}
+
+.national-day-hero-particle-two {
+  right: 23%;
+  top: 28px;
+  animation-delay: -3s;
+}
+
+.national-day-content {
+  position: relative;
+}
+
+.national-day-shell .national-day-page-intro {
+  display: flex;
+  margin-bottom: 32px;
+  flex-direction: column;
+  gap: 24px;
+  border-bottom: 1px solid #d6d8d2;
+  padding: 10px 0 32px;
+  animation: national-day-rise 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.national-day-page-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--nd-red);
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.national-day-page-kicker span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--nd-gold);
+}
+
+.national-day-page-intro h1 {
+  max-width: 760px;
+  color: var(--nd-ink);
+  font-size: clamp(2.15rem, 4.2vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+}
+
+.national-day-page-intro h1 strong {
+  display: block;
+  color: var(--nd-red);
+}
+
+.national-day-page-intro > div > p:last-child {
+  max-width: 610px;
+  margin-top: 16px;
+  color: var(--nd-muted);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.75;
+}
+
+.national-day-page-intro > button {
+  display: inline-flex;
+  height: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 12px;
+  padding: 0 20px;
+  color: #fff9ee;
+  background: var(--nd-red);
+  box-shadow: 0 8px 20px rgba(181, 35, 43, 0.18);
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.national-day-page-intro > button:hover {
+  transform: translateY(-2px);
+  background: var(--nd-red-deep);
+  box-shadow: 0 12px 28px rgba(181, 35, 43, 0.22);
+}
+
+.national-day-shell .national-day-dashboard-metrics {
+  animation: national-day-rise 650ms 80ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.national-day-shell .national-day-dashboard-metrics > div,
+.national-day-shell [data-testid="recent-campaigns"],
+.national-day-shell [data-testid="recent-activity"],
+.national-day-shell .admin-notice-card {
+  border-color: var(--nd-line);
+  background: var(--nd-surface);
+  box-shadow: 0 5px 18px rgba(23, 43, 58, 0.025);
+}
+
+.national-day-shell .national-day-dashboard-metrics > div {
+  border-radius: 18px;
+}
+
+.national-day-shell .national-day-dashboard-metrics > div:hover {
+  transform: translateY(-2px);
+  border-color: #c8cec8;
+  box-shadow: 0 12px 26px rgba(23, 43, 58, 0.07);
+}
+
+.national-day-shell .admin-notices-panel {
+  border-color: var(--nd-line);
+  background: var(--nd-surface);
+  background-image: none;
+  box-shadow: 0 14px 40px rgba(23, 43, 58, 0.055);
+  animation: national-day-rise 650ms 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.national-day-shell .admin-notices-bell {
+  color: var(--nd-red);
+  background: #f4e2df;
+}
+
+.national-day-shell [data-testid="recent-campaigns"],
+.national-day-shell [data-testid="recent-activity"] {
+  animation: national-day-rise 650ms 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes national-day-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes national-day-particle-float {
+  0%, 100% { opacity: 0.38; transform: translate3d(0, 0, 0); }
+  50% { opacity: 0.78; transform: translate3d(0, -10px, 0); }
+}
+
+@keyframes national-day-light-sweep {
+  0%, 18% { transform: translateX(-100%); }
+  58%, 100% { transform: translateX(120%); }
+}
+
+@keyframes national-day-mark-glow {
+  0%, 100% { box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.12), 0 8px 26px rgba(94, 12, 22, 0.18); }
+  50% { box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.08), 0 0 0 8px rgba(242, 202, 88, 0.08), 0 8px 30px rgba(94, 12, 22, 0.24); }
+}
+
+@media (min-width: 640px) {
+  .national-day-hero-status {
+    display: flex;
+  }
+}
+
+@media (min-width: 768px) {
+  .national-day-shell .national-day-page-intro {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-notices-panel,
   .admin-notices-bell {
@@ -246,6 +608,27 @@
 
   .admin-notice-card:hover,
   .admin-notice-card:focus-within {
+    transform: none;
+  }
+
+  .national-day-hero::before,
+  .national-day-hero-mark,
+  .national-day-hero-particle,
+  .national-day-shell .national-day-page-intro,
+  .national-day-shell .national-day-dashboard-metrics,
+  .national-day-shell .admin-notices-panel,
+  .national-day-shell [data-testid="recent-campaigns"],
+  .national-day-shell [data-testid="recent-activity"] {
+    animation: none !important;
+  }
+
+  .national-day-page-intro > button,
+  .national-day-shell .national-day-dashboard-metrics > div {
+    transition: none;
+  }
+
+  .national-day-page-intro > button:hover,
+  .national-day-shell .national-day-dashboard-metrics > div:hover {
     transform: none;
   }
 }

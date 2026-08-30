@@ -96,6 +96,7 @@ export function AppLayout({
   const nationalDayDay = Number(nationalDayDate.find((part) => part.type === "day")?.value);
   const showNationalDayRibbon = systemDefaults.data?.nationalDayThemeEnabled === true
     && ((nationalDayMonth === 8 && nationalDayDay >= 25) || (nationalDayMonth === 9 && nationalDayDay <= 3));
+  const nationalDayThemeActive = showNationalDayRibbon;
 
   function navigate(path: string) {
     setLocation(path);
@@ -108,9 +109,9 @@ export function AppLayout({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#f4f7fb] text-[#0f172a] font-sans">
+    <div className={`min-h-[100dvh] bg-[#f4f7fb] text-[#0f172a] font-sans ${nationalDayThemeActive ? "national-day-shell national-day-grain" : ""}`}>
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-[#eef2f6] bg-white transition-transform duration-300 lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[280px] flex-col border-r border-[#eef2f6] bg-white transition-transform duration-300 lg:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"} ${nationalDayThemeActive ? "national-day-sidebar" : ""}`}
       >
         <div className="flex items-center justify-between px-4 py-5 border-b border-[#eef2f6]">
           <button onClick={() => navigate("/dashboard")} className="flex min-w-0 flex-1 items-center gap-3 text-left">
@@ -139,11 +140,13 @@ export function AppLayout({
                 key={item.key}
                 onClick={() => navigate(item.path)}
                 className={`group flex w-full items-center gap-3.5 rounded-xl px-4 py-3.5 text-left text-[14px] font-bold transition-all ${
-                  selected ? "bg-[#eef2fa] text-[#1a2b88]" : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                  selected
+                    ? (nationalDayThemeActive ? "national-day-nav-selected" : "bg-[#eef2fa] text-[#1a2b88]")
+                    : (nationalDayThemeActive ? "national-day-nav-item" : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]")
                 }`}
                 data-testid={`nav-${item.key}`}
               >
-                <Icon className={`h-[18px] w-[18px] ${selected ? "text-[#1a2b88]" : "text-[#64748b] group-hover:text-[#1a2b88]"}`} strokeWidth={selected ? 2.5 : 2} />
+                <Icon className={`h-[18px] w-[18px] ${selected ? (nationalDayThemeActive ? "national-day-nav-icon-selected" : "text-[#1a2b88]") : (nationalDayThemeActive ? "national-day-nav-icon" : "text-[#64748b] group-hover:text-[#1a2b88]")}`} strokeWidth={selected ? 2.5 : 2} />
                 <span>{t(item.label)}</span>
               </button>
             );
@@ -151,7 +154,7 @@ export function AppLayout({
         </div>
 
         <div className="p-4 border-t border-[#eef2f6]">
-          <div className="border border-[#eef2f6] rounded-2xl p-2.5 bg-[#f8fafc]">
+          <div className={`border border-[#eef2f6] rounded-2xl p-2.5 bg-[#f8fafc] ${nationalDayThemeActive ? "national-day-language" : ""}`}>
             <div className="flex items-center gap-2 px-2 pb-2.5 text-[11px] font-extrabold text-[#64748b] uppercase tracking-wider">
               NGÔN NGỮ / LANGUAGE
             </div>
@@ -189,22 +192,22 @@ export function AppLayout({
 
       {mobileOpen && <button aria-label="Close navigation overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-[#0f172a]/20 backdrop-blur-sm lg:hidden transition-opacity" />}
       
-      <main className="min-h-[100dvh] lg:pl-[280px] flex flex-col">
-        <header className="sticky top-0 z-20 border-b border-[#eef2f6] bg-white/95 backdrop-blur-xl">
+      <main className={`min-h-[100dvh] lg:pl-[280px] flex flex-col ${nationalDayThemeActive ? "national-day-main" : ""}`}>
+        <header className={`sticky top-0 z-20 border-b border-[#eef2f6] bg-white/95 backdrop-blur-xl ${nationalDayThemeActive ? "national-day-header" : ""}`}>
           <div className="flex min-h-[72px] items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
               <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#475569] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Open menu')}>
                 <Menu className="h-6 w-6" />
               </button>
-              <h1 className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
-              <h1 className="text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight">{t(title)}</h1>
+                <h1 className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
+               <h1 className="text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight">{t(title)}</h1>
             </div>
             
             <div className="flex items-center gap-4">
               {headerAction}
               {!hideUpgrade && <button
                 onClick={() => setLocation("/upgrade")}
-                className="bg-[#1a2b88] hover:bg-[#152473] text-white text-[13px] font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95"
+                 className={`bg-[#1a2b88] hover:bg-[#152473] text-white text-[13px] font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${nationalDayThemeActive ? "national-day-upgrade" : ""}`}
                 data-testid="header-upgrade"
               >
                 {t("Upgrade")}
@@ -217,32 +220,35 @@ export function AppLayout({
         </header>
 
         {showNationalDayRibbon && (
-          <div className="relative overflow-hidden bg-[#b91c1c] text-white shadow-[0_4px_18px_rgba(127,29,29,0.16)]" data-testid="national-day-ribbon">
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-15 [background-image:radial-gradient(circle_at_20%_30%,#facc15_0,transparent_18%),radial-gradient(circle_at_65%_70%,#facc15_0,transparent_16%)]" />
-            <div className="relative mx-auto flex min-h-[58px] max-w-[1440px] items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#fde68a]/60 bg-[#991b1b] text-[#facc15] shadow-inner">
-                <Star className="h-5 w-5 fill-current" aria-hidden="true" />
-              </span>
+          <section className="national-day-hero" data-testid="national-day-ribbon" aria-label={language === "vi" ? "Chế độ Quốc khánh" : "National Day mode"}>
+            <div className="national-day-hero-orbit national-day-hero-orbit-one" />
+            <div className="national-day-hero-orbit national-day-hero-orbit-two" />
+            <span className="national-day-hero-particle national-day-hero-particle-one" aria-hidden="true" />
+            <span className="national-day-hero-particle national-day-hero-particle-two" aria-hidden="true" />
+            <div className="relative mx-auto flex max-w-[1440px] items-center gap-4 px-5 py-4 sm:px-8 lg:px-10">
+              <span className="national-day-hero-mark"><Star className="h-6 w-6 fill-current" aria-hidden="true" /></span>
               <div className="min-w-0">
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fef08a]">
-                  {language === "vi" ? "Chào mừng Quốc khánh 2/9" : "Vietnam National Day · 2 September"}
+                <p className="national-day-eyebrow">
+                  {language === "vi" ? "Quốc khánh Việt Nam · 02.09" : "Vietnam National Day · 02.09"}
                 </p>
-                <p className="mt-0.5 truncate text-[12px] font-semibold text-red-50">
-                  {language === "vi" ? "Tự hào Việt Nam · Kết nối hiệu quả hơn" : "Proudly Vietnamese · Connect more effectively"}
+                <h2 className="mt-1 text-[15px] font-bold tracking-[-.01em] sm:text-[17px]">
+                  {language === "vi" ? "Một ngày trọng đại, một nhịp gửi thông điệp." : "A day of meaning, a steady rhythm of sending."}
+                </h2>
+                <p className="mt-1 text-[11px] font-medium text-[#f9e9ba]">
+                  {language === "vi" ? "Đang ở chế độ vận hành lễ — các giới hạn an toàn vẫn được giữ nguyên." : "Ceremonial operations mode is active — safety limits remain unchanged."}
                 </p>
               </div>
-              <div className="ml-auto hidden items-center gap-1.5 text-[#facc15] sm:flex" aria-hidden="true">
-                <Star className="h-3 w-3 fill-current" />
-                <Star className="h-4 w-4 fill-current" />
-                <Star className="h-3 w-3 fill-current" />
+              <div className="national-day-hero-status">
+                <ShieldCheck className="h-4 w-4" />
+                <span>{language === "vi" ? "ĐÃ XÁC MINH" : "VERIFIED MODE"}</span>
               </div>
             </div>
-          </div>
+          </section>
         )}
         
         {banner}
         
-        <div className="flex-1 p-4 sm:p-6 lg:p-8">
+        <div className={`flex-1 p-4 sm:p-6 lg:p-8 ${nationalDayThemeActive ? "national-day-content" : ""}`}>
           <div className="mx-auto max-w-[1440px]">
             {children}
           </div>
