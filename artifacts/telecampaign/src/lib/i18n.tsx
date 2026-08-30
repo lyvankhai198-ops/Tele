@@ -560,6 +560,12 @@ export function localizedDeliveryErrorMessage(error: unknown, language: Language
       : "Telegram account error: the account or login session was banned, revoked, or expired. The system does not automatically sync. Check the account and sign in again if needed.";
   }
 
+  if (/Delivery state is unknown after an interrupted worker; manual review is required to avoid duplicate sends\./i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Không xác định được trạng thái gửi sau khi tiến trình bị gián đoạn. Cần kiểm tra thủ công để tránh gửi trùng."
+      : "Delivery state is unknown after an interrupted worker; manual review is required to avoid duplicate sends.";
+  }
+
   if (/destination .*is no longer the same destination|username no longer points/i.test(cleanMessage)) {
     return language === "vi"
       ? "Lỗi điểm đến: username hoặc nhóm đã thay đổi so với dữ liệu đã lưu. Hệ thống không tự đồng bộ nhóm. Hãy kiểm tra và chọn lại điểm đến."
