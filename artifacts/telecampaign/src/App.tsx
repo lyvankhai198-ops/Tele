@@ -71,6 +71,9 @@ function AuthShell({ children }: { children: ReactNode }) {
               </button>
             ))}
           </div>
+          <p className="absolute right-0 top-[calc(50%+22px)] whitespace-nowrap rounded-full border border-[#dbe6f0] bg-[#f5faff] px-2.5 py-1 text-[10px] font-semibold text-[#66809a] shadow-sm">
+            Chọn ngôn ngữ / Choose language
+          </p>
         </div>
         <div className="rounded-3xl border border-[#dbe6f0] bg-white p-6 shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-8">
           {children}
