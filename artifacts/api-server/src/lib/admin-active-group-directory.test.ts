@@ -78,10 +78,65 @@ const pendingDirectory = aggregateSavedGroupRows([{
   kind: "group",
   memberCount: null,
   isPublished: false,
+  firstCapturedAt: "2026-08-28T10:00:00.000Z",
   roundDelayMinSeconds: null,
   roundDelayMaxSeconds: null,
 }]);
 assert.equal(pendingDirectory.groups[0]?.isPublished, false);
+
+const sortedDirectory = aggregateSavedGroupRows([
+  {
+    telegramId: "-100001",
+    title: "Nhóm đã import nhiều thành viên",
+    username: null,
+    kind: "group",
+    memberCount: 5000,
+    isPublished: true,
+    firstCapturedAt: "2026-08-27T10:00:00.000Z",
+    roundDelayMinSeconds: null,
+    roundDelayMaxSeconds: null,
+  },
+  {
+    telegramId: "-100002",
+    title: "Nhóm mới ít thành viên",
+    username: null,
+    kind: "group",
+    memberCount: 10,
+    isPublished: false,
+    firstCapturedAt: "2026-08-29T10:00:00.000Z",
+    roundDelayMinSeconds: null,
+    roundDelayMaxSeconds: null,
+  },
+  {
+    telegramId: "-100003",
+    title: "Nhóm mới nhiều thành viên",
+    username: null,
+    kind: "group",
+    memberCount: 9000,
+    isPublished: false,
+    firstCapturedAt: "2026-08-28T10:00:00.000Z",
+    roundDelayMinSeconds: null,
+    roundDelayMaxSeconds: null,
+  },
+]);
+assert.deepEqual(
+  sortedDirectory.groups.map((group) => group.id),
+  ["-100002", "-100003", "-100001"],
+);
+const importedSortedDirectory = aggregateSavedGroupRows(sortedDirectory.groups.map((group) => ({
+  telegramId: group.id,
+  title: group.title,
+  username: group.username,
+  kind: group.kind,
+  memberCount: group.memberCount,
+  isPublished: true,
+  roundDelayMinSeconds: null,
+  roundDelayMaxSeconds: null,
+})));
+assert.deepEqual(
+  importedSortedDirectory.groups.map((group) => group.id),
+  ["-100003", "-100001", "-100002"],
+);
 
 const rankedDirectory = aggregateSavedGroupRows(rows, [
   {
@@ -127,9 +182,9 @@ const candidates = dedupeRunningGroupLibraryCandidates([
   {
     telegramId: "-100123",
     title: "Tên trùng từ account khác",
-    username: null,
+    username: "@tech_forum_backup",
     kind: "forum",
-    memberCount: null,
+    memberCount: 1500,
     sourceDestinationId: "destination-two",
   },
   {
@@ -143,6 +198,8 @@ const candidates = dedupeRunningGroupLibraryCandidates([
 ]);
 assert.equal(candidates.length, 2);
 assert.equal(candidates[0]?.sourceDestinationId, "destination-one");
+assert.equal(candidates[0]?.username, "@tech_forum");
+assert.equal(candidates[0]?.memberCount, 1500);
 assert.equal(candidates[1]?.telegramId, "-100555");
 
 const lockedGroups = redactGroupLibraryGroups(directory.groups, false);

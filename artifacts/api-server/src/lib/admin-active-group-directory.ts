@@ -20,6 +20,7 @@ export type SavedGroupRow = {
   kind: string;
   memberCount: number | null;
   isPublished?: boolean;
+  firstCapturedAt?: Date | string | null;
   roundDelayMinSeconds: number | null;
   roundDelayMaxSeconds: number | null;
 };
@@ -112,6 +113,24 @@ function compareDelaySafety(
   return right.minSeconds - left.minSeconds || right.maxSeconds - left.maxSeconds;
 }
 
+function compareMemberCount(
+  left: { memberCount: number | null },
+  right: { memberCount: number | null },
+): number {
+  if (left.memberCount === null && right.memberCount !== null) return 1;
+  if (left.memberCount !== null && right.memberCount === null) return -1;
+  if (left.memberCount !== null && right.memberCount !== null && left.memberCount !== right.memberCount) {
+    return right.memberCount - left.memberCount;
+  }
+  return 0;
+}
+
+function capturedAtValue(value: Date | string | null | undefined): number {
+  if (!value) return 0;
+  const timestamp = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 export function aggregateSavedGroupRows(
   rows: SavedGroupRow[],
   delayOutcomeRows: DelayOutcomeRow[] = [],
@@ -128,6 +147,7 @@ export function aggregateSavedGroupRows(
     kind: string;
     memberCount: number | null;
     isPublished: boolean;
+    firstCapturedAt: Date | string | null;
     roundDelays: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"];
   }>();
 
@@ -140,6 +160,7 @@ export function aggregateSavedGroupRows(
       kind: row.kind,
       memberCount: row.memberCount,
       isPublished: row.isPublished !== false,
+      firstCapturedAt: row.firstCapturedAt ?? null,
       roundDelays: [],
     };
     if (
@@ -178,7 +199,18 @@ export function aggregateSavedGroupRows(
           .sort(compareDelaySafety)
           .map((delay, index) => ({ ...delay, isPreferred: index === 0 })),
       }))
-      .sort((left, right) => left.title.localeCompare(right.title)),
+      .sort((left, right) => {
+        const leftIsNew = !left.isPublished;
+        const rightIsNew = !right.isPublished;
+        if (leftIsNew !== rightIsNew) return leftIsNew ? -1 : 1;
+        if (leftIsNew) {
+          const capturedDifference = capturedAtValue(right.firstCapturedAt) - capturedAtValue(left.firstCapturedAt);
+          if (capturedDifference !== 0) return capturedDifference;
+        }
+        return compareMemberCount(left, right)
+          || left.title.localeCompare(right.title)
+          || left.id.localeCompare(right.id);
+      }),
   };
 }
 
@@ -187,9 +219,20 @@ export function dedupeRunningGroupLibraryCandidates(
 ): RunningGroupLibraryCandidate[] {
   const candidatesByTelegramId = new Map<string, RunningGroupLibraryCandidate>();
   for (const row of rows) {
-    if (!candidatesByTelegramId.has(row.telegramId)) {
+    const existing = candidatesByTelegramId.get(row.telegramId);
+    if (!existing) {
       candidatesByTelegramId.set(row.telegramId, row);
+      continue;
     }
+    candidatesByTelegramId.set(row.telegramId, {
+      ...existing,
+      username: existing.username ?? row.username,
+      memberCount: existing.memberCount === null
+        ? row.memberCount
+        : row.memberCount === null
+          ? existing.memberCount
+          : Math.max(existing.memberCount, row.memberCount),
+    });
   }
   return [...candidatesByTelegramId.values()];
 }
@@ -227,6 +270,18 @@ export async function syncAdminGroupLibrary(): Promise<{ addedCount: number; can
     })))
     .onConflictDoNothing({ target: groupLibraryEntriesTable.telegramId })
     .returning({ id: groupLibraryEntriesTable.id });
+  await Promise.all(candidates.map((candidate) =>
+    db.update(groupLibraryEntriesTable)
+      .set({
+        title: candidate.title,
+        username: candidate.username,
+        kind: candidate.kind,
+        memberCount: candidate.memberCount,
+        sourceDestinationId: candidate.sourceDestinationId,
+        updatedAt: new Date(),
+      })
+      .where(eq(groupLibraryEntriesTable.telegramId, candidate.telegramId)),
+  ));
   return { addedCount: inserted.length, candidateCount: candidates.length };
 }
 
@@ -260,6 +315,7 @@ export async function getAdminActiveGroupDirectory(
       kind: groupLibraryEntriesTable.kind,
       memberCount: groupLibraryEntriesTable.memberCount,
       isPublished: groupLibraryEntriesTable.isPublished,
+      firstCapturedAt: groupLibraryEntriesTable.firstCapturedAt,
       roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
       roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
     }).from(groupLibraryEntriesTable)
