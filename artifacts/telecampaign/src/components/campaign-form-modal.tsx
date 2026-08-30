@@ -57,9 +57,10 @@ const copy = {
     deselectAll: "Deselect all",
     selectAll: "Select all",
     searchGroupPlaceholder: "Search groups…",
-    pickAccountHint: "Select a Telegram account to see active groups.",
-    noGroupsHint: "No groups with posting permission.",
+    pickAccountHint: "Select a Telegram account to see its groups and posting status.",
+    noGroupsHint: "No groups found for this account.",
     unavailableDestination: "No posting permission",
+    unavailableDestinationHint: "Telegram posting permission is unavailable for this group.",
     generalTopic: "General",
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
@@ -90,9 +91,10 @@ const copy = {
     deselectAll: "Bỏ chọn tất cả",
     selectAll: "Chọn tất cả",
     searchGroupPlaceholder: "Tìm nhóm...",
-    pickAccountHint: "Chọn tài khoản Telegram để hiển thị nhóm đang hoạt động.",
-    noGroupsHint: "Không có nhóm nào được phép gửi.",
+    pickAccountHint: "Chọn tài khoản Telegram để xem nhóm và trạng thái quyền đăng.",
+    noGroupsHint: "Không tìm thấy nhóm nào của tài khoản này.",
     unavailableDestination: "Không có quyền đăng",
+    unavailableDestinationHint: "Nhóm này hiện chưa thể nhận tin vì Telegram đã hạn chế quyền đăng.",
     generalTopic: "Chung",
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
@@ -185,10 +187,6 @@ export function CampaignFormModal({
     return (destinations.data ?? [])
       .filter((destination) =>
         destination.accountId === form.accountId
-        && (
-          destination.canPost
-          || Boolean(editingCampaign && form.destinationIds.includes(destination.id))
-        )
         && (!needle
           || destination.title.toLowerCase().includes(needle)
           || (destination.parentTitle ?? "").toLowerCase().includes(needle)
@@ -200,7 +198,6 @@ export function CampaignFormModal({
   }, [
     c.generalTopic,
     destinations.data,
-    editingCampaign?.clonedFromCampaignId,
     form.accountId,
     form.destinationIds,
     groupSearch,
@@ -266,13 +263,15 @@ export function CampaignFormModal({
   }
 
   function toggleAllDestinations() {
-    const visibleIds = accountDestinations.map((destination) => destination.id);
-    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => form.destinationIds.includes(id));
+    const selectableIds = accountDestinations
+      .filter((destination) => destination.canPost)
+      .map((destination) => destination.id);
+    const allSelectableSelected = selectableIds.length > 0 && selectableIds.every((id) => form.destinationIds.includes(id));
     setForm((current) => ({
       ...current,
-      destinationIds: allVisibleSelected
-        ? current.destinationIds.filter((id) => !visibleIds.includes(id))
-        : [...new Set([...current.destinationIds, ...visibleIds])],
+      destinationIds: allSelectableSelected
+        ? current.destinationIds.filter((id) => !selectableIds.includes(id))
+        : [...new Set([...current.destinationIds, ...selectableIds])],
     }));
   }
 
@@ -391,11 +390,24 @@ export function CampaignFormModal({
               : <div className="mt-2 max-h-40 divide-y divide-[#f1f5f9] overflow-y-auto">
                   {accountDestinations.length
                     ? accountDestinations.map((destination) => (
-                        <button type="button" key={destination.id} onClick={() => toggleDestination(destination.id)} className="flex w-full items-center gap-3 px-2 py-2.5 text-left">
-                          <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
+                         <button
+                           type="button"
+                           key={destination.id}
+                           onClick={() => toggleDestination(destination.id)}
+                           disabled={!destination.canPost && !form.destinationIds.includes(destination.id)}
+                           className="flex w-full items-center gap-3 px-2 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-75"
+                         >
+                           <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
                           <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c.generalTopic)}</span>
                           {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
-                           {!destination.canPost && <span className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]">{c.unavailableDestination}</span>}
+                           {!destination.canPost && (
+                             <span
+                               className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]"
+                               title={c.unavailableDestinationHint}
+                             >
+                               {c.unavailableDestination}
+                             </span>
+                           )}
                         </button>
                       ))
                     : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">{c.noGroupsHint}</p>}
