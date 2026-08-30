@@ -9,12 +9,10 @@ import type { ActivityLog } from './activityLog';
 import type { AdminNotification } from './adminNotification';
 import type { Campaign } from './campaign';
 import type { DashboardMetricSummary } from './dashboardMetricSummary';
-import type { OnboardingSummary } from './onboardingSummary';
 
 export interface DashboardSummary {
   metrics: DashboardMetricSummary;
   recentCampaigns: Campaign[];
   recentActivity: ActivityLog[];
   adminNotifications: AdminNotification[];
-  onboarding: OnboardingSummary;
 }

@@ -20,15 +20,6 @@ export type PendingScheduleRebase = {
   }>;
 };
 
-export type PendingScheduleRebaseFromStart = {
-  nextRunAt: Date | null;
-  updates: Array<{
-    id: string;
-    previousNextAttemptAt: Date | null;
-    nextAttemptAt: Date;
-  }>;
-};
-
 export type QuotaPausedScheduleTarget = PendingScheduleTarget & {
   updatedAt: Date;
 };
@@ -190,40 +181,6 @@ export function rebasePastPendingSchedule(
       id: target.id,
       previousNextAttemptAt: target.nextAttemptAt,
       nextAttemptAt: new Date(target.nextAttemptAt.getTime() + shiftMs),
-    })),
-  };
-}
-
-/**
- * Move the safe, ordinary pending delivery plan so its earliest target starts
- * at the administrator-selected instant. Relative gaps between pending
- * targets are retained; error markers and in-flight/confirmed targets are not
- * eligible for this operation.
- */
-export function rebasePendingScheduleFromStart(
-  targets: readonly PendingScheduleTarget[],
-  startAt: Date,
-): PendingScheduleRebaseFromStart {
-  const eligibleTargets = targets.filter((target) =>
-    target.status === "pending" && target.lastError === null,
-  );
-  if (!eligibleTargets.length) return { nextRunAt: null, updates: [] };
-
-  const earliest = eligibleTargets.reduce<Date | null>((current, target) => (
-    target.nextAttemptAt && (!current || target.nextAttemptAt < current)
-      ? target.nextAttemptAt
-      : current
-  ), null) ?? startAt;
-  const shiftMs = startAt.getTime() - earliest.getTime();
-
-  return {
-    nextRunAt: startAt,
-    updates: eligibleTargets.map((target) => ({
-      id: target.id,
-      previousNextAttemptAt: target.nextAttemptAt,
-      nextAttemptAt: target.nextAttemptAt
-        ? new Date(target.nextAttemptAt.getTime() + shiftMs)
-        : startAt,
     })),
   };
 }

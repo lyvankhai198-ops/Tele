@@ -593,18 +593,12 @@ export const ListCampaignsResponseItem = zod.object({
 }),
   "destinationIds": zod.array(zod.string()),
   "errors": zod.array(zod.object({
-  "targetId": zod.string(),
   "destinationId": zod.string(),
   "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
+  "nextAttemptAt": zod.coerce.date().nullable()
 }))
 })
 export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
@@ -677,18 +671,12 @@ export const CreateCampaignResponse = zod.object({
 }),
   "destinationIds": zod.array(zod.string()),
   "errors": zod.array(zod.object({
-  "targetId": zod.string(),
   "destinationId": zod.string(),
   "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
+  "nextAttemptAt": zod.coerce.date().nullable()
 }))
 })
 
@@ -756,18 +744,12 @@ export const UpdateCampaignStatusResponse = zod.object({
 }),
   "destinationIds": zod.array(zod.string()),
   "errors": zod.array(zod.object({
-  "targetId": zod.string(),
   "destinationId": zod.string(),
   "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
+  "nextAttemptAt": zod.coerce.date().nullable()
 }))
 })
 
@@ -820,71 +802,12 @@ export const CloneCampaignResponse = zod.object({
 }),
   "destinationIds": zod.array(zod.string()),
   "errors": zod.array(zod.object({
-  "targetId": zod.string(),
   "destinationId": zod.string(),
   "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
-}))
-})
-
-
-export const RetryCampaignTargetParams = zod.object({
-  "targetId": zod.coerce.string()
-})
-
-export const RetryCampaignTargetResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "content": zod.string(),
-  "telegramAccountId": zod.string().nullable(),
-  "templateId": zod.string().nullable(),
-  "templateMode": zod.enum(['text', 'forward']),
-  "templateSourceAccountId": zod.string().nullable(),
-  "templateSourceMessageId": zod.string().nullable(),
-  "clonedFromCampaignId": zod.string().nullable(),
-  "clonedFromUserId": zod.string().nullable(),
-  "cloneMode": zod.union([zod.literal('admin'),zod.literal('user'),zod.literal(null)]).nullable(),
-  "mediaUrl": zod.string().nullable(),
-  "status": zod.string(),
-  "scheduledAt": zod.coerce.date().nullable(),
-  "timezone": zod.string(),
-  "maxRetries": zod.number(),
-  "repeatCount": zod.number(),
-  "roundDelayMinSeconds": zod.number(),
-  "roundDelayMaxSeconds": zod.number(),
-  "createdAt": zod.coerce.date(),
-  "targetCount": zod.number(),
-  "sentCount": zod.number(),
-  "failedCount": zod.number(),
-  "dailyQuota": zod.object({
-  "limit": zod.number().nullable(),
-  "used": zod.number(),
-  "remaining": zod.number().nullable(),
-  "sentToday": zod.number(),
-  "reservedToday": zod.number()
-}),
-  "destinationIds": zod.array(zod.string()),
-  "errors": zod.array(zod.object({
-  "targetId": zod.string(),
-  "destinationId": zod.string(),
-  "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
-  "status": zod.string(),
-  "attempts": zod.number(),
-  "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
+  "nextAttemptAt": zod.coerce.date().nullable()
 }))
 })
 
@@ -931,9 +854,7 @@ export const ListActivityResponseItem = zod.object({
   "targetStatus": zod.string().nullable(),
   "targetAttempts": zod.number().nullable(),
   "targetLastError": zod.string().nullable(),
-  "targetNextAttemptAt": zod.coerce.date().nullable(),
-  "targetErrorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "targetLastErrorAt": zod.coerce.date().nullable()
+  "targetNextAttemptAt": zod.coerce.date().nullable()
 })
 export const ListActivityResponse = zod.array(ListActivityResponseItem)
 
@@ -980,18 +901,12 @@ export const GetDashboardResponse = zod.object({
 }),
   "destinationIds": zod.array(zod.string()),
   "errors": zod.array(zod.object({
-  "targetId": zod.string(),
   "destinationId": zod.string(),
   "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
+  "nextAttemptAt": zod.coerce.date().nullable()
 }))
 })),
   "recentActivity": zod.array(zod.object({
@@ -1011,9 +926,7 @@ export const GetDashboardResponse = zod.object({
   "targetStatus": zod.string().nullable(),
   "targetAttempts": zod.number().nullable(),
   "targetLastError": zod.string().nullable(),
-  "targetNextAttemptAt": zod.coerce.date().nullable(),
-  "targetErrorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "targetLastErrorAt": zod.coerce.date().nullable()
+  "targetNextAttemptAt": zod.coerce.date().nullable()
 })),
   "adminNotifications": zod.array(zod.object({
   "id": zod.string(),
@@ -1034,18 +947,7 @@ export const GetDashboardResponse = zod.object({
   "createdBy": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
-})),
-  "onboarding": zod.object({
-  "visible": zod.boolean(),
-  "completed": zod.boolean(),
-  "quickSendEligible": zod.boolean(),
-  "successfulCampaigns": zod.number(),
-  "steps": zod.array(zod.object({
-  "id": zod.enum(['account', 'verification', 'sync', 'permissions', 'content', 'first_campaign']),
-  "status": zod.enum(['not_started', 'in_progress', 'completed', 'attention']),
-  "href": zod.string()
 }))
-})
 })
 
 
@@ -1772,58 +1674,6 @@ export const UpdateAdminUserCampaignStatusResponse = zod.object({
 })
 
 
-export const UpdateAdminUserCampaignScheduleParams = zod.object({
-  "userId": zod.coerce.string(),
-  "campaignId": zod.coerce.string()
-})
-
-export const updateAdminUserCampaignScheduleBodyTimezoneMax = 100;
-
-
-
-export const UpdateAdminUserCampaignScheduleBody = zod.object({
-  "scheduledAt": zod.coerce.date().nullable(),
-  "timezone": zod.string().min(1).max(updateAdminUserCampaignScheduleBodyTimezoneMax)
-})
-
-export const UpdateAdminUserCampaignScheduleResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "status": zod.string(),
-  "content": zod.string(),
-  "templateMode": zod.string(),
-  "templateSourceAccountName": zod.string().nullable(),
-  "templateSourceMessageId": zod.string().nullable(),
-  "telegramAccountId": zod.string().nullable(),
-  "telegramAccountName": zod.string().nullable(),
-  "scheduledAt": zod.coerce.date().nullable(),
-  "timezone": zod.string(),
-  "repeatCount": zod.number(),
-  "roundDelayMinSeconds": zod.number(),
-  "roundDelayMaxSeconds": zod.number(),
-  "dailyQuota": zod.object({
-  "limit": zod.number().nullable(),
-  "used": zod.number(),
-  "remaining": zod.number().nullable(),
-  "sentToday": zod.number(),
-  "reservedToday": zod.number()
-}),
-  "destinationCount": zod.number(),
-  "deliveryCount": zod.number(),
-  "pendingCount": zod.number(),
-  "sendingCount": zod.number(),
-  "sentCount": zod.number(),
-  "failedCount": zod.number(),
-  "reviewCount": zod.number(),
-  "clones": zod.array(zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "status": zod.string(),
-  "telegramAccountName": zod.string().nullable()
-}))
-})
-
-
 export const RetryAdminCampaignTargetParams = zod.object({
   "targetId": zod.coerce.string()
 })
@@ -2496,18 +2346,12 @@ export const CloneAdminUserCampaignResponse = zod.object({
 }),
   "destinationIds": zod.array(zod.string()),
   "errors": zod.array(zod.object({
-  "targetId": zod.string(),
   "destinationId": zod.string(),
   "destinationTitle": zod.string(),
-  "accountId": zod.string(),
-  "accountName": zod.string(),
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable(),
-  "errorCategory": zod.union([zod.literal('session'),zod.literal('permission'),zod.literal('destination'),zod.literal('flood_wait'),zod.literal('proxy_network'),zod.literal('unknown'),zod.literal(null)]).nullable(),
-  "lastErrorAt": zod.coerce.date().nullable(),
-  "retryAllowed": zod.boolean()
+  "nextAttemptAt": zod.coerce.date().nullable()
 }))
 })
 

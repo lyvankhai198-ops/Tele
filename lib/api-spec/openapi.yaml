@@ -498,20 +498,6 @@ paths:
         "400": { description: Invalid clone input }
         "404": { description: Campaign or Telegram account not found }
         "409": { description: Campaign limit reached or Telegram account is not connected }
-  /campaign-targets/{targetId}/retry:
-    post:
-      operationId: retryCampaignTarget
-      tags: [campaigns]
-      parameters:
-        - { name: targetId, in: path, required: true, schema: { type: string } }
-      responses:
-        "200":
-          description: Failed campaign target requeued
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Campaign" }
-        "404": { description: Campaign target not found }
-        "409": { description: Target is not safe or eligible to retry }
   /calendar:
     get:
       operationId: listCalendarItems
@@ -735,28 +721,6 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: User or campaign not found }
         "409": { description: Campaign is not ready for the requested status }
-  /admin/users/{userId}/campaigns/{campaignId}/schedule:
-    patch:
-      operationId: updateAdminUserCampaignSchedule
-      tags: [admin]
-      parameters:
-        - { $ref: "#/components/parameters/AdminUserId" }
-        - { $ref: "#/components/parameters/AdminCampaignId" }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AdminCampaignScheduleInput" }
-      responses:
-        "200":
-          description: Customer campaign schedule updated
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminUserSupportCampaign" }
-        "400": { description: Invalid schedule or timezone }
-        "403": { description: Administrator permission is required }
-        "404": { description: User or campaign not found }
-        "409": { description: Campaign is not reschedulable or changed concurrently }
   /admin/targets/{targetId}/retry:
     post:
       operationId: retryAdminCampaignTarget
@@ -1478,22 +1442,14 @@ components:
         telegramAccountId: { type: string }
     CampaignTargetError:
       type: object
-      required: [targetId, destinationId, destinationTitle, accountId, accountName, status, attempts, lastError, nextAttemptAt, errorCategory, lastErrorAt, retryAllowed]
+      required: [destinationId, destinationTitle, status, attempts, lastError, nextAttemptAt]
       properties:
-        targetId: { type: string }
         destinationId: { type: string }
         destinationTitle: { type: string }
-        accountId: { type: string }
-        accountName: { type: string }
         status: { type: string }
         attempts: { type: number }
         lastError: { type: ["string", "null"] }
         nextAttemptAt: { type: ["string", "null"], format: date-time }
-        errorCategory:
-          type: ["string", "null"]
-          enum: [session, permission, destination, flood_wait, proxy_network, unknown, null]
-        lastErrorAt: { type: ["string", "null"], format: date-time }
-        retryAllowed: { type: boolean }
     CampaignUpdateInput:
       type: object
       properties:
@@ -1544,7 +1500,7 @@ components:
         targetCount: { type: number }
     ActivityLog:
       type: object
-      required: [id, level, event, message, accountId, campaignId, targetId, metadata, createdAt, campaignName, accountName, destinationTitle, destinationUsername, targetStatus, targetAttempts, targetLastError, targetNextAttemptAt, targetErrorCategory, targetLastErrorAt]
+      required: [id, level, event, message, accountId, campaignId, targetId, metadata, createdAt, campaignName, accountName, destinationTitle, destinationUsername, targetStatus, targetAttempts, targetLastError, targetNextAttemptAt]
       properties:
         id: { type: string }
         level: { type: string }
@@ -1563,10 +1519,6 @@ components:
         targetAttempts: { type: ["number", "null"] }
         targetLastError: { type: ["string", "null"] }
         targetNextAttemptAt: { type: ["string", "null"], format: date-time }
-        targetErrorCategory:
-          type: ["string", "null"]
-          enum: [session, permission, destination, flood_wait, proxy_network, unknown, null]
-        targetLastErrorAt: { type: ["string", "null"], format: date-time }
     ProxyAccount:
       type: object
       required: [id, name, phone]
@@ -1694,7 +1646,7 @@ components:
         objectPath: { type: string }
     DashboardSummary:
       type: object
-      required: [metrics, recentCampaigns, recentActivity, adminNotifications, onboarding]
+      required: [metrics, recentCampaigns, recentActivity, adminNotifications]
       properties:
         metrics: { $ref: "#/components/schemas/DashboardMetricSummary" }
         recentCampaigns:
@@ -1706,25 +1658,6 @@ components:
         adminNotifications:
           type: array
           items: { $ref: "#/components/schemas/AdminNotification" }
-        onboarding: { $ref: "#/components/schemas/OnboardingSummary" }
-    OnboardingSummary:
-      type: object
-      required: [visible, completed, quickSendEligible, successfulCampaigns, steps]
-      properties:
-        visible: { type: boolean }
-        completed: { type: boolean }
-        quickSendEligible: { type: boolean }
-        successfulCampaigns: { type: number }
-        steps:
-          type: array
-          items: { $ref: "#/components/schemas/OnboardingStep" }
-    OnboardingStep:
-      type: object
-      required: [id, status, href]
-      properties:
-        id: { type: string, enum: [account, verification, sync, permissions, content, first_campaign] }
-        status: { type: string, enum: [not_started, in_progress, completed, attention] }
-        href: { type: string }
     PlanCode:
       type: string
       enum: [plus, pro, unlimited]
@@ -1924,12 +1857,6 @@ components:
       required: [status]
       properties:
         status: { type: string, enum: [queued, paused] }
-    AdminCampaignScheduleInput:
-      type: object
-      required: [scheduledAt, timezone]
-      properties:
-        scheduledAt: { type: ["string", "null"], format: date-time }
-        timezone: { type: string, minLength: 1, maxLength: 100 }
     AdminOperationTarget:
       type: object
       required: [id, campaignId, campaignName, ownerUsername, destinationTitle, status, attempts, nextAttemptAt, lastError]

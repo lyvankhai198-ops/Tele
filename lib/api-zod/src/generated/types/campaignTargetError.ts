@@ -5,23 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { CampaignTargetErrorErrorCategory } from './campaignTargetErrorErrorCategory';
 
 export interface CampaignTargetError {
-  targetId: string;
   destinationId: string;
   destinationTitle: string;
-  accountId: string;
-  accountName: string;
   status: string;
   attempts: number;
   /** @nullable */
   lastError: string | null;
   /** @nullable */
   nextAttemptAt: Date | null;
-  /** @nullable */
-  errorCategory: CampaignTargetErrorErrorCategory;
-  /** @nullable */
-  lastErrorAt: Date | null;
-  retryAllowed: boolean;
 }

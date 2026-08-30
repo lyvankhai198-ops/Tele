@@ -327,38 +327,15 @@ export interface CampaignDailyQuota {
   reservedToday: number;
 }
 
-/**
- * @nullable
- */
-export type CampaignTargetErrorErrorCategory = typeof CampaignTargetErrorErrorCategory[keyof typeof CampaignTargetErrorErrorCategory] | null;
-
-
-export const CampaignTargetErrorErrorCategory = {
-  session: 'session',
-  permission: 'permission',
-  destination: 'destination',
-  flood_wait: 'flood_wait',
-  proxy_network: 'proxy_network',
-  unknown: 'unknown',
-} as const;
-
 export interface CampaignTargetError {
-  targetId: string;
   destinationId: string;
   destinationTitle: string;
-  accountId: string;
-  accountName: string;
   status: string;
   attempts: number;
   /** @nullable */
   lastError: string | null;
   /** @nullable */
   nextAttemptAt: string | null;
-  /** @nullable */
-  errorCategory: CampaignTargetErrorErrorCategory;
-  /** @nullable */
-  lastErrorAt: string | null;
-  retryAllowed: boolean;
 }
 
 export interface Campaign {
@@ -512,21 +489,6 @@ export interface CalendarItem {
  */
 export type ActivityLogMetadata = { [key: string]: unknown } | null;
 
-/**
- * @nullable
- */
-export type ActivityLogTargetErrorCategory = typeof ActivityLogTargetErrorCategory[keyof typeof ActivityLogTargetErrorCategory] | null;
-
-
-export const ActivityLogTargetErrorCategory = {
-  session: 'session',
-  permission: 'permission',
-  destination: 'destination',
-  flood_wait: 'flood_wait',
-  proxy_network: 'proxy_network',
-  unknown: 'unknown',
-} as const;
-
 export interface ActivityLog {
   id: string;
   level: string;
@@ -557,10 +519,6 @@ export interface ActivityLog {
   targetLastError: string | null;
   /** @nullable */
   targetNextAttemptAt: string | null;
-  /** @nullable */
-  targetErrorCategory: ActivityLogTargetErrorCategory;
-  /** @nullable */
-  targetLastErrorAt: string | null;
 }
 
 export interface ProxyAccount {
@@ -856,48 +814,11 @@ export interface AdminNotificationUpload {
   objectPath: string;
 }
 
-export type OnboardingStepId = typeof OnboardingStepId[keyof typeof OnboardingStepId];
-
-
-export const OnboardingStepId = {
-  account: 'account',
-  verification: 'verification',
-  sync: 'sync',
-  permissions: 'permissions',
-  content: 'content',
-  first_campaign: 'first_campaign',
-} as const;
-
-export type OnboardingStepStatus = typeof OnboardingStepStatus[keyof typeof OnboardingStepStatus];
-
-
-export const OnboardingStepStatus = {
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  attention: 'attention',
-} as const;
-
-export interface OnboardingStep {
-  id: OnboardingStepId;
-  status: OnboardingStepStatus;
-  href: string;
-}
-
-export interface OnboardingSummary {
-  visible: boolean;
-  completed: boolean;
-  quickSendEligible: boolean;
-  successfulCampaigns: number;
-  steps: OnboardingStep[];
-}
-
 export interface DashboardSummary {
   metrics: DashboardMetricSummary;
   recentCampaigns: Campaign[];
   recentActivity: ActivityLog[];
   adminNotifications: AdminNotification[];
-  onboarding: OnboardingSummary;
 }
 
 export type PlanCode = typeof PlanCode[keyof typeof PlanCode];
@@ -1235,16 +1156,6 @@ export const AdminCampaignStatusInputStatus = {
 
 export interface AdminCampaignStatusInput {
   status: AdminCampaignStatusInputStatus;
-}
-
-export interface AdminCampaignScheduleInput {
-  /** @nullable */
-  scheduledAt: string | null;
-  /**
-     * @minLength 1
-     * @maxLength 100
-     */
-  timezone: string;
 }
 
 export interface AdminOperationTarget {

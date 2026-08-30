@@ -25,7 +25,6 @@ import type {
   ActivityLog,
   AdminActiveGroupDirectory,
   AdminCampaignCloneInput,
-  AdminCampaignScheduleInput,
   AdminCampaignStatusInput,
   AdminGroupLibraryImportResult,
   AdminGroupLibrarySyncResult,
@@ -47,7 +46,6 @@ import type {
   AdminUser,
   AdminUserQuotaUpdateInput,
   AdminUserSupport,
-  AdminUserSupportCampaign,
   AdminUserSupportCampaignTargets,
   AuthUser,
   CalendarItem,
@@ -2483,71 +2481,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCloneCampaignMutationOptions(options));
     }
 
-export const getRetryCampaignTargetUrl = (targetId: string,) => {
-
-
-
-
-  return `/api/campaign-targets/${targetId}/retry`
-}
-
-export const retryCampaignTarget = async (targetId: string, options?: Parameters<typeof customFetch>[1]): Promise<Campaign> => {
-
-  return customFetch<Campaign>(getRetryCampaignTargetUrl(targetId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-
-
-export const getRetryCampaignTargetMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCampaignTarget>>, TError,{targetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof retryCampaignTarget>>, TError,{targetId: string}, TContext> => {
-
-const mutationKey = ['retryCampaignTarget'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryCampaignTarget>>, {targetId: string}> = (props) => {
-          const {targetId} = props ?? {};
-
-          return  retryCampaignTarget(targetId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RetryCampaignTargetMutationResult = NonNullable<Awaited<ReturnType<typeof retryCampaignTarget>>>
-
-    export type RetryCampaignTargetMutationError = ErrorType<void>
-
-    export const useRetryCampaignTarget = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryCampaignTarget>>, TError,{targetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof retryCampaignTarget>>,
-        TError,
-        {targetId: string},
-        TContext
-      > => {
-      return useMutation(getRetryCampaignTargetMutationOptions(options));
-    }
-
 export const getListCalendarItemsUrl = (params?: ListCalendarItemsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -3676,74 +3609,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateAdminUserCampaignStatusMutationOptions(options));
-    }
-
-export const getUpdateAdminUserCampaignScheduleUrl = (userId: string,
-    campaignId: string,) => {
-
-
-
-
-  return `/api/admin/users/${userId}/campaigns/${campaignId}/schedule`
-}
-
-export const updateAdminUserCampaignSchedule = async (userId: string,
-    campaignId: string,
-    adminCampaignScheduleInput: AdminCampaignScheduleInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminUserSupportCampaign> => {
-
-  return customFetch<AdminUserSupportCampaign>(getUpdateAdminUserCampaignScheduleUrl(userId,campaignId),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(adminCampaignScheduleInput)
-  }
-);}
-
-
-
-
-
-export const getUpdateAdminUserCampaignScheduleMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserCampaignSchedule>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignScheduleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserCampaignSchedule>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignScheduleInput>}, TContext> => {
-
-const mutationKey = ['updateAdminUserCampaignSchedule'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminUserCampaignSchedule>>, {userId: string;campaignId: string;data: BodyType<AdminCampaignScheduleInput>}> = (props) => {
-          const {userId,campaignId,data} = props ?? {};
-
-          return  updateAdminUserCampaignSchedule(userId,campaignId,data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateAdminUserCampaignScheduleMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminUserCampaignSchedule>>>
-    export type UpdateAdminUserCampaignScheduleMutationBody = BodyType<AdminCampaignScheduleInput>
-    export type UpdateAdminUserCampaignScheduleMutationError = ErrorType<void>
-
-    export const useUpdateAdminUserCampaignSchedule = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminUserCampaignSchedule>>, TError,{userId: string;campaignId: string;data: BodyType<AdminCampaignScheduleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof updateAdminUserCampaignSchedule>>,
-        TError,
-        {userId: string;campaignId: string;data: BodyType<AdminCampaignScheduleInput>},
-        TContext
-      > => {
-      return useMutation(getUpdateAdminUserCampaignScheduleMutationOptions(options));
     }
 
 export const getRetryAdminCampaignTargetUrl = (targetId: string,) => {

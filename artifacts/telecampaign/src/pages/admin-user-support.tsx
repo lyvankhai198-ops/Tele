@@ -19,13 +19,12 @@ import {
   useGetAdminUserSupportCampaignTargets,
   useListTelegramAccounts,
   useRetryAdminUserSupportCampaignTarget,
-  useUpdateAdminUserCampaignSchedule,
   useUpdateAdminUserCampaignStatus,
   getGetAdminUserSupportQueryKey,
   getGetAdminUserSupportCampaignTargetsQueryKey,
   type AdminUserSupportCampaign,
 } from "@workspace/api-client-react";
-import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { useLanguage } from "@/lib/i18n";
 import {
   ArrowLeft,
   ShieldAlert,
@@ -50,7 +49,6 @@ import {
   Play,
   RotateCcw,
   Search,
-  CalendarClock,
 } from "lucide-react";
 
 const copy = {
@@ -111,18 +109,6 @@ const copy = {
     queuedCampaigns: "Queued",
     completedCampaigns: "Completed",
     campaignSchedule: "Scheduled",
-    scheduleImmediate: "Run immediately",
-    editSchedule: "Edit schedule",
-    editScheduleTitle: "Edit customer campaign schedule",
-    editScheduleDetail: "Only safe pending deliveries move to the new start time. Sent, sending, failed, and review deliveries stay unchanged.",
-    scheduleDateTime: "Start date & time",
-    scheduleTimezone: "Timezone",
-    scheduleBlankHint: "Leave date and time blank to make the remaining safe deliveries ready now.",
-    schedulePreview: "New start",
-    saveSchedule: "Save schedule",
-    cancelSchedule: "Cancel",
-    scheduleSaved: "Campaign schedule updated.",
-    scheduleInvalid: "Enter a valid date, time, and timezone.",
     campaignDelay: "Round delay",
     campaignQuota: "Today",
     campaignQuotaUnlimited: (used: number) => `${used} sent · Unlimited`,
@@ -206,18 +192,6 @@ const copy = {
     queuedCampaigns: "Đang chờ",
     completedCampaigns: "Hoàn thành",
     campaignSchedule: "Lên lịch",
-    scheduleImmediate: "Chạy ngay",
-    editSchedule: "Chỉnh lịch",
-    editScheduleTitle: "Chỉnh lịch campaign khách",
-    editScheduleDetail: "Chỉ các lượt pending an toàn được dời theo mốc mới. Các lượt đã gửi, đang gửi, lỗi và cần review được giữ nguyên.",
-    scheduleDateTime: "Ngày và giờ bắt đầu",
-    scheduleTimezone: "Múi giờ",
-    scheduleBlankHint: "Để trống ngày giờ nếu muốn các lượt pending an toàn sẵn sàng chạy ngay.",
-    schedulePreview: "Mốc chạy mới",
-    saveSchedule: "Lưu lịch",
-    cancelSchedule: "Hủy",
-    scheduleSaved: "Đã cập nhật lịch campaign.",
-    scheduleInvalid: "Hãy nhập ngày, giờ và múi giờ hợp lệ.",
     campaignDelay: "Delay vòng",
     campaignQuota: "Hôm nay",
     campaignQuotaUnlimited: (used: number) => `${used} đã gửi · Không giới hạn`,
@@ -253,76 +227,6 @@ function formatDate(dateStr: string, language: string, showTime = true): string 
     return format(new Date(dateStr), fStr, { locale });
   } catch {
     return dateStr;
-  }
-}
-
-function formatDateInTimezone(dateStr: string, timezone: string, language: string): string {
-  try {
-    return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-US", {
-      timeZone: timezone,
-      dateStyle: "short",
-      timeStyle: "short",
-      hourCycle: "h23",
-    }).format(new Date(dateStr));
-  } catch {
-    return formatDate(dateStr, language);
-  }
-}
-
-function dateTimeInputValue(dateStr: string | null, timezone: string): string {
-  if (!dateStr) return "";
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(new Date(dateStr));
-    const values = new Map(parts.map((part) => [part.type, part.value]));
-    return `${values.get("year")}-${values.get("month")}-${values.get("day")}T${values.get("hour")}:${values.get("minute")}`;
-  } catch {
-    return "";
-  }
-}
-
-function zonedDateTimeToIso(value: string, timezone: string): string | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return null;
-  const [, year, month, day, hour, minute] = match;
-  const requestedLocalMs = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0);
-  let instantMs = requestedLocalMs;
-  try {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hourCycle: "h23",
-      }).formatToParts(new Date(instantMs));
-      const values = new Map(parts.map((part) => [part.type, part.value]));
-      const actualLocalMs = Date.UTC(
-        Number(values.get("year")),
-        Number(values.get("month")) - 1,
-        Number(values.get("day")),
-        Number(values.get("hour")),
-        Number(values.get("minute")),
-        Number(values.get("second")),
-      );
-      const difference = requestedLocalMs - actualLocalMs;
-      if (difference === 0) break;
-      instantMs += difference;
-    }
-    const result = new Date(instantMs);
-    return Number.isNaN(result.getTime()) ? null : result.toISOString();
-  } catch {
-    return null;
   }
 }
 
@@ -481,14 +385,9 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
   const [toast, setToast] = useState<string | null>(null);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [campaignStatus, setCampaignStatus] = useState("active");
-  const [scheduleCampaign, setScheduleCampaign] = useState<AdminUserSupportCampaign | null>(null);
-  const [scheduleDateTime, setScheduleDateTime] = useState("");
-  const [scheduleTimezone, setScheduleTimezone] = useState("Asia/Ho_Chi_Minh");
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
   const adminAccounts = useListTelegramAccounts();
   const cloneMutation = useCloneAdminUserCampaign();
   const updateCampaignMutation = useUpdateAdminUserCampaignStatus();
-  const updateScheduleMutation = useUpdateAdminUserCampaignSchedule();
   const retryTargetMutation = useRetryAdminUserSupportCampaignTarget();
 
   const { data, isLoading, error } = useGetAdminUserSupport(userId, {
@@ -547,38 +446,6 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
     setCloneCampaign(campaign);
     setCloneAccountId("");
     setCloneError(null);
-  };
-  const openSchedule = (campaign: AdminUserSupportCampaign) => {
-    setScheduleCampaign(campaign);
-    setScheduleDateTime(dateTimeInputValue(campaign.scheduledAt, campaign.timezone));
-    setScheduleTimezone(campaign.timezone);
-    setScheduleError(null);
-  };
-  const closeSchedule = () => {
-    setScheduleCampaign(null);
-    setScheduleDateTime("");
-    setScheduleError(null);
-  };
-  const submitSchedule = async () => {
-    if (!scheduleCampaign) return;
-    const timezone = scheduleTimezone.trim();
-    const scheduledAt = scheduleDateTime ? zonedDateTimeToIso(scheduleDateTime, timezone) : null;
-    if (!timezone || (scheduleDateTime && !scheduledAt)) {
-      setScheduleError(text.scheduleInvalid);
-      return;
-    }
-    try {
-      await updateScheduleMutation.mutateAsync({
-        userId,
-        campaignId: scheduleCampaign.id,
-        data: { scheduledAt, timezone },
-      });
-      closeSchedule();
-      setToast(text.scheduleSaved);
-      refreshCampaignSupport();
-    } catch (cause) {
-      setScheduleError(localizedErrorMessage(cause, language, text.loadError));
-    }
   };
   const submitClone = async () => {
     if (!cloneCampaign) return;
@@ -863,10 +730,10 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                     </div>
                     <div className="mt-3 space-y-1 text-[10px] font-semibold text-[#64748b]">
                       <p>{text.campaignQuota}: <span className="font-extrabold text-[#1d4ed8]">{quotaLabel}</span></p>
-                       <p>{text.campaignSchedule}: <span className="font-extrabold text-[#334155]">{camp.scheduledAt ? formatDateInTimezone(camp.scheduledAt, camp.timezone, language) : text.scheduleImmediate} · {camp.timezone}</span></p>
+                      <p>{text.campaignSchedule}: <span className="font-extrabold text-[#334155]">{camp.scheduledAt ? formatDate(camp.scheduledAt, language) : "—"}</span></p>
                       <p>{text.campaignDelay}: <span className="font-extrabold text-[#334155]">{camp.roundDelayMinSeconds}–{camp.roundDelayMaxSeconds}s</span></p>
                     </div>
-                     <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <button
                         type="button"
                         onClick={() => toggleCampaignDetails(camp.id)}
@@ -897,17 +764,6 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
                           {text.resumeCampaign}
                         </button>
                       ) : <span />}
-                       {["queued", "running", "paused"].includes(camp.status) ? (
-                         <button
-                           type="button"
-                           onClick={() => openSchedule(camp)}
-                           data-testid={`button-edit-campaign-schedule-${camp.id}`}
-                           className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#1d4ed8] transition hover:bg-[#dbeafe]"
-                         >
-                           <CalendarClock className="h-3.5 w-3.5" />
-                           {text.editSchedule}
-                         </button>
-                       ) : <span />}
                       <button
                         type="button"
                         onClick={() => openClone(camp)}
@@ -1067,72 +923,6 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
               </PrimaryButton>
             </div>
           </div>
-        </Modal>
-      )}
-      {scheduleCampaign && (
-        <Modal
-          title={text.editScheduleTitle}
-          description={text.editScheduleDetail}
-          onClose={closeSchedule}
-        >
-          <form className="space-y-5" onSubmit={(event) => {
-            event.preventDefault();
-            void submitSchedule();
-          }}>
-            <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4">
-              <p className="text-[11px] font-black uppercase tracking-wide text-[#1d4ed8]">{text.sectionCampaigns}</p>
-              <p className="mt-1 text-[14px] font-extrabold text-[#1e3a8a]">{scheduleCampaign.name}</p>
-              <p className="mt-1 text-[12px] font-medium text-[#1e40af]">
-                {text.campaignSchedule}: {scheduleCampaign.scheduledAt
-                  ? `${formatDateInTimezone(scheduleCampaign.scheduledAt, scheduleCampaign.timezone, language)} · ${scheduleCampaign.timezone}`
-                  : text.scheduleImmediate}
-              </p>
-            </div>
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-bold text-[#334155]">{text.scheduleDateTime}</span>
-              <input
-                type="datetime-local"
-                value={scheduleDateTime}
-                onChange={(event) => setScheduleDateTime(event.target.value)}
-                className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]"
-                data-testid="admin-campaign-schedule-datetime"
-              />
-              <span className="mt-2 block text-[11px] font-medium leading-relaxed text-[#64748b]">{text.scheduleBlankHint}</span>
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-bold text-[#334155]">{text.scheduleTimezone}</span>
-              <input
-                type="text"
-                list="admin-campaign-timezones"
-                value={scheduleTimezone}
-                onChange={(event) => setScheduleTimezone(event.target.value)}
-                className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]"
-                data-testid="admin-campaign-schedule-timezone"
-              />
-              <datalist id="admin-campaign-timezones">
-                {["Asia/Ho_Chi_Minh", "Asia/Bangkok", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin", "America/New_York", "America/Los_Angeles", "UTC"].map((timezone) => (
-                  <option value={timezone} key={timezone} />
-                ))}
-              </datalist>
-            </label>
-            <div className="rounded-xl bg-[#f8fafc] px-3.5 py-3 text-[12px] font-semibold text-[#475569]">
-              {text.schedulePreview}: <span className="font-extrabold text-[#0f172a]">
-                {scheduleDateTime
-                  ? (zonedDateTimeToIso(scheduleDateTime, scheduleTimezone.trim())
-                    ? `${formatDateInTimezone(zonedDateTimeToIso(scheduleDateTime, scheduleTimezone.trim())!, scheduleTimezone.trim(), language)} · ${scheduleTimezone.trim()}`
-                    : text.scheduleInvalid)
-                  : text.scheduleImmediate}
-              </span>
-            </div>
-            {scheduleError && <p className="rounded-xl bg-[#fff1f2] px-3.5 py-3 text-[12px] font-semibold text-[#be123c]">{scheduleError}</p>}
-            <div className="flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={closeSchedule} className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc]">{text.cancelSchedule}</button>
-              <PrimaryButton type="submit" disabled={updateScheduleMutation.isPending}>
-                {updateScheduleMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                {text.saveSchedule}
-              </PrimaryButton>
-            </div>
-          </form>
         </Modal>
       )}
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
