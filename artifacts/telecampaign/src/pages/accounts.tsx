@@ -80,6 +80,7 @@ const copy = {
     saveStepDescription: "The account appears in the list with its saved limit and login status.",
     addTitle: "Add Telegram account",
     addDescription: "Enter the Telegram account details below.",
+    apiNote: "Get your api_id and api_hash from",
     apiId: "api_id",
     apiHash: "api_hash",
     phoneNumber: "Telegram phone number",
@@ -151,6 +152,7 @@ const copy = {
     saveStepDescription: "Tài khoản sẽ xuất hiện trong danh sách với limit và trạng thái đăng nhập.",
     addTitle: "Thêm tài khoản Telegram",
     addDescription: "Nhập thông tin tài khoản Telegram bên dưới.",
+    apiNote: "Lấy api_id và api_hash tại",
     apiId: "api_id",
     apiHash: "api_hash",
     phoneNumber: "Số điện thoại Telegram",
@@ -544,6 +546,18 @@ export default function Accounts() {
       {showAddModal && (
         <AccountsDialog title={text.addTitle} description={text.addDescription} onClose={closeAddModal} testId="telegram-accounts-add-dialog">
           <form className="space-y-5" onSubmit={saveAccount}>
+            <p className="rounded-2xl border border-[#bde4f9] bg-[#f0f9ff] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#0369a1]">
+              {text.apiNote}{" "}
+              <a
+                href="https://my.telegram.org"
+                target="_blank"
+                rel="noreferrer"
+                className="font-extrabold underline decoration-[#7dd3fc] underline-offset-2 hover:text-[#075985]"
+              >
+                my.telegram.org
+              </a>{" "}
+              <span>→ API development tools.</span>
+            </p>
             <Input label={text.apiId} value={apiId} onChange={setApiId} placeholder="12345678" type="number" />
             <Input label={text.apiHash} value={apiHash} onChange={setApiHash} placeholder="0123456789abcdef" type="password" />
             <Input label={text.phoneNumber} value={phone} onChange={setPhone} placeholder={text.phonePlaceholder} type="tel" />

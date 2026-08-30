@@ -148,8 +148,6 @@ export async function getUnmappedLegacyOwnerCount(): Promise<number> {
       SELECT owner_user_id FROM telegram_accounts
       UNION
       SELECT owner_user_id FROM campaigns
-      UNION
-      SELECT owner_user_id FROM activity_logs
     ) AS legacy_owners
     WHERE NOT EXISTS (
       SELECT 1 FROM app_users

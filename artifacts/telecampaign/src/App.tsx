@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { KeyRound, LoaderCircle, LockKeyhole, UserRound } from 'lucide-react';
+import { KeyRound, Languages, LoaderCircle, LockKeyhole, UserRound } from 'lucide-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -14,7 +14,7 @@ import {
   Router as WouterRouter,
   Redirect,
 } from 'wouter';
-import { useGetGroupLibraryAccess, useGetUpgradeSummary } from '@workspace/api-client-react';
+import { getGetUpgradeSummaryQueryKey, useGetGroupLibraryAccess, useGetUpgradeSummary } from '@workspace/api-client-react';
 
 import Dashboard from '@/pages/dashboard';
 import Account from '@/pages/account';
@@ -71,6 +71,19 @@ function AuthShell({ children }: { children: ReactNode }) {
               </button>
             ))}
           </div>
+        </div>
+        <div className="mb-4 flex items-center justify-center gap-2 rounded-2xl border border-[#bde4f9] bg-[#eff8ff] px-3 py-2.5 text-center shadow-sm">
+          <Languages className="h-4 w-4 shrink-0 text-[#1888e8]" aria-hidden="true" />
+          <p className="text-[12px] font-semibold leading-5 text-[#48647c]">
+            <span>International visitors:</span>{" "}
+            <button
+              type="button"
+              onClick={() => setLanguage('en')}
+              className="font-extrabold text-[#0877d5] underline decoration-[#7dd3fc] underline-offset-2 hover:text-[#075985]"
+            >
+              Tap EN
+            </button>
+          </p>
         </div>
         <div className="rounded-3xl border border-[#dbe6f0] bg-white p-6 shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-8">
           {children}
@@ -331,7 +344,12 @@ function WorkspaceRoute({ children }: { children: ReactNode }) {
 
 function SubscriptionGate({ children }: { children: ReactNode }) {
   const { language } = useLanguage();
-  const { data: summary, isLoading, isError } = useGetUpgradeSummary();
+  const { data: summary, isLoading, isError } = useGetUpgradeSummary({
+    query: {
+      queryKey: getGetUpgradeSummaryQueryKey(),
+      retry: false,
+    },
+  });
   const [, setLocation] = useLocation();
 
   if (isLoading) {
