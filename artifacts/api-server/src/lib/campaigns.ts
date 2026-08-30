@@ -1017,7 +1017,7 @@ export async function processNextCampaignTarget() {
           : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
     const canRetry = ownerDeliveryBusy
       || (job.target.attempts + 1 < job.campaign.maxRetries && knownPreSendRejection);
-    if (hasSupportedFloodWait) {
+    if (hasSupportedFloodWait || hasSafePreSendTimeout) {
       await db.update(telegramAccountsTable).set({
         cooldownUntil: retryAt,
         updatedAt: new Date(),
