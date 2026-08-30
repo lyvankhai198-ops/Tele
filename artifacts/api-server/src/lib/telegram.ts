@@ -1,7 +1,5 @@
 import { Api, TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
-import { Logger as GramJsLogger } from "telegram/extensions/index.js";
-import { LogLevel } from "telegram/extensions/Logger.js";
 import { db, destinationsTable, proxiesTable, telegramAccountsTable } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "./crypto";
@@ -10,60 +8,6 @@ import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 import { logger } from "./logger";
-import { runTelegramAccountSyncOnce } from "./telegram-operation-guard";
-
-const TELEGRAM_CONNECTION_RETRIES = 3;
-const TELEGRAM_RETRY_DELAY_MS = 5_000;
-const TELEGRAM_ERROR_LOG_INTERVAL_MS = 60_000;
-const TELEGRAM_ERROR_LOG_MAX_KEYS = 500;
-const TELEGRAM_CONNECT_DEADLINE_MS = 45_000;
-const TELEGRAM_DELIVERY_DEADLINE_MS = 60_000;
-const TELEGRAM_DISCONNECT_DEADLINE_MS = 2_000;
-
-type TelegramClientOperation = "login" | "sync" | "saved_messages" | "send" | "forward";
-type TelegramClientContext = {
-  accountId?: string;
-  proxyId?: string | null;
-  operation: TelegramClientOperation;
-};
-
-const telegramErrorLogs = new Map<string, {
-  lastLoggedAt: number;
-  suppressed: number;
-}>();
-const silentGramJsLogger = new GramJsLogger(LogLevel.NONE);
-
-class TelegramOperationTimeoutError extends Error {
-  constructor(message: string, readonly safeToRetry: boolean) {
-    super(message);
-    this.name = "TelegramOperationTimeoutError";
-  }
-}
-
-export function isTelegramSafePreSendTimeout(error: unknown) {
-  return error instanceof TelegramOperationTimeoutError && error.safeToRetry;
-}
-
-async function withTelegramClientDeadline<T>(
-  client: TelegramClient,
-  operation: () => Promise<T>,
-  timeoutMs: number,
-  timeoutError: TelegramOperationTimeoutError,
-): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const operationPromise = operation();
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      void disconnectQuietly(client);
-      reject(timeoutError);
-    }, timeoutMs);
-  });
-  try {
-    return await Promise.race([operationPromise, timeoutPromise]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -90,76 +34,16 @@ export type TelegramCredentials = { apiId: number; apiHash: string };
 export type TelegramLoginUser = { id: string; username: string | null; phone: string | null; name: string | null };
 export const DEVELOPMENT_DEMO_TELEGRAM_PHONE = "+84987654321";
 
-function installTelegramErrorHandler(client: TelegramClient, context: TelegramClientContext) {
-  client.onError = async (error) => {
-    const now = Date.now();
-    const details = [
-      error.name,
-      error.message,
-      (error as { errorMessage?: unknown }).errorMessage,
-      (error as { code?: unknown }).code,
-    ].filter((value): value is string | number => typeof value === "string" || typeof value === "number")
-      .join(" ")
-      .toUpperCase();
-    const errorSummary = details.includes("TIMEOUT")
-      ? "timeout"
-      : details.includes("FLOOD")
-        ? "rate_limited"
-        : details.includes("AUTH_KEY") || details.includes("SESSION")
-          ? "session_error"
-          : details.includes("PROXY")
-            ? "proxy_error"
-            : details.includes("ECONN") || details.includes("SOCKET") || details.includes("NETWORK")
-              ? "network_error"
-              : "telegram_client_error";
-    const key = [
-      context.accountId ?? "unassigned",
-      context.proxyId ?? "direct",
-      context.operation,
-      errorSummary,
-    ].join(":");
-    const previous = telegramErrorLogs.get(key);
-    if (previous && now - previous.lastLoggedAt < TELEGRAM_ERROR_LOG_INTERVAL_MS) {
-      previous.suppressed += 1;
-      return;
-    }
-    const suppressedCount = previous?.suppressed ?? 0;
-    if (telegramErrorLogs.size >= TELEGRAM_ERROR_LOG_MAX_KEYS && !telegramErrorLogs.has(key)) {
-      const oldestKey = telegramErrorLogs.keys().next().value;
-      if (oldestKey) telegramErrorLogs.delete(oldestKey);
-    }
-    telegramErrorLogs.set(key, { lastLoggedAt: now, suppressed: 0 });
-    logger.warn({
-      errorSummary,
-      accountId: context.accountId,
-      proxyId: context.proxyId,
-      operation: context.operation,
-      suppressedCount,
-    }, "Telegram client background error");
-  };
-}
-
-export function createTelegramClient(
-  session = "",
-  credentials?: TelegramCredentials,
-  proxy?: TelegramProxyConfig,
-  context: TelegramClientContext = { operation: "login" },
-) {
+export function createTelegramClient(session = "", credentials?: TelegramCredentials, proxy?: TelegramProxyConfig) {
   const { apiId, apiHash } = credentials ?? requireTelegramConfiguration();
-  const client = new TelegramClient(new StringSession(session), apiId, apiHash, {
-    connectionRetries: TELEGRAM_CONNECTION_RETRIES,
-    reconnectRetries: TELEGRAM_CONNECTION_RETRIES,
-    retryDelay: TELEGRAM_RETRY_DELAY_MS,
-    autoReconnect: true,
-    baseLogger: silentGramJsLogger,
+  return new TelegramClient(new StringSession(session), apiId, apiHash, {
+    connectionRetries: 5,
     useWSS: false,
     ...(proxy ? {
       proxy: proxy as any,
       networkSocket: TelegramProxySocket as unknown as typeof import("telegram/extensions/index.js").PromisedNetSockets,
     } : {}),
   });
-  installTelegramErrorHandler(client, context);
-  return client;
 }
 
 export function credentialsForAccount(account: typeof telegramAccountsTable.$inferSelect): TelegramCredentials {
@@ -202,13 +86,8 @@ async function invalidateTelegramSession(accountId: string): Promise<void> {
   ));
 }
 
-export async function startTelegramPhoneLogin(
-  credentials: TelegramCredentials,
-  phone: string,
-  proxy?: TelegramProxyConfig,
-  context: Omit<TelegramClientContext, "operation"> = {},
-) {
-  const client = createTelegramClient("", credentials, proxy, { ...context, operation: "login" });
+export async function startTelegramPhoneLogin(credentials: TelegramCredentials, phone: string, proxy?: TelegramProxyConfig) {
+  const client = createTelegramClient("", credentials, proxy);
   try {
     await client.connect();
     const result = await client.sendCode(credentials, phone);
@@ -229,15 +108,11 @@ export async function confirmTelegramPhoneCode(input: {
   session: string;
   code: string;
   proxy?: TelegramProxyConfig;
-  context?: Omit<TelegramClientContext, "operation">;
 }): Promise<
   | { status: "connected"; session: string; user: TelegramLoginUser }
   | { status: "requires_2fa"; session: string }
 > {
-  const client = createTelegramClient(input.session, input.credentials, input.proxy, {
-    ...input.context,
-    operation: "login",
-  });
+  const client = createTelegramClient(input.session, input.credentials, input.proxy);
   try {
     await client.connect();
     await client.invoke(new Api.auth.SignIn({
@@ -259,12 +134,8 @@ export async function confirmTelegramTwoFactorPassword(input: {
   session: string;
   password: string;
   proxy?: TelegramProxyConfig;
-  context?: Omit<TelegramClientContext, "operation">;
 }): Promise<{ session: string; user: TelegramLoginUser }> {
-  const client = createTelegramClient(input.session, input.credentials, input.proxy, {
-    ...input.context,
-    operation: "login",
-  });
+  const client = createTelegramClient(input.session, input.credentials, input.proxy);
   try {
     await client.connect();
     await client.signInWithPassword(input.credentials, {
@@ -413,11 +284,7 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   );
 }
 
-export async function getAccountClient(
-  accountId: string,
-  ownerUserId?: string,
-  operation: Exclude<TelegramClientOperation, "login"> = "sync",
-): Promise<{
+export async function getAccountClient(accountId: string, ownerUserId?: string): Promise<{
   client: TelegramClient;
   account: typeof telegramAccountsTable.$inferSelect;
 }> {
@@ -433,21 +300,10 @@ export async function getAccountClient(
     throw new Error("Telegram account has not completed authorization");
   }
   const proxy = await getTelegramProxyConfig(account);
-  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy, {
-    accountId: account.id,
-    proxyId: account.proxyId,
-    operation,
-  });
+  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy);
   try {
-    const currentUser = await withTelegramClientDeadline(
-      client,
-      async () => {
-        await client.connect();
-        return getCurrentUser(client);
-      },
-      TELEGRAM_CONNECT_DEADLINE_MS,
-      new TelegramOperationTimeoutError("Telegram connection timed out before delivery started.", true),
-    );
+    await client.connect();
+    const currentUser = await getCurrentUser(client);
     if (currentUser.id !== account.telegramUserId) {
       throw new Error("Telegram session identity does not match the saved account");
     }
@@ -480,8 +336,8 @@ export async function getTelegramProxyConfig(account: typeof telegramAccountsTab
   };
 }
 
-async function syncAccountDestinationsUnlocked(accountId: string) {
-  const { client, account } = await getAccountClient(accountId, undefined, "sync");
+export async function syncAccountDestinations(accountId: string) {
+  const { client, account } = await getAccountClient(accountId);
   let count = 0;
   try {
     const previousDestinations = await db.select().from(destinationsTable)
@@ -620,10 +476,6 @@ async function syncAccountDestinationsUnlocked(accountId: string) {
   }
 }
 
-export function syncAccountDestinations(accountId: string) {
-  return runTelegramAccountSyncOnce(accountId, () => syncAccountDestinationsUnlocked(accountId));
-}
-
 function toTelegramSavedMessage(message: any) {
   if (!message?.id || !(message.message || message.media)) return null;
   return {
@@ -635,7 +487,7 @@ function toTelegramSavedMessage(message: any) {
 }
 
 export async function listTelegramSavedMessages(accountId: string) {
-  const { client, account } = await getAccountClient(accountId, undefined, "saved_messages");
+  const { client, account } = await getAccountClient(accountId);
   try {
     const messages = await client.getMessages("me", { limit: 100 });
     return messages
@@ -656,7 +508,7 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
   if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
     throw new Error("The saved Telegram message ID is invalid");
   }
-  const { client, account } = await getAccountClient(accountId, undefined, "saved_messages");
+  const { client, account } = await getAccountClient(accountId);
   try {
     const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
     return messages
@@ -673,48 +525,37 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
 }
 
 export async function sendTelegramMessage(accountId: string, destinationId: string, content: string, ownerUserId: string) {
-  const { client, account } = await getAccountClient(accountId, ownerUserId, "send");
+  const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {
-    return await withTelegramClientDeadline(
-      client,
-      async () => {
-        const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
-        if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
-        const entity = await resolveDestinationEntity(client, destination);
-        const sent = await client.sendMessage(entity, {
-          message: content,
-          ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
-        });
-        return String((sent as any).id ?? "");
-      },
-      TELEGRAM_DELIVERY_DEADLINE_MS,
-      new TelegramOperationTimeoutError(
-        "Telegram delivery timed out before confirmation; manual review is required to avoid a duplicate send.",
-        false,
-      ),
-    );
+    const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
+    if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
+    const entity = await resolveDestinationEntity(client, destination);
+    const sent = await client.sendMessage(entity, {
+      message: content,
+      ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
+    });
+    return String((sent as any).id ?? "");
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
       await invalidateTelegramSession(account.id);
     }
     throw error;
   } finally {
-    await disconnectQuietly(client);
+    await client.disconnect();
   }
 }
 
 export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
-  const { client, account } = await getAccountClient(accountId, ownerUserId, "forward");
+  const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {
-    return await withTelegramClientDeadline(client, async () => {
-      const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
-      if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
-      const entity = await resolveDestinationEntity(client, destination);
-      const numericSourceMessageId = Number(sourceMessageId);
-      if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
-        throw new Error("The saved Telegram message ID is invalid");
-      }
-      const forwardOnce = async () => {
+    const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
+    if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
+    const entity = await resolveDestinationEntity(client, destination);
+    const numericSourceMessageId = Number(sourceMessageId);
+    if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
+      throw new Error("The saved Telegram message ID is invalid");
+    }
+    const forwardOnce = async () => {
       if (destination.topicId === null) {
         const messages = await client.forwardMessages(entity, {
           messages: numericSourceMessageId,
@@ -731,39 +572,22 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
       const result = await client.invoke(request);
       const sent = await (client as any)._getResponseMessage(request, result, entity);
       return String(sent?.id ?? "");
-      };
-      const isInvalidSavedMessage = (error: unknown) => {
+    };
+    const isInvalidSavedMessage = (error: unknown) => {
       const details = [error, (error as { errorMessage?: unknown })?.errorMessage, (error as { message?: unknown })?.message]
         .filter((value): value is string => typeof value === "string")
         .join(" ");
       return /MESSAGE_ID_INVALID|saved Telegram message ID is invalid/i.test(details);
-      };
-      const refreshSavedMessage = async () => {
+    };
+    const refreshSavedMessage = async () => {
       try {
         const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
         return messages.some((message: any) => Number(message?.id) === numericSourceMessageId);
       } catch {
         return false;
       }
-      };
-      if (destination.topicId === null) {
-        try {
-          return await forwardOnce();
-        } catch (error) {
-          if (!isInvalidSavedMessage(error)) throw error;
-          if (!(await refreshSavedMessage())) {
-            throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
-          }
-          try {
-            return await forwardOnce();
-          } catch (retryError) {
-            if (isInvalidSavedMessage(retryError)) {
-              throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
-            }
-            throw retryError;
-          }
-        }
-      }
+    };
+    if (destination.topicId === null) {
       try {
         return await forwardOnce();
       } catch (error) {
@@ -780,17 +604,30 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
           throw retryError;
         }
       }
-    }, TELEGRAM_DELIVERY_DEADLINE_MS, new TelegramOperationTimeoutError(
-      "Telegram delivery timed out before confirmation; manual review is required to avoid a duplicate send.",
-      false,
-    ));
+    }
+    try {
+      return await forwardOnce();
+    } catch (error) {
+      if (!isInvalidSavedMessage(error)) throw error;
+      if (!(await refreshSavedMessage())) {
+        throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+      }
+      try {
+        return await forwardOnce();
+      } catch (retryError) {
+        if (isInvalidSavedMessage(retryError)) {
+          throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+        }
+        throw retryError;
+      }
+    }
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
       await invalidateTelegramSession(account.id);
     }
     throw error;
   } finally {
-    await disconnectQuietly(client);
+    await client.disconnect();
   }
 }
 
@@ -801,18 +638,10 @@ export async function getCurrentUser(client: TelegramClient): Promise<TelegramLo
 }
 
 export async function disconnectQuietly(client: TelegramClient) {
-  let timer: NodeJS.Timeout | undefined;
   try {
-    await Promise.race([
-      Promise.resolve().then(() => client.disconnect()).catch(() => undefined),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, TELEGRAM_DISCONNECT_DEADLINE_MS);
-      }),
-    ]);
+    await client.disconnect();
   } catch {
     // Disconnect is best effort and must not mask the original auth error.
-  } finally {
-    if (timer) clearTimeout(timer);
   }
 }
 

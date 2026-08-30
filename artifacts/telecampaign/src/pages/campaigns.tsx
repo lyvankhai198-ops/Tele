@@ -103,9 +103,6 @@ const copy = {
     detailRounds: "rounds",
     detailDelayRound: "Round delay:",
     detailSchedule: "Scheduled:",
-    cooldownTitle: "Telegram account is temporarily rate-limited",
-    cooldownMessage: "This campaign will automatically continue at:",
-    cooldownRemaining: "Time remaining:",
     detailForwardNote: "This template will be forwarded from Saved Messages.",
     detailLiveForwardContent: "Current content from Saved Messages",
     detailLiveForwardLoading: "Loading the current Saved Message…",
@@ -136,8 +133,6 @@ const copy = {
     detailWaitingStatus: "Waiting",
     detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
     detailWaitingCountdown: "Send countdown:",
-    detailWaitingDue: "Due now — queued for automatic processing",
-    detailWaitingDueMessage: "The scheduled time has passed. The system will continue this campaign automatically.",
     detailNextSend: "Next send:",
     detailErrorTitle: "Delivery errors",
     detailErrorEmpty: "No delivery errors recorded.",
@@ -217,9 +212,6 @@ const copy = {
     detailRounds: "vòng",
     detailDelayRound: "Delay vòng:",
     detailSchedule: "Lên lịch:",
-    cooldownTitle: "Tài khoản Telegram đang bị giới hạn tạm thời",
-    cooldownMessage: "Chiến dịch sẽ tự động chạy lại lúc:",
-    cooldownRemaining: "Thời gian còn lại:",
     detailForwardNote: "Mẫu này sẽ được chuyển tiếp từ Tin nhắn đã lưu.",
     detailLiveForwardContent: "Nội dung hiện tại từ Tin nhắn đã lưu",
     detailLiveForwardLoading: "Đang tải nội dung Tin nhắn đã lưu hiện tại...",
@@ -250,8 +242,6 @@ const copy = {
     detailWaitingStatus: "Đang chờ",
     detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
     detailWaitingCountdown: "Đếm ngược lần gửi:",
-    detailWaitingDue: "Đã đến giờ gửi — đang chờ hệ thống xử lý tự động",
-    detailWaitingDueMessage: "Thời gian dự kiến đã đến. Hệ thống sẽ tự động tiếp tục chiến dịch này.",
     detailNextSend: "Lần gửi tiếp:",
     detailErrorTitle: "Chi tiết lỗi gửi",
     detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
@@ -288,87 +278,17 @@ function retryTimestamp(value: Date | string | null) {
   return value ? new Date(value).getTime() : 0;
 }
 
-function WaitingSchedule({
-  nextAttemptAt,
-  cooldownUntil,
-  language,
-  c,
-}: {
-  nextAttemptAt: Date | string;
-  cooldownUntil: Date | string | null | undefined;
-  language: "en" | "vi";
-  c: (typeof copy)["en"] | (typeof copy)["vi"];
-}) {
-  const [now, setNow] = useState(() => Date.now());
-  const targetMs = retryTimestamp(nextAttemptAt);
-  const cooldownMs = cooldownUntil ? retryTimestamp(cooldownUntil) : 0;
-  const activeCooldownMs = cooldownMs > now ? cooldownMs : 0;
-  const effectiveMs = Math.max(targetMs, activeCooldownMs);
+function RetryCountdown({ nextAttemptAt }: { nextAttemptAt: Date | string }) {
+  const [remaining, setRemaining] = useState(() => retryTimestamp(nextAttemptAt) - Date.now());
 
   useEffect(() => {
-    const update = () => setNow(Date.now());
+    const update = () => setRemaining(retryTimestamp(nextAttemptAt) - Date.now());
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [nextAttemptAt, cooldownUntil]);
+  }, [nextAttemptAt]);
 
-  if (effectiveMs <= now) {
-    return (
-      <>
-        <p className="mt-2 text-[14px] font-black">{c.detailWaitingDue}</p>
-        <p className="mt-1 font-medium">{c.detailWaitingDueMessage}</p>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <p className="mt-2 text-[16px]">
-        {c.detailWaitingCountdown}{" "}
-        <span className="font-black tabular-nums">{formatCountdown(effectiveMs - now)}</span>
-      </p>
-      <p className="mt-1 font-medium">
-        {activeCooldownMs ? c.cooldownMessage : c.detailWaitingMessage}
-        {activeCooldownMs ? ` ${formatSchedule(cooldownUntil ?? null, language)}` : ""}
-      </p>
-      <p className="mt-1 text-[11px] font-semibold">
-        {c.detailNextSend} {formatSchedule(new Date(effectiveMs), language)}
-      </p>
-    </>
-  );
-}
-
-function AccountCooldownNotice({
-  until,
-  language,
-  c,
-}: {
-  until: Date | string | null | undefined;
-  language: "en" | "vi";
-  c: (typeof copy)["en"] | (typeof copy)["vi"];
-}) {
-  const [now, setNow] = useState(() => Date.now());
-  const cooldownMs = until ? new Date(until).getTime() : NaN;
-
-  useEffect(() => {
-    if (!Number.isFinite(cooldownMs) || cooldownMs <= Date.now()) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [cooldownMs]);
-
-  if (!Number.isFinite(cooldownMs) || cooldownMs <= now) return null;
-
-  return (
-    <div className="rounded-xl border border-[#fed7aa] bg-[#fff7ed] px-4 py-3 text-[#9a3412]" role="status">
-      <p className="text-[12px] font-black">{c.cooldownTitle}</p>
-      <p className="mt-1 text-[13px] font-semibold">
-        {c.cooldownMessage} <strong>{formatSchedule(until ?? null, language)}</strong>
-      </p>
-      <p className="mt-1 text-[12px] font-bold">
-        {c.cooldownRemaining} <span className="font-black tabular-nums">{formatCountdown(cooldownMs - now)}</span>
-      </p>
-    </div>
-  );
+  return <span className="font-black tabular-nums">{formatCountdown(remaining)}</span>;
 }
 
 function statusLabel(status: string, c: (typeof copy)["en"] | (typeof copy)["vi"]) {
@@ -409,9 +329,7 @@ export default function Campaigns() {
   const { language } = useLanguage();
   const c = copy[language];
 
-  const campaigns = useListCampaigns({
-    query: { refetchInterval: 15_000 } as any,
-  });
+  const campaigns = useListCampaigns();
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
@@ -456,12 +374,6 @@ export default function Campaigns() {
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
-
-  useEffect(() => {
-    if (!details) return;
-    const refreshedDetails = (campaigns.data ?? []).find((campaign) => campaign.id === details.id);
-    if (refreshedDetails && refreshedDetails !== details) setDetails(refreshedDetails);
-  }, [campaigns.data, details]);
 
   function openNew() {
     setEditingCampaign(null);
@@ -841,7 +753,6 @@ export default function Campaigns() {
               <p className="mt-1"><b>{c.detailDelayRound}</b> {details.roundDelayMinSeconds}–{details.roundDelayMaxSeconds}s</p>
               <p className="mt-1"><b>{c.detailSchedule}</b> {formatSchedule(details.scheduledAt, language)}</p>
             </div>
-             <AccountCooldownNotice until={details.cooldownUntil} language={language} c={c} />
              {details.templateMode === "forward" ? (
                <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e2e8f0] p-4 text-[#334155]">
                  <span className="font-medium">{c.detailForwardNote}</span>
@@ -890,12 +801,9 @@ export default function Campaigns() {
                                  <strong>{error.destinationTitle}</strong>
                                  <span className="shrink-0 font-bold">{c.detailWaitingStatus}</span>
                                </div>
-                                <WaitingSchedule
-                                  nextAttemptAt={error.nextAttemptAt!}
-                                  cooldownUntil={details.cooldownUntil}
-                                  language={language}
-                                  c={c}
-                                />
+                               <p className="mt-2 text-[16px]">{c.detailWaitingCountdown} <RetryCountdown nextAttemptAt={error.nextAttemptAt!} /></p>
+                               <p className="mt-1 font-medium">{c.detailWaitingMessage}</p>
+                                {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailNextSend} {formatSchedule(error.nextAttemptAt, language)}</p>}
                              </div>
                            ))}
                          </div>

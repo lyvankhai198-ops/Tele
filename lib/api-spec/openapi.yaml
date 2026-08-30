@@ -1376,7 +1376,7 @@ components:
         sourceMessageId: { type: ["string", "null"] }
     Campaign:
       type: object
-      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, cloneMode, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, dailyQuota, destinationIds, errors, cooldownUntil]
+      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, cloneMode, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, dailyQuota, destinationIds, errors]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1392,7 +1392,6 @@ components:
         mediaUrl: { type: ["string", "null"] }
         status: { type: string }
         scheduledAt: { type: ["string", "null"], format: date-time }
-        cooldownUntil: { type: ["string", "null"], format: date-time }
         timezone: { type: string }
         maxRetries: { type: number }
         repeatCount: { type: number }

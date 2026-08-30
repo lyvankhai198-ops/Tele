@@ -1,0 +1,2 @@
+exports/telecampaign-project-source.zip filter=lfs diff=lfs merge=lfs -text
+attached_assets/telecampaign-tutorial-original.mov filter=lfs diff=lfs merge=lfs -text
