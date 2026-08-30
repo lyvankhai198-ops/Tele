@@ -805,6 +805,11 @@ export async function processNextCampaignTarget() {
         lte(telegramAccountsTable.cooldownUntil, now),
         isNull(telegramAccountsTable.cooldownUntil),
       ),
+      or(
+        lte(telegramAccountsTable.deliveryLeaseUntil, now),
+        isNull(telegramAccountsTable.deliveryLeaseUntil),
+      ),
+      eq(telegramAccountsTable.status, "connected"),
       isNull(telegramAccountsTable.deletedAt),
     ))
     .orderBy(asc(campaignTargetsTable.nextAttemptAt))
