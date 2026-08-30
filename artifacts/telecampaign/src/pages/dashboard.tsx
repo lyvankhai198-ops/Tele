@@ -27,6 +27,7 @@ import type { AdminNotification } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { QuickSendWizard } from "@/components/quick-send-wizard";
+import { shouldShowQuickSend } from "@/lib/onboarding";
 
 export default function Dashboard() {
   const { language, t } = useLanguage();
@@ -47,7 +48,7 @@ export default function Dashboard() {
   });
   const [, setLocation] = useLocation();
   const [selectedNotice, setSelectedNotice] = useState<AdminNotification | null>(null);
-  const [showQuickSend, setShowQuickSend] = useState(false);
+  const [quickSendOpen, setQuickSendOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -73,6 +74,7 @@ export default function Dashboard() {
   }
 
   const { metrics, adminNotifications, recentCampaigns, recentActivity } = data;
+  const showQuickSendEntry = shouldShowQuickSend(metrics.successfulCampaigns);
   const expiresAt = upgradeSummary?.subscription.expiresAt ? new Date(upgradeSummary.subscription.expiresAt) : null;
   const remainingHours = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000))) : null;
   const showExpiryNotice = upgradeSummary?.subscription.status === "active" && remainingHours !== null && remainingHours <= 24;
@@ -108,21 +110,23 @@ export default function Dashboard() {
         <DashboardMetricCard label={t("Failed Today")} value={metrics.failedToday} icon={XCircle} iconColor="text-[#e11d48]" iconBg="bg-[#fff1f2]" />
       </div>
 
-      <section className="mb-8 overflow-hidden rounded-3xl bg-[linear-gradient(115deg,#172b85_0%,#1d4ed8_58%,#2563eb_100%)] text-white shadow-[0_12px_30px_rgba(29,78,216,0.18)]" data-testid="quick-send-entry">
-        <div className="flex flex-col gap-6 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-7">
-          <div className="flex items-start gap-4">
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 text-white ring-1 ring-white/20"><Rocket className="h-6 w-6" /></span>
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-100">{language === "vi" ? "Lối tắt cho người mới" : "A shortcut for getting started"}</p>
-              <h2 className="mt-1.5 text-[20px] font-extrabold tracking-tight">{metrics.campaigns === 0 ? (language === "vi" ? "Gửi chiến dịch đầu tiên" : "Send your first campaign") : (language === "vi" ? "Gửi nhanh một chiến dịch" : "Quick send a campaign")}</h2>
-              <p className="mt-1.5 max-w-2xl text-[13px] font-medium leading-relaxed text-blue-100">{language === "vi" ? "Chọn tài khoản, nhóm và nội dung trong một luồng gọn — không cần tạo mẫu tin riêng." : "Choose an account, groups, and message in one simple flow — no separate template setup."}</p>
+      {showQuickSendEntry && (
+        <section className="mb-8 overflow-hidden rounded-3xl bg-[linear-gradient(115deg,#172b85_0%,#1d4ed8_58%,#2563eb_100%)] text-white shadow-[0_12px_30px_rgba(29,78,216,0.18)]" data-testid="quick-send-entry">
+          <div className="flex flex-col gap-6 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-7">
+            <div className="flex items-start gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 text-white ring-1 ring-white/20"><Rocket className="h-6 w-6" /></span>
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-100">{language === "vi" ? "Lối tắt cho người mới" : "A shortcut for getting started"}</p>
+                <h2 className="mt-1.5 text-[20px] font-extrabold tracking-tight">{metrics.successfulCampaigns === 0 ? (language === "vi" ? "Gửi chiến dịch đầu tiên" : "Send your first campaign") : (language === "vi" ? "Gửi nhanh một chiến dịch" : "Quick send a campaign")}</h2>
+                <p className="mt-1.5 max-w-2xl text-[13px] font-medium leading-relaxed text-blue-100">{language === "vi" ? "Chọn tài khoản, nhóm và nội dung trong một luồng gọn — không cần tạo mẫu tin riêng." : "Choose an account, groups, and message in one simple flow — no separate template setup."}</p>
+              </div>
             </div>
+            <button type="button" onClick={() => setQuickSendOpen(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-[13px] font-extrabold text-[#1a2b88] shadow-sm transition hover:bg-blue-50 active:scale-[0.98]" data-testid="quick-send-open">
+              {language === "vi" ? "Bắt đầu ngay" : "Start now"}<ArrowRight className="h-4 w-4" />
+            </button>
           </div>
-          <button type="button" onClick={() => setShowQuickSend(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-[13px] font-extrabold text-[#1a2b88] shadow-sm transition hover:bg-blue-50 active:scale-[0.98]" data-testid="quick-send-open">
-            {language === "vi" ? "Bắt đầu ngay" : "Start now"}<ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      </section>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_400px] gap-8">
         <div className="space-y-8">
@@ -259,9 +263,9 @@ export default function Dashboard() {
         </div>
       </div>
       {selectedNotice && <NotificationDetailModal notification={selectedNotice} onClose={() => setSelectedNotice(null)} />}
-      {showQuickSend && (
+      {quickSendOpen && (
         <QuickSendWizard
-          onClose={() => setShowQuickSend(false)}
+          onClose={() => setQuickSendOpen(false)}
           onCreated={async () => {
             await queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
           }}
