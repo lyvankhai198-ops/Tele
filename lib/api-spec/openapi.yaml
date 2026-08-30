@@ -735,6 +735,28 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: User or campaign not found }
         "409": { description: Campaign is not ready for the requested status }
+  /admin/users/{userId}/campaigns/{campaignId}/schedule:
+    patch:
+      operationId: updateAdminUserCampaignSchedule
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+        - { $ref: "#/components/parameters/AdminCampaignId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminCampaignScheduleInput" }
+      responses:
+        "200":
+          description: Customer campaign schedule updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserSupportCampaign" }
+        "400": { description: Invalid schedule or timezone }
+        "403": { description: Administrator permission is required }
+        "404": { description: User or campaign not found }
+        "409": { description: Campaign is not reschedulable or changed concurrently }
   /admin/targets/{targetId}/retry:
     post:
       operationId: retryAdminCampaignTarget
@@ -1902,6 +1924,12 @@ components:
       required: [status]
       properties:
         status: { type: string, enum: [queued, paused] }
+    AdminCampaignScheduleInput:
+      type: object
+      required: [scheduledAt, timezone]
+      properties:
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        timezone: { type: string, minLength: 1, maxLength: 100 }
     AdminOperationTarget:
       type: object
       required: [id, campaignId, campaignName, ownerUsername, destinationTitle, status, attempts, nextAttemptAt, lastError]

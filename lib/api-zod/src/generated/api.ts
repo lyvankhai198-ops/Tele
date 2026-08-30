@@ -1772,6 +1772,58 @@ export const UpdateAdminUserCampaignStatusResponse = zod.object({
 })
 
 
+export const UpdateAdminUserCampaignScheduleParams = zod.object({
+  "userId": zod.coerce.string(),
+  "campaignId": zod.coerce.string()
+})
+
+export const updateAdminUserCampaignScheduleBodyTimezoneMax = 100;
+
+
+
+export const UpdateAdminUserCampaignScheduleBody = zod.object({
+  "scheduledAt": zod.coerce.date().nullable(),
+  "timezone": zod.string().min(1).max(updateAdminUserCampaignScheduleBodyTimezoneMax)
+})
+
+export const UpdateAdminUserCampaignScheduleResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "content": zod.string(),
+  "templateMode": zod.string(),
+  "templateSourceAccountName": zod.string().nullable(),
+  "templateSourceMessageId": zod.string().nullable(),
+  "telegramAccountId": zod.string().nullable(),
+  "telegramAccountName": zod.string().nullable(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "timezone": zod.string(),
+  "repeatCount": zod.number(),
+  "roundDelayMinSeconds": zod.number(),
+  "roundDelayMaxSeconds": zod.number(),
+  "dailyQuota": zod.object({
+  "limit": zod.number().nullable(),
+  "used": zod.number(),
+  "remaining": zod.number().nullable(),
+  "sentToday": zod.number(),
+  "reservedToday": zod.number()
+}),
+  "destinationCount": zod.number(),
+  "deliveryCount": zod.number(),
+  "pendingCount": zod.number(),
+  "sendingCount": zod.number(),
+  "sentCount": zod.number(),
+  "failedCount": zod.number(),
+  "reviewCount": zod.number(),
+  "clones": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "telegramAccountName": zod.string().nullable()
+}))
+})
+
+
 export const RetryAdminCampaignTargetParams = zod.object({
   "targetId": zod.coerce.string()
 })

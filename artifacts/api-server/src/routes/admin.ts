@@ -39,6 +39,9 @@ import {
   UpdateAdminUserCampaignStatusParams,
   UpdateAdminUserCampaignStatusBody,
   UpdateAdminUserCampaignStatusResponse,
+  UpdateAdminUserCampaignScheduleParams,
+  UpdateAdminUserCampaignScheduleBody,
+  UpdateAdminUserCampaignScheduleResponse,
   RetryAdminCampaignTargetParams,
   RetryAdminCampaignTargetResponse,
   RetryAdminUserSupportCampaignTargetParams,
@@ -97,7 +100,7 @@ import {
   pauseCampaignsOverCurrentQuotaAfterSettingsUpdate,
   resumeQuotaPausedCampaignsAfterSettingsUpdate,
 } from "../lib/campaigns";
-import { rebasePastPendingSchedule } from "../lib/campaign-schedule";
+import { rebasePastPendingSchedule, resolveCampaignScheduleStart, rebasePendingScheduleFromStart } from "../lib/campaign-schedule";
 import { campaignSummary } from "../lib/campaigns";
 import { adminNotificationResponse } from "../lib/admin-notifications";
 import {
@@ -1033,6 +1036,95 @@ async function updateCampaignStatusAsAdmin(input: {
   return { kind: "success" as const, campaign: outcome.campaign };
 }
 
+async function updateCampaignScheduleAsAdmin(input: {
+  actorUserId: string;
+  campaignId: string;
+  ownerUserId: string;
+  scheduledAt: Date | null;
+  timezone: string;
+}) {
+  const filters = [
+    eq(campaignsTable.id, input.campaignId),
+    eq(campaignsTable.ownerUserId, input.ownerUserId),
+  ];
+  const outcome = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${and(...filters)} FOR UPDATE`);
+    const [existing] = await tx.select().from(campaignsTable).where(and(...filters)).limit(1);
+    if (!existing) return { kind: "error" as const, status: 404, message: "Không tìm thấy campaign của người dùng." };
+    if (!["queued", "running", "paused"].includes(existing.status)) {
+      return { kind: "error" as const, status: 409, message: "Chỉ có thể chỉnh lịch campaign đang chờ, đang chạy hoặc tạm dừng." };
+    }
+
+    const now = new Date();
+    const { scheduledAt, roundStartAt } = resolveCampaignScheduleStart(input.scheduledAt, now);
+    await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${existing.id} FOR UPDATE`);
+    const targets = await tx.select({
+      id: campaignTargetsTable.id,
+      status: campaignTargetsTable.status,
+      lastError: campaignTargetsTable.lastError,
+      nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+    }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, existing.id));
+    const rebase = rebasePendingScheduleFromStart(targets, roundStartAt);
+
+    for (const update of rebase.updates) {
+      const [updated] = await tx.update(campaignTargetsTable).set({
+        nextAttemptAt: update.nextAttemptAt,
+        updatedAt: now,
+      }).where(and(
+        eq(campaignTargetsTable.id, update.id),
+        eq(campaignTargetsTable.status, "pending"),
+        isNull(campaignTargetsTable.lastError),
+        update.previousNextAttemptAt === null
+          ? isNull(campaignTargetsTable.nextAttemptAt)
+          : eq(campaignTargetsTable.nextAttemptAt, update.previousNextAttemptAt),
+      )).returning({ id: campaignTargetsTable.id });
+      if (!updated) {
+        return { kind: "error" as const, status: 409, message: "Lịch target đã thay đổi đồng thời. Hãy tải lại và thử lại." };
+      }
+    }
+
+    const [campaign] = await tx.update(campaignsTable).set({
+      scheduledAt,
+      scheduleAnchorAt: roundStartAt,
+      timezone: input.timezone,
+      updatedAt: now,
+    }).where(and(...filters, eq(campaignsTable.status, existing.status))).returning();
+    if (!campaign) return { kind: "error" as const, status: 409, message: "Campaign đã thay đổi đồng thời. Hãy tải lại và thử lại." };
+    return { kind: "success" as const, campaign, existing, rebase };
+  });
+  if (outcome.kind === "error") return outcome;
+
+  const metadata = {
+    adminUserId: input.actorUserId,
+    targetOwnerUserId: outcome.campaign.ownerUserId,
+    previousScheduledAt: outcome.existing.scheduledAt?.toISOString() ?? null,
+    scheduledAt: outcome.campaign.scheduledAt?.toISOString() ?? null,
+    previousTimezone: outcome.existing.timezone,
+    timezone: outcome.campaign.timezone,
+    effectiveStartAt: outcome.rebase.nextRunAt?.toISOString() ?? null,
+    rebasedPendingTargetCount: outcome.rebase.updates.length,
+  };
+  await Promise.all([
+    recordActivity({
+      ownerUserId: input.actorUserId,
+      event: "campaign.admin_schedule_updated",
+      level: "success",
+      campaignId: outcome.campaign.id,
+      message: `Admin changed customer campaign "${outcome.campaign.name}" schedule.`,
+      metadata,
+    }),
+    recordActivity({
+      ownerUserId: outcome.campaign.ownerUserId,
+      event: "campaign.schedule_updated_by_admin",
+      level: "info",
+      campaignId: outcome.campaign.id,
+      message: `An administrator changed the schedule for campaign "${outcome.campaign.name}".`,
+      metadata,
+    }),
+  ]);
+  return { kind: "success" as const, campaign: outcome.campaign };
+}
+
 async function retryCampaignTargetAsAdmin(input: {
   actorUserId: string;
   ownerUserId?: string;
@@ -1146,6 +1238,31 @@ router.patch("/admin/users/:userId/campaigns/:campaignId", async (req, res): Pro
   });
   if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
   res.json(UpdateAdminUserCampaignStatusResponse.parse(await adminCampaignOperationResponse(outcome.campaign)));
+});
+
+router.patch("/admin/users/:userId/campaigns/:campaignId/schedule", async (req, res): Promise<void> => {
+  const params = UpdateAdminUserCampaignScheduleParams.safeParse(req.params);
+  const body = UpdateAdminUserCampaignScheduleBody.safeParse(req.body);
+  if (!params.success || !body.success || (body.data.scheduledAt && Number.isNaN(body.data.scheduledAt.getTime()))) {
+    return void sendError(res, 400, "Lịch campaign hoặc timezone không hợp lệ.");
+  }
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: body.data.timezone });
+  } catch {
+    return void sendError(res, 400, "Múi giờ không hợp lệ.");
+  }
+  const outcome = await updateCampaignScheduleAsAdmin({
+    actorUserId: req.userId!,
+    campaignId: params.data.campaignId,
+    ownerUserId: params.data.userId,
+    scheduledAt: body.data.scheduledAt,
+    timezone: body.data.timezone,
+  });
+  if (outcome.kind === "error") return void sendError(res, outcome.status, outcome.message);
+  const support = await getAdminUserSupport(params.data.userId);
+  const updatedCampaign = support?.campaigns.find((campaign) => campaign.id === outcome.campaign.id);
+  if (!updatedCampaign) return void sendError(res, 404, "Không tìm thấy campaign sau khi cập nhật.");
+  res.json(UpdateAdminUserCampaignScheduleResponse.parse(updatedCampaign));
 });
 
 router.post("/admin/targets/:targetId/retry", async (req, res): Promise<void> => {

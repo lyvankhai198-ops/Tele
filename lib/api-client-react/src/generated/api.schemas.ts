@@ -1237,6 +1237,16 @@ export interface AdminCampaignStatusInput {
   status: AdminCampaignStatusInputStatus;
 }
 
+export interface AdminCampaignScheduleInput {
+  /** @nullable */
+  scheduledAt: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  timezone: string;
+}
+
 export interface AdminOperationTarget {
   id: string;
   campaignId: string;

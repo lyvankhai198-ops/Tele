@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
 import {
   nextCampaignDailyStart,
+  rebasePendingScheduleFromStart,
   rebasePastPendingSchedule,
   rebaseQuotaPausedSchedule,
   resolveCampaignScheduleStart,
@@ -60,6 +61,35 @@ assert.deepEqual(
     { id: "future", status: "pending", lastError: null, nextAttemptAt: futureStart },
   ], configuredAt),
   { shiftMs: 0, nextRunAt: null, updates: [] },
+);
+
+const adminStartAt = new Date("2026-08-30T14:00:00.000Z");
+const adminScheduleRebase = rebasePendingScheduleFromStart([
+  { id: "sent", status: "sent", lastError: null, nextAttemptAt: new Date("2026-08-30T08:00:00.000Z") },
+  { id: "sending", status: "sending", lastError: null, nextAttemptAt: new Date("2026-08-30T10:00:00.000Z") },
+  { id: "round-one", status: "pending", lastError: null, nextAttemptAt: new Date("2026-08-30T10:00:00.000Z") },
+  { id: "round-two", status: "pending", lastError: null, nextAttemptAt: new Date("2026-08-30T11:00:00.000Z") },
+  { id: "unscheduled", status: "pending", lastError: null, nextAttemptAt: null },
+  { id: "quota-marker", status: "pending", lastError: "Daily message limit reached", nextAttemptAt: new Date("2026-08-30T10:00:00.000Z") },
+  { id: "failed", status: "failed", lastError: "Telegram rejected delivery", nextAttemptAt: null },
+  { id: "review", status: "requires_review", lastError: "Outcome unknown", nextAttemptAt: null },
+], adminStartAt);
+assert.equal(adminScheduleRebase.nextRunAt?.toISOString(), adminStartAt.toISOString());
+assert.deepEqual(
+  adminScheduleRebase.updates.map((target) => [
+    target.id,
+    target.previousNextAttemptAt?.toISOString() ?? null,
+    target.nextAttemptAt.toISOString(),
+  ]),
+  [
+    ["round-one", "2026-08-30T10:00:00.000Z", "2026-08-30T14:00:00.000Z"],
+    ["round-two", "2026-08-30T11:00:00.000Z", "2026-08-30T15:00:00.000Z"],
+    ["unscheduled", null, "2026-08-30T14:00:00.000Z"],
+  ],
+);
+assert.equal(
+  adminScheduleRebase.updates.some((target) => ["sent", "sending", "quota-marker", "failed", "review"].includes(target.id)),
+  false,
 );
 
 const campaignAAnchor = new Date("2026-08-27T08:00:00.000Z"); // 15:00 Asia/Ho_Chi_Minh

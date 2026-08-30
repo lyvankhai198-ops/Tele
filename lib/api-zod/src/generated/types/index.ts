@@ -17,6 +17,7 @@ export * from './adminActiveGroup';
 export * from './adminActiveGroupDirectory';
 export * from './adminAuditLog';
 export * from './adminCampaignCloneInput';
+export * from './adminCampaignScheduleInput';
 export * from './adminCampaignStatusInput';
 export * from './adminCampaignStatusInputStatus';
 export * from './adminGroupLibraryImportResult';
