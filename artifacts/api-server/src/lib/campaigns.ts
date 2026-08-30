@@ -33,7 +33,6 @@ import {
   type UserDailyQuotaReservation,
 } from "./user-daily-quota";
 
-const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
 
@@ -914,10 +913,6 @@ export async function processNextCampaignTarget() {
         lte(campaignsTable.scheduledAt, now),
         isNull(campaignsTable.scheduledAt),
       ),
-      or(
-        lte(telegramAccountsTable.cooldownUntil, now),
-        isNull(telegramAccountsTable.cooldownUntil),
-      ),
       isNull(telegramAccountsTable.deletedAt),
     ))
     .orderBy(asc(campaignTargetsTable.nextAttemptAt))
@@ -935,10 +930,6 @@ export async function processNextCampaignTarget() {
     or(
       isNull(telegramAccountsTable.deliveryLeaseUntil),
       lte(telegramAccountsTable.deliveryLeaseUntil, now),
-    ),
-    or(
-      isNull(telegramAccountsTable.cooldownUntil),
-      lte(telegramAccountsTable.cooldownUntil, now),
     ),
     isNull(telegramAccountsTable.deletedAt),
   )).returning();
@@ -1083,12 +1074,9 @@ export async function processNextCampaignTarget() {
       return true;
     }
     const classified = classifyTelegramError(error);
-    const floodSeconds = classified.floodWaitSeconds ?? 0;
-    const hasSupportedFloodWait = classified.category === "flood_wait"
-      && floodSeconds > 0
-      && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
-    // Only deterministic Telegram rejections release reservations. Unknown
-    // and interrupted responses remain review-only to avoid duplicate sends.
+    // Every Telegram failure is recorded on this target and the campaign
+    // continues with its next scheduled target. Only confirmed pre-send
+    // rejections release quota; uncertain outcomes retain their reservation.
     const knownPreSendRejection = classified.safeToRetry;
     if (knownPreSendRejection && userQuotaReservation) {
       await releaseUserDailyQuota({
@@ -1099,22 +1087,10 @@ export async function processNextCampaignTarget() {
       });
       userQuotaReservation = undefined;
     }
-    const retryAt = hasSupportedFloodWait
-      ? new Date(Date.now() + floodSeconds * 1000)
-      : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
-    const canRetry = claimed.attempts < job.campaign.maxRetries && hasSupportedFloodWait;
-    if (hasSupportedFloodWait) {
-      await db.update(telegramAccountsTable).set({
-        cooldownUntil: retryAt,
-        updatedAt: new Date(),
-      }).where(eq(telegramAccountsTable.id, job.destination.accountId));
-    }
     const targetUpdate = {
-      status: knownPreSendRejection
-        ? canRetry ? "pending" : "failed"
-        : "requires_review",
+      status: "failed",
       ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
-      nextAttemptAt: knownPreSendRejection && canRetry ? retryAt : null,
+      nextAttemptAt: null,
       lastError: classified.safeMessage,
       errorCategory: classified.category,
       lastErrorAt: new Date(),
@@ -1125,21 +1101,19 @@ export async function processNextCampaignTarget() {
       eq(campaignTargetsTable.status, "sending"),
     ));
     await recordActivity({
-      event: hasSupportedFloodWait ? "campaign.target.rate_limited" : "campaign.target.failed",
-      message: hasSupportedFloodWait
-        ? `Telegram requested a ${floodSeconds}s delay; delivery was postponed.`
-        : classified.safeMessage,
-      level: hasSupportedFloodWait || canRetry ? "warning" : "error",
+      event: "campaign.target.failed",
+      message: classified.safeMessage,
+      level: "error",
       campaignId: job.campaign.id,
       targetId: job.target.id,
       accountId: job.destination.accountId,
       ownerUserId: job.campaign.ownerUserId,
       metadata: {
-        retryAt: knownPreSendRejection && canRetry ? retryAt.toISOString() : null,
+        retryAt: null,
         quotaReservationRetained: !knownPreSendRejection,
         errorCategory: classified.category,
         recoveryAction: classified.recoveryAction,
-        retryAllowed: knownPreSendRejection && !canRetry && claimed.attempts < job.campaign.maxRetries,
+        retryAllowed: knownPreSendRejection && claimed.attempts < job.campaign.maxRetries,
       },
     });
   } finally {
