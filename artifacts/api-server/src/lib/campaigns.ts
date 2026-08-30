@@ -934,31 +934,31 @@ export async function processNextCampaignTarget() {
       );
       return true;
     }
-    const delivery = await withOwnerDeliveryLock(job.campaign.ownerUserId, async () => {
-      const quota = await pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts);
-      if (quota.pausedForQuota) return quota;
-      userQuotaReservation = quota.userQuotaReservation;
-      const messageId = isDevelopmentDemoTelegramAccount(job.account)
-        ? `development-demo-${job.target.id}`
-        : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
-          ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
-          : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
-      telegramAcceptedDelivery = true;
-      const [persisted] = await db.update(campaignTargetsTable).set({
-        status: "sent",
-        sentMessageId: messageId,
-        sentAt: new Date(),
-        nextAttemptAt: null,
-        lastError: null,
-        updatedAt: new Date(),
-      }).where(and(
-        eq(campaignTargetsTable.id, job.target.id),
-        eq(campaignTargetsTable.status, "sending"),
-      )).returning({ id: campaignTargetsTable.id });
-      return { pausedForQuota: false as const, persisted: Boolean(persisted) };
-    });
-    if (delivery.pausedForQuota) return true;
-    if (!delivery.persisted) {
+    const quota = await withOwnerDeliveryLock(
+      job.campaign.ownerUserId,
+      () => pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts),
+    );
+    if (quota.pausedForQuota) return true;
+    userQuotaReservation = quota.userQuotaReservation;
+
+    const messageId = isDevelopmentDemoTelegramAccount(job.account)
+      ? `development-demo-${job.target.id}`
+      : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
+        ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
+        : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
+    telegramAcceptedDelivery = true;
+    const [persisted] = await db.update(campaignTargetsTable).set({
+      status: "sent",
+      sentMessageId: messageId,
+      sentAt: new Date(),
+      nextAttemptAt: null,
+      lastError: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(campaignTargetsTable.id, job.target.id),
+      eq(campaignTargetsTable.status, "sending"),
+    )).returning({ id: campaignTargetsTable.id });
+    if (!persisted) {
       await markTargetForReview(
         job.target.id,
         "Telegram accepted delivery but database confirmation was interrupted; manual review is required to avoid a duplicate send.",
