@@ -36,6 +36,13 @@ const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
 
+class OwnerDeliveryBusyError extends Error {
+  constructor() {
+    super("Another delivery for this owner is already being processed.");
+    this.name = "OwnerDeliveryBusyError";
+  }
+}
+
 /**
  * Older campaigns could be created after their selected schedule had already
  * passed (for example, selecting today's date with an empty time defaulted to
@@ -158,12 +165,20 @@ export async function rebaseCampaignScheduleForResume(campaignId: string, resume
 async function withOwnerDeliveryLock<T>(ownerUserId: string, action: () => Promise<T>): Promise<T> {
   const client = await pool.connect();
   const lockKey = `telecampaign:delivery:${ownerUserId}`;
+  let locked = false;
   try {
-    await client.query("SELECT pg_advisory_lock(hashtext($1))", [lockKey]);
+    const result = await client.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock(hashtext($1)) AS locked",
+      [lockKey],
+    );
+    locked = result.rows[0]?.locked === true;
+    if (!locked) throw new OwnerDeliveryBusyError();
     return await action();
   } finally {
     try {
-      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
+      if (locked) {
+        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
+      }
     } finally {
       client.release();
     }
@@ -961,10 +976,11 @@ export async function processNextCampaignTarget() {
     const message = error instanceof Error ? error.message : "Telegram delivery failed";
     const floodSeconds = Number((error as { seconds?: number }).seconds);
     const hasSupportedFloodWait = Number.isFinite(floodSeconds) && floodSeconds > 0 && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
+    const ownerDeliveryBusy = error instanceof OwnerDeliveryBusyError;
     // FLOOD_WAIT is a known Telegram pre-send rejection. Other errors may
     // have accepted the message before the client lost its response, so their
     // reservations remain until a human resolves the target.
-    const knownPreSendRejection = hasSupportedFloodWait;
+    const knownPreSendRejection = hasSupportedFloodWait || ownerDeliveryBusy;
     if (knownPreSendRejection && userQuotaReservation) {
       await releaseUserDailyQuota({
         ownerUserId: job.campaign.ownerUserId,
@@ -976,8 +992,11 @@ export async function processNextCampaignTarget() {
     }
     const retryAt = hasSupportedFloodWait
       ? new Date(Date.now() + floodSeconds * 1000)
+      : ownerDeliveryBusy
+        ? new Date(Date.now() + 5_000)
       : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
-    const canRetry = job.target.attempts + 1 < job.campaign.maxRetries && hasSupportedFloodWait;
+    const canRetry = ownerDeliveryBusy
+      || (job.target.attempts + 1 < job.campaign.maxRetries && hasSupportedFloodWait);
     if (hasSupportedFloodWait) {
       await db.update(telegramAccountsTable).set({
         cooldownUntil: retryAt,
@@ -986,6 +1005,7 @@ export async function processNextCampaignTarget() {
     }
     const targetUpdate = {
       status: knownPreSendRejection && canRetry ? "pending" : "requires_review",
+      ...(ownerDeliveryBusy ? { attempts: job.target.attempts } : {}),
       ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
       nextAttemptAt: knownPreSendRejection && canRetry ? retryAt : null,
       lastError: message.slice(0, 500),
@@ -996,9 +1016,15 @@ export async function processNextCampaignTarget() {
       eq(campaignTargetsTable.status, "sending"),
     ));
     await recordActivity({
-      event: hasSupportedFloodWait ? "campaign.target.rate_limited" : "campaign.target.failed",
+      event: hasSupportedFloodWait
+        ? "campaign.target.rate_limited"
+        : ownerDeliveryBusy
+          ? "campaign.target.retry_scheduled"
+          : "campaign.target.failed",
       message: hasSupportedFloodWait
         ? `Telegram requested a ${floodSeconds}s delay; delivery was postponed.`
+        : ownerDeliveryBusy
+          ? "Another delivery for this owner is in progress; retry scheduled in 5 seconds."
         : `Delivery to "${job.destination.title}" could not be confirmed; manual review is required to avoid a duplicate send.`,
       level: hasSupportedFloodWait || canRetry ? "warning" : "error",
       campaignId: job.campaign.id,
@@ -1026,7 +1052,10 @@ export async function processNextCampaignTarget() {
 let interval: NodeJS.Timeout | undefined;
 export function startCampaignWorker() {
   if (interval) return;
+  let tickRunning = false;
   const tick = async () => {
+    if (tickRunning) return;
+    tickRunning = true;
     try {
       const stalled = await db.update(campaignTargetsTable).set({
         status: "requires_review",
@@ -1046,6 +1075,8 @@ export function startCampaignWorker() {
       }
     } catch (err) {
       logger.error({ err }, "Campaign worker failed");
+    } finally {
+      tickRunning = false;
     }
   };
   interval = setInterval(() => { void tick(); }, 5_000);
