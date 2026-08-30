@@ -379,7 +379,14 @@ export default function Campaigns() {
   const c = copy[language];
   const [, setLocation] = useLocation();
 
-  const campaigns = useListCampaigns();
+  const campaigns = useListCampaigns({
+    query: {
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: "always",
+      staleTime: 0,
+    } as any,
+  });
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
@@ -423,6 +430,11 @@ export default function Campaigns() {
     const needle = search.trim().toLowerCase();
     return (!needle || campaign.name.toLowerCase().includes(needle)) && (status === "all" || campaign.status === status);
   }), [campaigns.data, search, status]);
+  useEffect(() => {
+    if (!details) return;
+    const refreshedDetails = (campaigns.data ?? []).find((campaign) => campaign.id === details.id);
+    if (refreshedDetails) setDetails(refreshedDetails);
+  }, [campaigns.data, details?.id]);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
