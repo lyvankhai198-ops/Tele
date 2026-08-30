@@ -5,7 +5,6 @@ import {
   campaignsTable,
   db,
   destinationsTable,
-  pool,
   telegramAccountsTable,
 } from "@workspace/db";
 import { recordActivity } from "./activity";
@@ -35,13 +34,6 @@ import {
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
-
-class OwnerDeliveryBusyError extends Error {
-  constructor() {
-    super("Another delivery for this owner is already being processed.");
-    this.name = "OwnerDeliveryBusyError";
-  }
-}
 
 /**
  * Older campaigns could be created after their selected schedule had already
@@ -160,29 +152,6 @@ export async function rebaseCampaignScheduleForResume(campaignId: string, resume
 
     return { rebasedTargetCount, clearedPastSchedule, nextRunAt: rebase.nextRunAt, resumedAt };
   });
-}
-
-async function withOwnerDeliveryLock<T>(ownerUserId: string, action: () => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  const lockKey = `telecampaign:delivery:${ownerUserId}`;
-  let locked = false;
-  try {
-    const result = await client.query<{ locked: boolean }>(
-      "SELECT pg_try_advisory_lock(hashtext($1)) AS locked",
-      [lockKey],
-    );
-    locked = result.rows[0]?.locked === true;
-    if (!locked) throw new OwnerDeliveryBusyError();
-    return await action();
-  } finally {
-    try {
-      if (locked) {
-        await client.query("SELECT pg_advisory_unlock(hashtext($1))", [lockKey]);
-      }
-    } finally {
-      client.release();
-    }
-  }
 }
 
 const DAILY_QUOTA_PAUSE_REASON = "Daily message limit reached. Campaign paused and will resume automatically on a new day.";
@@ -782,7 +751,7 @@ async function markTargetForReview(targetId: string, reason: string) {
   }
 }
 
-export async function processNextCampaignTarget() {
+export async function processNextCampaignTarget(accountId?: string) {
   const now = await getDatabaseNow();
   const candidates = await db.select({
     target: campaignTargetsTable,
@@ -810,6 +779,7 @@ export async function processNextCampaignTarget() {
         isNull(telegramAccountsTable.cooldownUntil),
       ),
       isNull(telegramAccountsTable.deletedAt),
+      ...(accountId ? [eq(destinationsTable.accountId, accountId)] : []),
     ))
     .orderBy(asc(campaignTargetsTable.nextAttemptAt))
     .limit(1);
@@ -917,29 +887,27 @@ export async function processNextCampaignTarget() {
       );
       return true;
     }
-    const delivery = await withOwnerDeliveryLock(job.campaign.ownerUserId, async () => {
-      const quota = await pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts);
-      if (quota.pausedForQuota) return quota;
-      userQuotaReservation = quota.userQuotaReservation;
-      const messageId = isDevelopmentDemoTelegramAccount(job.account)
-        ? `development-demo-${job.target.id}`
-        : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
-          ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
-          : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
-      telegramAcceptedDelivery = true;
-      const [persisted] = await db.update(campaignTargetsTable).set({
-        status: "sent",
-        sentMessageId: messageId,
-        sentAt: new Date(),
-        nextAttemptAt: null,
-        lastError: null,
-        updatedAt: new Date(),
-      }).where(and(
-        eq(campaignTargetsTable.id, job.target.id),
-        eq(campaignTargetsTable.status, "sending"),
-      )).returning({ id: campaignTargetsTable.id });
-      return { pausedForQuota: false as const, persisted: Boolean(persisted) };
-    });
+    const quota = await pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts);
+    if (quota.pausedForQuota) return true;
+    userQuotaReservation = quota.userQuotaReservation;
+    const messageId = isDevelopmentDemoTelegramAccount(job.account)
+      ? `development-demo-${job.target.id}`
+      : job.campaign.templateMode === "forward" && job.campaign.templateSourceMessageId
+        ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
+        : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
+    telegramAcceptedDelivery = true;
+    const [persisted] = await db.update(campaignTargetsTable).set({
+      status: "sent",
+      sentMessageId: messageId,
+      sentAt: new Date(),
+      nextAttemptAt: null,
+      lastError: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(campaignTargetsTable.id, job.target.id),
+      eq(campaignTargetsTable.status, "sending"),
+    )).returning({ id: campaignTargetsTable.id });
+    const delivery = { pausedForQuota: false as const, persisted: Boolean(persisted) };
     if (delivery.pausedForQuota) return true;
     if (!delivery.persisted) {
       await markTargetForReview(
@@ -976,11 +944,10 @@ export async function processNextCampaignTarget() {
     const message = error instanceof Error ? error.message : "Telegram delivery failed";
     const floodSeconds = Number((error as { seconds?: number }).seconds);
     const hasSupportedFloodWait = Number.isFinite(floodSeconds) && floodSeconds > 0 && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
-    const ownerDeliveryBusy = error instanceof OwnerDeliveryBusyError;
     // FLOOD_WAIT is a known Telegram pre-send rejection. Other errors may
     // have accepted the message before the client lost its response, so their
     // reservations remain until a human resolves the target.
-    const knownPreSendRejection = hasSupportedFloodWait || ownerDeliveryBusy;
+    const knownPreSendRejection = hasSupportedFloodWait;
     if (knownPreSendRejection && userQuotaReservation) {
       await releaseUserDailyQuota({
         ownerUserId: job.campaign.ownerUserId,
@@ -992,11 +959,8 @@ export async function processNextCampaignTarget() {
     }
     const retryAt = hasSupportedFloodWait
       ? new Date(Date.now() + floodSeconds * 1000)
-      : ownerDeliveryBusy
-        ? new Date(Date.now() + 5_000)
       : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
-    const canRetry = ownerDeliveryBusy
-      || (job.target.attempts + 1 < job.campaign.maxRetries && hasSupportedFloodWait);
+    const canRetry = job.target.attempts + 1 < job.campaign.maxRetries && hasSupportedFloodWait;
     if (hasSupportedFloodWait) {
       await db.update(telegramAccountsTable).set({
         cooldownUntil: retryAt,
@@ -1005,7 +969,6 @@ export async function processNextCampaignTarget() {
     }
     const targetUpdate = {
       status: knownPreSendRejection && canRetry ? "pending" : "requires_review",
-      ...(ownerDeliveryBusy ? { attempts: job.target.attempts } : {}),
       ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
       nextAttemptAt: knownPreSendRejection && canRetry ? retryAt : null,
       lastError: message.slice(0, 500),
@@ -1018,13 +981,9 @@ export async function processNextCampaignTarget() {
     await recordActivity({
       event: hasSupportedFloodWait
         ? "campaign.target.rate_limited"
-        : ownerDeliveryBusy
-          ? "campaign.target.retry_scheduled"
-          : "campaign.target.failed",
+        : "campaign.target.failed",
       message: hasSupportedFloodWait
         ? `Telegram requested a ${floodSeconds}s delay; delivery was postponed.`
-        : ownerDeliveryBusy
-          ? "Another delivery for this owner is in progress; retry scheduled in 5 seconds."
         : `Delivery to "${job.destination.title}" could not be confirmed; manual review is required to avoid a duplicate send.`,
       level: hasSupportedFloodWait || canRetry ? "warning" : "error",
       campaignId: job.campaign.id,
@@ -1050,6 +1009,43 @@ export async function processNextCampaignTarget() {
 }
 
 let interval: NodeJS.Timeout | undefined;
+const accountQueues = new Map<string, Promise<void>>();
+
+async function findReadyCampaignAccountIds() {
+  const now = await getDatabaseNow();
+  const candidates = await db.select({ accountId: destinationsTable.accountId })
+    .from(campaignTargetsTable)
+    .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+    .innerJoin(telegramAccountsTable, eq(destinationsTable.accountId, telegramAccountsTable.id))
+    .where(and(
+      inArray(campaignsTable.status, ["queued", "running"]),
+      eq(campaignTargetsTable.status, "pending"),
+      or(
+        lte(campaignTargetsTable.nextAttemptAt, now),
+        isNull(campaignTargetsTable.nextAttemptAt),
+      ),
+      or(
+        lte(campaignsTable.scheduledAt, now),
+        isNull(campaignsTable.scheduledAt),
+      ),
+      or(
+        lte(telegramAccountsTable.cooldownUntil, now),
+        isNull(telegramAccountsTable.cooldownUntil),
+      ),
+      isNull(telegramAccountsTable.deletedAt),
+    ))
+    .groupBy(destinationsTable.accountId);
+  return candidates.map(({ accountId }) => accountId);
+}
+
+async function processCampaignAccountQueue(accountId: string) {
+  while (await processNextCampaignTarget(accountId)) {
+    // Keep campaigns on the same Telegram account sequential while allowing
+    // every other account to continue independently.
+  }
+}
+
 export function startCampaignWorker() {
   if (interval) return;
   let tickRunning = false;
@@ -1070,8 +1066,17 @@ export function startCampaignWorker() {
       await resumeDailyQuotaPausedCampaigns();
        await resumeSubscriptionExpiryPausedCampaigns();
        await resumeDailyQuotaPausedCampaigns();
-      while (await processNextCampaignTarget()) {
-        // Process one delivery at a time to honor Telegram limits.
+      const readyAccountIds = await findReadyCampaignAccountIds();
+      for (const accountId of readyAccountIds) {
+        if (accountQueues.has(accountId)) continue;
+        const queue = processCampaignAccountQueue(accountId)
+          .catch((err) => {
+            logger.error({ err, accountId }, "Campaign account queue failed");
+          })
+          .finally(() => {
+            accountQueues.delete(accountId);
+          });
+        accountQueues.set(accountId, queue);
       }
     } catch (err) {
       logger.error({ err }, "Campaign worker failed");
