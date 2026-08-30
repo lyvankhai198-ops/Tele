@@ -136,6 +136,8 @@ const copy = {
     detailWaitingStatus: "Waiting",
     detailWaitingMessage: "The campaign will send automatically when the scheduled wait is over.",
     detailWaitingCountdown: "Send countdown:",
+    detailWaitingDue: "Due now — queued for automatic processing",
+    detailWaitingDueMessage: "The scheduled time has passed. The system will continue this campaign automatically.",
     detailNextSend: "Next send:",
     detailErrorTitle: "Delivery errors",
     detailErrorEmpty: "No delivery errors recorded.",
@@ -248,6 +250,8 @@ const copy = {
     detailWaitingStatus: "Đang chờ",
     detailWaitingMessage: "Chiến dịch sẽ tự động gửi khi hết thời gian chờ.",
     detailWaitingCountdown: "Đếm ngược lần gửi:",
+    detailWaitingDue: "Đã đến giờ gửi — đang chờ hệ thống xử lý tự động",
+    detailWaitingDueMessage: "Thời gian dự kiến đã đến. Hệ thống sẽ tự động tiếp tục chiến dịch này.",
     detailNextSend: "Lần gửi tiếp:",
     detailErrorTitle: "Chi tiết lỗi gửi",
     detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
@@ -284,17 +288,54 @@ function retryTimestamp(value: Date | string | null) {
   return value ? new Date(value).getTime() : 0;
 }
 
-function RetryCountdown({ nextAttemptAt }: { nextAttemptAt: Date | string }) {
-  const [remaining, setRemaining] = useState(() => retryTimestamp(nextAttemptAt) - Date.now());
+function WaitingSchedule({
+  nextAttemptAt,
+  cooldownUntil,
+  language,
+  c,
+}: {
+  nextAttemptAt: Date | string;
+  cooldownUntil: Date | string | null | undefined;
+  language: "en" | "vi";
+  c: (typeof copy)["en"] | (typeof copy)["vi"];
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const targetMs = retryTimestamp(nextAttemptAt);
+  const cooldownMs = cooldownUntil ? retryTimestamp(cooldownUntil) : 0;
+  const activeCooldownMs = cooldownMs > now ? cooldownMs : 0;
+  const effectiveMs = Math.max(targetMs, activeCooldownMs);
 
   useEffect(() => {
-    const update = () => setRemaining(retryTimestamp(nextAttemptAt) - Date.now());
+    const update = () => setNow(Date.now());
     update();
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
-  }, [nextAttemptAt]);
+  }, [nextAttemptAt, cooldownUntil]);
 
-  return <span className="font-black tabular-nums">{formatCountdown(remaining)}</span>;
+  if (effectiveMs <= now) {
+    return (
+      <>
+        <p className="mt-2 text-[14px] font-black">{c.detailWaitingDue}</p>
+        <p className="mt-1 font-medium">{c.detailWaitingDueMessage}</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <p className="mt-2 text-[16px]">
+        {c.detailWaitingCountdown}{" "}
+        <span className="font-black tabular-nums">{formatCountdown(effectiveMs - now)}</span>
+      </p>
+      <p className="mt-1 font-medium">
+        {activeCooldownMs ? c.cooldownMessage : c.detailWaitingMessage}
+        {activeCooldownMs ? ` ${formatSchedule(cooldownUntil ?? null, language)}` : ""}
+      </p>
+      <p className="mt-1 text-[11px] font-semibold">
+        {c.detailNextSend} {formatSchedule(new Date(effectiveMs), language)}
+      </p>
+    </>
+  );
 }
 
 function AccountCooldownNotice({
@@ -368,7 +409,9 @@ export default function Campaigns() {
   const { language } = useLanguage();
   const c = copy[language];
 
-  const campaigns = useListCampaigns();
+  const campaigns = useListCampaigns({
+    query: { refetchInterval: 15_000 } as any,
+  });
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
@@ -413,6 +456,12 @@ export default function Campaigns() {
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
+
+  useEffect(() => {
+    if (!details) return;
+    const refreshedDetails = (campaigns.data ?? []).find((campaign) => campaign.id === details.id);
+    if (refreshedDetails && refreshedDetails !== details) setDetails(refreshedDetails);
+  }, [campaigns.data, details]);
 
   function openNew() {
     setEditingCampaign(null);
@@ -841,9 +890,12 @@ export default function Campaigns() {
                                  <strong>{error.destinationTitle}</strong>
                                  <span className="shrink-0 font-bold">{c.detailWaitingStatus}</span>
                                </div>
-                               <p className="mt-2 text-[16px]">{c.detailWaitingCountdown} <RetryCountdown nextAttemptAt={error.nextAttemptAt!} /></p>
-                               <p className="mt-1 font-medium">{c.detailWaitingMessage}</p>
-                                {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailNextSend} {formatSchedule(error.nextAttemptAt, language)}</p>}
+                                <WaitingSchedule
+                                  nextAttemptAt={error.nextAttemptAt!}
+                                  cooldownUntil={details.cooldownUntil}
+                                  language={language}
+                                  c={c}
+                                />
                              </div>
                            ))}
                          </div>
