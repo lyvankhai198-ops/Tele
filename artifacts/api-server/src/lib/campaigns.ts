@@ -774,10 +774,6 @@ export async function processNextCampaignTarget(accountId?: string) {
         lte(campaignsTable.scheduledAt, now),
         isNull(campaignsTable.scheduledAt),
       ),
-      or(
-        lte(telegramAccountsTable.cooldownUntil, now),
-        isNull(telegramAccountsTable.cooldownUntil),
-      ),
       isNull(telegramAccountsTable.deletedAt),
       ...(accountId ? [eq(destinationsTable.accountId, accountId)] : []),
     ))
@@ -796,10 +792,6 @@ export async function processNextCampaignTarget(accountId?: string) {
     or(
       isNull(telegramAccountsTable.deliveryLeaseUntil),
       lte(telegramAccountsTable.deliveryLeaseUntil, now),
-    ),
-    or(
-      isNull(telegramAccountsTable.cooldownUntil),
-      lte(telegramAccountsTable.cooldownUntil, now),
     ),
     isNull(telegramAccountsTable.deletedAt),
   )).returning();
@@ -957,20 +949,10 @@ export async function processNextCampaignTarget(accountId?: string) {
       });
       userQuotaReservation = undefined;
     }
-    const retryAt = hasSupportedFloodWait
-      ? new Date(Date.now() + floodSeconds * 1000)
-      : new Date(Date.now() + Math.min(60 * 60, 30 * 2 ** job.target.attempts) * 1000);
-    const canRetry = job.target.attempts + 1 < job.campaign.maxRetries && hasSupportedFloodWait;
-    if (hasSupportedFloodWait) {
-      await db.update(telegramAccountsTable).set({
-        cooldownUntil: retryAt,
-        updatedAt: new Date(),
-      }).where(eq(telegramAccountsTable.id, job.destination.accountId));
-    }
     const targetUpdate = {
-      status: knownPreSendRejection && canRetry ? "pending" : "requires_review",
+      status: "requires_review",
       ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
-      nextAttemptAt: knownPreSendRejection && canRetry ? retryAt : null,
+      nextAttemptAt: null,
       lastError: message.slice(0, 500),
       updatedAt: new Date(),
     };
@@ -983,15 +965,16 @@ export async function processNextCampaignTarget(accountId?: string) {
         ? "campaign.target.rate_limited"
         : "campaign.target.failed",
       message: hasSupportedFloodWait
-        ? `Telegram requested a ${floodSeconds}s delay; delivery was postponed.`
+        ? `Telegram rejected this delivery with FLOOD_WAIT_${floodSeconds}; the error was recorded and the campaign continued.`
         : `Delivery to "${job.destination.title}" could not be confirmed; manual review is required to avoid a duplicate send.`,
-      level: hasSupportedFloodWait || canRetry ? "warning" : "error",
+      level: hasSupportedFloodWait ? "warning" : "error",
       campaignId: job.campaign.id,
       targetId: job.target.id,
       accountId: job.destination.accountId,
       ownerUserId: job.campaign.ownerUserId,
       metadata: {
-        retryAt: knownPreSendRejection && canRetry ? retryAt.toISOString() : null,
+        retryAt: null,
+        campaignContinued: true,
         quotaReservationRetained: !knownPreSendRejection,
       },
     });
@@ -1028,10 +1011,6 @@ async function findReadyCampaignAccountIds() {
       or(
         lte(campaignsTable.scheduledAt, now),
         isNull(campaignsTable.scheduledAt),
-      ),
-      or(
-        lte(telegramAccountsTable.cooldownUntil, now),
-        isNull(telegramAccountsTable.cooldownUntil),
       ),
       isNull(telegramAccountsTable.deletedAt),
     ))
