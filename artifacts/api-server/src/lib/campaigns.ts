@@ -36,7 +36,10 @@ import {
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
-const DELIVERY_WORKER_CONCURRENCY = 8;
+// Delivery concurrency is scoped to Telegram accounts: one account may have
+// one in-flight delivery, while independent accounts can make progress in
+// parallel without creating a global campaign queue.
+const DELIVERY_WORKER_CONCURRENCY = 32;
 
 /**
  * Older campaigns could be created after their selected schedule had already
