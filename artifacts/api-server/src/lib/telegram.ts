@@ -16,6 +16,9 @@ const TELEGRAM_CONNECTION_RETRIES = 3;
 const TELEGRAM_RETRY_DELAY_MS = 5_000;
 const TELEGRAM_ERROR_LOG_INTERVAL_MS = 60_000;
 const TELEGRAM_ERROR_LOG_MAX_KEYS = 500;
+const TELEGRAM_CONNECT_DEADLINE_MS = 45_000;
+const TELEGRAM_DELIVERY_DEADLINE_MS = 60_000;
+const TELEGRAM_DISCONNECT_DEADLINE_MS = 2_000;
 
 type TelegramClientOperation = "login" | "sync" | "saved_messages" | "send" | "forward";
 type TelegramClientContext = {
@@ -29,6 +32,38 @@ const telegramErrorLogs = new Map<string, {
   suppressed: number;
 }>();
 const silentGramJsLogger = new GramJsLogger(LogLevel.NONE);
+
+class TelegramOperationTimeoutError extends Error {
+  constructor(message: string, readonly safeToRetry: boolean) {
+    super(message);
+    this.name = "TelegramOperationTimeoutError";
+  }
+}
+
+export function isTelegramSafePreSendTimeout(error: unknown) {
+  return error instanceof TelegramOperationTimeoutError && error.safeToRetry;
+}
+
+async function withTelegramClientDeadline<T>(
+  client: TelegramClient,
+  operation: () => Promise<T>,
+  timeoutMs: number,
+  timeoutError: TelegramOperationTimeoutError,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const operationPromise = operation();
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      void disconnectQuietly(client);
+      reject(timeoutError);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([operationPromise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -404,8 +439,15 @@ export async function getAccountClient(
     operation,
   });
   try {
-    await client.connect();
-    const currentUser = await getCurrentUser(client);
+    const currentUser = await withTelegramClientDeadline(
+      client,
+      async () => {
+        await client.connect();
+        return getCurrentUser(client);
+      },
+      TELEGRAM_CONNECT_DEADLINE_MS,
+      new TelegramOperationTimeoutError("Telegram connection timed out before delivery started.", true),
+    );
     if (currentUser.id !== account.telegramUserId) {
       throw new Error("Telegram session identity does not match the saved account");
     }
@@ -633,35 +675,46 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
 export async function sendTelegramMessage(accountId: string, destinationId: string, content: string, ownerUserId: string) {
   const { client, account } = await getAccountClient(accountId, ownerUserId, "send");
   try {
-    const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
-    if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
-    const entity = await resolveDestinationEntity(client, destination);
-    const sent = await client.sendMessage(entity, {
-      message: content,
-      ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
-    });
-    return String((sent as any).id ?? "");
+    return await withTelegramClientDeadline(
+      client,
+      async () => {
+        const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
+        if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
+        const entity = await resolveDestinationEntity(client, destination);
+        const sent = await client.sendMessage(entity, {
+          message: content,
+          ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
+        });
+        return String((sent as any).id ?? "");
+      },
+      TELEGRAM_DELIVERY_DEADLINE_MS,
+      new TelegramOperationTimeoutError(
+        "Telegram delivery timed out before confirmation; manual review is required to avoid a duplicate send.",
+        false,
+      ),
+    );
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
       await invalidateTelegramSession(account.id);
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
 export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
   const { client, account } = await getAccountClient(accountId, ownerUserId, "forward");
   try {
-    const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
-    if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
-    const entity = await resolveDestinationEntity(client, destination);
-    const numericSourceMessageId = Number(sourceMessageId);
-    if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
-      throw new Error("The saved Telegram message ID is invalid");
-    }
-    const forwardOnce = async () => {
+    return await withTelegramClientDeadline(client, async () => {
+      const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
+      if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
+      const entity = await resolveDestinationEntity(client, destination);
+      const numericSourceMessageId = Number(sourceMessageId);
+      if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
+        throw new Error("The saved Telegram message ID is invalid");
+      }
+      const forwardOnce = async () => {
       if (destination.topicId === null) {
         const messages = await client.forwardMessages(entity, {
           messages: numericSourceMessageId,
@@ -678,22 +731,39 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
       const result = await client.invoke(request);
       const sent = await (client as any)._getResponseMessage(request, result, entity);
       return String(sent?.id ?? "");
-    };
-    const isInvalidSavedMessage = (error: unknown) => {
+      };
+      const isInvalidSavedMessage = (error: unknown) => {
       const details = [error, (error as { errorMessage?: unknown })?.errorMessage, (error as { message?: unknown })?.message]
         .filter((value): value is string => typeof value === "string")
         .join(" ");
       return /MESSAGE_ID_INVALID|saved Telegram message ID is invalid/i.test(details);
-    };
-    const refreshSavedMessage = async () => {
+      };
+      const refreshSavedMessage = async () => {
       try {
         const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
         return messages.some((message: any) => Number(message?.id) === numericSourceMessageId);
       } catch {
         return false;
       }
-    };
-    if (destination.topicId === null) {
+      };
+      if (destination.topicId === null) {
+        try {
+          return await forwardOnce();
+        } catch (error) {
+          if (!isInvalidSavedMessage(error)) throw error;
+          if (!(await refreshSavedMessage())) {
+            throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+          }
+          try {
+            return await forwardOnce();
+          } catch (retryError) {
+            if (isInvalidSavedMessage(retryError)) {
+              throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
+            }
+            throw retryError;
+          }
+        }
+      }
       try {
         return await forwardOnce();
       } catch (error) {
@@ -710,30 +780,17 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
           throw retryError;
         }
       }
-    }
-    try {
-      return await forwardOnce();
-    } catch (error) {
-      if (!isInvalidSavedMessage(error)) throw error;
-      if (!(await refreshSavedMessage())) {
-        throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
-      }
-      try {
-        return await forwardOnce();
-      } catch (retryError) {
-        if (isInvalidSavedMessage(retryError)) {
-          throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
-        }
-        throw retryError;
-      }
-    }
+    }, TELEGRAM_DELIVERY_DEADLINE_MS, new TelegramOperationTimeoutError(
+      "Telegram delivery timed out before confirmation; manual review is required to avoid a duplicate send.",
+      false,
+    ));
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
       await invalidateTelegramSession(account.id);
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -744,10 +801,18 @@ export async function getCurrentUser(client: TelegramClient): Promise<TelegramLo
 }
 
 export async function disconnectQuietly(client: TelegramClient) {
+  let timer: NodeJS.Timeout | undefined;
   try {
-    await client.disconnect();
+    await Promise.race([
+      Promise.resolve().then(() => client.disconnect()).catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, TELEGRAM_DISCONNECT_DEADLINE_MS);
+      }),
+    ]);
   } catch {
     // Disconnect is best effort and must not mask the original auth error.
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
