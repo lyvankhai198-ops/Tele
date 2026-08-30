@@ -38,6 +38,7 @@ export type SystemSettings = {
   };
   registrationEnabled: boolean;
   maintenanceMode: boolean;
+  nationalDayThemeEnabled: boolean;
   defaultTimezone: string;
 };
 
@@ -51,6 +52,7 @@ type StoredSystemSettings = {
   campaignDefaults?: Partial<SystemSettings["campaignDefaults"]>;
   registrationEnabled?: unknown;
   maintenanceMode?: unknown;
+  nationalDayThemeEnabled?: unknown;
   defaultTimezone?: unknown;
 };
 
@@ -136,6 +138,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   },
   registrationEnabled: true,
   maintenanceMode: false,
+  nationalDayThemeEnabled: true,
   defaultTimezone: "Asia/Ho_Chi_Minh",
 };
 
@@ -270,6 +273,7 @@ function parseSettings(value: string | undefined): SystemSettings {
       },
       registrationEnabled: typeof raw.registrationEnabled === "boolean" ? raw.registrationEnabled : DEFAULT_SYSTEM_SETTINGS.registrationEnabled,
       maintenanceMode: typeof raw.maintenanceMode === "boolean" ? raw.maintenanceMode : DEFAULT_SYSTEM_SETTINGS.maintenanceMode,
+      nationalDayThemeEnabled: typeof raw.nationalDayThemeEnabled === "boolean" ? raw.nationalDayThemeEnabled : DEFAULT_SYSTEM_SETTINGS.nationalDayThemeEnabled,
       defaultTimezone: typeof raw.defaultTimezone === "string" && raw.defaultTimezone ? raw.defaultTimezone : DEFAULT_SYSTEM_SETTINGS.defaultTimezone,
     };
   } catch {

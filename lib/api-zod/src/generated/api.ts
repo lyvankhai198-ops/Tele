@@ -1019,6 +1019,7 @@ export const GetSystemDefaultsResponse = zod.object({
   "roundDelayMinSeconds": zod.number().min(getSystemDefaultsResponseCampaignDefaultsRoundDelayMinSecondsMin).max(getSystemDefaultsResponseCampaignDefaultsRoundDelayMinSecondsMax),
   "roundDelayMaxSeconds": zod.number().min(getSystemDefaultsResponseCampaignDefaultsRoundDelayMaxSecondsMin).max(getSystemDefaultsResponseCampaignDefaultsRoundDelayMaxSecondsMax)
 }),
+  "nationalDayThemeEnabled": zod.boolean(),
   "defaultTimezone": zod.string().min(1).max(getSystemDefaultsResponseDefaultTimezoneMax)
 })
 
@@ -1276,6 +1277,7 @@ export const GetAdminSystemSettingsResponse = zod.object({
 }),
   "registrationEnabled": zod.boolean(),
   "maintenanceMode": zod.boolean(),
+  "nationalDayThemeEnabled": zod.boolean(),
   "defaultTimezone": zod.string().min(1).max(getAdminSystemSettingsResponseDefaultTimezoneMax)
 })
 
@@ -1414,6 +1416,7 @@ export const UpdateAdminSystemSettingsBody = zod.object({
 }),
   "registrationEnabled": zod.boolean(),
   "maintenanceMode": zod.boolean(),
+  "nationalDayThemeEnabled": zod.boolean(),
   "defaultTimezone": zod.string().min(1).max(updateAdminSystemSettingsBodyDefaultTimezoneMax)
 })
 
@@ -1551,6 +1554,7 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
 }),
   "registrationEnabled": zod.boolean(),
   "maintenanceMode": zod.boolean(),
+  "nationalDayThemeEnabled": zod.boolean(),
   "defaultTimezone": zod.string().min(1).max(updateAdminSystemSettingsResponseDefaultTimezoneMax)
 })
 

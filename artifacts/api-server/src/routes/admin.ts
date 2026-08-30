@@ -760,6 +760,7 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     metadata: {
       registrationEnabled: updated.registrationEnabled,
       maintenanceMode: updated.maintenanceMode,
+      nationalDayThemeEnabled: updated.nationalDayThemeEnabled,
       defaultTimezone: updated.defaultTimezone,
     },
   });

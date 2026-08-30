@@ -25,6 +25,7 @@ export interface AdminSystemSettingsInput {
   campaignDefaults: CampaignDefaults;
   registrationEnabled: boolean;
   maintenanceMode: boolean;
+  nationalDayThemeEnabled: boolean;
   /**
      * @minLength 1
      * @maxLength 100

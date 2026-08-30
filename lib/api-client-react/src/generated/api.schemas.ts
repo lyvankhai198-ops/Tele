@@ -998,6 +998,7 @@ export interface SystemDefaults {
      */
   defaultAccountDailyLimit: number;
   campaignDefaults: CampaignDefaults;
+  nationalDayThemeEnabled: boolean;
   /**
      * @minLength 1
      * @maxLength 100
@@ -1071,6 +1072,7 @@ export interface AdminSystemSettings {
   campaignDefaults: CampaignDefaults;
   registrationEnabled: boolean;
   maintenanceMode: boolean;
+  nationalDayThemeEnabled: boolean;
   /**
      * @minLength 1
      * @maxLength 100
@@ -1112,6 +1114,7 @@ export interface AdminSystemSettingsInput {
   campaignDefaults: CampaignDefaults;
   registrationEnabled: boolean;
   maintenanceMode: boolean;
+  nationalDayThemeEnabled: boolean;
   /**
      * @minLength 1
      * @maxLength 100

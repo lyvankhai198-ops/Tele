@@ -19,10 +19,11 @@ import {
   Megaphone,
   UserCircle,
   LifeBuoy,
+  Star,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { useGetGroupLibraryAccess } from "@workspace/api-client-react";
+import { useGetGroupLibraryAccess, useGetSystemDefaults } from "@workspace/api-client-react";
 
 export type PageKey =
   | "dashboard"
@@ -84,7 +85,17 @@ export function AppLayout({
   const { language, setLanguage, t } = useLanguage();
   const { user, logout } = useAuth();
   const groupLibraryAccess = useGetGroupLibraryAccess();
+  const systemDefaults = useGetSystemDefaults();
   const isAdminSection = location === "/admin" || location.startsWith("/admin/");
+  const nationalDayDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(new Date());
+  const nationalDayMonth = Number(nationalDayDate.find((part) => part.type === "month")?.value);
+  const nationalDayDay = Number(nationalDayDate.find((part) => part.type === "day")?.value);
+  const showNationalDayRibbon = systemDefaults.data?.nationalDayThemeEnabled === true
+    && ((nationalDayMonth === 8 && nationalDayDay >= 25) || (nationalDayMonth === 9 && nationalDayDay <= 3));
 
   function navigate(path: string) {
     setLocation(path);
@@ -204,6 +215,30 @@ export function AppLayout({
             </div>
           </div>
         </header>
+
+        {showNationalDayRibbon && (
+          <div className="relative overflow-hidden bg-[#b91c1c] text-white shadow-[0_4px_18px_rgba(127,29,29,0.16)]" data-testid="national-day-ribbon">
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-15 [background-image:radial-gradient(circle_at_20%_30%,#facc15_0,transparent_18%),radial-gradient(circle_at_65%_70%,#facc15_0,transparent_16%)]" />
+            <div className="relative mx-auto flex min-h-[58px] max-w-[1440px] items-center gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#fde68a]/60 bg-[#991b1b] text-[#facc15] shadow-inner">
+                <Star className="h-5 w-5 fill-current" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fef08a]">
+                  {language === "vi" ? "Chào mừng Quốc khánh 2/9" : "Vietnam National Day · 2 September"}
+                </p>
+                <p className="mt-0.5 truncate text-[12px] font-semibold text-red-50">
+                  {language === "vi" ? "Tự hào Việt Nam · Kết nối hiệu quả hơn" : "Proudly Vietnamese · Connect more effectively"}
+                </p>
+              </div>
+              <div className="ml-auto hidden items-center gap-1.5 text-[#facc15] sm:flex" aria-hidden="true">
+                <Star className="h-3 w-3 fill-current" />
+                <Star className="h-4 w-4 fill-current" />
+                <Star className="h-3 w-3 fill-current" />
+              </div>
+            </div>
+          </div>
+        )}
         
         {banner}
         

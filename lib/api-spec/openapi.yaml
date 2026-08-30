@@ -1751,10 +1751,11 @@ components:
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
     SystemDefaults:
       type: object
-      required: [defaultAccountDailyLimit, campaignDefaults, defaultTimezone]
+      required: [defaultAccountDailyLimit, campaignDefaults, nationalDayThemeEnabled, defaultTimezone]
       properties:
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
+        nationalDayThemeEnabled: { type: boolean }
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     SupportSettings:
       type: object
@@ -1777,7 +1778,7 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1800,10 +1801,11 @@ components:
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
         maintenanceMode: { type: boolean }
+        nationalDayThemeEnabled: { type: boolean }
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminSystemSettingsInput:
       type: object
-      required: [planLimits, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, defaultTimezone]
+      required: [planLimits, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -1826,6 +1828,7 @@ components:
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
         maintenanceMode: { type: boolean }
+        nationalDayThemeEnabled: { type: boolean }
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminOperationAccount:
       type: object

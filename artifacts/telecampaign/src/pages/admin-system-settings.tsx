@@ -46,6 +46,8 @@ const copy = {
     registration: "Allow new user registration",
     maintenance: "Maintenance mode",
     maintenanceHint: "Non-admin users cannot access their workspace while maintenance mode is enabled.",
+    nationalDayTheme: "National Day theme",
+    nationalDayThemeHint: "Show the red-and-gold 2 September ribbon during the Vietnam National Day period. Turn it off to restore the previous interface.",
     groupLibrary: "Group library access",
     groupLibraryHint: "Show the shared group directory to users. The selected plan controls who can open Telegram links.",
     groupLibraryVisible: "Show group library to users / Hiển thị thư viện nhóm cho user",
@@ -95,6 +97,8 @@ const copy = {
     registration: "Cho phép đăng ký user mới",
     maintenance: "Chế độ bảo trì",
     maintenanceHint: "User không phải admin không thể truy cập workspace khi bật chế độ bảo trì.",
+    nationalDayTheme: "Giao diện Quốc khánh",
+    nationalDayThemeHint: "Hiển thị ribbon đỏ-vàng 2/9 trong thời gian Quốc khánh Việt Nam. Tắt để trở về giao diện cũ.",
     groupLibrary: "Quyền truy cập Thư viện nhóm",
     groupLibraryHint: "Hiển thị thư mục nhóm dùng chung cho user. Gói được chọn quyết định ai có thể mở link Telegram.",
     groupLibraryVisible: "Hiển thị thư viện nhóm cho user / Show group library to users",
@@ -372,6 +376,7 @@ export default function AdminSystemSettingsPage() {
             <div className="flex items-center gap-4 rounded-2xl border border-[#e7edf4] p-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef2fa] text-[#1a2b88]"><Check className="h-5 w-5" /></span><div className="flex-1"><p className="text-[13px] font-extrabold text-[#0f172a]">{text.registration}</p></div><Toggle checked={form.registrationEnabled} onChange={() => setForm({ ...form, registrationEnabled: !form.registrationEnabled })} label={text.registration} /></div>
             <div className={`flex items-center gap-4 rounded-2xl border p-4 ${form.maintenanceMode ? "border-[#fecdd3] bg-[#fff1f2]" : "border-[#e7edf4]"}`}><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fff1f2] text-[#e11d48]"><ShieldAlert className="h-5 w-5" /></span><div className="flex-1"><p className="text-[13px] font-extrabold text-[#0f172a]">{text.maintenance}</p><p className="mt-1 text-[12px] font-medium text-[#64748b]">{text.maintenanceHint}</p></div><Toggle checked={form.maintenanceMode} onChange={() => setForm({ ...form, maintenanceMode: !form.maintenanceMode })} label={text.maintenance} /></div>
             {form.maintenanceMode && <div className="flex gap-2 rounded-xl border border-[#fecdd3] bg-[#fff7f8] p-3 text-[12px] font-semibold text-[#be123c]"><AlertTriangle className="h-4 w-4 shrink-0" />{text.maintenanceHint}</div>}
+             <div className={`flex items-center gap-4 rounded-2xl border p-4 ${form.nationalDayThemeEnabled ? "border-[#fde68a] bg-[#fffbeb]" : "border-[#e7edf4]"}`}><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#fef3c7] text-[#b45309]"><span aria-hidden="true" className="text-lg leading-none">★</span></span><div className="flex-1"><p className="text-[13px] font-extrabold text-[#0f172a]">{text.nationalDayTheme}</p><p className="mt-1 text-[12px] font-medium text-[#64748b]">{text.nationalDayThemeHint}</p></div><Toggle checked={form.nationalDayThemeEnabled} onChange={() => setForm({ ...form, nationalDayThemeEnabled: !form.nationalDayThemeEnabled })} label={text.nationalDayTheme} /></div>
           </div>
         </Panel>
       </div>

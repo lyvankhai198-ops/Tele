@@ -447,6 +447,7 @@ router.get("/system-defaults", async (_req, res): Promise<void> => {
   res.json(GetSystemDefaultsResponse.parse({
     defaultAccountDailyLimit: settings.defaultAccountDailyLimit,
     campaignDefaults: settings.campaignDefaults,
+    nationalDayThemeEnabled: settings.nationalDayThemeEnabled,
     defaultTimezone: settings.defaultTimezone,
   }));
 });

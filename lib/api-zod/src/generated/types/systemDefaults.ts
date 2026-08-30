@@ -14,6 +14,7 @@ export interface SystemDefaults {
      */
   defaultAccountDailyLimit: number;
   campaignDefaults: CampaignDefaults;
+  nationalDayThemeEnabled: boolean;
   /**
      * @minLength 1
      * @maxLength 100
