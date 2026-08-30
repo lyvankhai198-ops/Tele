@@ -74,7 +74,7 @@ export default function Dashboard() {
   }
 
   const { metrics, adminNotifications, recentCampaigns, recentActivity } = data;
-  const showQuickSendEntry = shouldShowQuickSend(metrics.successfulCampaigns);
+  const showQuickSendEntry = shouldShowQuickSend(metrics.campaigns);
   const expiresAt = upgradeSummary?.subscription.expiresAt ? new Date(upgradeSummary.subscription.expiresAt) : null;
   const remainingHours = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000))) : null;
   const showExpiryNotice = upgradeSummary?.subscription.status === "active" && remainingHours !== null && remainingHours <= 24;
@@ -117,7 +117,7 @@ export default function Dashboard() {
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 text-white ring-1 ring-white/20"><Rocket className="h-6 w-6" /></span>
               <div>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-100">{language === "vi" ? "Lối tắt cho người mới" : "A shortcut for getting started"}</p>
-                <h2 className="mt-1.5 text-[20px] font-extrabold tracking-tight">{metrics.successfulCampaigns === 0 ? (language === "vi" ? "Gửi chiến dịch đầu tiên" : "Send your first campaign") : (language === "vi" ? "Gửi nhanh một chiến dịch" : "Quick send a campaign")}</h2>
+                <h2 className="mt-1.5 text-[20px] font-extrabold tracking-tight">{metrics.campaigns === 0 ? (language === "vi" ? "Gửi chiến dịch đầu tiên" : "Send your first campaign") : (language === "vi" ? "Gửi nhanh một chiến dịch" : "Quick send a campaign")}</h2>
                 <p className="mt-1.5 max-w-2xl text-[13px] font-medium leading-relaxed text-blue-100">{language === "vi" ? "Chọn tài khoản, nhóm và nội dung trong một luồng gọn — không cần tạo mẫu tin riêng." : "Choose an account, groups, and message in one simple flow — no separate template setup."}</p>
               </div>
             </div>

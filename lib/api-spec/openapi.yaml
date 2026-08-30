@@ -1577,13 +1577,12 @@ components:
         status: { type: string, enum: [active, inactive] }
     DashboardMetricSummary:
       type: object
-      required: [telegramAccounts, activeGroups, messageTemplates, campaigns, successfulCampaigns, sentToday, failedToday]
+      required: [telegramAccounts, activeGroups, messageTemplates, campaigns, sentToday, failedToday]
       properties:
         telegramAccounts: { type: number }
         activeGroups: { type: number }
         messageTemplates: { type: number }
         campaigns: { type: number }
-        successfulCampaigns: { type: number, description: Number of campaigns completed without delivery errors. }
         sentToday: { type: number }
         failedToday: { type: number }
     AdminNotification:

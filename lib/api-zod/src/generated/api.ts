@@ -865,7 +865,6 @@ export const GetDashboardResponse = zod.object({
   "activeGroups": zod.number(),
   "messageTemplates": zod.number(),
   "campaigns": zod.number(),
-  "successfulCampaigns": zod.number().describe('Number of campaigns completed without delivery errors.'),
   "sentToday": zod.number(),
   "failedToday": zod.number()
 }),

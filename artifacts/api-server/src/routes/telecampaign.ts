@@ -691,7 +691,6 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     [activeGroups],
     [messageTemplates],
     [campaigns],
-    [successfulCampaigns],
     [sentToday],
     [failedToday],
     recentCampaignRows,
@@ -704,10 +703,6 @@ router.get("/dashboard", async (req, res): Promise<void> => {
       .where(and(eq(telegramAccountsTable.ownerUserId, ownerUserId), eq(destinationsTable.canPost, true))),
     db.select({ value: count() }).from(messageTemplatesTable).where(eq(messageTemplatesTable.ownerUserId, ownerUserId)),
     db.select({ value: count() }).from(campaignsTable).where(eq(campaignsTable.ownerUserId, ownerUserId)),
-    db.select({ value: count() }).from(campaignsTable).where(and(
-      eq(campaignsTable.ownerUserId, ownerUserId),
-      eq(campaignsTable.status, "completed"),
-    )),
     db.select({ value: count() }).from(activityLogsTable).where(and(
       eq(activityLogsTable.ownerUserId, ownerUserId),
       eq(activityLogsTable.event, "campaign.target.sent"),
@@ -757,7 +752,6 @@ router.get("/dashboard", async (req, res): Promise<void> => {
       activeGroups: activeGroups.value,
       messageTemplates: messageTemplates.value,
       campaigns: campaigns.value,
-      successfulCampaigns: successfulCampaigns.value,
       sentToday: sentToday.value,
       failedToday: failedToday.value,
     },

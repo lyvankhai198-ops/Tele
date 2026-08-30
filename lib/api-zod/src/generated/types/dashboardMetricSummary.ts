@@ -11,8 +11,6 @@ export interface DashboardMetricSummary {
   activeGroups: number;
   messageTemplates: number;
   campaigns: number;
-  /** Number of campaigns completed without delivery errors. */
-  successfulCampaigns: number;
   sentToday: number;
   failedToday: number;
 }
