@@ -9,6 +9,7 @@ import {
 import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
+  getListDestinationsQueryKey,
   useGetSystemDefaults,
   useListDestinations,
   useListMessageTemplates,
@@ -25,6 +26,7 @@ import {
   suggestedRestrictionSchedule,
   temporaryRestrictionUntil,
 } from "@/lib/telegram-restrictions";
+import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-sync";
 
 type CampaignForm = {
   name: string;
@@ -79,6 +81,8 @@ const copy = {
     unavailableDestinationHint: "Telegram posting permission is unavailable for this group.",
     selectedUnavailableWarning: "A selected group no longer has posting permission. Deselect every group marked in red before saving so the campaign can continue with the other groups.",
     syncingDestinations: "Refreshing groups and posting permissions...",
+    cachedDestinations: "Groups were synced recently. Showing saved permissions.",
+    loadingDestinations: "Loading saved groups...",
     destinationsSynced: (count: number) => `Updated ${count} group${count === 1 ? "" : "s"}.`,
     syncDestinationsFailed: "Groups could not be refreshed. Try again or check the Telegram account.",
     retrySyncDestinations: "Refresh groups",
@@ -128,6 +132,8 @@ const copy = {
     unavailableDestinationHint: "Nhóm này hiện chưa thể nhận tin vì Telegram đã hạn chế quyền đăng.",
     selectedUnavailableWarning: "Có nhóm đang chọn không còn quyền đăng. Hãy bỏ chọn tất cả nhóm có nhãn đỏ trước khi lưu để chiến dịch tiếp tục với các nhóm khác.",
     syncingDestinations: "Đang cập nhật nhóm và quyền đăng...",
+    cachedDestinations: "Nhóm đã được đồng bộ gần đây. Đang hiển thị quyền đã lưu.",
+    loadingDestinations: "Đang tải các nhóm đã lưu...",
     destinationsSynced: (count: number) => `Đã cập nhật ${count} nhóm.`,
     syncDestinationsFailed: "Không thể cập nhật nhóm. Hãy thử lại hoặc kiểm tra tài khoản Telegram.",
     retrySyncDestinations: "Cập nhật lại nhóm",
@@ -213,7 +219,12 @@ export function CampaignFormModal({
   const { language } = useLanguage();
   const c = copy[language];
   const accounts = useListTelegramAccounts();
-  const destinations = useListDestinations();
+  const destinations = useListDestinations({
+    query: {
+      queryKey: getListDestinationsQueryKey(),
+      staleTime: DESTINATION_SYNC_TTL_MS,
+    },
+  });
   const templates = useListMessageTemplates();
   const systemDefaults = useGetSystemDefaults();
   const createCampaign = useCreateCampaign();
@@ -328,6 +339,11 @@ export function CampaignFormModal({
     syncedAccounts.current.add(accountId);
     setSyncMessage(null);
     setSyncError(false);
+    const selectedAccount = (accounts.data ?? []).find((account) => account.id === accountId);
+    if (destinationSyncIsFresh(selectedAccount?.lastSyncAt)) {
+      setSyncMessage(c.cachedDestinations);
+      return;
+    }
     syncDestinations.mutate({ accountId }, {
       onSuccess: async (result) => {
         if (activeAccountId.current !== accountId) return;
@@ -346,7 +362,7 @@ export function CampaignFormModal({
         setSyncMessage(localizedErrorMessage(error, language, c.syncDestinationsFailed));
       },
     });
-  }, [c, destinations, form.accountId, language, syncDestinations, syncDestinations.isPending]);
+  }, [accounts.data, c, destinations, form.accountId, language, syncDestinations, syncDestinations.isPending]);
 
   function changeAccount(accountId: string) {
     setForm((current) => ({ ...current, accountId, templateId: "", destinationIds: [] }));
@@ -542,6 +558,11 @@ export function CampaignFormModal({
                      {c.retrySyncDestinations}
                    </button>
                  )}
+                  {!syncError && !syncDestinations.isPending && (
+                    <button type="button" onClick={retryDestinationSync} className="shrink-0 font-extrabold underline underline-offset-2">
+                      {c.retrySyncDestinations}
+                    </button>
+                  )}
                </div>
              )}
             {hasSelectedUnavailableDestination && (
@@ -584,7 +605,7 @@ export function CampaignFormModal({
             )}
             {!form.accountId
               ? <p className="px-1 py-4 text-[13px] font-medium leading-relaxed text-[#64748b]">{c.pickAccountHint}</p>
-              : <div className="mt-2 max-h-40 divide-y divide-[#f1f5f9] overflow-y-auto">
+                     : <div className="mt-2 max-h-40 divide-y divide-[#f1f5f9] overflow-y-auto">
                   {accountDestinations.length
                     ? accountDestinations.map((destination) => (
                          <button
@@ -616,7 +637,9 @@ export function CampaignFormModal({
                            )}
                         </button>
                       ))
-                    : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">{c.noGroupsHint}</p>}
+                     : <p className="px-2 py-4 text-[13px] font-medium text-[#64748b]">
+                         {syncDestinations.isPending ? c.loadingDestinations : c.noGroupsHint}
+                       </p>}
                 </div>}
           </div>
         </div>

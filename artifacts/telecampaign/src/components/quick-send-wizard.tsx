@@ -21,6 +21,7 @@ import type { Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
   useCreateMessageTemplate,
+  getListDestinationsQueryKey,
   useGetSystemDefaults,
   useListDestinations,
   useListTelegramAccounts,
@@ -35,6 +36,7 @@ import {
   suggestedRestrictionSchedule,
   temporaryRestrictionUntil,
 } from "@/lib/telegram-restrictions";
+import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-sync";
 import { useLocation } from "wouter";
 
 type QuickSendWizardProps = {
@@ -101,6 +103,8 @@ const copy = {
     noAccountDetail: "Kết nối tài khoản Telegram trước, sau đó quay lại đây để gửi chiến dịch đầu tiên.",
     connectAccount: "Kết nối tài khoản",
     syncing: "Đang tự động đồng bộ nhóm...",
+    cachedSync: "Nhóm đã được đồng bộ gần đây. Đang hiển thị nhóm đã lưu.",
+    loadingGroups: "Đang tải các nhóm đã lưu...",
     syncAgain: "Đồng bộ lại",
     syncDone: (count: number) => `Đã cập nhật ${count} nhóm`,
     syncFailed: "Không thể đồng bộ nhóm. Bạn có thể thử lại hoặc kiểm tra tài khoản Telegram.",
@@ -171,6 +175,8 @@ const copy = {
     noAccountDetail: "Connect a Telegram account first, then come back here to send your first campaign.",
     connectAccount: "Connect account",
     syncing: "Automatically syncing groups...",
+    cachedSync: "Groups were synced recently. Showing saved groups.",
+    loadingGroups: "Loading saved groups...",
     syncAgain: "Sync again",
     syncDone: (count: number) => `Updated ${count} groups`,
     syncFailed: "Groups could not be synced. Try again or check the Telegram account.",
@@ -239,7 +245,12 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   const c = copy[language];
   const initialDraft = useRef(readQuickSendDraft());
   const accounts = useListTelegramAccounts();
-  const destinations = useListDestinations();
+  const destinations = useListDestinations({
+    query: {
+      queryKey: getListDestinationsQueryKey(),
+      staleTime: DESTINATION_SYNC_TTL_MS,
+    },
+  });
   const systemDefaults = useGetSystemDefaults();
   const sync = useSyncTelegramDestinations();
   const createTemplate = useCreateMessageTemplate();
@@ -261,8 +272,11 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   const [delayMax, setDelayMax] = useState(initialDraft.current?.delayMax ?? "3");
   const [formError, setFormError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState(false);
   const [completed, setCompleted] = useState(false);
   const syncedAccounts = useRef(new Set<string>());
+  const activeAccountId = useRef(accountId);
+  activeAccountId.current = accountId;
 
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
   const selectedAccount = connectedAccounts.find((account) => account.id === accountId);
@@ -355,16 +369,25 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     if (!accountId || syncedAccounts.current.has(accountId)) return;
     syncedAccounts.current.add(accountId);
     setSyncMessage(null);
+    setSyncError(false);
+    if (destinationSyncIsFresh(selectedAccount?.lastSyncAt)) {
+      setSyncMessage(c.cachedSync);
+      return;
+    }
     sync.mutate({ accountId }, {
       onSuccess: async (result) => {
+        if (activeAccountId.current !== accountId) return;
         await destinations.refetch();
+        if (activeAccountId.current !== accountId) return;
         setSyncMessage(c.syncDone(result.count));
       },
       onError: () => {
+        if (activeAccountId.current !== accountId) return;
+        setSyncError(true);
         setSyncMessage(c.syncFailed);
       },
     });
-  }, [accountId, c, destinations, sync]);
+  }, [accountId, c, destinations, selectedAccount?.lastSyncAt, sync]);
 
   function chooseAccount(nextAccountId: string) {
     setAccountId(nextAccountId);
@@ -372,17 +395,25 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     setSourceMessageId("");
     setGroupSearch("");
     setSyncMessage(null);
+    setSyncError(false);
   }
 
   function syncAccount() {
     if (!accountId || sync.isPending) return;
     setSyncMessage(null);
+    setSyncError(false);
     sync.mutate({ accountId }, {
       onSuccess: async (result) => {
+        if (activeAccountId.current !== accountId) return;
         await destinations.refetch();
+        if (activeAccountId.current !== accountId) return;
         setSyncMessage(c.syncDone(result.count));
       },
-      onError: () => setSyncMessage(c.syncFailed),
+      onError: () => {
+        if (activeAccountId.current !== accountId) return;
+        setSyncError(true);
+        setSyncMessage(c.syncFailed);
+      },
     });
   }
 
@@ -560,8 +591,8 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                           <div className="flex min-w-0 items-center gap-3">
                             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e8efff] text-[#1d3bb8]"><RefreshCw className={`h-4 w-4 ${sync.isPending ? "animate-spin" : ""}`} /></span>
                             <div className="min-w-0">
-                              <p className="text-[13px] font-extrabold text-[#0f172a]">{sync.isPending ? c.syncing : syncMessage ?? c.accountHint}</p>
-                              {syncMessage === c.syncFailed && <p className="mt-1 text-[12px] font-semibold text-[#dc2626]">{c.syncFailed}</p>}
+                               <p className="text-[13px] font-extrabold text-[#0f172a]">{sync.isPending ? c.syncing : syncMessage ?? c.accountHint}</p>
+                               {syncError && <p className="mt-1 text-[12px] font-semibold text-[#dc2626]">{c.syncFailed}</p>}
                             </div>
                           </div>
                           <button type="button" onClick={syncAccount} disabled={!accountId || sync.isPending} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-[12px] font-extrabold text-[#1d3bb8] transition hover:bg-[#eef2ff] disabled:opacity-50">
@@ -592,7 +623,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                                   )}
                                 </span>
                               </button>
-                            )) : <p className="px-2 py-5 text-center text-[13px] font-medium text-[#64748b]">{c.noGroups}</p>}
+                             )) : <p className="px-2 py-5 text-center text-[13px] font-medium text-[#64748b]">{sync.isPending ? c.loadingGroups : c.noGroups}</p>}
                           </div>
                         </div>
                       </div>
