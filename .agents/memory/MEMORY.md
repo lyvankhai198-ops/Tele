@@ -1,4 +1,4 @@
-- [Subscription access policy](subscription-upgrade-policy.md) — new users receive a one-day PLUS trial; expiry locks the workspace until any paid plan key is redeemed.
+- [Subscription access policy](subscription-upgrade-policy.md) — one-day PLUS trials lock on expiry; group details require an active plan meeting the configured minimum.
 - [Telegram account verification](telegram-account-verification.md) — saving API credentials and a phone never proves a Telegram session; keep unverified accounts out of sync/send paths.
 - [Delivery error recovery](delivery-error-recovery.md) — refresh only an invalid Forward source message; never auto-sync a banned account or a group with restricted posting.
 - [Live Saved Message previews](live-saved-message-previews.md) — Forward sends and previews must resolve the current Telegram message by its source ID, not a stored text snapshot.
@@ -28,3 +28,11 @@
 - [Durable Git SHA construction](durable-git-sha-construction.md) — construct Git blob SHA separators at runtime; literal null bytes can break sandbox callback replay.
 - [Persistent group library](persistent-group-library.md) — a dedicated admin library imports target groups only from running campaigns and retains its own snapshots.
 - [OpenAPI route contracts](openapi-route-contracts.md) — generated client verb/path must match the server route exactly, or a request can fall through unrelated middleware.
+- [Notification upload proxy limit](notification-upload-proxy-limit.md) — the TeleCampaign Nginx API route must allow more than the backend’s 50 MiB media limit.
+- [Account security concurrency](account-security-concurrency.md) — login, password changes, and session revocation serialize per user; password attempt slots are reserved before async work.
+- [Independent campaign queues](independent-campaign-queues.md) — schedule delivery independently per Telegram account; target errors continue the campaign and never impose account-wide cooldown.
+- [Ownership migration guard](ownership-migration-guard.md) — orphan audit logs must not block the workspace or campaign worker when no live account or campaign needs ownership mapping.
+- [Non-interactive Drizzle push](noninteractive-drizzle-push.md) — a data-loss prompt can fail without a nonzero exit; inspect output and never force unrelated schema deletion.
+- [National Day presentation mode](national-day-presentation-mode.md) — the ceremonial UI is a time-boxed visual layer; disabling its setting must restore the unchanged standard interface.
+- [Telegram VPS cutovers](telegram-vps-cutovers.md) — keep the new worker disabled until a public bridge request is confirmed on the new host; only one worker may run.
+- [Self-hosted CAPTCHA rendering](self-hosted-captcha-rendering.md) — send only a randomized raster image; client-visible SVG text makes CAPTCHA answers machine-readable.
