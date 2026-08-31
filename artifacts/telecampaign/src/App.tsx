@@ -1,6 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { KeyRound, Languages, LoaderCircle, LockKeyhole, UserRound } from 'lucide-react';
+import { KeyRound, Languages, LoaderCircle, LockKeyhole, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import type { AuthCaptcha } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -153,10 +154,117 @@ function AuthError({ message }: { message: string | null }) {
   ) : null;
 }
 
+function useCaptcha() {
+  const { getCaptcha } = useAuth();
+  const { language, t } = useLanguage();
+  const [challenge, setChallenge] = useState<AuthCaptcha | null>(null);
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    setChallenge(null);
+    setCode('');
+    try {
+      setChallenge(await getCaptcha());
+    } catch (cause) {
+      setLoadError(localizedErrorMessage(
+        cause,
+        language,
+        t('Could not load CAPTCHA. Try refreshing it.'),
+      ));
+    } finally {
+      setLoading(false);
+    }
+  }, [getCaptcha, language, t]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return { challenge, code, setCode, loading, loadError, refresh };
+}
+
+function CaptchaField({
+  challenge,
+  code,
+  onCodeChange,
+  loading,
+  loadError,
+  onRefresh,
+}: {
+  challenge: AuthCaptcha | null;
+  code: string;
+  onCodeChange: (value: string) => void;
+  loading: boolean;
+  loadError: string | null;
+  onRefresh: () => void;
+}) {
+  const { t } = useLanguage();
+  return (
+    <fieldset className="space-y-3 rounded-2xl border border-[#dbe6f0] bg-[#f8fbfe] p-3.5">
+      <legend className="px-1 text-sm font-semibold text-[#28445e]">{t('Security verification')}</legend>
+      <div className="grid grid-cols-[minmax(0,1fr)_92px] gap-2.5">
+        <div className="relative flex h-[68px] min-w-0 items-center justify-center overflow-hidden rounded-xl border border-[#bde4f9] bg-[#eff8ff]">
+          {challenge && (
+            <img
+              src={challenge.image}
+              alt={t('CAPTCHA image')}
+              className="h-full w-full object-contain"
+              data-testid="auth-captcha-image"
+            />
+          )}
+          {loading && (
+            <span className="absolute inset-0 flex items-center justify-center gap-2 bg-[#eff8ff] text-xs font-semibold text-[#66809a]">
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+              {t('Loading CAPTCHA…')}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          title={t('Refresh CAPTCHA')}
+          aria-label={t('Refresh CAPTCHA')}
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#ccdbe8] bg-white px-2 text-xs font-bold text-[#147ed8] transition hover:border-[#1888e8] hover:bg-[#eff8ff] disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid="auth-captcha-refresh"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <span>{t('Refresh code')}</span>
+        </button>
+      </div>
+      <label className="block">
+        <span className="mb-2 block text-sm font-semibold text-[#28445e]">{t('Security code')}</span>
+        <span className="flex items-center gap-3 rounded-xl border border-[#ccdbe8] bg-white px-3.5 py-3 transition focus-within:border-[#1888e8] focus-within:ring-4 focus-within:ring-[#1888e8]/10">
+          <ShieldCheck className="h-[18px] w-[18px] shrink-0 text-[#7190ab]" aria-hidden="true" />
+          <input
+            className="min-w-0 flex-1 bg-transparent text-sm font-bold uppercase tracking-[0.18em] text-[#16304a] outline-none placeholder:font-normal placeholder:normal-case placeholder:tracking-normal placeholder:text-[#9aafc0]"
+            type="text"
+            value={code}
+            onChange={(event) => onCodeChange(event.target.value.toUpperCase())}
+            placeholder={t('Enter the code shown')}
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            maxLength={32}
+            disabled={!challenge || loading}
+            data-testid="auth-captcha-input"
+          />
+        </span>
+      </label>
+      {loadError && <p role="alert" className="text-xs leading-5 text-[#bd3434]">{loadError}</p>}
+    </fieldset>
+  );
+}
+
 function LoginPage() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
   const { language, t } = useLanguage();
+  const captcha = useCaptcha();
   const [username, setUsername] = useState(typeof window !== 'undefined' && window.location.search.includes('step=2') ? "demo_admin" : "");
   const [password, setPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=2') ? "••••••••••" : "");
   const [error, setError] = useState<string | null>(null);
@@ -164,14 +272,20 @@ function LoginPage() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!captcha.challenge || !captcha.code.trim()) {
+      setError(t('Enter the CAPTCHA code'));
+      if (!captcha.challenge && !captcha.loading) void captcha.refresh();
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      await login(username, password);
+      await login(username, password, captcha.challenge.challengeId, captcha.code);
       setPassword('');
       setLocation('/dashboard', { replace: true });
     } catch (cause) {
       setError(localizedErrorMessage(cause, language, t('Could not sign in. Please try again.')));
+      await captcha.refresh();
     } finally {
       setSubmitting(false);
     }
@@ -201,9 +315,17 @@ function LoginPage() {
           onChange={setPassword}
           autoComplete="current-password"
         />
+        <CaptchaField
+          challenge={captcha.challenge}
+          code={captcha.code}
+          onCodeChange={captcha.setCode}
+          loading={captcha.loading}
+          loadError={captcha.loadError}
+          onRefresh={() => void captcha.refresh()}
+        />
         <AuthError message={error} />
         <button
-          disabled={submitting}
+          disabled={submitting || captcha.loading || !captcha.challenge}
           type="submit"
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -228,6 +350,7 @@ function RegisterPage() {
   const [, setLocation] = useLocation();
   const { register } = useAuth();
   const { language, t } = useLanguage();
+  const captcha = useCaptcha();
   const [username, setUsername] = useState(typeof window !== 'undefined' && window.location.search.includes('step=1') ? "demo_admin" : "");
   const [password, setPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=1') ? "••••••••••" : "");
   const [confirmPassword, setConfirmPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=1') ? "••••••••••" : "");
@@ -243,15 +366,27 @@ function RegisterPage() {
       setError(t('Passwords do not match'));
       return;
     }
+    if (!captcha.challenge || !captcha.code.trim()) {
+      setError(t('Enter the CAPTCHA code'));
+      if (!captcha.challenge && !captcha.loading) void captcha.refresh();
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      await register(username, password, confirmPassword);
+      await register(
+        username,
+        password,
+        confirmPassword,
+        captcha.challenge.challengeId,
+        captcha.code,
+      );
       setPassword('');
       setConfirmPassword('');
       setLocation('/dashboard', { replace: true });
     } catch (cause) {
       setError(localizedErrorMessage(cause, language, t('Could not register. Please try again.')));
+      await captcha.refresh();
     } finally {
       setSubmitting(false);
     }
@@ -295,9 +430,17 @@ function RegisterPage() {
           onChange={setConfirmPassword}
           autoComplete="new-password"
         />
+        <CaptchaField
+          challenge={captcha.challenge}
+          code={captcha.code}
+          onCodeChange={captcha.setCode}
+          loading={captcha.loading}
+          loadError={captcha.loadError}
+          onRefresh={() => void captcha.refresh()}
+        />
         <AuthError message={error} />
         <button
-          disabled={submitting}
+          disabled={submitting || captcha.loading || !captcha.challenge}
           type="submit"
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
         >

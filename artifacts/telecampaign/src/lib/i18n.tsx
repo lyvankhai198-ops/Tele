@@ -388,6 +388,15 @@ const translations: Record<string, string> = {
   "Could not sign in. Please try again.": "Không thể đăng nhập. Vui lòng thử lại",
   "Could not register. Please try again.": "Không thể đăng ký. Vui lòng thử lại",
   "Could not connect to server. Please try again.": "Không thể kết nối máy chủ. Vui lòng thử lại",
+  "Security verification": "Xác minh bảo mật",
+  "Security code": "Mã CAPTCHA",
+  "Enter the code shown": "Nhập mã trong hình",
+  "CAPTCHA image": "Hình mã CAPTCHA",
+  "Refresh CAPTCHA": "Đổi mã CAPTCHA",
+  "Refresh code": "Đổi mã",
+  "Loading CAPTCHA…": "Đang tải CAPTCHA...",
+  "Enter the CAPTCHA code": "Vui lòng nhập mã CAPTCHA",
+  "Could not load CAPTCHA. Try refreshing it.": "Không thể tải CAPTCHA. Hãy thử đổi mã mới.",
   // Navigation / admin
   "Admin license keys": "Quản trị key",
   "Close sidebar": "Đóng",
@@ -507,6 +516,29 @@ const translations: Record<string, string> = {
 export function localizedErrorMessage(error: unknown, language: Language, fallback: string): string {
   const message = error instanceof Error ? error.message.trim() : "";
   const cleanMessage = message.replace(/^HTTP \d{3}(?: [^:]*)?:\s*/, "");
+  const captchaMessages: Record<string, Record<Language, string>> = {
+    CAPTCHA_REQUIRED: {
+      vi: "Mã CAPTCHA không tồn tại hoặc đã được sử dụng. Vui lòng đổi mã mới.",
+      en: "The CAPTCHA is missing or was already used. Please load a new code.",
+    },
+    CAPTCHA_WRONG: {
+      vi: "Mã CAPTCHA không đúng. Vui lòng nhập mã mới.",
+      en: "The CAPTCHA code is incorrect. Please enter the new code.",
+    },
+    CAPTCHA_EXPIRED: {
+      vi: "Mã CAPTCHA đã hết hạn. Vui lòng nhập mã mới.",
+      en: "The CAPTCHA code expired. Please enter the new code.",
+    },
+    CAPTCHA_IP_MISMATCH: {
+      vi: "Mã CAPTCHA không còn hợp lệ. Vui lòng đổi mã mới.",
+      en: "The CAPTCHA is no longer valid. Please load a new code.",
+    },
+    CAPTCHA_RATE_LIMITED: {
+      vi: "Bạn đã yêu cầu quá nhiều mã CAPTCHA. Vui lòng thử lại sau 15 phút.",
+      en: "Too many CAPTCHA codes were requested. Please try again in 15 minutes.",
+    },
+  };
+  if (captchaMessages[cleanMessage]) return captchaMessages[cleanMessage][language];
   return language === "vi" && cleanMessage ? cleanMessage : fallback;
 }
 

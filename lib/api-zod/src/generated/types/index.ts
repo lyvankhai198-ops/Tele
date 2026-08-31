@@ -66,6 +66,7 @@ export * from './adminUserSupportCampaignTargets';
 export * from './adminUserSupportOverview';
 export * from './adminUserSupportTarget';
 export * from './adminUserUsage';
+export * from './authCaptcha';
 export * from './authUser';
 export * from './authUserRole';
 export * from './calendarItem';

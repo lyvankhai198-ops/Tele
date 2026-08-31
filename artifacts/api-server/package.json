@@ -22,6 +22,7 @@
     "http-proxy-middleware": "^4.2.0",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
+    "sharp": "^0.34.4",
     "telegram": "^2.26.22",
     "utf-8-validate": "^6.0.6"
   },

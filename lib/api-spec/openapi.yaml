@@ -67,6 +67,21 @@ paths:
         "400": { description: Invalid login data }
         "401": { description: Invalid credentials }
         "429": { description: Too many attempts }
+  /auth/captcha:
+    get:
+      operationId: getAuthCaptcha
+      tags: [auth]
+      summary: Issue a CAPTCHA challenge for authentication
+      responses:
+        "200":
+          description: CAPTCHA challenge
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthCaptcha" }
+        "429": { description: Too many CAPTCHA requests }
   /auth/logout:
     post:
       operationId: logoutAuth
@@ -1212,17 +1227,28 @@ components:
         role: { type: string, enum: [user, admin] }
     RegistrationInput:
       type: object
-      required: [username, password, confirmPassword]
+      required: [username, password, confirmPassword, captchaChallengeId, captchaCode]
       properties:
         username: { type: string, minLength: 3, maxLength: 32 }
         password: { type: string, minLength: 10, maxLength: 128 }
         confirmPassword: { type: string, minLength: 10, maxLength: 128 }
+        captchaChallengeId: { type: string, minLength: 1, maxLength: 128 }
+        captchaCode: { type: string, minLength: 1, maxLength: 32 }
     LoginInput:
       type: object
-      required: [username, password]
+      required: [username, password, captchaChallengeId, captchaCode]
       properties:
         username: { type: string, minLength: 1, maxLength: 128 }
         password: { type: string, minLength: 1, maxLength: 128 }
+        captchaChallengeId: { type: string, minLength: 1, maxLength: 128 }
+        captchaCode: { type: string, minLength: 1, maxLength: 32 }
+    AuthCaptcha:
+      type: object
+      required: [challengeId, image, expiresAt]
+      properties:
+        challengeId: { type: string, minLength: 1, maxLength: 128 }
+        image: { type: string, minLength: 1 }
+        expiresAt: { type: string, format: date-time }
     PasswordChangeInput:
       type: object
       required: [currentPassword, newPassword, confirmPassword]

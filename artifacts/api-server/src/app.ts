@@ -6,7 +6,17 @@ import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
 
 const app: Express = express();
-app.set("trust proxy", 1);
+
+function isTrustedProxy(address: string): boolean {
+  const normalized = address.replace(/^::ffff:/, "");
+  if (normalized === "::1" || normalized === "127.0.0.1") return true;
+  if (process.env.NODE_ENV === "production") return false;
+  if (normalized.startsWith("10.") || normalized.startsWith("192.168.")) return true;
+  const match = normalized.match(/^172\.(\d{1,3})\./);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+}
+
+app.set("trust proxy", isTrustedProxy);
 
 app.use(
   pinoHttp({

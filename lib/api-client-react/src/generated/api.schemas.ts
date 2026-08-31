@@ -39,6 +39,16 @@ export interface RegistrationInput {
      * @maxLength 128
      */
   confirmPassword: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  captchaChallengeId: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  captchaCode: string;
 }
 
 export interface LoginInput {
@@ -52,6 +62,27 @@ export interface LoginInput {
      * @maxLength 128
      */
   password: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  captchaChallengeId: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  captchaCode: string;
+}
+
+export interface AuthCaptcha {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  challengeId: string;
+  /** @minLength 1 */
+  image: string;
+  expiresAt: string;
 }
 
 export interface PasswordChangeInput {

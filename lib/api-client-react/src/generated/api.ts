@@ -47,6 +47,7 @@ import type {
   AdminUserQuotaUpdateInput,
   AdminUserSupport,
   AdminUserSupportCampaignTargets,
+  AuthCaptcha,
   AuthUser,
   CalendarItem,
   Campaign,
@@ -331,6 +332,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getLoginAuthMutationOptions(options));
     }
+
+export const getGetAuthCaptchaUrl = () => {
+
+
+
+
+  return `/api/auth/captcha`
+}
+
+/**
+ * @summary Issue a CAPTCHA challenge for authentication
+ */
+export const getAuthCaptcha = async ( options?: Parameters<typeof customFetch>[1]): Promise<AuthCaptcha> => {
+
+  return customFetch<AuthCaptcha>(getGetAuthCaptchaUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAuthCaptchaQueryKey = () => {
+    return [
+    `/api/auth/captcha`
+    ] as const;
+    }
+
+
+export const getGetAuthCaptchaQueryOptions = <TData = Awaited<ReturnType<typeof getAuthCaptcha>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthCaptcha>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAuthCaptchaQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthCaptcha>>> = ({ signal }) => getAuthCaptcha({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAuthCaptcha>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAuthCaptchaQueryResult = NonNullable<Awaited<ReturnType<typeof getAuthCaptcha>>>
+export type GetAuthCaptchaQueryError = ErrorType<void>
+
+
+/**
+ * @summary Issue a CAPTCHA challenge for authentication
+ */
+
+export function useGetAuthCaptcha<TData = Awaited<ReturnType<typeof getAuthCaptcha>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAuthCaptcha>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAuthCaptchaQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getLogoutAuthUrl = () => {
 

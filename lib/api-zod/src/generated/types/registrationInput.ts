@@ -22,4 +22,14 @@ export interface RegistrationInput {
      * @maxLength 128
      */
   confirmPassword: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  captchaChallengeId: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  captchaCode: string;
 }

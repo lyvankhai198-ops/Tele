@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { AuthCaptcha } from "@workspace/api-client-react";
 import { localizedErrorMessage, type Language } from "@/lib/i18n";
 
 export type AuthUser = {
@@ -11,8 +12,9 @@ export type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
-  register: (username: string, password: string, confirmPassword: string) => Promise<void>;
-  login: (username: string, password: string) => Promise<void>;
+  getCaptcha: () => Promise<AuthCaptcha>;
+  register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
+  login: (username: string, password: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -37,11 +39,7 @@ async function authRequest<T>(path: string, language: Language, init?: RequestIn
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(localizedErrorMessage(
-      payload?.error ? new Error(payload.error) : null,
-      language,
-      serverFallback[language],
-    ));
+    throw new Error(typeof payload?.error === "string" ? payload.error : serverFallback[language]);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -67,19 +65,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const register = useCallback(async (username: string, password: string, confirmPassword: string) => {
+  const getCaptcha = useCallback(async () => {
+    return authRequest<AuthCaptcha>("/captcha", currentLanguage(), {
+      cache: "no-store",
+    });
+  }, []);
+
+  const register = useCallback(async (
+    username: string,
+    password: string,
+    confirmPassword: string,
+    captchaChallengeId: string,
+    captchaCode: string,
+  ) => {
     const currentUser = await authRequest<AuthUser>("/register", currentLanguage(), {
       method: "POST",
-      body: JSON.stringify({ username, password, confirmPassword }),
+      body: JSON.stringify({ username, password, confirmPassword, captchaChallengeId, captchaCode }),
     });
     queryClient.clear();
     setUser(currentUser);
   }, [queryClient]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (
+    username: string,
+    password: string,
+    captchaChallengeId: string,
+    captchaCode: string,
+  ) => {
     const currentUser = await authRequest<AuthUser>("/login", currentLanguage(), {
       method: "POST",
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, captchaChallengeId, captchaCode }),
     });
     queryClient.clear();
     setUser(currentUser);
@@ -94,7 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient]);
 
-  const value = useMemo(() => ({ user, isLoading, register, login, logout }), [isLoading, login, logout, register, user]);
+  const value = useMemo(
+    () => ({ user, isLoading, getCaptcha, register, login, logout }),
+    [getCaptcha, isLoading, login, logout, register, user],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

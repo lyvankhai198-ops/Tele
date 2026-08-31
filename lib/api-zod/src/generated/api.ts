@@ -26,12 +26,18 @@ export const registerAuthBodyPasswordMax = 128;
 export const registerAuthBodyConfirmPasswordMin = 10;
 export const registerAuthBodyConfirmPasswordMax = 128;
 
+export const registerAuthBodyCaptchaChallengeIdMax = 128;
+
+export const registerAuthBodyCaptchaCodeMax = 32;
+
 
 
 export const RegisterAuthBody = zod.object({
   "username": zod.string().min(registerAuthBodyUsernameMin).max(registerAuthBodyUsernameMax),
   "password": zod.string().min(registerAuthBodyPasswordMin).max(registerAuthBodyPasswordMax),
-  "confirmPassword": zod.string().min(registerAuthBodyConfirmPasswordMin).max(registerAuthBodyConfirmPasswordMax)
+  "confirmPassword": zod.string().min(registerAuthBodyConfirmPasswordMin).max(registerAuthBodyConfirmPasswordMax),
+  "captchaChallengeId": zod.string().min(1).max(registerAuthBodyCaptchaChallengeIdMax),
+  "captchaCode": zod.string().min(1).max(registerAuthBodyCaptchaCodeMax)
 })
 
 export const RegisterAuthResponse = zod.object({
@@ -45,17 +51,38 @@ export const loginAuthBodyUsernameMax = 128;
 
 export const loginAuthBodyPasswordMax = 128;
 
+export const loginAuthBodyCaptchaChallengeIdMax = 128;
+
+export const loginAuthBodyCaptchaCodeMax = 32;
+
 
 
 export const LoginAuthBody = zod.object({
   "username": zod.string().min(1).max(loginAuthBodyUsernameMax),
-  "password": zod.string().min(1).max(loginAuthBodyPasswordMax)
+  "password": zod.string().min(1).max(loginAuthBodyPasswordMax),
+  "captchaChallengeId": zod.string().min(1).max(loginAuthBodyCaptchaChallengeIdMax),
+  "captchaCode": zod.string().min(1).max(loginAuthBodyCaptchaCodeMax)
 })
 
 export const LoginAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin'])
+})
+
+
+/**
+ * @summary Issue a CAPTCHA challenge for authentication
+ */
+export const getAuthCaptchaResponseChallengeIdMax = 128;
+
+
+
+
+export const GetAuthCaptchaResponse = zod.object({
+  "challengeId": zod.string().min(1).max(getAuthCaptchaResponseChallengeIdMax),
+  "image": zod.string().min(1),
+  "expiresAt": zod.coerce.date()
 })
 
 

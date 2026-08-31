@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Request } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { timingSafeEqual } from "node:crypto";
 import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import {
@@ -32,6 +32,11 @@ import { requireSession } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
 import { recordActivity } from "../lib/activity";
 import { TRIAL_DURATION_DAYS } from "../lib/subscriptions";
+import {
+  CaptchaIssueRateLimitError,
+  issueCaptcha,
+  verifyAndConsumeCaptcha,
+} from "../lib/captcha";
 
 const router: IRouter = Router();
 const MAX_CREDENTIAL_ATTEMPTS = 5;
@@ -115,6 +120,38 @@ function clearCredentialFailures(key: string): void {
   credentialAttempts.delete(key);
 }
 
+function captchaErrorCode(result: ReturnType<typeof verifyAndConsumeCaptcha>): string {
+  switch (result) {
+    case "valid":
+      return "";
+    case "wrong":
+      return "CAPTCHA_WRONG";
+    case "expired":
+      return "CAPTCHA_EXPIRED";
+    case "ip-mismatch":
+      return "CAPTCHA_IP_MISMATCH";
+    case "missing":
+      return "CAPTCHA_REQUIRED";
+  }
+}
+
+function requireValidCaptcha(req: Request, res: Response): boolean {
+  const body = req.body as Record<string, unknown> | null | undefined;
+  const challengeId = typeof body?.captchaChallengeId === "string" ? body.captchaChallengeId : "";
+  const code = typeof body?.captchaCode === "string" ? body.captchaCode : "";
+  if (!challengeId || !code.trim()) {
+    res.status(400).json({ error: "CAPTCHA_REQUIRED" });
+    return false;
+  }
+
+  const error = captchaErrorCode(verifyAndConsumeCaptcha(challengeId, code, ipKey(req)));
+  if (error) {
+    res.status(400).json({ error });
+    return false;
+  }
+  return true;
+}
+
 async function recordAuthActivityBestEffort(
   req: Request,
   activity: Parameters<typeof recordActivity>[0],
@@ -148,7 +185,23 @@ function isUniqueViolation(error: unknown): boolean {
   return false;
 }
 
+router.get("/auth/captcha", async (req, res): Promise<void> => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await issueCaptcha(ipKey(req)));
+  } catch (error) {
+    if (error instanceof CaptchaIssueRateLimitError) {
+      res.status(429).json({ error: "CAPTCHA_RATE_LIMITED" });
+      return;
+    }
+    req.log.error({ err: error }, "Unable to issue CAPTCHA challenge");
+    res.status(500).json({ error: "Không thể tạo mã CAPTCHA lúc này. Vui lòng thử lại" });
+  }
+});
+
 router.post("/auth/register", async (req, res): Promise<void> => {
+  if (!requireValidCaptcha(req, res)) return;
+
   const parsed = RegisterAuthBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Thông tin đăng ký không hợp lệ" });
@@ -231,6 +284,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
+  if (!requireValidCaptcha(req, res)) return;
+
   const parsed = LoginAuthBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Thông tin đăng nhập không hợp lệ" });
