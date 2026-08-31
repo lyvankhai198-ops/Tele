@@ -1349,7 +1349,7 @@ components:
         count: { type: number }
     Destination:
       type: object
-      required: [id, accountId, telegramId, topicId, parentTitle, title, username, kind, memberCount, canPost, permissionReason, permissionCheckedAt]
+      required: [id, accountId, telegramId, topicId, parentTitle, title, username, kind, memberCount, canPost, permissionReason, permissionCheckedAt, restrictedUntil]
       properties:
         id: { type: string }
         accountId: { type: string }
@@ -1363,6 +1363,7 @@ components:
         canPost: { type: boolean }
         permissionReason: { type: ["string", "null"] }
         permissionCheckedAt: { type: ["string", "null"], format: date-time }
+        restrictedUntil: { type: ["string", "null"], format: date-time }
     TelegramSavedMessage:
       type: object
       required: [id, text, date, hasMedia]

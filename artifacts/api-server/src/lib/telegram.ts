@@ -8,7 +8,10 @@ import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 import { logger } from "./logger";
-import { TelegramPostingPermissionError } from "./telegram-errors";
+import {
+  TelegramPostingPermissionError,
+  telegramSendRestrictionIsActive,
+} from "./telegram-errors";
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -25,9 +28,11 @@ type TelegramEntity = {
   };
   bannedRights?: {
     sendMessages?: boolean;
+    untilDate?: number;
   };
   defaultBannedRights?: {
     sendMessages?: boolean;
+    untilDate?: number;
   };
 };
 
@@ -165,13 +170,29 @@ function canPostToEntity(entity: TelegramEntity): boolean {
   // For groups and megagroups, Telegram may return an individual ban as
   // well as the default group restriction. Individual rights take priority.
   if (entity.bannedRights?.sendMessages !== undefined) {
-    return !entity.bannedRights.sendMessages;
+    return !telegramSendRestrictionIsActive(entity.bannedRights);
   }
   if (entity.defaultBannedRights?.sendMessages !== undefined) {
-    return !entity.defaultBannedRights.sendMessages;
+    return !telegramSendRestrictionIsActive(entity.defaultBannedRights);
   }
   // Telegram omits ban rights when a known group has no sending restriction.
   return true;
+}
+
+function restrictionUntilFromRights(rights: TelegramEntity["bannedRights"] | TelegramEntity["defaultBannedRights"]): Date | null {
+  if (!rights?.sendMessages || typeof rights.untilDate !== "number" || !Number.isFinite(rights.untilDate)) {
+    return null;
+  }
+  const restrictedUntil = new Date(rights.untilDate * 1000);
+  return restrictedUntil.getTime() > Date.now() ? restrictedUntil : null;
+}
+
+function postingRestrictionUntil(entity: TelegramEntity): Date | null {
+  if (entity.broadcast) return null;
+  if (entity.bannedRights?.sendMessages !== undefined) {
+    return restrictionUntilFromRights(entity.bannedRights);
+  }
+  return restrictionUntilFromRights(entity.defaultBannedRights);
 }
 
 type TelegramDestination = {
@@ -255,6 +276,7 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
     if (!canPostToEntity(entity)) {
       throw new TelegramPostingPermissionError(
         `Telegram posting permission is no longer available for "${destination.title}". The account may be restricted or banned from posting.`,
+        postingRestrictionUntil(entity),
       );
     }
     return inputEntity;
@@ -287,6 +309,23 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   throw new TelegramPostingPermissionError(
     `Telegram destination "${destination.title}" is unavailable to this account. Check that the account still belongs to the group; automatic group sync is not attempted for this delivery.`,
   );
+}
+
+async function markDestinationPostingAvailable(destinationId: string): Promise<void> {
+  const checkedAt = new Date();
+  try {
+    await db.update(destinationsTable).set({
+      canPost: true,
+      permissionReason: "Posting permission available",
+      permissionCheckedAt: checkedAt,
+      restrictedUntil: null,
+      updatedAt: checkedAt,
+    }).where(eq(destinationsTable.id, destinationId));
+  } catch (error) {
+    // Telegram already accepted the message. Metadata refresh must never turn
+    // that success into an automatic retry that could duplicate the delivery.
+    logger.warn({ err: error, destinationId }, "Could not refresh restored destination posting permission");
+  }
 }
 
 export async function getAccountClient(accountId: string, ownerUserId?: string): Promise<{
@@ -364,6 +403,7 @@ export async function syncAccountDestinations(accountId: string) {
       memberCount: number | null;
       canPost: boolean;
       permissionReason: string;
+      restrictedUntil: Date | null;
     }) => {
       const conditions = [
         eq(destinationsTable.accountId, accountId),
@@ -407,6 +447,7 @@ export async function syncAccountDestinations(accountId: string) {
         memberCount: entity.participantsCount ?? null,
         canPost,
         permissionReason: canPost ? "Posting permission available" : "Posting is restricted by Telegram",
+        restrictedUntil: canPost ? null : postingRestrictionUntil(entity),
       });
 
       if (!entity.forum || entity.broadcast) {
@@ -438,6 +479,7 @@ export async function syncAccountDestinations(accountId: string) {
                 : topic.hidden
                   ? "Topic is hidden by Telegram"
                   : "Posting is restricted by Telegram",
+            restrictedUntil: topicCanPost ? null : postingRestrictionUntil(entity),
           });
         }
       } catch (error) {
@@ -458,6 +500,7 @@ export async function syncAccountDestinations(accountId: string) {
         canPost: false,
         permissionReason: "This destination is no longer available to the connected account",
         permissionCheckedAt: new Date(),
+        restrictedUntil: null,
         updatedAt: new Date(),
       }).where(eq(destinationsTable.id, destinationId))));
     await db.update(telegramAccountsTable).set({ status: "connected", lastSyncAt: new Date(), updatedAt: new Date() })
@@ -539,6 +582,7 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
       message: content,
       ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
     });
+    await markDestinationPostingAvailable(destination.id);
     return String((sent as any).id ?? "");
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
@@ -592,16 +636,21 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
         return false;
       }
     };
+    const forwardAndRefreshPermission = async () => {
+      const messageId = await forwardOnce();
+      await markDestinationPostingAvailable(destination.id);
+      return messageId;
+    };
     if (destination.topicId === null) {
       try {
-        return await forwardOnce();
+        return await forwardAndRefreshPermission();
       } catch (error) {
         if (!isInvalidSavedMessage(error)) throw error;
         if (!(await refreshSavedMessage())) {
           throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
         }
         try {
-          return await forwardOnce();
+          return await forwardAndRefreshPermission();
         } catch (retryError) {
           if (isInvalidSavedMessage(retryError)) {
             throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
@@ -611,14 +660,14 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
       }
     }
     try {
-      return await forwardOnce();
+      return await forwardAndRefreshPermission();
     } catch (error) {
       if (!isInvalidSavedMessage(error)) throw error;
       if (!(await refreshSavedMessage())) {
         throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");
       }
       try {
-        return await forwardOnce();
+        return await forwardAndRefreshPermission();
       } catch (retryError) {
         if (isInvalidSavedMessage(retryError)) {
           throw new Error("The saved Telegram message was changed or deleted. Select the current message again from Saved Messages. (MESSAGE_ID_INVALID)");

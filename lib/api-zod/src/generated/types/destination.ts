@@ -25,4 +25,6 @@ export interface Destination {
   permissionReason: string | null;
   /** @nullable */
   permissionCheckedAt: Date | null;
+  /** @nullable */
+  restrictedUntil: Date | null;
 }

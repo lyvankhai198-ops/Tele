@@ -13,7 +13,10 @@ import {
   isDevelopmentDemoTelegramAccount,
   sendTelegramMessage,
 } from "./telegram";
-import { telegramPostingPermissionFailureReason } from "./telegram-errors";
+import {
+  telegramPostingPermissionFailureReason,
+  telegramPostingPermissionRestrictedUntil,
+} from "./telegram-errors";
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
@@ -936,6 +939,7 @@ export async function processNextCampaignTarget(accountId?: string) {
     }
     const message = error instanceof Error ? error.message : "Telegram delivery failed";
     const postingPermissionReason = telegramPostingPermissionFailureReason(error);
+    const postingPermissionRestrictedUntil = telegramPostingPermissionRestrictedUntil(error);
     const floodSeconds = Number((error as { seconds?: number }).seconds);
     const hasSupportedFloodWait = Number.isFinite(floodSeconds) && floodSeconds > 0 && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
     // FLOOD_WAIT and explicit posting-permission errors are known Telegram
@@ -970,6 +974,7 @@ export async function processNextCampaignTarget(accountId?: string) {
           canPost: false,
           permissionReason: postingPermissionReason,
           permissionCheckedAt: now,
+          restrictedUntil: postingPermissionRestrictedUntil,
           updatedAt: now,
         }).where(eq(destinationsTable.id, job.destination.id));
         const skipped = await tx.update(campaignTargetsTable).set({
@@ -1008,6 +1013,7 @@ export async function processNextCampaignTarget(accountId?: string) {
       ownerUserId: job.campaign.ownerUserId,
       metadata: {
         retryAt: null,
+        restrictedUntil: postingPermissionRestrictedUntil?.toISOString() ?? null,
         campaignContinued: true,
         quotaReservationRetained: !knownPreSendRejection,
         destinationMarkedUnavailable: Boolean(postingPermissionReason),

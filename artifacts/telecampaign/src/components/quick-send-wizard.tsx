@@ -28,6 +28,13 @@ import {
   useSyncTelegramDestinations,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import {
+  canChooseRestrictedDestination,
+  localScheduleFields,
+  scheduleMeetsRestrictionSuggestion,
+  suggestedRestrictionSchedule,
+  temporaryRestrictionUntil,
+} from "@/lib/telegram-restrictions";
 import { useLocation } from "wouter";
 
 type QuickSendWizardProps = {
@@ -102,6 +109,11 @@ const copy = {
     selectAll: "Chọn tất cả",
     deselectAll: "Bỏ chọn tất cả",
     noGroups: "Chưa có nhóm được phép gửi. Hãy đồng bộ lại tài khoản.",
+    temporaryRestrictionHint: (until: string) => `Tạm hạn chế đến ${until}`,
+    temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} nhóm đã chọn đang bị hạn chế tạm thời. Hãy xác nhận lịch chạy từ ${suggestedAt}.`,
+    applySuggestedSchedule: "Dùng thời gian an toàn đề xuất",
+    restrictionSafetyHint: "Đã cộng 5 phút an toàn; worker sẽ kiểm tra lại quyền đăng trước khi gửi.",
+    validationRestrictionSchedule: (suggestedAt: string) => `Hãy lên lịch từ ${suggestedAt} trở đi cho nhóm đang bị hạn chế.`,
     selectedGroups: (count: number) => `${count} nhóm được chọn`,
     next: "Tiếp tục",
     back: "Quay lại",
@@ -167,6 +179,11 @@ const copy = {
     selectAll: "Select all",
     deselectAll: "Deselect all",
     noGroups: "No groups with posting permission yet. Sync the account again.",
+    temporaryRestrictionHint: (until: string) => `Temporarily restricted until ${until}`,
+    temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} selected group${count === 1 ? " is" : "s are"} temporarily restricted. Confirm a schedule at or after ${suggestedAt}.`,
+    applySuggestedSchedule: "Use suggested safe time",
+    restrictionSafetyHint: "Includes a 5-minute safety buffer; the worker checks posting permission again before sending.",
+    validationRestrictionSchedule: (suggestedAt: string) => `Schedule the campaign at or after ${suggestedAt} for the restricted group.`,
     selectedGroups: (count: number) => `${count} group${count === 1 ? "" : "s"} selected`,
     next: "Continue",
     back: "Back",
@@ -258,7 +275,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     return (destinations.data ?? [])
       .filter((destination) =>
         destination.accountId === accountId
-        && destination.canPost
+        && canChooseRestrictedDestination(destination)
         && (!needle
           || destination.title.toLowerCase().includes(needle)
           || (destination.parentTitle ?? "").toLowerCase().includes(needle)
@@ -268,6 +285,14 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   }, [accountId, destinations.data, groupSearch, language]);
 
   const selectedDestinations = (destinations.data ?? []).filter((destination) => destinationIds.includes(destination.id));
+  const selectedTemporaryDestinations = selectedDestinations.filter((destination) =>
+    temporaryRestrictionUntil(destination) !== null,
+  );
+  const suggestedScheduleAt = suggestedRestrictionSchedule(selectedTemporaryDestinations);
+  const formatRestrictionTime = (value: Date) => new Intl.DateTimeFormat(
+    language === "vi" ? "vi-VN" : "en-US",
+    { dateStyle: "short", timeStyle: "short" },
+  ).format(value);
   const selectedMessage = (accountSavedMessages.data ?? []).find((message) => message.id === sourceMessageId);
   const allVisibleSelected = accountDestinations.length > 0 && accountDestinations.every((item) => destinationIds.includes(item.id));
   const isCreating = createTemplate.isPending || createCampaign.isPending;
@@ -373,6 +398,15 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       : [...new Set([...current, ...accountDestinations.map((item) => item.id)])]);
   }
 
+  function applySuggestedRestrictionSchedule() {
+    if (!suggestedScheduleAt) return;
+    const fields = localScheduleFields(suggestedScheduleAt);
+    setScheduleMode("later");
+    setScheduleDate(fields.date);
+    setScheduleTime(fields.time);
+    setFormError(null);
+  }
+
   function nextStep() {
     setFormError(null);
     if (step === 1) {
@@ -399,6 +433,12 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       const date = new Date(`${scheduleDate}T${scheduleTime || "00:00"}`);
       if (!scheduleDate || Number.isNaN(date.getTime())) return setFormError(c.validationSchedule);
       scheduledAt = date.toISOString();
+    }
+    if (!scheduleMeetsRestrictionSuggestion(
+      scheduledAt ? new Date(scheduledAt) : null,
+      suggestedScheduleAt,
+    )) {
+      return setFormError(c.validationRestrictionSchedule(formatRestrictionTime(suggestedScheduleAt!)));
     }
     const numericValues = [Number(repeatCount), Number(delayMin), Number(delayMax)];
     if (!Number.isInteger(numericValues[0]) || numericValues[0] < 1
@@ -543,7 +583,14 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                             {accountDestinations.length ? accountDestinations.map((destination) => (
                               <button type="button" key={destination.id} onClick={() => toggleDestination(destination.id)} className="flex w-full items-center gap-3 px-2 py-3 text-left transition hover:bg-[#f8fafc]" data-testid={`quick-send-group-${destination.id}`}>
                                 <span className="text-[#1d3bb8]">{destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
-                                <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, language === "vi" ? "Chung" : "General")}</span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, language === "vi" ? "Chung" : "General")}</span>
+                                  {temporaryRestrictionUntil(destination) && (
+                                    <span className="mt-0.5 block text-[10px] font-bold text-[#a16207]">
+                                      {c.temporaryRestrictionHint(formatRestrictionTime(new Date(destination.restrictedUntil!)))}
+                                    </span>
+                                  )}
+                                </span>
                               </button>
                             )) : <p className="px-2 py-5 text-center text-[13px] font-medium text-[#64748b]">{c.noGroups}</p>}
                           </div>
@@ -603,6 +650,17 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                     <span className="mb-2 block text-[13px] font-bold text-[#334155]">{c.campaignName}</span>
                     <input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} placeholder={c.campaignNamePlaceholder} className="h-12 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="quick-send-campaign-name" />
                   </label>
+                  {suggestedScheduleAt && (
+                    <div className="rounded-2xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[#92400e]" data-testid="quick-send-restriction-suggestion">
+                      <p className="text-[12px] font-bold leading-relaxed">
+                        {c.temporaryRestrictionWarning(selectedTemporaryDestinations.length, formatRestrictionTime(suggestedScheduleAt))}
+                      </p>
+                      <button type="button" onClick={applySuggestedRestrictionSchedule} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#f59e0b] px-3.5 py-2.5 text-[12px] font-extrabold text-white" data-testid="quick-send-apply-restriction-schedule">
+                        <CalendarClock className="h-4 w-4" />{c.applySuggestedSchedule}
+                      </button>
+                      <p className="mt-2 text-[10px] font-semibold leading-relaxed text-[#a16207]">{c.restrictionSafetyHint}</p>
+                    </div>
+                  )}
                   <div>
                     <span className="mb-2 block text-[13px] font-bold text-[#334155]">{c.sendTiming}</span>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -331,7 +331,8 @@ export const ListDestinationsResponseItem = zod.object({
   "memberCount": zod.number().nullable(),
   "canPost": zod.boolean(),
   "permissionReason": zod.string().nullable(),
-  "permissionCheckedAt": zod.coerce.date().nullable()
+  "permissionCheckedAt": zod.coerce.date().nullable(),
+  "restrictedUntil": zod.coerce.date().nullable()
 })
 export const ListDestinationsResponse = zod.array(ListDestinationsResponseItem)
 

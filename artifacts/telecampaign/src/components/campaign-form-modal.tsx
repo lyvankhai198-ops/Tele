@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  CalendarClock,
   CheckSquare,
   LoaderCircle,
   Search,
@@ -16,6 +17,13 @@ import {
 } from "@workspace/api-client-react";
 import { Modal, PrimaryButton } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import {
+  canChooseRestrictedDestination,
+  localScheduleFields,
+  scheduleMeetsRestrictionSuggestion,
+  suggestedRestrictionSchedule,
+  temporaryRestrictionUntil,
+} from "@/lib/telegram-restrictions";
 
 type CampaignForm = {
   name: string;
@@ -69,6 +77,11 @@ const copy = {
     unavailableDestination: "No posting permission",
     unavailableDestinationHint: "Telegram posting permission is unavailable for this group.",
     selectedUnavailableWarning: "A selected group no longer has posting permission. Deselect every group marked in red before saving so the campaign can continue with the other groups.",
+    temporaryRestrictionHint: (until: string) => `Temporarily restricted until ${until}.`,
+    temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} selected group${count === 1 ? " is" : "s are"} temporarily restricted. Schedule the campaign for ${suggestedAt} or later.`,
+    applySuggestedSchedule: "Use suggested safe time",
+    scheduleSafetyHint: "Includes a 5-minute safety buffer and will be checked again by Telegram before sending.",
+    validationRestrictionSchedule: (suggestedAt: string) => `Choose a schedule at or after ${suggestedAt} for the temporarily restricted groups.`,
     generalTopic: "General",
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
@@ -109,6 +122,11 @@ const copy = {
     unavailableDestination: "Không có quyền đăng",
     unavailableDestinationHint: "Nhóm này hiện chưa thể nhận tin vì Telegram đã hạn chế quyền đăng.",
     selectedUnavailableWarning: "Có nhóm đang chọn không còn quyền đăng. Hãy bỏ chọn tất cả nhóm có nhãn đỏ trước khi lưu để chiến dịch tiếp tục với các nhóm khác.",
+    temporaryRestrictionHint: (until: string) => `Telegram tạm hạn chế đến ${until}.`,
+    temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} nhóm đã chọn đang bị hạn chế tạm thời. Hãy lên lịch từ ${suggestedAt} trở đi.`,
+    applySuggestedSchedule: "Dùng thời gian an toàn đề xuất",
+    scheduleSafetyHint: "Đã cộng thêm 5 phút an toàn và Telegram sẽ được kiểm tra lại trước khi gửi.",
+    validationRestrictionSchedule: (suggestedAt: string) => `Hãy chọn lịch từ ${suggestedAt} trở đi cho các nhóm đang bị hạn chế tạm thời.`,
     generalTopic: "Chung",
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
@@ -236,11 +254,23 @@ export function CampaignFormModal({
     templates.data,
   ]);
   const selectedTemplate = (templates.data ?? []).find((template) => template.id === form.templateId);
-  const hasSelectedUnavailableDestination = (destinations.data ?? []).some((destination) =>
+  const selectedDestinations = (destinations.data ?? []).filter((destination) =>
     destination.accountId === form.accountId
-    && !destination.canPost
     && form.destinationIds.includes(destination.id),
   );
+  const selectedTemporaryDestinations = selectedDestinations.filter((destination) =>
+    temporaryRestrictionUntil(destination) !== null,
+  );
+  const suggestedScheduleAt = suggestedRestrictionSchedule(selectedTemporaryDestinations);
+  const hasSelectedUnavailableDestination = selectedDestinations.some((destination) =>
+    destination.accountId === form.accountId
+    && !destination.canPost
+    && temporaryRestrictionUntil(destination) === null,
+  );
+  const formatRestrictionTime = (value: Date) => new Intl.DateTimeFormat(
+    language === "vi" ? "vi-VN" : "en-US",
+    { dateStyle: "short", timeStyle: "short" },
+  ).format(value);
 
   useEffect(() => {
     if (editingCampaign || prefill?.roundDelayMinSeconds !== undefined || !systemDefaults.data) return;
@@ -302,6 +332,16 @@ export function CampaignFormModal({
     }));
   }
 
+  function applySuggestedRestrictionSchedule() {
+    if (!suggestedScheduleAt) return;
+    const fields = localScheduleFields(suggestedScheduleAt);
+    setForm((current) => ({
+      ...current,
+      scheduleDate: fields.date,
+      scheduleTime: fields.time,
+    }));
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
@@ -330,6 +370,13 @@ export function CampaignFormModal({
         return;
       }
       scheduledAt = date.toISOString();
+    }
+    if (!scheduleMeetsRestrictionSuggestion(
+      scheduledAt ? new Date(scheduledAt) : null,
+      suggestedScheduleAt,
+    )) {
+      setFormError(c.validationRestrictionSchedule(formatRestrictionTime(suggestedScheduleAt!)));
+      return;
     }
     try {
       if (editingCampaign) {
@@ -413,6 +460,17 @@ export function CampaignFormModal({
                 {c.selectedUnavailableWarning}
               </div>
             )}
+            {suggestedScheduleAt && (
+              <div className="mb-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-3 text-[#92400e]" data-testid="campaign-restriction-suggestion">
+                <p className="text-[12px] font-bold leading-relaxed">
+                  {c.temporaryRestrictionWarning(selectedTemporaryDestinations.length, formatRestrictionTime(suggestedScheduleAt))}
+                </p>
+                <button type="button" onClick={applySuggestedRestrictionSchedule} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#f59e0b] px-3 py-2 text-[11px] font-extrabold text-white" data-testid="campaign-apply-restriction-schedule">
+                  <CalendarClock className="h-3.5 w-3.5" />{c.applySuggestedSchedule}
+                </button>
+                <p className="mt-2 text-[10px] font-semibold leading-relaxed text-[#a16207]">{c.scheduleSafetyHint}</p>
+              </div>
+            )}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
               <input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={c.searchGroupPlaceholder} className="h-10 w-full rounded-xl border border-[#e2e8f0] pl-9 pr-3 text-[14px] font-medium outline-none focus:border-[#1a2b88]" />
@@ -444,25 +502,27 @@ export function CampaignFormModal({
                            type="button"
                            key={destination.id}
                            onClick={() => toggleDestination(destination.id)}
-                           disabled={!destination.canPost && !form.destinationIds.includes(destination.id)}
+                            disabled={!canChooseRestrictedDestination(destination) && !form.destinationIds.includes(destination.id)}
                            className="flex w-full items-center gap-3 px-2 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-75"
                          >
                            <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
                            <span className="min-w-0 flex-1">
                              <span className="block truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c.generalTopic)}</span>
-                             {!destination.canPost && (
+                              {!destination.canPost && (
                                <span className="mt-0.5 block text-[10px] font-semibold leading-snug text-[#be123c]">
-                                 {c.unavailableDestinationHint}
+                                  {temporaryRestrictionUntil(destination)
+                                    ? c.temporaryRestrictionHint(formatRestrictionTime(new Date(destination.restrictedUntil!)))
+                                    : c.unavailableDestinationHint}
                                </span>
                              )}
                            </span>
                           {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
                            {!destination.canPost && (
                              <span
-                               className="rounded-full bg-[#fff1f2] px-2 py-0.5 text-[10px] font-extrabold text-[#be123c]"
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${temporaryRestrictionUntil(destination) ? "bg-[#fffbeb] text-[#a16207]" : "bg-[#fff1f2] text-[#be123c]"}`}
                                title={c.unavailableDestinationHint}
                              >
-                               {c.unavailableDestination}
+                                {temporaryRestrictionUntil(destination) ? formatRestrictionTime(new Date(destination.restrictedUntil!)) : c.unavailableDestination}
                              </span>
                            )}
                         </button>

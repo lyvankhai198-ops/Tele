@@ -111,6 +111,7 @@ export const destinationsTable = pgTable("destinations", {
   canPost: boolean("can_post").notNull().default(false),
   permissionReason: text("permission_reason"),
   permissionCheckedAt: timestamp("permission_checked_at", { withTimezone: true }),
+  restrictedUntil: timestamp("restricted_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

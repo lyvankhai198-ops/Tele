@@ -115,6 +115,7 @@ import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
 import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
+import { canScheduleTelegramDestination } from "../lib/telegram-errors";
 
 const router: IRouter = Router();
 const activityDestinationAccounts = alias(telegramAccountsTable, "activity_destination_accounts");
@@ -1412,6 +1413,11 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   const parsed = CreateCampaignBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
   const systemSettings = await getSystemSettings();
+  const campaignSetAt = new Date();
+  const { scheduledAt, roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(
+    parsed.data.scheduledAt,
+    campaignSetAt,
+  );
   const numericValues = [
     parsed.data.repeatCount,
     parsed.data.roundDelayMinSeconds,
@@ -1442,8 +1448,9 @@ router.post("/campaigns", async (req, res): Promise<void> => {
       inArray(destinationsTable.id, destinationIds),
       inArray(destinationsTable.accountId, parsed.data.telegramAccountId ? [parsed.data.telegramAccountId] : accountIds),
     ));
-  if (destinations.length !== destinationIds.length || destinations.some((destination) => !destination.canPost)) {
-    return void sendError(res, 409, "Every campaign destination must exist and have verified posting permission");
+  if (destinations.length !== destinationIds.length
+    || destinations.some((destination) => !canScheduleTelegramDestination(destination, scheduledAt))) {
+    return void sendError(res, 409, "Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission");
   }
   let content = parsed.data.content.trim();
   let templateMode: "text" | "forward" = "text";
@@ -1464,11 +1471,6 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     }
   }
   if (templateMode === "text" && !content) return void sendError(res, 400, "Choose a message template or enter campaign content.");
-  const now = new Date();
-  const { scheduledAt, roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(
-    parsed.data.scheduledAt,
-    now,
-  );
   const [campaign] = await db.insert(campaignsTable).values({
     ownerUserId: currentUserId(req),
     name: parsed.data.name,
@@ -1787,14 +1789,6 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
        if (campaignCloneMode(lockedCampaign) !== "admin" && template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
         return { kind: "error" as const, status: 409, message: "Forward templates must use the Telegram account that owns the saved message" };
       }
-      const destinations = await tx.select().from(destinationsTable).where(and(
-        inArray(destinationsTable.id, destinationIds),
-        eq(destinationsTable.accountId, telegramAccountId),
-      ));
-       if (destinations.length !== destinationIds.length || (campaignCloneMode(lockedCampaign) !== "admin" && destinations.some((destination) => !destination.canPost))) {
-        return { kind: "error" as const, status: 409, message: "Every campaign destination must exist and have verified posting permission" };
-      }
-
       const editSetAt = new Date();
       const requestedScheduledAt = parsed.data.scheduledAt === undefined
         ? lockedCampaign.scheduledAt
@@ -1806,6 +1800,15 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       const scheduleAnchorAt = parsed.data.scheduledAt === undefined
         ? lockedCampaign.scheduleAnchorAt ?? lockedCampaign.scheduledAt ?? lockedCampaign.createdAt
         : configuredRoundStartAt;
+      const destinations = await tx.select().from(destinationsTable).where(and(
+        inArray(destinationsTable.id, destinationIds),
+        eq(destinationsTable.accountId, telegramAccountId),
+      ));
+       if (destinations.length !== destinationIds.length
+         || destinations.some((destination) => !canScheduleTelegramDestination(destination, scheduledAt))) {
+         return { kind: "error" as const, status: 409, message: "Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission" };
+      }
+
       const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
       const sentByDestination = new Map<string, number>();
       let latestSentAt: Date | null = null;

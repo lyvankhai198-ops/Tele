@@ -252,6 +252,8 @@ export interface Destination {
   permissionReason: string | null;
   /** @nullable */
   permissionCheckedAt: string | null;
+  /** @nullable */
+  restrictedUntil: string | null;
 }
 
 export interface TelegramSavedMessage {

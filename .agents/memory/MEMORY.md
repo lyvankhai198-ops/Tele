@@ -36,3 +36,4 @@
 - [National Day presentation mode](national-day-presentation-mode.md) — the ceremonial UI is a time-boxed visual layer; disabling its setting must restore the unchanged standard interface.
 - [Telegram VPS cutovers](telegram-vps-cutovers.md) — keep the new worker disabled until a public bridge request is confirmed on the new host; only one worker may run.
 - [Self-hosted CAPTCHA rendering](self-hosted-captcha-rendering.md) — send only a randomized raster image; client-visible SVG text makes CAPTCHA answers machine-readable.
+- [Temporary Telegram restrictions](temporary-telegram-restrictions.md) — known expiries require explicit scheduling after a safety buffer; delivery still rechecks live permission.
