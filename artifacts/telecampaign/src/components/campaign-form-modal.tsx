@@ -29,6 +29,8 @@ type CampaignForm = {
   scheduleTime: string;
 };
 
+type DestinationFilter = "all" | "selected" | "available" | "unavailable";
+
 export type CampaignFormPrefill = {
   destinationTelegramId?: string;
   destinationTitle?: string;
@@ -57,6 +59,11 @@ const copy = {
     deselectAll: "Deselect all",
     selectAll: "Select all",
     searchGroupPlaceholder: "Search groups…",
+    destinationFilterLabel: "Filter",
+    destinationFilterAll: "All groups",
+    destinationFilterSelected: "Selected in campaign",
+    destinationFilterAvailable: "Can post",
+    destinationFilterUnavailable: "No posting permission",
     pickAccountHint: "Select a Telegram account to see its groups and posting status.",
     noGroupsHint: "No groups found for this account.",
     unavailableDestination: "No posting permission",
@@ -92,6 +99,11 @@ const copy = {
     deselectAll: "Bỏ chọn tất cả",
     selectAll: "Chọn tất cả",
     searchGroupPlaceholder: "Tìm nhóm...",
+    destinationFilterLabel: "Lọc nhóm",
+    destinationFilterAll: "Tất cả nhóm",
+    destinationFilterSelected: "Nhóm đang chạy",
+    destinationFilterAvailable: "Có quyền đăng",
+    destinationFilterUnavailable: "Không có quyền đăng",
     pickAccountHint: "Chọn tài khoản Telegram để xem nhóm và trạng thái quyền đăng.",
     noGroupsHint: "Không tìm thấy nhóm nào của tài khoản này.",
     unavailableDestination: "Không có quyền đăng",
@@ -181,6 +193,7 @@ export function CampaignFormModal({
   const updateStatus = useUpdateCampaignStatus();
   const [form, setForm] = useState<CampaignForm>(() => initialForm(editingCampaign, prefill));
   const [groupSearch, setGroupSearch] = useState("");
+  const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>("all");
   const [formError, setFormError] = useState<string | null>(null);
 
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
@@ -189,6 +202,12 @@ export function CampaignFormModal({
     return (destinations.data ?? [])
       .filter((destination) =>
         destination.accountId === form.accountId
+        && (
+          destinationFilter === "all"
+          || (destinationFilter === "selected" && form.destinationIds.includes(destination.id))
+          || (destinationFilter === "available" && destination.canPost)
+          || (destinationFilter === "unavailable" && !destination.canPost)
+        )
         && (!needle
           || destination.title.toLowerCase().includes(needle)
           || (destination.parentTitle ?? "").toLowerCase().includes(needle)
@@ -202,6 +221,7 @@ export function CampaignFormModal({
     destinations.data,
     form.accountId,
     form.destinationIds,
+    destinationFilter,
     groupSearch,
     language,
   ]);
@@ -216,8 +236,10 @@ export function CampaignFormModal({
     templates.data,
   ]);
   const selectedTemplate = (templates.data ?? []).find((template) => template.id === form.templateId);
-  const hasSelectedUnavailableDestination = accountDestinations.some((destination) =>
-    !destination.canPost && form.destinationIds.includes(destination.id),
+  const hasSelectedUnavailableDestination = (destinations.data ?? []).some((destination) =>
+    destination.accountId === form.accountId
+    && !destination.canPost
+    && form.destinationIds.includes(destination.id),
   );
 
   useEffect(() => {
@@ -395,6 +417,24 @@ export function CampaignFormModal({
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
               <input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={c.searchGroupPlaceholder} className="h-10 w-full rounded-xl border border-[#e2e8f0] pl-9 pr-3 text-[14px] font-medium outline-none focus:border-[#1a2b88]" />
             </div>
+            {form.accountId && (
+              <div className="mt-2 flex items-center gap-2">
+                <label htmlFor="campaign-destination-filter" className="shrink-0 text-[11px] font-extrabold text-[#64748b]">
+                  {c.destinationFilterLabel}
+                </label>
+                <select
+                  id="campaign-destination-filter"
+                  value={destinationFilter}
+                  onChange={(event) => setDestinationFilter(event.target.value as DestinationFilter)}
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-[#e2e8f0] bg-white px-2.5 text-[12px] font-bold text-[#334155] outline-none focus:border-[#1a2b88]"
+                >
+                  <option value="all">{c.destinationFilterAll}</option>
+                  <option value="selected">{c.destinationFilterSelected}</option>
+                  <option value="available">{c.destinationFilterAvailable}</option>
+                  <option value="unavailable">{c.destinationFilterUnavailable}</option>
+                </select>
+              </div>
+            )}
             {!form.accountId
               ? <p className="px-1 py-4 text-[13px] font-medium leading-relaxed text-[#64748b]">{c.pickAccountHint}</p>
               : <div className="mt-2 max-h-40 divide-y divide-[#f1f5f9] overflow-y-auto">
