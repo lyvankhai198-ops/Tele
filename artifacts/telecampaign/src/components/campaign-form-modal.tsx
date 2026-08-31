@@ -61,6 +61,7 @@ const copy = {
     noGroupsHint: "No groups found for this account.",
     unavailableDestination: "No posting permission",
     unavailableDestinationHint: "Telegram posting permission is unavailable for this group.",
+    selectedUnavailableWarning: "A selected group no longer has posting permission. Deselect every group marked in red before saving so the campaign can continue with the other groups.",
     generalTopic: "General",
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
@@ -95,6 +96,7 @@ const copy = {
     noGroupsHint: "Không tìm thấy nhóm nào của tài khoản này.",
     unavailableDestination: "Không có quyền đăng",
     unavailableDestinationHint: "Nhóm này hiện chưa thể nhận tin vì Telegram đã hạn chế quyền đăng.",
+    selectedUnavailableWarning: "Có nhóm đang chọn không còn quyền đăng. Hãy bỏ chọn tất cả nhóm có nhãn đỏ trước khi lưu để chiến dịch tiếp tục với các nhóm khác.",
     generalTopic: "Chung",
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
@@ -214,6 +216,9 @@ export function CampaignFormModal({
     templates.data,
   ]);
   const selectedTemplate = (templates.data ?? []).find((template) => template.id === form.templateId);
+  const hasSelectedUnavailableDestination = accountDestinations.some((destination) =>
+    !destination.canPost && form.destinationIds.includes(destination.id),
+  );
 
   useEffect(() => {
     if (editingCampaign || prefill?.roundDelayMinSeconds !== undefined || !systemDefaults.data) return;
@@ -381,6 +386,11 @@ export function CampaignFormModal({
             )}
           </div>
           <div className="rounded-xl border border-[#e2e8f0] p-3">
+            {hasSelectedUnavailableDestination && (
+              <div className="mb-3 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3 py-2.5 text-[12px] font-bold leading-relaxed text-[#9f1239]">
+                {c.selectedUnavailableWarning}
+              </div>
+            )}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
               <input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={c.searchGroupPlaceholder} className="h-10 w-full rounded-xl border border-[#e2e8f0] pl-9 pr-3 text-[14px] font-medium outline-none focus:border-[#1a2b88]" />
@@ -398,7 +408,14 @@ export function CampaignFormModal({
                            className="flex w-full items-center gap-3 px-2 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-75"
                          >
                            <span className="text-[#1d3bb8]">{form.destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c.generalTopic)}</span>
+                           <span className="min-w-0 flex-1">
+                             <span className="block truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, c.generalTopic)}</span>
+                             {!destination.canPost && (
+                               <span className="mt-0.5 block text-[10px] font-semibold leading-snug text-[#be123c]">
+                                 {c.unavailableDestinationHint}
+                               </span>
+                             )}
+                           </span>
                           {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
                            {!destination.canPost && (
                              <span

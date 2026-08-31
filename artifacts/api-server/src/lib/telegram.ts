@@ -8,6 +8,7 @@ import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 import { logger } from "./logger";
+import { TelegramPostingPermissionError } from "./telegram-errors";
 
 type TelegramEntity = {
   id?: bigint | number;
@@ -252,14 +253,17 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
       throw new Error(`Telegram destination "${destination.title}" is no longer the same destination as when it was saved.`);
     }
     if (!canPostToEntity(entity)) {
-      throw new Error(`Telegram posting permission is no longer available for "${destination.title}". The account may be restricted or banned from posting.`);
+      throw new TelegramPostingPermissionError(
+        `Telegram posting permission is no longer available for "${destination.title}". The account may be restricted or banned from posting.`,
+      );
     }
     return inputEntity;
   };
 
   try {
     return await validate(await client.getInputEntity(destination.telegramId));
-  } catch {
+  } catch (error) {
+    if (error instanceof TelegramPostingPermissionError) throw error;
     // Numeric IDs for users do not include the access hash. Loading dialogs
     // gives GramJS the complete entity and refreshes its session cache.
   }
@@ -267,7 +271,8 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
   if (destination.username) {
     try {
       return await validate(await client.getInputEntity(destination.username));
-    } catch {
+    } catch (error) {
+      if (error instanceof TelegramPostingPermissionError) throw error;
       // The username may have changed; fall back to the account's dialogs.
     }
   }
@@ -279,7 +284,7 @@ async function resolveDestinationEntity(client: TelegramClient, destination: Tel
     }
   }
 
-  throw new Error(
+  throw new TelegramPostingPermissionError(
     `Telegram destination "${destination.title}" is unavailable to this account. Check that the account still belongs to the group; automatic group sync is not attempted for this delivery.`,
   );
 }

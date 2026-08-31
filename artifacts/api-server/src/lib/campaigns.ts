@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   campaignTargetsTable,
@@ -13,6 +13,7 @@ import {
   isDevelopmentDemoTelegramAccount,
   sendTelegramMessage,
 } from "./telegram";
+import { telegramPostingPermissionFailureReason } from "./telegram-errors";
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
@@ -934,12 +935,13 @@ export async function processNextCampaignTarget(accountId?: string) {
       return true;
     }
     const message = error instanceof Error ? error.message : "Telegram delivery failed";
+    const postingPermissionReason = telegramPostingPermissionFailureReason(error);
     const floodSeconds = Number((error as { seconds?: number }).seconds);
     const hasSupportedFloodWait = Number.isFinite(floodSeconds) && floodSeconds > 0 && floodSeconds <= MAX_FLOOD_WAIT_SECONDS;
-    // FLOOD_WAIT is a known Telegram pre-send rejection. Other errors may
-    // have accepted the message before the client lost its response, so their
-    // reservations remain until a human resolves the target.
-    const knownPreSendRejection = hasSupportedFloodWait;
+    // FLOOD_WAIT and explicit posting-permission errors are known Telegram
+    // pre-send rejections. Other errors may have accepted the message before
+    // the client lost its response, so their reservations remain until review.
+    const knownPreSendRejection = hasSupportedFloodWait || Boolean(postingPermissionReason);
     if (knownPreSendRejection && userQuotaReservation) {
       await releaseUserDailyQuota({
         ownerUserId: job.campaign.ownerUserId,
@@ -950,24 +952,56 @@ export async function processNextCampaignTarget(accountId?: string) {
       userQuotaReservation = undefined;
     }
     const targetUpdate = {
-      status: "requires_review",
+      status: postingPermissionReason ? "failed" : "requires_review",
       ...(knownPreSendRejection ? { quotaReservedAt: null } : {}),
       nextAttemptAt: null,
       lastError: message.slice(0, 500),
       updatedAt: new Date(),
     };
-    await db.update(campaignTargetsTable).set(targetUpdate).where(and(
-      eq(campaignTargetsTable.id, job.target.id),
-      eq(campaignTargetsTable.status, "sending"),
-    ));
+    let skippedDestinationTargets = 0;
+    if (postingPermissionReason) {
+      const now = new Date();
+      await db.transaction(async (tx) => {
+        await tx.update(campaignTargetsTable).set(targetUpdate).where(and(
+          eq(campaignTargetsTable.id, job.target.id),
+          eq(campaignTargetsTable.status, "sending"),
+        ));
+        await tx.update(destinationsTable).set({
+          canPost: false,
+          permissionReason: postingPermissionReason,
+          permissionCheckedAt: now,
+          updatedAt: now,
+        }).where(eq(destinationsTable.id, job.destination.id));
+        const skipped = await tx.update(campaignTargetsTable).set({
+          status: "cancelled",
+          nextAttemptAt: null,
+          lastError: null,
+          updatedAt: now,
+        }).where(and(
+          eq(campaignTargetsTable.campaignId, job.campaign.id),
+          eq(campaignTargetsTable.destinationId, job.destination.id),
+          eq(campaignTargetsTable.status, "pending"),
+        )).returning({ id: campaignTargetsTable.id });
+        skippedDestinationTargets = skipped.length;
+      });
+    } else {
+      await db.update(campaignTargetsTable).set(targetUpdate).where(and(
+        eq(campaignTargetsTable.id, job.target.id),
+        eq(campaignTargetsTable.status, "sending"),
+      ));
+    }
     await recordActivity({
-      event: hasSupportedFloodWait
-        ? "campaign.target.rate_limited"
-        : "campaign.target.failed",
-      message: hasSupportedFloodWait
-        ? `Telegram rejected this delivery with FLOOD_WAIT_${floodSeconds}; the error was recorded and the campaign continued.`
-        : `Delivery to "${job.destination.title}" could not be confirmed; manual review is required to avoid a duplicate send.`,
-      level: hasSupportedFloodWait ? "warning" : "error",
+      event: postingPermissionReason
+        ? "campaign.target.posting_permission_denied"
+        : hasSupportedFloodWait
+          ? "campaign.target.rate_limited"
+          : "campaign.target.failed",
+      message: postingPermissionReason
+        ? `Telegram denied posting to "${job.destination.title}". The destination was marked unavailable and ${skippedDestinationTargets} remaining deliveries to it were skipped; other destinations continue.`
+        : hasSupportedFloodWait
+          ? `Telegram rejected this delivery with FLOOD_WAIT_${floodSeconds}; the error was recorded and the campaign continued.`
+          : `Delivery to "${job.destination.title}" could not be confirmed; manual review is required to avoid a duplicate send.`,
+      level: postingPermissionReason || hasSupportedFloodWait ? "warning" : "error",
       campaignId: job.campaign.id,
       targetId: job.target.id,
       accountId: job.destination.accountId,
@@ -976,6 +1010,8 @@ export async function processNextCampaignTarget(accountId?: string) {
         retryAt: null,
         campaignContinued: true,
         quotaReservationRetained: !knownPreSendRejection,
+        destinationMarkedUnavailable: Boolean(postingPermissionReason),
+        skippedDestinationTargets,
       },
     });
   } finally {
@@ -1025,13 +1061,87 @@ async function processCampaignAccountQueue(accountId: string) {
   }
 }
 
+async function reconcileRecordedPostingPermissionFailures() {
+  const candidates = await db.select({
+    campaignId: campaignTargetsTable.campaignId,
+    destinationId: campaignTargetsTable.destinationId,
+    lastError: campaignTargetsTable.lastError,
+    targetUpdatedAt: campaignTargetsTable.updatedAt,
+    permissionCheckedAt: destinationsTable.permissionCheckedAt,
+  }).from(campaignTargetsTable)
+    .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+    .where(and(
+      inArray(campaignTargetsTable.status, ["failed", "requires_review"]),
+      isNotNull(campaignTargetsTable.lastError),
+      or(
+        isNull(destinationsTable.permissionCheckedAt),
+        lte(destinationsTable.permissionCheckedAt, campaignTargetsTable.updatedAt),
+      ),
+    ));
+  const latestByCampaignDestination = new Map<string, typeof candidates[number]>();
+  for (const candidate of candidates) {
+    if (!telegramPostingPermissionFailureReason(new Error(candidate.lastError ?? ""))) continue;
+    const key = `${candidate.campaignId}:${candidate.destinationId}`;
+    const current = latestByCampaignDestination.get(key);
+    if (!current || candidate.targetUpdatedAt > current.targetUpdatedAt) {
+      latestByCampaignDestination.set(key, candidate);
+    }
+  }
+
+  let reconciledDestinations = 0;
+  let skippedTargets = 0;
+  for (const candidate of latestByCampaignDestination.values()) {
+    const permissionReason = telegramPostingPermissionFailureReason(new Error(candidate.lastError ?? ""));
+    if (!permissionReason) continue;
+    const result = await db.transaction(async (tx) => {
+      const updatedDestination = await tx.update(destinationsTable).set({
+        canPost: false,
+        permissionReason,
+        permissionCheckedAt: candidate.targetUpdatedAt,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(destinationsTable.id, candidate.destinationId),
+        or(
+          isNull(destinationsTable.permissionCheckedAt),
+          lte(destinationsTable.permissionCheckedAt, candidate.targetUpdatedAt),
+        ),
+      )).returning({ id: destinationsTable.id });
+      if (!updatedDestination.length) return 0;
+      const skipped = await tx.update(campaignTargetsTable).set({
+        status: "cancelled",
+        nextAttemptAt: null,
+        lastError: null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(campaignTargetsTable.campaignId, candidate.campaignId),
+        eq(campaignTargetsTable.destinationId, candidate.destinationId),
+        eq(campaignTargetsTable.status, "pending"),
+      )).returning({ id: campaignTargetsTable.id });
+      return skipped.length;
+    });
+    reconciledDestinations += 1;
+    skippedTargets += result;
+  }
+  if (reconciledDestinations > 0) {
+    logger.info(
+      { reconciledDestinations, skippedTargets },
+      "Marked destinations unavailable from recorded Telegram posting-permission failures",
+    );
+  }
+}
+
 export function startCampaignWorker() {
   if (interval) return;
   let tickRunning = false;
+  let postingPermissionFailuresReconciled = false;
   const tick = async () => {
     if (tickRunning) return;
     tickRunning = true;
     try {
+      if (!postingPermissionFailuresReconciled) {
+        await reconcileRecordedPostingPermissionFailures();
+        postingPermissionFailuresReconciled = true;
+      }
       const stalled = await db.update(campaignTargetsTable).set({
         status: "requires_review",
         nextAttemptAt: null,
