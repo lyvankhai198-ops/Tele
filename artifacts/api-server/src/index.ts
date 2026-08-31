@@ -30,8 +30,10 @@ void getUnmappedLegacyOwnerCount().then(async (unmappedOwners) => {
   logger.info({ port }, "Server listening");
   startNotificationMediaCleanup();
   startActivityLogCleanup();
-  if (unmappedOwners === 0) {
+  if (unmappedOwners === 0 && process.env.TELECAMPAIGN_DISABLE_WORKER !== "true") {
     startCampaignWorker();
+  } else if (process.env.TELECAMPAIGN_DISABLE_WORKER === "true") {
+    logger.warn("Campaign worker is disabled by TELECAMPAIGN_DISABLE_WORKER");
   } else {
     logger.warn({ unmappedOwners }, "Campaign worker is paused until legacy ownership is migrated");
   }
