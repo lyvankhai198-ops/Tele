@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CalendarClock,
   CheckSquare,
@@ -13,6 +13,7 @@ import {
   useListDestinations,
   useListMessageTemplates,
   useListTelegramAccounts,
+  useSyncTelegramDestinations,
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { Modal, PrimaryButton } from "@/components/layout/AppLayout";
@@ -77,6 +78,10 @@ const copy = {
     unavailableDestination: "No posting permission",
     unavailableDestinationHint: "Telegram posting permission is unavailable for this group.",
     selectedUnavailableWarning: "A selected group no longer has posting permission. Deselect every group marked in red before saving so the campaign can continue with the other groups.",
+    syncingDestinations: "Refreshing groups and posting permissions...",
+    destinationsSynced: (count: number) => `Updated ${count} group${count === 1 ? "" : "s"}.`,
+    syncDestinationsFailed: "Groups could not be refreshed. Try again or check the Telegram account.",
+    retrySyncDestinations: "Refresh groups",
     temporaryRestrictionHint: (until: string) => `Temporarily restricted until ${until}.`,
     temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} selected group${count === 1 ? " is" : "s are"} temporarily restricted. Schedule the campaign for ${suggestedAt} or later.`,
     applySuggestedSchedule: "Use suggested safe time",
@@ -122,6 +127,10 @@ const copy = {
     unavailableDestination: "Không có quyền đăng",
     unavailableDestinationHint: "Nhóm này hiện chưa thể nhận tin vì Telegram đã hạn chế quyền đăng.",
     selectedUnavailableWarning: "Có nhóm đang chọn không còn quyền đăng. Hãy bỏ chọn tất cả nhóm có nhãn đỏ trước khi lưu để chiến dịch tiếp tục với các nhóm khác.",
+    syncingDestinations: "Đang cập nhật nhóm và quyền đăng...",
+    destinationsSynced: (count: number) => `Đã cập nhật ${count} nhóm.`,
+    syncDestinationsFailed: "Không thể cập nhật nhóm. Hãy thử lại hoặc kiểm tra tài khoản Telegram.",
+    retrySyncDestinations: "Cập nhật lại nhóm",
     temporaryRestrictionHint: (until: string) => `Telegram tạm hạn chế đến ${until}.`,
     temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} nhóm đã chọn đang bị hạn chế tạm thời. Hãy lên lịch từ ${suggestedAt} trở đi.`,
     applySuggestedSchedule: "Dùng thời gian an toàn đề xuất",
@@ -208,11 +217,17 @@ export function CampaignFormModal({
   const templates = useListMessageTemplates();
   const systemDefaults = useGetSystemDefaults();
   const createCampaign = useCreateCampaign();
+  const syncDestinations = useSyncTelegramDestinations();
   const updateStatus = useUpdateCampaignStatus();
   const [form, setForm] = useState<CampaignForm>(() => initialForm(editingCampaign, prefill));
   const [groupSearch, setGroupSearch] = useState("");
   const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>("all");
   const [formError, setFormError] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState(false);
+  const syncedAccounts = useRef(new Set<string>());
+  const activeAccountId = useRef(form.accountId);
+  activeAccountId.current = form.accountId;
 
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
   const accountDestinations = useMemo(() => {
@@ -306,8 +321,62 @@ export function CampaignFormModal({
     prefill?.destinationTelegramId,
   ]);
 
+  useEffect(() => {
+    const accountId = form.accountId;
+    if (!accountId || syncedAccounts.current.has(accountId) || syncDestinations.isPending) return;
+
+    syncedAccounts.current.add(accountId);
+    setSyncMessage(null);
+    setSyncError(false);
+    syncDestinations.mutate({ accountId }, {
+      onSuccess: async (result) => {
+        if (activeAccountId.current !== accountId) return;
+        try {
+          await destinations.refetch();
+          if (activeAccountId.current !== accountId) return;
+          setSyncMessage(c.destinationsSynced(result.count));
+        } catch (error) {
+          setSyncError(true);
+          setSyncMessage(localizedErrorMessage(error, language, c.syncDestinationsFailed));
+        }
+      },
+      onError: (error) => {
+        if (activeAccountId.current !== accountId) return;
+        setSyncError(true);
+        setSyncMessage(localizedErrorMessage(error, language, c.syncDestinationsFailed));
+      },
+    });
+  }, [c, destinations, form.accountId, language, syncDestinations, syncDestinations.isPending]);
+
   function changeAccount(accountId: string) {
     setForm((current) => ({ ...current, accountId, templateId: "", destinationIds: [] }));
+    setSyncMessage(null);
+    setSyncError(false);
+  }
+
+  function retryDestinationSync() {
+    const accountId = form.accountId;
+    if (!accountId || syncDestinations.isPending) return;
+    setSyncMessage(null);
+    setSyncError(false);
+    syncDestinations.mutate({ accountId }, {
+      onSuccess: async (result) => {
+        if (activeAccountId.current !== accountId) return;
+        try {
+          await destinations.refetch();
+          if (activeAccountId.current !== accountId) return;
+          setSyncMessage(c.destinationsSynced(result.count));
+        } catch (error) {
+          setSyncError(true);
+          setSyncMessage(localizedErrorMessage(error, language, c.syncDestinationsFailed));
+        }
+      },
+      onError: (error) => {
+        if (activeAccountId.current !== accountId) return;
+        setSyncError(true);
+        setSyncMessage(localizedErrorMessage(error, language, c.syncDestinationsFailed));
+      },
+    });
   }
 
   function toggleDestination(destinationId: string) {
@@ -455,6 +524,26 @@ export function CampaignFormModal({
             )}
           </div>
           <div className="rounded-xl border border-[#e2e8f0] p-3">
+             {(syncDestinations.isPending || syncMessage) && (
+               <div
+                 className={`mb-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold leading-relaxed ${
+                   syncError ? "border border-[#fecdd3] bg-[#fff1f2] text-[#9f1239]" : "border border-[#dbeafe] bg-[#eff6ff] text-[#1e40af]"
+                 }`}
+                 role="status"
+                 aria-live="polite"
+                 data-testid="campaign-destination-sync-status"
+               >
+                 <span className="flex min-w-0 items-center gap-2">
+                   {syncDestinations.isPending && <LoaderCircle className="h-4 w-4 shrink-0 animate-spin" />}
+                   <span>{syncDestinations.isPending ? c.syncingDestinations : syncMessage}</span>
+                 </span>
+                 {syncError && !syncDestinations.isPending && (
+                   <button type="button" onClick={retryDestinationSync} className="shrink-0 font-extrabold underline underline-offset-2">
+                     {c.retrySyncDestinations}
+                   </button>
+                 )}
+               </div>
+             )}
             {hasSelectedUnavailableDestination && (
               <div className="mb-3 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3 py-2.5 text-[12px] font-bold leading-relaxed text-[#9f1239]">
                 {c.selectedUnavailableWarning}

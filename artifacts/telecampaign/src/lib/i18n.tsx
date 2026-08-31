@@ -539,6 +539,16 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
     },
   };
   if (captchaMessages[cleanMessage]) return captchaMessages[cleanMessage][language];
+  if (/Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Mỗi nhóm đang bị hạn chế cần có lịch đã xác nhận, ít nhất 5 phút sau khi Telegram khôi phục quyền đăng."
+      : "Every restricted destination needs a confirmed schedule at least 5 minutes after Telegram restores posting permission.";
+  }
+  if (/Every destination must be synced and have verified posting permission before running/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Mỗi nhóm cần được đồng bộ và xác minh quyền đăng trước khi chạy."
+      : "Every destination must be synced and have verified posting permission before running.";
+  }
   return language === "vi" && cleanMessage ? cleanMessage : fallback;
 }
 

@@ -1685,7 +1685,11 @@ router.get("/campaigns/:campaignId/clone-readiness", async (req, res): Promise<v
   const destinations = targets.flatMap(({ destination }) => {
     if (seenDestinationIds.has(destination.id)) return [];
     seenDestinationIds.add(destination.id);
-    const ready = Boolean(account && destination.accountId === account.id && destination.canPost);
+    const ready = Boolean(
+      account
+      && destination.accountId === account.id
+      && canScheduleTelegramDestination(destination, campaign.scheduledAt),
+    );
     return [{
       id: destination.id,
       title: destination.title,
@@ -1930,9 +1934,10 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     if (!configuredDestinationIds.length
       || targetDestinations.length !== configuredDestinationIds.length
       || targetDestinations.some(({ destination }) => (
-      destination.accountId !== existing.telegramAccountId || !destination.canPost
+      destination.accountId !== existing.telegramAccountId
+      || !canScheduleTelegramDestination(destination, existing.scheduledAt)
     ))) {
-      return void sendError(res, 409, "Every destination must be synced and have verified posting permission before running.");
+      return void sendError(res, 409, "Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission");
     }
     if (existing.clonedFromCampaignId && existing.status === "draft") {
       const pendingTargets = await db.select({
