@@ -136,6 +136,21 @@ const proxyTestLimits = new Map<string, { active: number; attempts: number[] }>(
 type WaitingLoginStatus = "waiting_code" | "waiting_password";
 type ProcessingLoginStatus = "processing_code" | "processing_password";
 
+function telegramRpcErrorCode(error: unknown): string | null {
+  const telegramError = error as { errorMessage?: unknown; message?: unknown } | null;
+  const details = [telegramError?.errorMessage, telegramError?.message]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toUpperCase();
+  return [
+    "PHONE_CODE_INVALID",
+    "PHONE_CODE_EXPIRED",
+    "PHONE_CODE_EMPTY",
+    "PHONE_NUMBER_INVALID",
+    "PHONE_NUMBER_BANNED",
+  ].find((code) => details.includes(code)) ?? null;
+}
+
 function acquireProxyTestSlot(ownerUserId: string): (() => void) | null {
   const now = Date.now();
   const state = proxyTestLimits.get(ownerUserId) ?? { active: 0, attempts: [] };
@@ -1154,14 +1169,25 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
       status: "connected",
       account: telegramAccountResponse(connectedAccount),
     }));
-  } catch {
+  } catch (error) {
+    const telegramError = telegramRpcErrorCode(error);
+    req.log.warn({ telegramError, accountId: account.id }, "Telegram phone code confirmation failed");
     await recordLoginAttemptFailure({
       challenge: reservation.challenge,
       accountId: account.id,
       processingStatus: reservation.processingStatus,
       retryStatus: reservation.retryStatus,
     });
-    sendError(res, 401, "Mã xác minh không đúng hoặc đã hết hạn.");
+    if (telegramError === "PHONE_CODE_INVALID" || telegramError === "PHONE_CODE_EMPTY") {
+      return void sendError(res, 401, "Mã không khớp với yêu cầu xác minh mới nhất. Nếu đã bấm Gửi lại mã, chỉ dùng mã Telegram gửi sau cùng.");
+    }
+    if (telegramError === "PHONE_CODE_EXPIRED") {
+      return void sendError(res, 410, "Mã Telegram đã hết hạn. Hãy bấm Gửi lại mã và chỉ dùng mã mới nhất.");
+    }
+    if (telegramError === "PHONE_NUMBER_INVALID" || telegramError === "PHONE_NUMBER_BANNED") {
+      return void sendError(res, 409, "Telegram không cho phép xác minh số điện thoại này. Hãy kiểm tra lại tài khoản.");
+    }
+    sendError(res, 502, "Telegram chưa thể xác minh mã lúc này. Mã chưa được kết luận là sai; hãy thử lại sau.");
   }
 });
 

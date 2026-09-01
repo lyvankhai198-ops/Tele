@@ -31,7 +31,7 @@ import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 const copy = {
   en: {
     requestFailed: "The request could not be completed.",
-    codeSent: "Telegram verification code sent.",
+    codeSent: "A new Telegram verification code was sent. Use only the latest code.",
     loginComplete: "Telegram account logged in.",
     deleted: "Telegram account deleted.",
     title: "Telegram Accounts",
@@ -97,13 +97,13 @@ const copy = {
     twoFactorDescription: "This Telegram account is protected with a 2FA password.",
     twoFactorPassword: "2FA password",
     confirmPassword: "Confirm password",
-    sentViaApp: "Telegram sent the code in the Telegram app.",
-    sentViaSms: "Telegram sent the code by SMS.",
+    sentViaApp: "Telegram sent the code in the Telegram app. Use only the newest message; older codes are no longer valid.",
+    sentViaSms: "Telegram sent the code by SMS. Use only the newest message; older codes are no longer valid.",
     tryAgain: "Try again",
   },
   vi: {
     requestFailed: "Yêu cầu không thể hoàn thành.",
-    codeSent: "Đã gửi mã xác minh Telegram.",
+    codeSent: "Đã gửi mã xác minh Telegram mới. Chỉ dùng mã mới nhất.",
     loginComplete: "Đã Login tài khoản Telegram.",
     deleted: "Đã xóa tài khoản Telegram.",
     title: "Tài khoản Telegram",
@@ -169,8 +169,8 @@ const copy = {
     twoFactorDescription: "Tài khoản Telegram này được bảo vệ bằng mật khẩu 2FA.",
     twoFactorPassword: "Mật khẩu 2FA",
     confirmPassword: "Xác nhận mật khẩu",
-    sentViaApp: "Telegram đã gửi mã trong ứng dụng Telegram.",
-    sentViaSms: "Telegram đã gửi mã qua SMS.",
+    sentViaApp: "Telegram đã gửi mã trong ứng dụng. Chỉ dùng tin nhắn mới nhất; mã cũ không còn hiệu lực.",
+    sentViaSms: "Telegram đã gửi mã qua SMS. Chỉ dùng tin nhắn mới nhất; mã cũ không còn hiệu lực.",
     tryAgain: "Thử lại",
   },
 } as const;
@@ -340,6 +340,9 @@ export default function Accounts() {
   };
 
   const startAccountLogin = (accountId: string) => {
+    if (loginSubmissionLocked.current) return;
+    loginSubmissionLocked.current = true;
+    setVerificationCode("");
     startLogin.mutate({ accountId }, {
       onSuccess: (data) => {
         void invalidateAccounts();
@@ -347,6 +350,9 @@ export default function Accounts() {
         setToast(text.codeSent);
       },
       onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onSettled: () => {
+        loginSubmissionLocked.current = false;
+      },
     });
   };
 
