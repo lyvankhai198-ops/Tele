@@ -45,6 +45,7 @@ const copy = {
     statusCancelled: "Cancelled",
     accountFallback: "Telegram account",
     scheduledLabel: "Scheduled:",
+    temporaryRestrictionNote: (time: string) => `Safety time applied; this campaign will continue at ${time}.`,
     detailsBtn: "Details",
     pauseBtn: "Pause",
     resumeBtn: "Resume",
@@ -154,6 +155,7 @@ const copy = {
     statusCancelled: "Đã hủy",
     accountFallback: "Tài khoản Telegram",
     scheduledLabel: "Lên lịch:",
+    temporaryRestrictionNote: (time: string) => `Đã dùng thời gian an toàn; chiến dịch sẽ tiếp tục lúc ${time}.`,
     detailsBtn: "Chi tiết",
     pauseBtn: "Dừng",
     resumeBtn: "Tiếp tục",
@@ -264,6 +266,21 @@ function formatSchedule(value: Date | string | null, language: "en" | "vi") {
 
 function isWaitingRetry(error: Campaign["errors"][number]) {
   return error.status === "pending" && Boolean(error.nextAttemptAt);
+}
+
+function temporaryRestrictionCampaignNote(
+  campaign: Campaign,
+  language: "en" | "vi",
+  c: (typeof copy)["en"] | (typeof copy)["vi"],
+) {
+  const waiting = campaign.errors.find((error) =>
+    error.status === "pending"
+    && Boolean(error.nextAttemptAt)
+    && error.lastError?.startsWith("temporary_telegram_restriction:"),
+  );
+  return waiting?.nextAttemptAt
+    ? c.temporaryRestrictionNote(formatSchedule(waiting.nextAttemptAt, language))
+    : null;
 }
 
 function formatCountdown(milliseconds: number) {
@@ -522,6 +539,7 @@ export default function Campaigns() {
                   const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
                   const complete = campaign.targetCount ? Math.round((campaign.sentCount / campaign.targetCount) * 100) : 0;
                   const autoResumes = resumesAfterDailyQuota(campaign);
+                   const safetyNote = temporaryRestrictionCampaignNote(campaign, language, c);
                   return (
                     <article key={campaign.id} className="p-4 sm:p-5" data-testid={`campaign-row-${campaign.id}`}>
                       <div className="flex items-start justify-between gap-3">
@@ -541,6 +559,7 @@ export default function Campaigns() {
                         <p>{account?.name ?? "—"}</p>
                         <p>{c.scheduledLabel} {formatSchedule(campaign.scheduledAt, language)}</p>
                         <p>{c.detailDelayRound} {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds}s</p>
+                         {safetyNote && <p className="rounded-lg bg-[#fffbeb] px-2.5 py-2 font-extrabold text-[#92400e]">{safetyNote}</p>}
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2">
                         <button onClick={() => setDetails(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] text-[14px] font-extrabold text-[#0f172a] hover:bg-[#f8fafc]"><Eye className="h-[17px] w-[17px]" />{c.detailsBtn}</button>

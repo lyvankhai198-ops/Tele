@@ -14,6 +14,7 @@ import {
   sendTelegramMessage,
 } from "./telegram";
 import {
+  TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS,
   telegramPostingPermissionFailureReason,
   telegramPostingPermissionRestrictedUntil,
 } from "./telegram-errors";
@@ -38,6 +39,16 @@ import {
 const MAX_FLOOD_WAIT_SECONDS = 24 * 60 * 60;
 const DELIVERY_LEASE_MS = 5 * 60_000;
 const DELIVERY_LEASE_RENEW_MS = 60_000;
+const TEMPORARY_RESTRICTION_NOTE_PREFIX = "temporary_telegram_restriction:";
+
+function temporaryRestrictionResumeAt(restrictedUntil: Date | null, now = new Date()) {
+  if (!restrictedUntil || Number.isNaN(restrictedUntil.getTime()) || restrictedUntil <= now) return null;
+  return new Date(restrictedUntil.getTime() + TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS);
+}
+
+function temporaryRestrictionNote(resumeAt: Date) {
+  return `${TEMPORARY_RESTRICTION_NOTE_PREFIX}${resumeAt.toISOString()}`;
+}
 
 /**
  * Older campaigns could be created after their selected schedule had already
@@ -730,6 +741,7 @@ async function finalizeCampaignIfTerminal(campaignId: string) {
     .where(and(eq(campaignTargetsTable.campaignId, campaignId), inArray(campaignTargetsTable.status, ["failed", "requires_review"])));
   await db.update(campaignsTable).set({
     status: reviewOrFailure.length > 0 ? "completed_with_errors" : "completed",
+    pauseReason: null,
     updatedAt: new Date(),
   }).where(and(
     eq(campaignsTable.id, campaignId),
@@ -753,6 +765,60 @@ async function markTargetForReview(targetId: string, reason: string) {
       logger.warn({ err: error, targetId, attempt }, "Could not persist manual-review status");
     }
   }
+}
+
+async function rescheduleTemporaryRestriction(input: {
+  campaignId: string;
+  targetId: string;
+  destinationId: string;
+  restrictedUntil: Date | null;
+}) {
+  const now = new Date();
+  const resumeAt = temporaryRestrictionResumeAt(input.restrictedUntil, now);
+  if (!resumeAt) return null;
+
+  return db.transaction(async (tx) => {
+    const [target] = await tx.update(campaignTargetsTable).set({
+      status: "pending",
+      quotaReservedAt: null,
+      nextAttemptAt: resumeAt,
+      lastError: temporaryRestrictionNote(resumeAt),
+      updatedAt: now,
+    }).where(and(
+      eq(campaignTargetsTable.id, input.targetId),
+      eq(campaignTargetsTable.campaignId, input.campaignId),
+      eq(campaignTargetsTable.destinationId, input.destinationId),
+      eq(campaignTargetsTable.status, "sending"),
+    )).returning({ id: campaignTargetsTable.id });
+    if (!target) return null;
+
+    await tx.update(campaignTargetsTable).set({
+      nextAttemptAt: resumeAt,
+      updatedAt: now,
+    }).where(and(
+      eq(campaignTargetsTable.campaignId, input.campaignId),
+      eq(campaignTargetsTable.destinationId, input.destinationId),
+      eq(campaignTargetsTable.status, "pending"),
+      or(
+        isNull(campaignTargetsTable.nextAttemptAt),
+        lt(campaignTargetsTable.nextAttemptAt, resumeAt),
+      ),
+    ));
+    await tx.update(destinationsTable).set({
+      canPost: false,
+      permissionCheckedAt: now,
+      restrictedUntil: input.restrictedUntil,
+      updatedAt: now,
+    }).where(eq(destinationsTable.id, input.destinationId));
+    await tx.update(campaignsTable).set({
+      status: "running",
+      updatedAt: now,
+    }).where(and(
+      eq(campaignsTable.id, input.campaignId),
+      inArray(campaignsTable.status, ["queued", "running"]),
+    ));
+    return { resumeAt };
+  });
 }
 
 export async function processNextCampaignTarget(accountId?: string) {
@@ -954,6 +1020,36 @@ export async function processNextCampaignTarget(accountId?: string) {
         logger.warn({ err: releaseError, targetId: job.target.id }, "Could not release daily user quota after a rejected delivery");
       });
       userQuotaReservation = undefined;
+    }
+    const temporaryRestriction = postingPermissionReason
+      ? await rescheduleTemporaryRestriction({
+        campaignId: job.campaign.id,
+        targetId: job.target.id,
+        destinationId: job.destination.id,
+        restrictedUntil: postingPermissionRestrictedUntil,
+      })
+      : null;
+    if (temporaryRestriction) {
+      try {
+        await recordActivity({
+          event: "campaign.target.temporary_restriction_waiting",
+          message: `Campaign "${job.campaign.name}" is waiting for Telegram posting access to "${job.destination.title}" until ${temporaryRestriction.resumeAt.toISOString()}.`,
+          level: "warning",
+          campaignId: job.campaign.id,
+          targetId: job.target.id,
+          accountId: job.destination.accountId,
+          ownerUserId: job.campaign.ownerUserId,
+          metadata: {
+            restrictedUntil: postingPermissionRestrictedUntil?.toISOString() ?? null,
+            safetyBufferMs: TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS,
+            resumeAt: temporaryRestriction.resumeAt.toISOString(),
+            campaignContinued: true,
+          },
+        });
+      } catch (activityError) {
+        logger.warn({ err: activityError, targetId: job.target.id }, "Could not record temporary restriction wait");
+      }
+      return true;
     }
     const targetUpdate = {
       status: postingPermissionReason ? "failed" : "requires_review",
