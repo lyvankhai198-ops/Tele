@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createReadStream } from "node:fs";
-import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
@@ -116,6 +116,7 @@ import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
 import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
 import { canScheduleTelegramDestination } from "../lib/telegram-errors";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 const activityDestinationAccounts = alias(telegramAccountsTable, "activity_destination_accounts");
@@ -149,6 +150,7 @@ function telegramRpcErrorCode(error: unknown): string | null {
     "PHONE_NUMBER_INVALID",
     "PHONE_NUMBER_BANNED",
     "AUTH_KEY_DUPLICATED",
+    "TELEGRAM_ACCOUNT_ALREADY_LINKED",
     "TIMEOUT",
   ].find((code) => details.includes(code)) ?? null;
 }
@@ -409,35 +411,63 @@ async function completeTelegramLogin(input: {
   session: string;
   user: { id: string; username: string | null; name: string | null };
 }) {
-  const [authorizedChallenge] = await db.update(authChallengesTable).set({
-    status: "authorized",
-    completedAt: new Date(),
-    sessionEncrypted: null,
-    phoneCodeHashEncrypted: null,
-    error: null,
-  }).where(and(
-    eq(authChallengesTable.id, input.challengeId),
-    eq(authChallengesTable.accountId, input.account.id),
-    eq(authChallengesTable.ownerUserId, input.account.ownerUserId),
-    eq(authChallengesTable.status, input.challengeStatus),
-    gt(authChallengesTable.expiresAt, new Date()),
-  )).returning();
-  if (!authorizedChallenge) throw new Error("Telegram login challenge is no longer active");
-  const [account] = await db.update(telegramAccountsTable).set({
-    name: input.user.name ?? input.account.name,
-    username: input.user.username,
-    telegramUserId: input.user.id,
-    sessionEncrypted: encryptSecret(input.session),
-    status: "connected",
-    updatedAt: new Date(),
-  }).where(eq(telegramAccountsTable.id, input.account.id)).returning();
-  await recordActivity({
-    ownerUserId: input.account.ownerUserId,
-    event: "account.connected",
-    message: "Telegram account authenticated with phone verification",
-    accountId: input.account.id,
-    level: "success",
+  const account = await db.transaction(async (tx) => {
+    const [duplicate] = await tx.select({
+      id: telegramAccountsTable.id,
+      deletedAt: telegramAccountsTable.deletedAt,
+    }).from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.telegramUserId, input.user.id),
+      ne(telegramAccountsTable.id, input.account.id),
+    )).limit(1);
+
+    if (duplicate && !duplicate.deletedAt) {
+      throw new Error("TELEGRAM_ACCOUNT_ALREADY_LINKED");
+    }
+    if (duplicate?.deletedAt) {
+      await tx.update(telegramAccountsTable).set({
+        telegramUserId: null,
+        sessionEncrypted: null,
+        updatedAt: new Date(),
+      }).where(eq(telegramAccountsTable.id, duplicate.id));
+    }
+
+    const [connectedAccount] = await tx.update(telegramAccountsTable).set({
+      name: input.user.name ?? input.account.name,
+      username: input.user.username,
+      telegramUserId: input.user.id,
+      sessionEncrypted: encryptSecret(input.session),
+      status: "connected",
+      updatedAt: new Date(),
+    }).where(eq(telegramAccountsTable.id, input.account.id)).returning();
+    if (!connectedAccount) throw new Error("Telegram account is no longer active");
+
+    const [authorizedChallenge] = await tx.update(authChallengesTable).set({
+      status: "authorized",
+      completedAt: new Date(),
+      sessionEncrypted: null,
+      phoneCodeHashEncrypted: null,
+      error: null,
+    }).where(and(
+      eq(authChallengesTable.id, input.challengeId),
+      eq(authChallengesTable.accountId, input.account.id),
+      eq(authChallengesTable.ownerUserId, input.account.ownerUserId),
+      eq(authChallengesTable.status, input.challengeStatus),
+      gt(authChallengesTable.expiresAt, new Date()),
+    )).returning();
+    if (!authorizedChallenge) throw new Error("Telegram login challenge is no longer active");
+    return connectedAccount;
   });
+  try {
+    await recordActivity({
+      ownerUserId: input.account.ownerUserId,
+      event: "account.connected",
+      message: "Telegram account authenticated with phone verification",
+      accountId: input.account.id,
+      level: "success",
+    });
+  } catch (error) {
+    logger.warn({ err: error, accountId: input.account.id }, "Telegram login activity recording failed");
+  }
   return account;
 }
 
@@ -1191,6 +1221,9 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
     }
     if (telegramError === "AUTH_KEY_DUPLICATED") {
       return void sendError(res, 409, "Phiên xác minh Telegram bị xung đột. Hãy gửi lại mã một lần để tạo phiên mới.");
+    }
+    if (telegramError === "TELEGRAM_ACCOUNT_ALREADY_LINKED") {
+      return void sendError(res, 409, "Tài khoản Telegram này đã được liên kết với một mục tài khoản khác đang hoạt động.");
     }
     sendError(res, 502, "Telegram chưa thể xác minh mã lúc này. Mã chưa được kết luận là sai; hãy thử lại sau.");
   }
