@@ -17,6 +17,7 @@ import {
   TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS,
   telegramPostingPermissionFailureReason,
   telegramPostingPermissionRestrictedUntil,
+  telegramPostingPermissionResumeAt,
 } from "./telegram-errors";
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
@@ -42,8 +43,7 @@ const DELIVERY_LEASE_RENEW_MS = 60_000;
 const TEMPORARY_RESTRICTION_NOTE_PREFIX = "temporary_telegram_restriction:";
 
 function temporaryRestrictionResumeAt(restrictedUntil: Date | null, now = new Date()) {
-  if (!restrictedUntil || Number.isNaN(restrictedUntil.getTime()) || restrictedUntil <= now) return null;
-  return new Date(restrictedUntil.getTime() + TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS);
+  return telegramPostingPermissionResumeAt(restrictedUntil, now);
 }
 
 function temporaryRestrictionNote(resumeAt: Date) {

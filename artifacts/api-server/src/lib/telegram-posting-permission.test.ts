@@ -6,6 +6,7 @@ import {
   telegramSendRestrictionIsActive,
   telegramPostingPermissionFailureReason,
   telegramPostingPermissionRestrictedUntil,
+  telegramPostingPermissionResumeAt,
 } from "./telegram-errors";
 
 assert.match(
@@ -41,6 +42,16 @@ assert.equal(
   telegramPostingPermissionRestrictedUntil(new Error("CHAT_WRITE_FORBIDDEN")),
   null,
 );
+const restrictionCheckAt = new Date("2026-09-01T12:00:00.000Z");
+assert.equal(
+  telegramPostingPermissionResumeAt(restrictedUntil, restrictionCheckAt)?.toISOString(),
+  "2026-09-01T12:10:00.000Z",
+);
+assert.equal(
+  telegramPostingPermissionResumeAt(new Date("2026-09-01T11:59:59.000Z"), restrictionCheckAt),
+  null,
+);
+assert.equal(telegramPostingPermissionResumeAt(null, restrictionCheckAt), null);
 assert.equal(
   canScheduleTelegramDestination(
     { canPost: false, restrictedUntil },

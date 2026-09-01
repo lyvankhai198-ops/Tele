@@ -10,6 +10,16 @@ export class TelegramPostingPermissionError extends Error {
 
 export const TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS = 5 * 60_000;
 
+export function telegramPostingPermissionResumeAt(
+  restrictedUntil: Date | null,
+  now = new Date(),
+): Date | null {
+  if (!restrictedUntil || Number.isNaN(restrictedUntil.getTime()) || restrictedUntil.getTime() <= now.getTime()) {
+    return null;
+  }
+  return new Date(restrictedUntil.getTime() + TELEGRAM_RESTRICTION_SAFETY_BUFFER_MS);
+}
+
 export function telegramSendRestrictionIsActive(
   rights: { sendMessages?: boolean; untilDate?: number } | null | undefined,
   now = new Date(),
