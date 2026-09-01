@@ -148,6 +148,7 @@ function telegramRpcErrorCode(error: unknown): string | null {
     "PHONE_CODE_EMPTY",
     "PHONE_NUMBER_INVALID",
     "PHONE_NUMBER_BANNED",
+    "AUTH_KEY_DUPLICATED",
     "TIMEOUT",
   ].find((code) => details.includes(code)) ?? null;
 }
@@ -1187,6 +1188,9 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
     }
     if (telegramError === "PHONE_NUMBER_INVALID" || telegramError === "PHONE_NUMBER_BANNED") {
       return void sendError(res, 409, "Telegram không cho phép xác minh số điện thoại này. Hãy kiểm tra lại tài khoản.");
+    }
+    if (telegramError === "AUTH_KEY_DUPLICATED") {
+      return void sendError(res, 409, "Phiên xác minh Telegram bị xung đột. Hãy gửi lại mã một lần để tạo phiên mới.");
     }
     sendError(res, 502, "Telegram chưa thể xác minh mã lúc này. Mã chưa được kết luận là sai; hãy thử lại sau.");
   }

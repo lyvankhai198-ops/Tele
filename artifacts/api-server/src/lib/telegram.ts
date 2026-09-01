@@ -116,7 +116,7 @@ export async function startTelegramPhoneLogin(credentials: TelegramCredentials, 
       delivery: result.isCodeViaApp ? "app" as const : "sms" as const,
     };
   } finally {
-    await disconnectQuietly(client);
+    await destroyQuietly(client);
   }
 }
 
@@ -148,7 +148,7 @@ export async function confirmTelegramPhoneCode(input: {
     if (requiresTwoFactor(error)) return { status: "requires_2fa", session: savedSession(client) };
     throw error;
   } finally {
-    await disconnectQuietly(client);
+    await destroyQuietly(client);
   }
 }
 
@@ -167,7 +167,7 @@ export async function confirmTelegramTwoFactorPassword(input: {
     });
     return { session: savedSession(client), user: telegramLoginUser(user) };
   } finally {
-    await disconnectQuietly(client);
+    await destroyQuietly(client);
   }
 }
 
@@ -711,6 +711,15 @@ export async function disconnectQuietly(client: TelegramClient) {
     await client.disconnect();
   } catch {
     // Disconnect is best effort and must not mask the original auth error.
+  }
+}
+
+async function destroyQuietly(client: TelegramClient) {
+  try {
+    await client.destroy();
+  } catch {
+    // Login clients are single-use. Destruction is best effort and must not
+    // mask a Telegram authentication response.
   }
 }
 
