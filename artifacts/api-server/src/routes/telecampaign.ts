@@ -1374,6 +1374,7 @@ router.get("/telegram/accounts/:accountId/saved-messages", async (req, res): Pro
   if (!account.sessionEncrypted || account.status !== "connected") {
     return void sendError(res, 409, "Tài khoản Telegram cần đăng nhập trước khi đồng bộ Tin nhắn đã lưu.");
   }
+  res.setHeader("Cache-Control", "no-store");
   try {
     res.json(ListTelegramSavedMessagesResponse.parse(await listTelegramSavedMessages(account.id)));
   } catch (error) {
@@ -1392,6 +1393,7 @@ router.get("/telegram/accounts/:accountId/saved-messages/:messageId", async (req
   if (!account.sessionEncrypted || account.status !== "connected") {
     return void sendError(res, 409, "Tài khoản Telegram cần đăng nhập trước khi đồng bộ Tin nhắn đã lưu.");
   }
+  res.setHeader("Cache-Control", "no-store");
   try {
     const message = await getTelegramSavedMessage(account.id, params.data.messageId);
     if (!message) return void sendError(res, 404, "Tin nhắn đã lưu không còn tồn tại.");

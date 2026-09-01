@@ -554,7 +554,24 @@ function toTelegramSavedMessage(message: any) {
 export async function listTelegramSavedMessages(accountId: string) {
   const { client, account } = await getAccountClient(accountId);
   try {
-    const messages = await client.getMessages("me", { limit: 100 });
+    const messages: any[] = [];
+    let offsetId: number | undefined;
+    const pageSize = 100;
+    const maxPages = 10;
+
+    for (let page = 0; page < maxPages; page += 1) {
+      const batch = await client.getMessages("me", {
+        limit: pageSize,
+        ...(offsetId === undefined ? {} : { offsetId }),
+      });
+      messages.push(...batch);
+      if (batch.length < pageSize) break;
+
+      const oldestId = Number(batch.at(-1)?.id);
+      if (!Number.isSafeInteger(oldestId) || oldestId <= 0 || oldestId === offsetId) break;
+      offsetId = oldestId;
+    }
+
     return messages
       .map(toTelegramSavedMessage)
       .filter((message): message is NonNullable<typeof message> => message !== null);
