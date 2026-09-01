@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronRight,
   KeyRound,
+  ScrollText,
   Settings2,
   ShieldCheck,
   UsersRound,
@@ -56,6 +57,8 @@ const copy = {
     operationsDetail: "Theo dõi Telegram, campaign, queue và dung lượng VPS.",
     activeGroups: "Thư Viện Nhóm",
     activeGroupsDetail: "Tập trung các nhóm được campaign active sử dụng và delay đã cài.",
+    systemEvents: "Sự kiện hệ thống",
+    systemEventsDetail: "Theo dõi ngay các thay đổi tài khoản, license và trạng thái đăng ký.",
   }
 } as const;
 
@@ -69,6 +72,7 @@ export default function AdminDashboardPage() {
     { path: "/admin/system-settings", title: text.settings, detail: text.settingsDetail, icon: Settings2, tone: "purple" },
     { path: "/admin/operations", title: text.operations, detail: text.operationsDetail, icon: Activity, tone: "red" },
     { path: "/admin/active-groups", title: text.activeGroups, detail: text.activeGroupsDetail, icon: UsersRound, tone: "blue" },
+    { path: "/admin/system-events", title: text.systemEvents, detail: text.systemEventsDetail, icon: ScrollText, tone: "green" },
   ] as const;
 
   return (

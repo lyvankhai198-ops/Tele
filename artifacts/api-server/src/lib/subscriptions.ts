@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
+  adminSystemEventsTable,
   appUsersTable,
   activityLogsTable,
   db,
@@ -9,6 +10,7 @@ import {
   telegramAccountsTable,
   campaignsTable,
 } from "@workspace/db";
+import { licenseActivationEventValues } from "./admin-system-events";
 import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { localQuotaDate } from "./user-daily-quota";
@@ -687,6 +689,20 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
     const [next] = current
       ? await tx.update(subscriptionsTable).set(values).where(eq(subscriptionsTable.id, current.id)).returning()
       : await tx.insert(subscriptionsTable).values({ ownerUserId, ...values }).returning();
+
+    const [user] = await tx.select({ username: appUsersTable.username })
+      .from(appUsersTable)
+      .where(eq(appUsersTable.id, ownerUserId))
+      .limit(1);
+    const username = user?.username ?? ownerUserId;
+    await tx.insert(adminSystemEventsTable).values(licenseActivationEventValues({
+      ownerUserId,
+      username,
+      licenseKeyId: license.id,
+      plan: license.plan,
+      durationDays: license.durationDays,
+      expiresAt: next.expiresAt,
+    }));
 
     return { ok: true as const, subscription: toSubscriptionSummary(next, now, catalog) };
   });

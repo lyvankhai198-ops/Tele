@@ -58,6 +58,10 @@ import {
   SetAdminNotificationVisibilityBody,
   RequestAdminNotificationUploadUrlBody,
   RequestAdminNotificationUploadUrlResponse,
+  ListAdminSystemEventsQueryParams,
+  ListAdminSystemEventsResponse,
+  MarkAdminSystemEventReadParams,
+  MarkAllAdminSystemEventsReadResponse,
 } from "@workspace/api-zod";
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
@@ -106,6 +110,11 @@ import {
   NotificationMediaUploadError,
 } from "../lib/notificationMediaStorage";
 import { getStorageStatus } from "../lib/storage-status";
+import {
+  listAdminSystemEvents,
+  markAdminSystemEventRead,
+  markAllAdminSystemEventsRead,
+} from "../lib/admin-system-events";
 
 const router: IRouter = Router();
 const notificationMediaStorage = new NotificationMediaStorage();
@@ -121,6 +130,35 @@ function sendError(res: any, status: number, error: string): void {
 }
 
 router.use("/admin", requireAdmin);
+
+router.get("/admin/system-events", async (req, res): Promise<void> => {
+  const parsed = ListAdminSystemEventsQueryParams.safeParse(req.query);
+  if (!parsed.success) return void sendError(res, 400, "Bộ lọc sự kiện không hợp lệ");
+
+  const result = await listAdminSystemEvents({
+    adminUserId: req.userId!,
+    range: parsed.data.range,
+    eventType: parsed.data.eventType,
+    limit: parsed.data.limit,
+  });
+  res.json(ListAdminSystemEventsResponse.parse(result));
+});
+
+router.post("/admin/system-events/read-all", async (req, res): Promise<void> => {
+  const markedCount = await markAllAdminSystemEventsRead(req.userId!);
+  res.json(MarkAllAdminSystemEventsReadResponse.parse({ markedCount }));
+});
+
+router.post("/admin/system-events/:eventId/read", async (req, res): Promise<void> => {
+  const parsed = MarkAdminSystemEventReadParams.safeParse(req.params);
+  if (!parsed.success) return void sendError(res, 400, "Mã sự kiện không hợp lệ");
+  const marked = await markAdminSystemEventRead({
+    adminUserId: req.userId!,
+    eventId: parsed.data.eventId,
+  });
+  if (!marked) return void sendError(res, 404, "Không tìm thấy sự kiện");
+  res.status(204).send();
+});
 
 router.get("/admin/overview", async (_req, res): Promise<void> => {
   res.json(GetAdminOverviewResponse.parse(await getAdminOverview()));

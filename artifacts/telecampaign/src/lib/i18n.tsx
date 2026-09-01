@@ -402,6 +402,8 @@ const translations: Record<string, string> = {
   "Close sidebar": "Đóng",
   "Open menu": "Mở menu",
   "Sign out": "Đăng xuất",
+  "System events": "Sự kiện hệ thống",
+  "Open system event history": "Mở lịch sử sự kiện hệ thống",
 
   // ── dashboard.tsx ────────────────────────────────────────────
   "Loading data…": "Đang tải dữ liệu...",

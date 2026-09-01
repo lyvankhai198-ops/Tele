@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { useGetGroupLibraryAccess, useGetSystemDefaults } from "@workspace/api-client-react";
+import { getListAdminSystemEventsQueryKey, useGetGroupLibraryAccess, useGetSystemDefaults, useListAdminSystemEvents } from "@workspace/api-client-react";
 
 export type PageKey =
   | "dashboard"
@@ -46,6 +46,7 @@ export type PageKey =
   | "admin-system-settings"
   | "admin-operations"
   | "admin-active-groups"
+  | "admin-system-events"
   | "support";
 
 const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean; groupLibraryOnly?: boolean }> = [
@@ -87,6 +88,16 @@ export function AppLayout({
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const systemDefaults = useGetSystemDefaults();
   const isAdminSection = location === "/admin" || location.startsWith("/admin/");
+  const systemEvents = useListAdminSystemEvents(
+    { range: "all", limit: 1 },
+    {
+      query: {
+        queryKey: getListAdminSystemEventsQueryKey({ range: "all", limit: 1 }),
+        enabled: isAdminSection && user?.role === "admin",
+        staleTime: 30_000,
+      },
+    },
+  );
   const nationalDayDate = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Ho_Chi_Minh",
     month: "numeric",
@@ -203,8 +214,29 @@ export function AppLayout({
                <h1 className="text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight">{t(title)}</h1>
             </div>
             
-            <div className="flex items-center gap-4">
+             <div className="flex items-center gap-3 sm:gap-4">
               {headerAction}
+               {isAdminSection && user?.role === "admin" && (
+                 <button
+                   type="button"
+                   onClick={() => setLocation("/admin/system-events")}
+                   className={`relative grid h-10 w-10 place-items-center rounded-xl border transition-colors ${
+                     location === "/admin/system-events"
+                       ? "border-[#b8d9d5] bg-[#e8f1f0] text-[#075e68]"
+                       : "border-[#dfe7ea] bg-[#fcfdfd] text-[#61727b] hover:border-[#b8d9d5] hover:bg-[#f4faf9] hover:text-[#075e68]"
+                   }`}
+                   aria-label={t("Open system event history")}
+                   title={t("System events")}
+                   data-testid="admin-system-events-bell"
+                 >
+                   <Bell className="h-[19px] w-[19px]" strokeWidth={2.2} />
+                   {(systemEvents.data?.unreadCount ?? 0) > 0 && (
+                     <span className="absolute -right-1 -top-1 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-white bg-[#c65b4d] px-1 text-[9px] font-extrabold leading-none text-white" aria-label={`${systemEvents.data?.unreadCount ?? 0} unread system events`}>
+                       {(systemEvents.data?.unreadCount ?? 0) > 99 ? "99+" : systemEvents.data?.unreadCount}
+                     </span>
+                   )}
+                 </button>
+               )}
               {!hideUpgrade && <button
                 onClick={() => setLocation("/upgrade")}
                  className={`bg-[#1a2b88] hover:bg-[#152473] text-white text-[13px] font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${nationalDayThemeActive ? "national-day-upgrade" : ""}`}

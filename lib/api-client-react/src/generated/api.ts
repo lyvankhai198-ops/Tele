@@ -41,6 +41,8 @@ import type {
   AdminOperations,
   AdminOverview,
   AdminSubscriptionUpdateInput,
+  AdminSystemEventList,
+  AdminSystemEventsReadResult,
   AdminSystemSettings,
   AdminSystemSettingsInput,
   AdminUser,
@@ -68,6 +70,7 @@ import type {
   LicenseActivationResult,
   ListActivityParams,
   ListAdminLicenseKeysParams,
+  ListAdminSystemEventsParams,
   ListAdminUsersParams,
   ListCalendarItemsParams,
   LoginInput,
@@ -4235,6 +4238,214 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
 
 
 
+
+export const getListAdminSystemEventsUrl = (params?: ListAdminSystemEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/system-events?${stringifiedParams}` : `/api/admin/system-events`
+}
+
+export const listAdminSystemEvents = async (params?: ListAdminSystemEventsParams, options?: Parameters<typeof customFetch>[1]): Promise<AdminSystemEventList> => {
+
+  return customFetch<AdminSystemEventList>(getListAdminSystemEventsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminSystemEventsQueryKey = (params?: ListAdminSystemEventsParams,) => {
+    return [
+    `/api/admin/system-events`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminSystemEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminSystemEvents>>, TError = ErrorType<void>>(params?: ListAdminSystemEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminSystemEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminSystemEventsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminSystemEvents>>> = ({ signal }) => listAdminSystemEvents(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminSystemEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminSystemEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminSystemEvents>>>
+export type ListAdminSystemEventsQueryError = ErrorType<void>
+
+
+
+export function useListAdminSystemEvents<TData = Awaited<ReturnType<typeof listAdminSystemEvents>>, TError = ErrorType<void>>(
+ params?: ListAdminSystemEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminSystemEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminSystemEventsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkAllAdminSystemEventsReadUrl = () => {
+
+
+
+
+  return `/api/admin/system-events/read-all`
+}
+
+export const markAllAdminSystemEventsRead = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminSystemEventsReadResult> => {
+
+  return customFetch<AdminSystemEventsReadResult>(getMarkAllAdminSystemEventsReadUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkAllAdminSystemEventsReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllAdminSystemEventsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAllAdminSystemEventsRead>>, TError,void, TContext> => {
+
+const mutationKey = ['markAllAdminSystemEventsRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAllAdminSystemEventsRead>>, void> = () => {
+
+
+          return  markAllAdminSystemEventsRead(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAllAdminSystemEventsReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAllAdminSystemEventsRead>>>
+
+    export type MarkAllAdminSystemEventsReadMutationError = ErrorType<void>
+
+    export const useMarkAllAdminSystemEventsRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAllAdminSystemEventsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAllAdminSystemEventsRead>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMarkAllAdminSystemEventsReadMutationOptions(options));
+    }
+
+export const getMarkAdminSystemEventReadUrl = (eventId: string,) => {
+
+
+
+
+  return `/api/admin/system-events/${eventId}/read`
+}
+
+export const markAdminSystemEventRead = async (eventId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getMarkAdminSystemEventReadUrl(eventId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkAdminSystemEventReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAdminSystemEventRead>>, TError,{eventId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAdminSystemEventRead>>, TError,{eventId: string}, TContext> => {
+
+const mutationKey = ['markAdminSystemEventRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAdminSystemEventRead>>, {eventId: string}> = (props) => {
+          const {eventId} = props ?? {};
+
+          return  markAdminSystemEventRead(eventId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAdminSystemEventReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAdminSystemEventRead>>>
+
+    export type MarkAdminSystemEventReadMutationError = ErrorType<void>
+
+    export const useMarkAdminSystemEventRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAdminSystemEventRead>>, TError,{eventId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAdminSystemEventRead>>,
+        TError,
+        {eventId: string},
+        TContext
+      > => {
+      return useMutation(getMarkAdminSystemEventReadMutationOptions(options));
+    }
 
 export const getGetAdminActiveGroupDirectoryUrl = () => {
 

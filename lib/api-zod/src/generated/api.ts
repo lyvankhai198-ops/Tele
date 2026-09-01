@@ -1872,6 +1872,50 @@ export const GetAdminOverviewResponse = zod.object({
 })
 
 
+export const listAdminSystemEventsQueryRangeDefault = `all`;
+export const listAdminSystemEventsQueryLimitDefault = 50;
+export const listAdminSystemEventsQueryLimitMax = 100;
+
+
+
+export const ListAdminSystemEventsQueryParams = zod.object({
+  "range": zod.enum(['all', 'today']).default(listAdminSystemEventsQueryRangeDefault),
+  "eventType": zod.enum(['license_activated', 'user_registered', 'license_revoked']).optional(),
+  "limit": zod.coerce.number().min(1).max(listAdminSystemEventsQueryLimitMax).default(listAdminSystemEventsQueryLimitDefault)
+})
+
+export const ListAdminSystemEventsResponse = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.string(),
+  "eventType": zod.enum(['license_activated', 'user_registered', 'license_revoked']),
+  "level": zod.enum(['info', 'success', 'warning', 'error']),
+  "title": zod.string(),
+  "titleEn": zod.string(),
+  "body": zod.string(),
+  "bodyEn": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()).nullable(),
+  "isRead": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})),
+  "unreadCount": zod.number(),
+  "today": zod.object({
+  "licenseActivations": zod.number()
+})
+})
+
+
+export const MarkAllAdminSystemEventsReadResponse = zod.object({
+  "markedCount": zod.number()
+})
+
+
+export const MarkAdminSystemEventReadParams = zod.object({
+  "eventId": zod.coerce.string()
+})
+
+export const MarkAdminSystemEventReadResponse = zod.void()
+
+
 export const getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMin = 0;
 export const getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMax = 1;
 

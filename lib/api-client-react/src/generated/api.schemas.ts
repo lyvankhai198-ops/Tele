@@ -847,6 +847,58 @@ export interface AdminNotificationUpload {
   objectPath: string;
 }
 
+export type AdminSystemEventEventType = typeof AdminSystemEventEventType[keyof typeof AdminSystemEventEventType];
+
+
+export const AdminSystemEventEventType = {
+  license_activated: 'license_activated',
+  user_registered: 'user_registered',
+  license_revoked: 'license_revoked',
+} as const;
+
+export type AdminSystemEventLevel = typeof AdminSystemEventLevel[keyof typeof AdminSystemEventLevel];
+
+
+export const AdminSystemEventLevel = {
+  info: 'info',
+  success: 'success',
+  warning: 'warning',
+  error: 'error',
+} as const;
+
+/**
+ * @nullable
+ */
+export type AdminSystemEventMetadata = { [key: string]: unknown } | null;
+
+export interface AdminSystemEvent {
+  id: string;
+  eventType: AdminSystemEventEventType;
+  level: AdminSystemEventLevel;
+  title: string;
+  titleEn: string;
+  body: string;
+  bodyEn: string;
+  /** @nullable */
+  metadata: AdminSystemEventMetadata;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface AdminSystemEventTodaySummary {
+  licenseActivations: number;
+}
+
+export interface AdminSystemEventList {
+  events: AdminSystemEvent[];
+  unreadCount: number;
+  today: AdminSystemEventTodaySummary;
+}
+
+export interface AdminSystemEventsReadResult {
+  markedCount: number;
+}
+
 export interface DashboardSummary {
   metrics: DashboardMetricSummary;
   recentCampaigns: Campaign[];
@@ -1639,6 +1691,33 @@ export type ListAdminLicenseKeysParams = {
 status?: LicenseKeyStatus;
 plan?: PlanCode;
 };
+
+export type ListAdminSystemEventsParams = {
+range?: ListAdminSystemEventsRange;
+eventType?: ListAdminSystemEventsEventType;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type ListAdminSystemEventsRange = typeof ListAdminSystemEventsRange[keyof typeof ListAdminSystemEventsRange];
+
+
+export const ListAdminSystemEventsRange = {
+  all: 'all',
+  today: 'today',
+} as const;
+
+export type ListAdminSystemEventsEventType = typeof ListAdminSystemEventsEventType[keyof typeof ListAdminSystemEventsEventType];
+
+
+export const ListAdminSystemEventsEventType = {
+  license_activated: 'license_activated',
+  user_registered: 'user_registered',
+  license_revoked: 'license_revoked',
+} as const;
 
 export type ListAdminUsersParams = {
 /**
