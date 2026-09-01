@@ -3,7 +3,6 @@
   size 25M
   rotate 7
   compress
-  delaycompress
   copytruncate
   missingok
   notifempty

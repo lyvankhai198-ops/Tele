@@ -44,7 +44,7 @@ It creates the protected directory and verifies every existing notification-medi
 
 Install `/opt/telecampaign/scripts/telecampaign-operations.cron` as `/etc/cron.d/telecampaign-operations` with mode `0644`. It runs only the dedicated backup and local health-check scripts; the backup briefly stops and restarts only `telecampaign-api`, never PM2 globally or any other VPS project.
 
-The same cron file rotates only the dedicated TeleCampaign PM2 logs every five minutes. Rotation uses `copytruncate`, a 25 MiB size threshold, compression, and seven retained files, so it does not stop `telecampaign-api` or the campaign worker. The log policy is stored at `/opt/telecampaign/scripts/telecampaign-api.logrotate`.
+The same cron file rotates only the dedicated TeleCampaign PM2 logs every five minutes. Rotation uses `copytruncate`, a 25 MiB size threshold, compression, and seven retained files, so it does not stop `telecampaign-api` or the campaign worker. Install `/opt/telecampaign/scripts/telecampaign-api.logrotate` as `/etc/logrotate.d/telecampaign-api` with mode `0644`.
 
 ## Restore
 

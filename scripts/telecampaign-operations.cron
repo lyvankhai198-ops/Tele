@@ -5,4 +5,4 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # and bounded rotation of the dedicated PM2 logs without stopping the API.
 17 2 * * * root /opt/telecampaign/scripts/backup-telecampaign.sh >> /var/log/telecampaign-backup.log 2>&1
 */5 * * * * root /opt/telecampaign/scripts/telecampaign-healthcheck.sh >> /var/log/telecampaign-health.log 2>&1
-*/5 * * * * root /usr/sbin/logrotate -s /var/lib/telecampaign/telecampaign-logrotate.status /opt/telecampaign/scripts/telecampaign-api.logrotate >/dev/null 2>&1
+*/5 * * * * root /usr/sbin/logrotate -s /var/lib/telecampaign/telecampaign-logrotate.status /etc/logrotate.d/telecampaign-api >/dev/null 2>&1
