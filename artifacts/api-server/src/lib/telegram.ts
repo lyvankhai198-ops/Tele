@@ -561,10 +561,7 @@ async function getTelegramSavedMessagesPeer(client: TelegramClient) {
       .toLowerCase();
     return /saved messages|tin nhắn đã lưu|messages enregistrés|mensagens salvas|保存的消息|保存メッセージ/.test(title);
   });
-  if (!savedDialog?.entity) {
-    throw new Error("Telegram Saved Messages dialog was not found");
-  }
-  return savedDialog.entity;
+  return savedDialog?.entity ?? new Api.InputPeerSelf();
 }
 
 export async function listTelegramSavedMessages(accountId: string) {
