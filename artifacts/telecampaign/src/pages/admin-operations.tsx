@@ -59,7 +59,7 @@ const copy = {
     storageWarning: "Needs attention",
     storageHigh: "Act soon",
     storageCritical: "Critical",
-    storageHint: "The VPS disk is shared with other projects. Keep usage below 70% when possible.",
+    storageHint: "Monitor this VPS disk and keep usage below 70% when possible.",
   },
   vi: {
     title: "Giám sát Vận hành",
@@ -108,7 +108,7 @@ const copy = {
     storageWarning: "Nên kiểm tra",
     storageHigh: "Cần xử lý sớm",
     storageCritical: "Khẩn cấp",
-    storageHint: "Ổ đĩa VPS dùng chung với dự án khác. Nên giữ mức sử dụng dưới 70%.",
+    storageHint: "Theo dõi dung lượng ổ đĩa VPS này và nên giữ mức sử dụng dưới 70%.",
   },
 } as const;
 
