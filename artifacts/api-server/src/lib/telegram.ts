@@ -551,16 +551,33 @@ function toTelegramSavedMessage(message: any) {
   };
 }
 
+async function getTelegramSavedMessagesPeer(client: TelegramClient) {
+  const dialogs = await client.getDialogs({ limit: 500 });
+  const savedDialog = dialogs.find((dialog: any) => {
+    const title = [dialog.name, dialog.entity?.firstName, dialog.entity?.lastName]
+      .filter((value): value is string => typeof value === "string")
+      .join(" ")
+      .trim()
+      .toLowerCase();
+    return /saved messages|tin nhắn đã lưu|messages enregistrés|mensagens salvas|保存的消息|保存メッセージ/.test(title);
+  });
+  if (!savedDialog?.entity) {
+    throw new Error("Telegram Saved Messages dialog was not found");
+  }
+  return savedDialog.entity;
+}
+
 export async function listTelegramSavedMessages(accountId: string) {
   const { client, account } = await getAccountClient(accountId);
   try {
+    const savedMessagesPeer = await getTelegramSavedMessagesPeer(client);
     const messages: any[] = [];
     let offsetId: number | undefined;
     const pageSize = 100;
     const maxPages = 10;
 
     for (let page = 0; page < maxPages; page += 1) {
-      const batch = await client.getMessages("me", {
+      const batch = await client.getMessages(savedMessagesPeer, {
         limit: pageSize,
         ...(offsetId === undefined ? {} : { offsetId }),
       });
@@ -592,7 +609,8 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
   }
   const { client, account } = await getAccountClient(accountId);
   try {
-    const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
+    const savedMessagesPeer = await getTelegramSavedMessagesPeer(client);
+    const messages = await client.getMessages(savedMessagesPeer, { ids: [numericSourceMessageId] });
     return messages
       .map(toTelegramSavedMessage)
       .find((message): message is NonNullable<typeof message> => message !== null) ?? null;
@@ -638,16 +656,17 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     if (!Number.isSafeInteger(numericSourceMessageId) || numericSourceMessageId <= 0) {
       throw new Error("The saved Telegram message ID is invalid");
     }
+    const savedMessagesPeer = await getTelegramSavedMessagesPeer(client);
     const forwardOnce = async () => {
       if (destination.topicId === null) {
         const messages = await client.forwardMessages(entity, {
           messages: numericSourceMessageId,
-          fromPeer: "me",
+          fromPeer: savedMessagesPeer,
         });
         return String((messages[0] as any)?.id ?? "");
       }
       const request = new Api.messages.ForwardMessages({
-        fromPeer: await client.getInputEntity("me"),
+        fromPeer: await client.getInputEntity(savedMessagesPeer),
         id: [numericSourceMessageId],
         toPeer: entity,
         topMsgId: destination.topicId,
@@ -664,7 +683,7 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     };
     const refreshSavedMessage = async () => {
       try {
-        const messages = await client.getMessages("me", { ids: [numericSourceMessageId] });
+        const messages = await client.getMessages(savedMessagesPeer, { ids: [numericSourceMessageId] });
         return messages.some((message: any) => Number(message?.id) === numericSourceMessageId);
       } catch {
         return false;
