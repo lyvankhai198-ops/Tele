@@ -71,6 +71,19 @@ export function isDevelopmentDemoTelegramAccount(account: typeof telegramAccount
 const savedSession = (client: TelegramClient) => (client.session as unknown as { save: () => string }).save();
 const requiresTwoFactor = (error: unknown) => (error as { errorMessage?: string })?.errorMessage === "SESSION_PASSWORD_NEEDED";
 
+function telegramLoginUser(user: any): TelegramLoginUser {
+  if (user?.id === undefined || user?.id === null) {
+    throw new Error("Telegram authorization did not include a user");
+  }
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return {
+    id: String(user.id),
+    username: user.username ?? null,
+    phone: user.phone ?? null,
+    name: name || null,
+  };
+}
+
 export function isTelegramSessionRevoked(error: unknown): boolean {
   const telegramError = error as { errorMessage?: unknown; message?: unknown } | null;
   const details = [telegramError?.errorMessage, telegramError?.message]
@@ -121,12 +134,16 @@ export async function confirmTelegramPhoneCode(input: {
   const client = createTelegramClient(input.session, input.credentials, input.proxy);
   try {
     await client.connect();
-    await client.invoke(new Api.auth.SignIn({
+    const authorization = await client.invoke(new Api.auth.SignIn({
       phoneNumber: input.phone,
       phoneCodeHash: input.phoneCodeHash,
       phoneCode: input.code,
-    }));
-    return { status: "connected", session: savedSession(client), user: await getCurrentUser(client) };
+    })) as unknown as { user?: unknown };
+    return {
+      status: "connected",
+      session: savedSession(client),
+      user: telegramLoginUser(authorization.user),
+    };
   } catch (error) {
     if (requiresTwoFactor(error)) return { status: "requires_2fa", session: savedSession(client) };
     throw error;
@@ -144,11 +161,11 @@ export async function confirmTelegramTwoFactorPassword(input: {
   const client = createTelegramClient(input.session, input.credentials, input.proxy);
   try {
     await client.connect();
-    await client.signInWithPassword(input.credentials, {
+    const user = await client.signInWithPassword(input.credentials, {
       password: async () => input.password,
       onError: async () => true,
     });
-    return { session: savedSession(client), user: await getCurrentUser(client) };
+    return { session: savedSession(client), user: telegramLoginUser(user) };
   } finally {
     await disconnectQuietly(client);
   }
@@ -686,9 +703,7 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
 }
 
 export async function getCurrentUser(client: TelegramClient): Promise<TelegramLoginUser> {
-  const user = (await client.getMe()) as any;
-  const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
-  return { id: String(user.id), username: user.username ?? null, phone: user.phone ?? null, name: name || null };
+  return telegramLoginUser(await client.getMe());
 }
 
 export async function disconnectQuietly(client: TelegramClient) {

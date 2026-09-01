@@ -148,6 +148,7 @@ function telegramRpcErrorCode(error: unknown): string | null {
     "PHONE_CODE_EMPTY",
     "PHONE_NUMBER_INVALID",
     "PHONE_NUMBER_BANNED",
+    "TIMEOUT",
   ].find((code) => details.includes(code)) ?? null;
 }
 
