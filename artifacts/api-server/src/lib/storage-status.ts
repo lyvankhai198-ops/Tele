@@ -3,7 +3,7 @@ import path from "node:path";
 
 const MEDIA_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const MEDIA_MAX_FILES = 500;
-const EXPORT_RETENTION_DAYS = 30;
+const EXPORT_RETENTION_DAYS = 7;
 const LOG_MAX_BYTES = 25 * 1024 * 1024 * 2 * 8;
 const LOG_RETENTION_DAYS = 7;
 const STORAGE_CACHE_TTL_MS = 30_000;

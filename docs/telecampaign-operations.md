@@ -22,7 +22,7 @@ Create encrypted-permission backups of the database and notification media:
 /opt/telecampaign/scripts/backup-telecampaign.sh
 ```
 
-Backups are stored only in `/var/backups/telecampaign` and files older than 14 days are removed. Each completed backup is one timestamped directory containing `database.dump`, `media.tar.gz`, and a completion marker; the directory appears only after all three are ready. Media lives in `/var/lib/telecampaign/media`. The backup script briefly stops only `telecampaign-api` while it takes both files, then restarts it and runs the local health check; this keeps database rows and media files in one consistent snapshot. Backup and restore reject media sets above 500 files or 2 GiB uncompressed. `TELECAMPAIGN_BACKUP_DIR` is intentionally ignored; `TELECAMPAIGN_BACKUP_RETENTION_DAYS` may be set only for a one-off retention adjustment.
+Backups are stored only in `/var/backups/telecampaign` and files older than 7 days are removed. Each completed backup is one timestamped directory containing `database.dump`, `media.tar.gz`, and a completion marker; the directory appears only after all three are ready. Media lives in `/var/lib/telecampaign/media`. The backup script briefly stops only `telecampaign-api` while it takes both files, then restarts it and runs the local health check; this keeps database rows and media files in one consistent snapshot. Backup and restore reject media sets above 500 files or 2 GiB uncompressed. `TELECAMPAIGN_BACKUP_DIR` is intentionally ignored; `TELECAMPAIGN_BACKUP_RETENTION_DAYS` may be set only for a one-off retention adjustment.
 
 The backup and restore scripts always read `/etc/telecampaign/api.env`; they intentionally reject environment-file overrides so another VPS project's database or media path cannot be selected by mistake.
 
@@ -43,6 +43,8 @@ It creates the protected directory and verifies every existing notification-medi
 ## Scheduled operations
 
 Install `/opt/telecampaign/scripts/telecampaign-operations.cron` as `/etc/cron.d/telecampaign-operations` with mode `0644`. It runs only the dedicated backup and local health-check scripts; the backup briefly stops and restarts only `telecampaign-api`, never PM2 globally or any other VPS project.
+
+The same cron file rotates only the dedicated TeleCampaign PM2 logs every five minutes. Rotation uses `copytruncate`, a 25 MiB size threshold, compression, and seven retained files, so it does not stop `telecampaign-api` or the campaign worker. The log policy is stored at `/opt/telecampaign/scripts/telecampaign-api.logrotate`.
 
 ## Restore
 

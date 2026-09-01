@@ -1,0 +1,12 @@
+/home/ubuntu/.pm2/logs/telecampaign-api-out.log /home/ubuntu/.pm2/logs/telecampaign-api-error.log {
+  su ubuntu ubuntu
+  size 25M
+  rotate 7
+  compress
+  delaycompress
+  copytruncate
+  missingok
+  notifempty
+  dateext
+  dateformat -%Y%m%d-%H%M%S
+}

@@ -7,8 +7,8 @@ import {
 const now = new Date("2026-08-26T00:00:00.000Z");
 const cutoff = activityLogCutoff(now);
 
-assert.equal(ACTIVITY_LOG_RETENTION_DAYS, 30);
-assert.equal(cutoff.toISOString(), "2026-07-27T00:00:00.000Z");
+assert.equal(ACTIVITY_LOG_RETENTION_DAYS, 7);
+assert.equal(cutoff.toISOString(), "2026-08-19T00:00:00.000Z");
 assert.throws(
   () => activityLogCutoff(now, 0),
   /retention must be a positive integer/,

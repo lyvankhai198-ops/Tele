@@ -2,7 +2,7 @@ import { asc, inArray, lt } from "drizzle-orm";
 import { db, activityLogsTable } from "@workspace/db";
 import { logger } from "./logger";
 
-export const ACTIVITY_LOG_RETENTION_DAYS = 30;
+export const ACTIVITY_LOG_RETENTION_DAYS = 7;
 export const ACTIVITY_LOG_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const ACTIVITY_LOG_CLEANUP_BATCH_SIZE = 1_000;
