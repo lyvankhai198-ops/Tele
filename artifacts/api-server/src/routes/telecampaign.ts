@@ -329,6 +329,39 @@ async function activeLoginChallenge(input: {
   return { challenge, processingStatus, retryStatus: input.status };
 }
 
+async function loginChallengeUnavailableMessage(input: {
+  accountId: string;
+  ownerUserId: string;
+  challengeId: string;
+  step: "code" | "password";
+}) {
+  const [challenge] = await db.select({
+    status: authChallengesTable.status,
+    attempts: authChallengesTable.attempts,
+    expiresAt: authChallengesTable.expiresAt,
+  }).from(authChallengesTable).where(and(
+    eq(authChallengesTable.id, input.challengeId),
+    eq(authChallengesTable.accountId, input.accountId),
+    eq(authChallengesTable.ownerUserId, input.ownerUserId),
+  ));
+  const label = input.step === "code" ? "mã xác minh" : "mật khẩu 2FA";
+  if (challenge?.status === `processing_${input.step}`) {
+    return { status: 409, error: `Yêu cầu ${label} đang được xử lý. Vui lòng chờ, không cần gửi lại.` };
+  }
+  if (challenge && (challenge.attempts >= MAX_LOGIN_ATTEMPTS || challenge.status === "error")) {
+    return { status: 429, error: `Đã nhập sai quá ${MAX_LOGIN_ATTEMPTS} lần. Hãy gửi lại mã để bắt đầu xác minh mới.` };
+  }
+  if (!challenge || challenge.expiresAt.getTime() <= Date.now() || challenge.status === "expired") {
+    return {
+      status: 409,
+      error: input.step === "code"
+        ? "Mã xác minh đã hết hạn hoặc không còn hợp lệ. Hãy gửi lại mã."
+        : "Yêu cầu xác minh 2FA đã hết hạn. Hãy gửi lại mã.",
+    };
+  }
+  return { status: 409, error: `Yêu cầu ${label} không còn ở đúng bước xác minh. Hãy gửi lại mã.` };
+}
+
 async function recordLoginAttemptFailure(input: {
   challenge: typeof authChallengesTable.$inferSelect;
   accountId: string;
@@ -1055,7 +1088,13 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
     status: "waiting_code",
   });
   if (!reservation?.challenge.phoneCodeHashEncrypted || !reservation.challenge.sessionEncrypted) {
-    return void sendError(res, 409, "Mã xác minh đã hết hạn hoặc không còn hợp lệ. Hãy gửi lại mã.");
+    const unavailable = await loginChallengeUnavailableMessage({
+      accountId: account.id,
+      ownerUserId: currentUserId(req),
+      challengeId: parsed.data.challengeId,
+      step: "code",
+    });
+    return void sendError(res, unavailable.status, unavailable.error);
   }
   if (isDevelopmentDemoTelegramAccount(account)) {
     if (code !== "12345") {
@@ -1139,7 +1178,13 @@ router.post("/telegram/accounts/:accountId/login/password", async (req, res): Pr
     status: "waiting_password",
   });
   if (!reservation?.challenge.sessionEncrypted) {
-    return void sendError(res, 409, "Yêu cầu xác minh 2FA đã hết hạn. Hãy gửi lại mã.");
+    const unavailable = await loginChallengeUnavailableMessage({
+      accountId: account.id,
+      ownerUserId: currentUserId(req),
+      challengeId: parsed.data.challengeId,
+      step: "password",
+    });
+    return void sendError(res, unavailable.status, unavailable.error);
   }
   try {
     const result = await confirmTelegramTwoFactorPassword({

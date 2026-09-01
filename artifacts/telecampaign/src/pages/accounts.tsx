@@ -308,6 +308,7 @@ export default function Accounts() {
   const [loginFlow, setLoginFlow] = useState<LoginFlow | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [twoFactorPassword, setTwoFactorPassword] = useState("");
+  const loginSubmissionLocked = useRef(false);
   const defaultDailyLimit = String(systemDefaults.data?.defaultAccountDailyLimit ?? 200);
 
   const closeAddModal = () => {
@@ -332,6 +333,7 @@ export default function Accounts() {
   };
 
   const closeLoginDialog = () => {
+    loginSubmissionLocked.current = false;
     setVerificationCode("");
     setTwoFactorPassword("");
     setLoginFlow(null);
@@ -376,7 +378,8 @@ export default function Accounts() {
 
   const submitVerificationCode = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!loginFlow || !verificationCode.trim()) return;
+    if (!loginFlow || !verificationCode.trim() || loginSubmissionLocked.current) return;
+    loginSubmissionLocked.current = true;
     confirmCode.mutate({
       accountId: loginFlow.accountId,
       data: { challengeId: loginFlow.challengeId, code: verificationCode.trim() },
@@ -392,12 +395,16 @@ export default function Accounts() {
         setToast(text.loginComplete);
       },
       onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onSettled: () => {
+        loginSubmissionLocked.current = false;
+      },
     });
   };
 
   const submitTwoFactorPassword = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!loginFlow || !twoFactorPassword) return;
+    if (!loginFlow || !twoFactorPassword || loginSubmissionLocked.current) return;
+    loginSubmissionLocked.current = true;
     confirmPassword.mutate({
       accountId: loginFlow.accountId,
       data: { challengeId: loginFlow.challengeId, password: twoFactorPassword },
@@ -407,7 +414,13 @@ export default function Accounts() {
         closeLoginDialog();
         setToast(text.loginComplete);
       },
-      onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onError: (error) => {
+        setTwoFactorPassword("");
+        setToast(errorMessage(error, language, text.requestFailed));
+      },
+      onSettled: () => {
+        loginSubmissionLocked.current = false;
+      },
     });
   };
 
