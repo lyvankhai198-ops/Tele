@@ -124,10 +124,11 @@ const copy = {
     libraryLoading: "Đang tải thư viện nhóm...",
     libraryUnavailable: "Chưa thể tải thư viện nhóm.",
     libraryEmpty: "Thư viện nhóm hiện chưa có nhóm.",
-    afterJoinHint: "Sau khi tham gia nhóm, hãy nhấn “Đồng bộ tài khoản” để cập nhật trạng thái.",
+    afterJoinHintPrefix: "Sau khi tham gia nhóm, hãy nhấn “",
+    afterJoinHintSuffix: "” để cập nhật trạng thái.",
     openGroup: "Tham gia nhóm",
     trial: "Trial",
-    lockedTitle: (count: number) => `${count} nhóm khác đang được che`,
+    lockedTitle: (_count: number) => "+50 nhóm khác đang được che",
     lockedDetail: "Kích hoạt key hợp lệ để xem đầy đủ thư viện nhóm và mở link tham gia.",
     buyKey: "Mua / kích hoạt key",
     members: "thành viên",
@@ -213,10 +214,11 @@ const copy = {
     libraryLoading: "Loading group library...",
     libraryUnavailable: "The group library could not be loaded.",
     libraryEmpty: "There are no groups in the library yet.",
-    afterJoinHint: "After joining a group, press “Sync account” to refresh its status.",
+    afterJoinHintPrefix: "After joining a group, press “",
+    afterJoinHintSuffix: "” to refresh its status.",
     openGroup: "Join group",
     trial: "Trial",
-    lockedTitle: (count: number) => `${count} more groups are hidden`,
+    lockedTitle: (_count: number) => "+50 more groups are hidden",
     lockedDetail: "Activate a valid key to see the full group library and open join links.",
     buyKey: "Buy / activate key",
     members: "members",
@@ -695,7 +697,9 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                               {visibleLibraryGroups.length}{hiddenLibraryGroupCount > 0 ? ` / ${libraryGroups.length}` : ""}
                             </span>
                           </div>
-                          <p className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-semibold leading-relaxed text-[#64748b]">{c.afterJoinHint}</p>
+                          <p className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-semibold leading-relaxed text-[#64748b]">
+                            {c.afterJoinHintPrefix}<strong className="font-extrabold text-[#334155]">{c.syncAgain}</strong>{c.afterJoinHintSuffix}
+                          </p>
 
                           {groupLibrary.isLoading || groupLibraryAccess.isLoading ? (
                             <p className="py-5 text-center text-[12px] font-bold text-[#64748b]">{c.libraryLoading}</p>
@@ -707,7 +711,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                             <p className="py-5 text-center text-[12px] font-medium text-[#64748b]">{c.libraryEmpty}</p>
                           ) : (
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                              {visibleLibraryGroups.map((group) => {
+                              {visibleLibraryGroups.map((group, index) => {
                                 const status = getLibraryGroupStatus(group, accountId, postableDestinationIds);
                                 const statusText = status === "joined"
                                   ? c.groupJoined
@@ -721,7 +725,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                                         <p className="truncate text-[13px] font-extrabold text-[#0f172a]">{group.title}</p>
                                         <p className="mt-1 text-[11px] font-medium text-[#64748b]">{group.memberCount?.toLocaleString(language === "vi" ? "vi-VN" : "en-US") ?? "—"} {c.members}</p>
                                       </div>
-                                      {!canOpenLibraryLinks && <span className="shrink-0 rounded-full bg-[#fff7ed] px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[#c2410c]">{c.trial}</span>}
+                                      {!canOpenLibraryLinks && index === 0 && <span className="shrink-0 rounded-full bg-[#fff7ed] px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[#c2410c]">{c.trial}</span>}
                                     </div>
                                     <p className={`mt-3 text-[10px] font-extrabold ${status === "joined" ? "text-[#047857]" : status === "review" ? "text-[#b45309]" : "text-[#64748b]"}`}>{statusText}</p>
                                     {group.telegramLink && status !== "joined" && (
