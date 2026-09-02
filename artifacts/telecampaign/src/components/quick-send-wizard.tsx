@@ -21,7 +21,10 @@ import type { Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
   useCreateMessageTemplate,
+  getGetGroupLibraryQueryKey,
   getListDestinationsQueryKey,
+  useGetGroupLibrary,
+  useGetGroupLibraryAccess,
   useGetSystemDefaults,
   useListDestinations,
   useListTelegramAccounts,
@@ -37,6 +40,12 @@ import {
   temporaryRestrictionUntil,
 } from "@/lib/telegram-restrictions";
 import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-sync";
+import {
+  GROUP_LIBRARY_TRIAL_PREVIEW_LIMIT,
+  filterDestinationsForAccount,
+  getLibraryGroupStatus,
+  splitGroupLibrary,
+} from "@/lib/quick-send-groups";
 import { useLocation } from "wouter";
 
 type QuickSendWizardProps = {
@@ -62,7 +71,6 @@ type QuickSendDraft = {
 };
 
 const QUICK_SEND_DRAFT_KEY = "telecampaign.quick-send-draft";
-
 function readQuickSendDraft(): QuickSendDraft | null {
   if (typeof window === "undefined") return null;
   try {
@@ -105,10 +113,27 @@ const copy = {
     syncing: "Đang tự động đồng bộ nhóm...",
     cachedSync: "Nhóm đã được đồng bộ gần đây. Đang hiển thị nhóm đã lưu.",
     loadingGroups: "Đang tải các nhóm đã lưu...",
-    syncAgain: "Đồng bộ lại",
+    syncAgain: "Đồng bộ tài khoản",
     syncDone: (count: number) => `Đã cập nhật ${count} nhóm`,
     syncFailed: "Không thể đồng bộ nhóm. Bạn có thể thử lại hoặc kiểm tra tài khoản Telegram.",
     groupsTitle: "Chọn nhóm gửi",
+    yourGroups: "Nhóm của bạn",
+    yourGroupsDetail: "Các nhóm được đồng bộ từ tài khoản Telegram đang chọn.",
+    libraryTitle: "Thư viện nhóm",
+    libraryDetail: "Gợi ý thêm nhóm để tham gia và gửi chiến dịch.",
+    libraryLoading: "Đang tải thư viện nhóm...",
+    libraryUnavailable: "Chưa thể tải thư viện nhóm.",
+    libraryEmpty: "Thư viện nhóm hiện chưa có nhóm.",
+    afterJoinHint: "Sau khi tham gia nhóm, hãy nhấn “Đồng bộ tài khoản” để cập nhật trạng thái.",
+    openGroup: "Mở nhóm",
+    trial: "Trial",
+    lockedTitle: (count: number) => `${count} nhóm khác đang được che`,
+    lockedDetail: "Kích hoạt key hợp lệ để xem đầy đủ thư viện nhóm và mở link tham gia.",
+    buyKey: "Mua / kích hoạt key",
+    members: "thành viên",
+    groupJoined: "Đã tham gia · Có thể gửi",
+    groupReview: "Đã tham gia · cần đồng bộ lại",
+    groupNotJoined: "Chưa tham gia / chưa đồng bộ",
     searchGroups: "Tìm nhóm...",
     selectAll: "Chọn tất cả",
     deselectAll: "Bỏ chọn tất cả",
@@ -177,10 +202,27 @@ const copy = {
     syncing: "Automatically syncing groups...",
     cachedSync: "Groups were synced recently. Showing saved groups.",
     loadingGroups: "Loading saved groups...",
-    syncAgain: "Sync again",
+    syncAgain: "Sync account",
     syncDone: (count: number) => `Updated ${count} groups`,
     syncFailed: "Groups could not be synced. Try again or check the Telegram account.",
     groupsTitle: "Choose destination groups",
+    yourGroups: "Your groups",
+    yourGroupsDetail: "Groups synchronized from the selected Telegram account.",
+    libraryTitle: "Group library",
+    libraryDetail: "Discover more groups to join and send campaigns to.",
+    libraryLoading: "Loading group library...",
+    libraryUnavailable: "The group library could not be loaded.",
+    libraryEmpty: "There are no groups in the library yet.",
+    afterJoinHint: "After joining a group, press “Sync account” to refresh its status.",
+    openGroup: "Open group",
+    trial: "Trial",
+    lockedTitle: (count: number) => `${count} more groups are hidden`,
+    lockedDetail: "Activate a valid key to see the full group library and open join links.",
+    buyKey: "Buy / activate key",
+    members: "members",
+    groupJoined: "Joined · Ready to send",
+    groupReview: "Joined · sync again to confirm",
+    groupNotJoined: "Not joined / not synchronized",
     searchGroups: "Search groups...",
     selectAll: "Select all",
     deselectAll: "Deselect all",
@@ -253,6 +295,14 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   });
   const systemDefaults = useGetSystemDefaults();
   const sync = useSyncTelegramDestinations();
+  const groupLibraryAccess = useGetGroupLibraryAccess();
+  const groupLibrary = useGetGroupLibrary({
+    query: {
+      queryKey: getGetGroupLibraryQueryKey(),
+      enabled: groupLibraryAccess.data?.canView === true,
+      refetchOnWindowFocus: true,
+    },
+  });
   const createTemplate = useCreateMessageTemplate();
   const createCampaign = useCreateCampaign();
   const [, setLocation] = useLocation();
@@ -285,18 +335,21 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   });
 
   const accountDestinations = useMemo(() => {
-    const needle = groupSearch.trim().toLowerCase();
-    return (destinations.data ?? [])
-      .filter((destination) =>
-        destination.accountId === accountId
-        && canChooseRestrictedDestination(destination)
-        && (!needle
-          || destination.title.toLowerCase().includes(needle)
-          || (destination.parentTitle ?? "").toLowerCase().includes(needle)
-          || (destination.username ?? "").toLowerCase().includes(needle)),
-      )
+    return filterDestinationsForAccount(
+      (destinations.data ?? []).filter((destination) => canChooseRestrictedDestination(destination)),
+      accountId,
+      groupSearch,
+    )
       .sort((left, right) => left.title.localeCompare(right.title, language === "vi" ? "vi" : "en"));
   }, [accountId, destinations.data, groupSearch, language]);
+  const libraryGroups = groupLibrary.data?.groups ?? [];
+  const canOpenLibraryLinks = groupLibraryAccess.data?.canOpenLinks === true;
+  const { visibleGroups: visibleLibraryGroups, hiddenCount: hiddenLibraryGroupCount } =
+    splitGroupLibrary(libraryGroups, canOpenLibraryLinks);
+  const postableDestinationIds = useMemo(
+    () => new Set((destinations.data ?? []).filter((destination) => destination.accountId === accountId && destination.canPost).map((destination) => destination.id)),
+    [accountId, destinations.data],
+  );
 
   const selectedDestinations = (destinations.data ?? []).filter((destination) => destinationIds.includes(destination.id));
   const selectedTemporaryDestinations = selectedDestinations.filter((destination) =>
@@ -600,32 +653,99 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                           </button>
                         </div>
                       </div>
-                      <div>
-                        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <span className="text-[14px] font-extrabold text-[#0f172a]">{c.groupsTitle}</span>
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[12px] font-bold text-[#64748b]">{c.selectedGroups(destinationIds.length)}</span>
-                            {accountDestinations.length > 0 && <button type="button" onClick={toggleAllDestinations} className="text-[12px] font-extrabold text-[#1d3bb8]">{allVisibleSelected ? c.deselectAll : c.selectAll}</button>}
+                      <div className="space-y-6">
+                        <section data-testid="quick-send-your-groups">
+                          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <span className="text-[14px] font-extrabold text-[#0f172a]">{c.yourGroups}</span>
+                              <p className="mt-1 text-[12px] font-medium text-[#64748b]">{c.yourGroupsDetail}</p>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[12px] font-bold text-[#64748b]">{c.selectedGroups(destinationIds.length)}</span>
+                              {accountDestinations.length > 0 && <button type="button" onClick={toggleAllDestinations} className="text-[12px] font-extrabold text-[#1d3bb8]">{allVisibleSelected ? c.deselectAll : c.selectAll}</button>}
+                            </div>
                           </div>
-                        </div>
-                        <div className="rounded-2xl border border-[#e2e8f0] p-3">
-                          <input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={c.searchGroups} className="h-10 w-full rounded-xl border border-[#e2e8f0] px-3.5 text-[13px] font-medium outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="quick-send-group-search" />
-                          <div className="mt-2 max-h-56 divide-y divide-[#f1f5f9] overflow-y-auto">
-                            {accountDestinations.length ? accountDestinations.map((destination) => (
-                              <button type="button" key={destination.id} onClick={() => toggleDestination(destination.id)} className="flex w-full items-center gap-3 px-2 py-3 text-left transition hover:bg-[#f8fafc]" data-testid={`quick-send-group-${destination.id}`}>
-                                <span className="text-[#1d3bb8]">{destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, language === "vi" ? "Chung" : "General")}</span>
-                                  {temporaryRestrictionUntil(destination) && (
-                                    <span className="mt-0.5 block text-[10px] font-bold text-[#a16207]">
-                                      {c.temporaryRestrictionHint(formatRestrictionTime(new Date(destination.restrictedUntil!)))}
-                                    </span>
-                                  )}
-                                </span>
+                          <div className="rounded-2xl border border-[#e2e8f0] p-3">
+                            <input value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={c.searchGroups} className="h-10 w-full rounded-xl border border-[#e2e8f0] px-3.5 text-[13px] font-medium outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="quick-send-group-search" />
+                            <div className="mt-2 max-h-56 divide-y divide-[#f1f5f9] overflow-y-auto">
+                              {accountDestinations.length ? accountDestinations.map((destination) => (
+                                <button type="button" key={destination.id} onClick={() => toggleDestination(destination.id)} className="flex w-full items-center gap-3 px-2 py-3 text-left transition hover:bg-[#f8fafc]" data-testid={`quick-send-group-${destination.id}`}>
+                                  <span className="text-[#1d3bb8]">{destinationIds.includes(destination.id) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-[#cbd5e1]" />}</span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-[13px] font-bold text-[#334155]">{destinationLabel(destination, language === "vi" ? "Chung" : "General")}</span>
+                                    {temporaryRestrictionUntil(destination) && (
+                                      <span className="mt-0.5 block text-[10px] font-bold text-[#a16207]">
+                                        {c.temporaryRestrictionHint(formatRestrictionTime(new Date(destination.restrictedUntil!)))}
+                                      </span>
+                                    )}
+                                  </span>
+                                </button>
+                              )) : <p className="px-2 py-5 text-center text-[13px] font-medium text-[#64748b]">{sync.isPending ? c.loadingGroups : c.noGroups}</p>}
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-[#dbe6f0] bg-[#f8fbff] p-4" data-testid="quick-send-group-library">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-[14px] font-extrabold text-[#0f172a]">{c.libraryTitle}</p>
+                              <p className="mt-1 text-[12px] font-medium leading-relaxed text-[#64748b]">{c.libraryDetail}</p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-[#e8efff] px-2.5 py-1 text-[10px] font-extrabold text-[#1d3bb8]">
+                              {visibleLibraryGroups.length}{hiddenLibraryGroupCount > 0 ? ` / ${libraryGroups.length}` : ""}
+                            </span>
+                          </div>
+                          <p className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-semibold leading-relaxed text-[#64748b]">{c.afterJoinHint}</p>
+
+                          {groupLibrary.isLoading || groupLibraryAccess.isLoading ? (
+                            <p className="py-5 text-center text-[12px] font-bold text-[#64748b]">{c.libraryLoading}</p>
+                          ) : groupLibrary.error ? (
+                            <p className="py-5 text-center text-[12px] font-bold text-[#be123c]">{c.libraryUnavailable}</p>
+                          ) : !groupLibraryAccess.data?.canView ? (
+                            <p className="py-5 text-center text-[12px] font-bold text-[#64748b]">{c.libraryUnavailable}</p>
+                          ) : !visibleLibraryGroups.length ? (
+                            <p className="py-5 text-center text-[12px] font-medium text-[#64748b]">{c.libraryEmpty}</p>
+                          ) : (
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              {visibleLibraryGroups.map((group) => {
+                                const status = getLibraryGroupStatus(group, accountId, postableDestinationIds);
+                                const statusText = status === "joined"
+                                  ? c.groupJoined
+                                  : status === "review"
+                                    ? c.groupReview
+                                    : c.groupNotJoined;
+                                return (
+                                  <article key={group.id} className="rounded-xl border border-[#dbe2ea] bg-white p-3.5">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-[13px] font-extrabold text-[#0f172a]">{group.title}</p>
+                                        <p className="mt-1 text-[11px] font-medium text-[#64748b]">{group.memberCount?.toLocaleString(language === "vi" ? "vi-VN" : "en-US") ?? "—"} {c.members}</p>
+                                      </div>
+                                      {!canOpenLibraryLinks && <span className="shrink-0 rounded-full bg-[#fff7ed] px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-[#c2410c]">{c.trial}</span>}
+                                    </div>
+                                    <p className={`mt-3 text-[10px] font-extrabold ${status === "joined" ? "text-[#047857]" : status === "review" ? "text-[#b45309]" : "text-[#64748b]"}`}>{statusText}</p>
+                                    {group.telegramLink && status !== "joined" && (
+                                      <a href={group.telegramLink} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-2.5 py-2 text-[10px] font-extrabold text-[#1d4ed8] transition hover:bg-[#dbeafe]" data-testid={`quick-send-library-open-${group.id}`}>
+                                        {c.openGroup}<ChevronRight className="h-3 w-3" />
+                                      </a>
+                                    )}
+                                  </article>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {hiddenLibraryGroupCount > 0 && (
+                            <div className="mt-3 flex flex-col gap-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="text-[11px] font-medium leading-relaxed text-[#a16207]">
+                                <strong className="font-extrabold text-[#92400e]">{c.lockedTitle(hiddenLibraryGroupCount)}.</strong>{" "}{c.lockedDetail}
+                              </p>
+                              <button type="button" onClick={() => setLocation("/upgrade")} className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[#f59e0b] px-3 py-2 text-[10px] font-extrabold text-white transition hover:bg-[#d97706]" data-testid="quick-send-library-buy-key">
+                                {c.buyKey}
                               </button>
-                             )) : <p className="px-2 py-5 text-center text-[13px] font-medium text-[#64748b]">{sync.isPending ? c.loadingGroups : c.noGroups}</p>}
-                          </div>
-                        </div>
+                            </div>
+                          )}
+                        </section>
                       </div>
                     </>
                   )}
