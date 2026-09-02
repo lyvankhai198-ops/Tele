@@ -179,7 +179,7 @@ const copy = {
     creating: "Đang chuẩn bị chiến dịch...",
     createdTitle: "Đã tạo chiến dịch",
     createdDetail: "Chiến dịch đã được tạo và sẽ bắt đầu theo lựa chọn của bạn.",
-    viewCampaigns: "Xem chiến dịch",
+    viewCampaigns: "Chuyển đến trang Chiến dịch",
     done: "Hoàn tất",
     validationAccount: "Hãy chọn tài khoản Telegram.",
     validationGroups: "Hãy chọn ít nhất một nhóm gửi.",
@@ -272,7 +272,7 @@ const copy = {
     creating: "Preparing campaign...",
     createdTitle: "Campaign created",
     createdDetail: "Your campaign is ready and will start according to your choice.",
-    viewCampaigns: "View campaigns",
+    viewCampaigns: "Go to Campaigns",
     done: "Done",
     validationAccount: "Choose a Telegram account.",
     validationGroups: "Choose at least one destination group.",
@@ -615,9 +615,12 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
               <span className="grid h-20 w-20 place-items-center rounded-full bg-[#dff8ed] text-[#059669]"><Check className="h-10 w-10" strokeWidth={2.5} /></span>
               <h3 className="mt-6 text-[22px] font-extrabold tracking-tight text-[#0f172a]">{c.createdTitle}</h3>
               <p className="mt-2 max-w-sm text-[14px] font-medium leading-relaxed text-[#64748b]">{c.createdDetail}</p>
-              <div className="mt-7 flex flex-wrap justify-center gap-3">
+              <div className="mt-7 flex flex-col items-center gap-3">
                 <button type="button" onClick={onClose} className="inline-flex items-center gap-2 rounded-2xl bg-[#1a2b88] px-5 py-3 text-[14px] font-extrabold text-white transition hover:bg-[#152473]" data-testid="quick-send-done">
                   {c.done}<ArrowRight className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => { onClose(); setLocation("/dashboard/campaigns"); }} className="text-[13px] font-extrabold text-[#1a2b88] underline decoration-[#bfdbfe] decoration-2 underline-offset-4 transition hover:text-[#152473]" data-testid="quick-send-view-campaigns">
+                  {c.viewCampaigns}
                 </button>
               </div>
             </div>
