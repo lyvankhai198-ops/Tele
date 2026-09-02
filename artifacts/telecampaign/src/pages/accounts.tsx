@@ -326,6 +326,12 @@ export default function Accounts() {
   const invalidateAccounts = () => queryClient.invalidateQueries({ queryKey: getListTelegramAccountsQueryKey() });
   const isLoginPending = startLogin.isPending || confirmCode.isPending || confirmPassword.isPending;
 
+  const completeTelegramLogin = () => {
+    void invalidateAccounts();
+    closeLoginDialog();
+    setToast(text.loginComplete);
+  };
+
   const openCodeVerification = (data: { account: { id: string }; challenge: { id: string; delivery: "app" | "sms" } }) => {
     setVerificationCode("");
     setTwoFactorPassword("");
@@ -396,9 +402,7 @@ export default function Accounts() {
           setLoginFlow((current) => current ? { ...current, step: "password" } : current);
           return;
         }
-        void invalidateAccounts();
-        closeLoginDialog();
-        setToast(text.loginComplete);
+        completeTelegramLogin();
       },
       onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
       onSettled: () => {
@@ -416,9 +420,7 @@ export default function Accounts() {
       data: { challengeId: loginFlow.challengeId, password: twoFactorPassword },
     }, {
       onSuccess: () => {
-        void invalidateAccounts();
-        closeLoginDialog();
-        setToast(text.loginComplete);
+        completeTelegramLogin();
       },
       onError: (error) => {
         setTwoFactorPassword("");

@@ -46,7 +46,7 @@ export default function Dashboard() {
       enabled: false,
     },
   });
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [selectedNotice, setSelectedNotice] = useState<AdminNotification | null>(null);
   const [quickSendOpen, setQuickSendOpen] = useState(false);
 
