@@ -18,6 +18,8 @@ export * from './adminAuditLog';
 export * from './adminCampaignCloneInput';
 export * from './adminCampaignStatusInput';
 export * from './adminCampaignStatusInputStatus';
+export * from './adminGroupLibraryEntryUpdateInput';
+export * from './adminGroupLibraryEntryUpdateResult';
 export * from './adminGroupLibraryImportResult';
 export * from './adminGroupLibrarySyncResult';
 export * from './adminGroupRoundDelay';

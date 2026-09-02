@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   campaignTargetsTable,
   campaignsTable,
@@ -16,10 +16,12 @@ function destinationLink(username: string | null): string | null {
 export type SavedGroupRow = {
   telegramId: string;
   title: string;
+  trialTitle?: string | null;
   username: string | null;
   kind: string;
   memberCount: number | null;
   isPublished?: boolean;
+  trialVisible?: boolean;
   firstCapturedAt?: Date | string | null;
   roundDelayMinSeconds: number | null;
   roundDelayMaxSeconds: number | null;
@@ -46,11 +48,13 @@ export type AdminActiveGroupDirectoryRecord = {
   groups: Array<{
     id: string;
     title: string;
+    trialTitle: string | null;
     username: string | null;
     telegramLink: string | null;
     kind: string;
     memberCount: number | null;
     isPublished: boolean;
+    trialVisible: boolean;
     roundDelays: Array<{
       minSeconds: number;
       maxSeconds: number;
@@ -63,19 +67,35 @@ export type AdminActiveGroupDirectoryRecord = {
   }>;
 };
 
+const GROUP_LIBRARY_TRIAL_PREVIEW_LIMIT = 2;
+
 export function redactGroupLibraryGroups(
   groups: AdminActiveGroupDirectoryRecord["groups"],
   canOpenLinks: boolean,
 ): AdminActiveGroupDirectoryRecord["groups"] {
   if (canOpenLinks) return groups;
-  return groups.map((group, index) => ({
-    ...group,
-    id: `locked-group-${index + 1}`,
-    title: "••••••••••",
-    username: null,
-    telegramLink: null,
-    isPublished: true,
-  }));
+  const configuredTrialGroups = groups.filter((group) => group.trialVisible).slice(0, GROUP_LIBRARY_TRIAL_PREVIEW_LIMIT);
+  const trialGroups = configuredTrialGroups.length > 0
+    ? configuredTrialGroups
+    : groups.slice(0, GROUP_LIBRARY_TRIAL_PREVIEW_LIMIT);
+  const trialIds = new Set(trialGroups.map((group) => group.id));
+  const lockedGroups = groups.filter((group) => !trialIds.has(group.id));
+  return [
+    ...trialGroups.map((group) => ({
+      ...group,
+      title: group.trialTitle?.trim() || group.title,
+    })),
+    ...lockedGroups.map((group, index) => ({
+      ...group,
+      id: `locked-group-${index + 1}`,
+      title: "••••••••••",
+      trialTitle: null,
+      username: null,
+      telegramLink: null,
+      isPublished: true,
+      trialVisible: false,
+    })),
+  ];
 }
 
 function delayKey(telegramId: string, minSeconds: number, maxSeconds: number): string {
@@ -142,11 +162,13 @@ export function aggregateSavedGroupRows(
   const rowsByTelegramId = new Map<string, {
     id: string;
     title: string;
+    trialTitle: string | null;
     username: string | null;
     telegramLink: string | null;
     kind: string;
     memberCount: number | null;
     isPublished: boolean;
+    trialVisible: boolean;
     firstCapturedAt: Date | string | null;
     roundDelays: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"];
   }>();
@@ -155,11 +177,13 @@ export function aggregateSavedGroupRows(
     const group = rowsByTelegramId.get(row.telegramId) ?? {
       id: row.telegramId,
       title: row.title,
+      trialTitle: row.trialTitle ?? null,
       username: row.username,
       telegramLink: destinationLink(row.username),
       kind: row.kind,
       memberCount: row.memberCount,
       isPublished: row.isPublished !== false,
+      trialVisible: row.trialVisible === true,
       firstCapturedAt: row.firstCapturedAt ?? null,
       roundDelays: [],
     };
@@ -311,10 +335,12 @@ export async function getAdminActiveGroupDirectory(
     db.select({
       telegramId: groupLibraryEntriesTable.telegramId,
       title: groupLibraryEntriesTable.title,
+      trialTitle: groupLibraryEntriesTable.trialTitle,
       username: groupLibraryEntriesTable.username,
       kind: groupLibraryEntriesTable.kind,
       memberCount: groupLibraryEntriesTable.memberCount,
       isPublished: groupLibraryEntriesTable.isPublished,
+      trialVisible: groupLibraryEntriesTable.trialVisible,
       firstCapturedAt: groupLibraryEntriesTable.firstCapturedAt,
       roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,
       roundDelayMaxSeconds: campaignsTable.roundDelayMaxSeconds,
@@ -359,4 +385,44 @@ export async function getAdminActiveGroupDirectory(
   ]);
 
   return aggregateSavedGroupRows(rows, delayOutcomeRows);
+}
+
+export async function updateAdminGroupLibraryEntry(input: {
+  telegramId: string;
+  trialVisible: boolean;
+  trialTitle: string | null;
+}): Promise<{ updated: true; trialVisible: boolean; trialTitle: string | null } | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('telecampaign_group_library_trial'))`);
+    const [entry] = await tx.select({
+      id: groupLibraryEntriesTable.id,
+      trialVisible: groupLibraryEntriesTable.trialVisible,
+      trialTitle: groupLibraryEntriesTable.trialTitle,
+    }).from(groupLibraryEntriesTable)
+      .where(eq(groupLibraryEntriesTable.telegramId, input.telegramId))
+      .limit(1);
+    if (!entry) return null;
+
+    if (input.trialVisible) {
+      const [{ count: trialCount }] = await tx.select({ count: sql<number>`count(*)`.mapWith(Number) })
+        .from(groupLibraryEntriesTable)
+        .where(and(
+          eq(groupLibraryEntriesTable.trialVisible, true),
+          ne(groupLibraryEntriesTable.telegramId, input.telegramId),
+        ));
+      if (trialCount >= GROUP_LIBRARY_TRIAL_PREVIEW_LIMIT) {
+        throw new Error("TRIAL_GROUP_LIMIT_REACHED");
+      }
+    }
+
+    const trialTitle = input.trialTitle?.trim() || null;
+    const [updated] = await tx.update(groupLibraryEntriesTable)
+      .set({ trialVisible: input.trialVisible, trialTitle, updatedAt: new Date() })
+      .where(eq(groupLibraryEntriesTable.id, entry.id))
+      .returning({
+        trialVisible: groupLibraryEntriesTable.trialVisible,
+        trialTitle: groupLibraryEntriesTable.trialTitle,
+      });
+    return updated ? { updated: true, ...updated } : null;
+  });
 }

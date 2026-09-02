@@ -679,11 +679,11 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
   }
   const visibleGroups = redactGroupLibraryGroups(directory.groups, canOpenLinks);
   res.json(GetGroupLibraryResponse.parse({
-    groups: visibleGroups.map((group, index) => ({
+    groups: visibleGroups.map((group) => ({
       ...group,
       accountMemberships: isAdmin
         ? []
-        : (membershipsByTelegramId.get(directory.groups[index]?.id ?? "") ?? []).map((membership) => ({
+        : (membershipsByTelegramId.get(group.id) ?? []).map((membership) => ({
           accountId: membership.accountId,
           destinationId: membership.destinationId,
           canPost: membership.canPost,

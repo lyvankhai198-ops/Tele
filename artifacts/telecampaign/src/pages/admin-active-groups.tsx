@@ -12,6 +12,7 @@ import {
   useListDestinations,
   useListTelegramAccounts,
   useImportAdminGroupLibraryEntry,
+  useUpdateAdminGroupLibraryEntry,
   useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
   type AdminActiveGroup,
@@ -56,6 +57,14 @@ const text = {
   importSuccess: (title: string) => `Đã import “${title}” vào thư viện user.`,
   importFailed: "Không thể import nhóm vào thư viện. Vui lòng thử lại.",
   openGroup: "Mở nhóm",
+  trialVisible: "Hiển thị trong trial",
+  trialTitle: "Tên hiển thị trial",
+  trialTitlePlaceholder: "Nhập tên hiển thị cho user chưa nâng cấp",
+  saveTrial: "Lưu cấu hình trial",
+  savingTrial: "Đang lưu...",
+  trialSaved: "Đã lưu cấu hình trial.",
+  trialSaveFailed: "Không thể lưu cấu hình trial.",
+  trialLimit: (count: number) => `Đã chọn ${count}/2 nhóm trial`,
   privateGroup: "Nhóm riêng tư · Chưa có link tham gia",
   group: "Nhóm",
   forum: "Forum",
@@ -100,8 +109,8 @@ const workspaceText = {
     retry: "Thử lại",
     search: "Tìm theo tên nhóm hoặc username...",
     savedGroups: "Nhóm trong Thư Viện Nhóm ( MMO )",
-    lockedButton: "Mở nhóm",
-    openGroup: "Mở nhóm",
+    lockedButton: "Nâng cấp để mở",
+    openGroup: "Tham gia nhóm",
     hiddenGroupName: "Tên nhóm được ẩn",
     group: "Nhóm",
     forum: "Forum",
@@ -149,8 +158,8 @@ const workspaceText = {
     retry: "Retry",
     search: "Search by group name or username...",
     savedGroups: "Groups in Group Library (MMO)",
-    lockedButton: "Open group",
-    openGroup: "Open group",
+    lockedButton: "Upgrade to open",
+    openGroup: "Join group",
     hiddenGroupName: "Group name hidden",
     group: "Group",
     forum: "Forum",
@@ -207,6 +216,8 @@ type GroupCardProps = {
   onCreate: (group: AdminActiveGroup, delay?: AdminActiveGroup["roundDelays"][number], preferredAccountId?: string) => void;
   onEdit: (campaign: Campaign) => void;
   onImport: (group: AdminActiveGroup) => void;
+  onSaveTrial: (group: AdminActiveGroup, trialVisible: boolean, trialTitle: string) => void;
+  trialSaving: boolean;
   importDisabled: boolean;
   importing: boolean;
   mode: "admin" | "workspace";
@@ -247,6 +258,8 @@ function GroupCard({
   onCreate,
   onEdit,
   onImport,
+  onSaveTrial,
+  trialSaving,
   importDisabled,
   importing,
   mode,
@@ -278,6 +291,8 @@ function GroupCard({
   delayOutcomeTitleLabel,
 }: GroupCardProps) {
   const isAdmin = mode === "admin";
+  const [trialVisibleDraft, setTrialVisibleDraft] = useState(group.trialVisible);
+  const [trialTitleDraft, setTrialTitleDraft] = useState(group.trialTitle ?? "");
   const isGroupNameHidden = !isAdmin && group.title === HIDDEN_GROUP_TITLE;
   const showEntitlementDetails = isAdmin || canOpenLinks;
   const memberships = accounts.map((account) => {
@@ -301,6 +316,11 @@ function GroupCard({
     account.status === "connected" && destination?.canPost,
   )?.account.id;
   const canQuickCreate = canOpenLinks && Boolean(preferredAccountId);
+
+  useEffect(() => {
+    setTrialVisibleDraft(group.trialVisible);
+    setTrialTitleDraft(group.trialTitle ?? "");
+  }, [group.trialTitle, group.trialVisible]);
 
   return (
     <article
@@ -348,7 +368,7 @@ function GroupCard({
               {importing ? text.importingGroup : text.importGroup}
             </button>
           )}
-          {group.telegramLink && (isAdmin || canOpenLinks) ? (
+          {group.telegramLink && (isAdmin || canOpenLinks || group.trialVisible) ? (
             <a
               href={group.telegramLink}
               target="_blank"
@@ -376,6 +396,47 @@ function GroupCard({
           ) : null}
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="mt-4 border-t border-[#f1f5f9] pt-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+            <label className="flex min-h-10 items-center gap-2 text-[11px] font-extrabold text-[#334155]">
+              <input
+                type="checkbox"
+                checked={trialVisibleDraft}
+                onChange={(event) => setTrialVisibleDraft(event.target.checked)}
+                className="h-4 w-4 rounded border-[#cbd5e1] accent-[#1a2b88]"
+                data-testid={`checkbox-trial-group-${group.id}`}
+              />
+              {text.trialVisible}
+            </label>
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.trialTitle}</span>
+              <input
+                value={trialTitleDraft}
+                onChange={(event) => setTrialTitleDraft(event.target.value)}
+                maxLength={120}
+                placeholder={text.trialTitlePlaceholder}
+                className="h-10 w-full rounded-lg border border-[#dbe2ea] px-3 text-[11px] font-semibold outline-none transition focus:border-[#1a2b88]"
+                data-testid={`input-trial-title-${group.id}`}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => onSaveTrial(group, trialVisibleDraft, trialTitleDraft)}
+              disabled={trialSaving}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#1a2b88] px-3 text-[10px] font-extrabold text-white transition hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid={`button-save-trial-group-${group.id}`}
+            >
+              {trialSaving && <LoaderCircle className="h-3 w-3 animate-spin" />}
+              {trialSaving ? text.savingTrial : text.saveTrial}
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] font-semibold text-[#64748b]">
+            Chỉ tối đa 2 nhóm được hiện cho user chưa đủ quyền mở thư viện. Để trống tên sẽ dùng tên nhóm gốc.
+          </p>
+        </div>
+      )}
 
       {showEntitlementDetails && (
         <div className="mt-3 border-t border-[#f1f5f9] pt-3">
@@ -523,6 +584,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [feedbackIsError, setFeedbackIsError] = useState(false);
   const [importingGroupId, setImportingGroupId] = useState<string | null>(null);
+  const [updatingTrialGroupId, setUpdatingTrialGroupId] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState<{
     editingCampaign: Campaign | null;
     prefill?: CampaignFormPrefill;
@@ -552,6 +614,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   });
   const syncTelegram = useSyncTelegramDestinations();
   const importGroup = useImportAdminGroupLibraryEntry();
+  const updateTrialGroup = useUpdateAdminGroupLibraryEntry();
   const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
   const directoryQuery = isAdmin ? query : workspaceQuery;
@@ -611,6 +674,25 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       setFeedbackIsError(true);
     } finally {
       setImportingGroupId(null);
+    }
+  }
+
+  async function handleSaveTrial(group: AdminActiveGroup, trialVisible: boolean, trialTitle: string) {
+    setUpdatingTrialGroupId(group.id);
+    setSyncFeedback(null);
+    setFeedbackIsError(false);
+    try {
+      await updateTrialGroup.mutateAsync({
+        telegramId: group.id,
+        data: { trialVisible, trialTitle: trialTitle.trim() || null },
+      });
+      await query.refetch();
+      setSyncFeedback(text.trialSaved);
+    } catch {
+      setSyncFeedback(text.trialSaveFailed);
+      setFeedbackIsError(true);
+    } finally {
+      setUpdatingTrialGroupId(null);
     }
   }
 
@@ -689,6 +771,19 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
               <p className="mt-0.5 text-[22px] font-extrabold leading-none text-[#0f172a]">{groups.length}</p>
             </div>
           </Panel>
+         {isAdmin && (
+           <Panel className="flex items-center gap-3 border-[#dbeafe] bg-[#f8fbff] p-4">
+             <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#dbeafe] text-[#1d4ed8]">
+               <Users className="h-5 w-5" />
+             </span>
+             <div>
+               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#64748b]">Trial preview</p>
+               <p className="mt-0.5 text-[15px] font-extrabold leading-none text-[#0f172a]">
+                 {text.trialLimit(groups.filter((group) => group.trialVisible).length)}
+               </p>
+             </div>
+           </Panel>
+         )}
         </div>
 
         <Panel className="p-4 sm:p-5">
@@ -743,6 +838,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 onCreate={openCreateCampaign}
                 onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
                 onImport={(selectedGroup) => void handleImport(selectedGroup)}
+                 onSaveTrial={(selectedGroup, trialVisible, trialTitle) => void handleSaveTrial(selectedGroup, trialVisible, trialTitle)}
+                 trialSaving={updateTrialGroup.isPending && updatingTrialGroupId === group.id}
                 importDisabled={importGroup.isPending}
                 importing={importGroup.isPending && importingGroupId === group.id}
                 mode={mode}

@@ -1074,6 +1074,8 @@ export const GetGroupLibraryAccessResponse = zod.object({
 })
 
 
+export const getGroupLibraryResponseGroupsItemTrialTitleMax = 120;
+
 export const getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMin = 0;
 export const getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMax = 1;
 
@@ -1083,6 +1085,8 @@ export const GetGroupLibraryResponse = zod.object({
   "groups": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
+  "trialTitle": zod.string().max(getGroupLibraryResponseGroupsItemTrialTitleMax).nullable(),
+  "trialVisible": zod.boolean(),
   "username": zod.string().nullable(),
   "telegramLink": zod.string().nullable(),
   "kind": zod.string(),
@@ -1916,6 +1920,8 @@ export const MarkAdminSystemEventReadParams = zod.object({
 export const MarkAdminSystemEventReadResponse = zod.void()
 
 
+export const getAdminActiveGroupDirectoryResponseGroupsItemTrialTitleMax = 120;
+
 export const getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMin = 0;
 export const getAdminActiveGroupDirectoryResponseGroupsItemRoundDelaysItemErrorRateMax = 1;
 
@@ -1925,6 +1931,8 @@ export const GetAdminActiveGroupDirectoryResponse = zod.object({
   "groups": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
+  "trialTitle": zod.string().max(getAdminActiveGroupDirectoryResponseGroupsItemTrialTitleMax).nullable(),
+  "trialVisible": zod.boolean(),
   "username": zod.string().nullable(),
   "telegramLink": zod.string().nullable(),
   "kind": zod.string(),
@@ -1960,6 +1968,26 @@ export const ImportAdminGroupLibraryEntryParams = zod.object({
 
 export const ImportAdminGroupLibraryEntryResponse = zod.object({
   "imported": zod.boolean()
+})
+
+
+export const UpdateAdminGroupLibraryEntryParams = zod.object({
+  "telegramId": zod.coerce.string()
+})
+
+export const updateAdminGroupLibraryEntryBodyTrialTitleMax = 120;
+
+
+
+export const UpdateAdminGroupLibraryEntryBody = zod.object({
+  "trialVisible": zod.boolean(),
+  "trialTitle": zod.string().max(updateAdminGroupLibraryEntryBodyTrialTitleMax).nullable()
+})
+
+export const UpdateAdminGroupLibraryEntryResponse = zod.object({
+  "updated": zod.boolean(),
+  "trialVisible": zod.boolean(),
+  "trialTitle": zod.string().nullable()
 })
 
 

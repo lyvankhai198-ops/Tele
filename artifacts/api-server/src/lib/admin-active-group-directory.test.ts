@@ -202,23 +202,73 @@ assert.equal(candidates[0]?.username, "@tech_forum");
 assert.equal(candidates[0]?.memberCount, 1500);
 assert.equal(candidates[1]?.telegramId, "-100555");
 
-const lockedGroups = redactGroupLibraryGroups(directory.groups, false);
-assert.equal(lockedGroups.length, directory.groups.length);
-assert.equal(lockedGroups[0]?.id, "locked-group-1");
-assert.notEqual(lockedGroups[0]?.id, directory.groups[0]?.id);
-assert.equal(lockedGroups[0]?.title, "••••••••••");
-assert.equal(lockedGroups[0]?.username, null);
-assert.equal(lockedGroups[0]?.telegramLink, null);
-assert.equal(lockedGroups[0]?.kind, directory.groups[0]?.kind);
-assert.equal(lockedGroups[0]?.memberCount, directory.groups[0]?.memberCount);
-assert.equal(lockedGroups[0]?.isPublished, true);
+const directoryWithThreeGroups = {
+  groups: [
+    ...directory.groups,
+    {
+      ...directory.groups[0]!,
+      id: "-100777",
+      title: "Nhóm bị khóa",
+      username: "@locked_group",
+      telegramLink: "https://t.me/locked_group",
+    },
+  ],
+};
+const lockedGroups = redactGroupLibraryGroups(directoryWithThreeGroups.groups, false);
+assert.equal(lockedGroups.length, directoryWithThreeGroups.groups.length);
+assert.equal(lockedGroups[0]?.id, directory.groups[0]?.id);
+assert.equal(lockedGroups[0]?.title, directory.groups[0]?.title);
+assert.equal(lockedGroups[0]?.telegramLink, directory.groups[0]?.telegramLink);
+assert.equal(lockedGroups[1]?.id, directory.groups[1]?.id);
+assert.equal(lockedGroups[2]?.id, "locked-group-3");
+assert.notEqual(lockedGroups[2]?.id, directoryWithThreeGroups.groups[2]?.id);
+assert.equal(lockedGroups[2]?.title, "••••••••••");
+assert.equal(lockedGroups[2]?.username, null);
+assert.equal(lockedGroups[2]?.telegramLink, null);
+assert.equal(lockedGroups[2]?.kind, directoryWithThreeGroups.groups[2]?.kind);
+assert.equal(lockedGroups[2]?.memberCount, directoryWithThreeGroups.groups[2]?.memberCount);
+assert.equal(lockedGroups[2]?.isPublished, true);
 assert.deepEqual(
-  lockedGroups[0]?.roundDelays.map((delay) => [delay.minSeconds, delay.maxSeconds]),
+  lockedGroups[2]?.roundDelays.map((delay) => [delay.minSeconds, delay.maxSeconds]),
   [
     [45, 60],
     [15, 30],
   ],
 );
 assert.strictEqual(redactGroupLibraryGroups(directory.groups, true), directory.groups);
+
+const configuredPreview = redactGroupLibraryGroups([
+  {
+    ...directory.groups[0]!,
+    id: "-100001",
+    title: "Nhóm cũ",
+    telegramLink: "https://t.me/old_group",
+    trialVisible: false,
+    trialTitle: null,
+  },
+  {
+    ...directory.groups[1]!,
+    id: "-100002",
+    title: "Tên nội bộ",
+    telegramLink: "https://t.me/trial_one",
+    trialVisible: true,
+    trialTitle: "Cộng đồng MMO Việt",
+  },
+  {
+    ...directory.groups[0]!,
+    id: "-100003",
+    title: "Tên nội bộ 2",
+    telegramLink: "https://t.me/trial_two",
+    trialVisible: true,
+    trialTitle: "Nhóm kiếm tiền online",
+  },
+], false);
+assert.deepEqual(configuredPreview.map((group) => group.id), ["-100002", "-100003", "locked-group-1"]);
+assert.equal(configuredPreview[0]?.title, "Cộng đồng MMO Việt");
+assert.equal(configuredPreview[0]?.telegramLink, "https://t.me/trial_one");
+assert.equal(configuredPreview[1]?.title, "Nhóm kiếm tiền online");
+assert.equal(configuredPreview[1]?.telegramLink, "https://t.me/trial_two");
+assert.equal(configuredPreview[2]?.title, "••••••••••");
+assert.equal(configuredPreview[2]?.telegramLink, null);
 
 console.log("Admin group library aggregation and one-time import checks passed.");

@@ -948,6 +948,31 @@ paths:
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
         "404": { description: Group was not discovered by the administrator }
+  /admin/active-groups/{telegramId}:
+    patch:
+      operationId: updateAdminGroupLibraryEntry
+      tags: [admin]
+      parameters:
+        - name: telegramId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminGroupLibraryEntryUpdateInput" }
+      responses:
+        "200":
+          description: Trial display configuration updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupLibraryEntryUpdateResult" }
+        "400": { description: Invalid trial display configuration }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Group was not found in the administrator library }
+        "409": { description: At most two groups can be selected for trial preview }
   /admin/notifications:
     get:
       operationId: listAdminNotifications
@@ -2311,10 +2336,12 @@ components:
         canPost: { type: boolean }
     AdminActiveGroup:
       type: object
-      required: [id, title, username, telegramLink, kind, memberCount, isPublished, roundDelays]
+      required: [id, title, trialTitle, trialVisible, username, telegramLink, kind, memberCount, isPublished, roundDelays]
       properties:
         id: { type: string }
         title: { type: string }
+        trialTitle: { type: ["string", "null"], maxLength: 120 }
+        trialVisible: { type: boolean }
         username: { type: ["string", "null"] }
         telegramLink: { type: ["string", "null"] }
         kind: { type: string }
@@ -2344,6 +2371,19 @@ components:
       required: [imported]
       properties:
         imported: { type: boolean }
+    AdminGroupLibraryEntryUpdateInput:
+      type: object
+      required: [trialVisible, trialTitle]
+      properties:
+        trialVisible: { type: boolean }
+        trialTitle: { type: ["string", "null"], maxLength: 120 }
+    AdminGroupLibraryEntryUpdateResult:
+      type: object
+      required: [updated, trialVisible, trialTitle]
+      properties:
+        updated: { type: boolean }
+        trialVisible: { type: boolean }
+        trialTitle: { type: ["string", "null"] }
     AdminSubscriptionUpdateInput:
       type: object
       required: [plan, durationDays]

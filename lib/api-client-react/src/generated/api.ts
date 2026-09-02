@@ -26,6 +26,8 @@ import type {
   AdminActiveGroupDirectory,
   AdminCampaignCloneInput,
   AdminCampaignStatusInput,
+  AdminGroupLibraryEntryUpdateInput,
+  AdminGroupLibraryEntryUpdateResult,
   AdminGroupLibraryImportResult,
   AdminGroupLibrarySyncResult,
   AdminLicenseKey,
@@ -4646,6 +4648,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getImportAdminGroupLibraryEntryMutationOptions(options));
+    }
+
+export const getUpdateAdminGroupLibraryEntryUrl = (telegramId: string,) => {
+
+
+
+
+  return `/api/admin/active-groups/${telegramId}`
+}
+
+export const updateAdminGroupLibraryEntry = async (telegramId: string,
+    adminGroupLibraryEntryUpdateInput: AdminGroupLibraryEntryUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupLibraryEntryUpdateResult> => {
+
+  return customFetch<AdminGroupLibraryEntryUpdateResult>(getUpdateAdminGroupLibraryEntryUrl(telegramId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminGroupLibraryEntryUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminGroupLibraryEntryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupLibraryEntry>>, TError,{telegramId: string;data: BodyType<AdminGroupLibraryEntryUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupLibraryEntry>>, TError,{telegramId: string;data: BodyType<AdminGroupLibraryEntryUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateAdminGroupLibraryEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminGroupLibraryEntry>>, {telegramId: string;data: BodyType<AdminGroupLibraryEntryUpdateInput>}> = (props) => {
+          const {telegramId,data} = props ?? {};
+
+          return  updateAdminGroupLibraryEntry(telegramId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminGroupLibraryEntryMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminGroupLibraryEntry>>>
+    export type UpdateAdminGroupLibraryEntryMutationBody = BodyType<AdminGroupLibraryEntryUpdateInput>
+    export type UpdateAdminGroupLibraryEntryMutationError = ErrorType<void>
+
+    export const useUpdateAdminGroupLibraryEntry = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupLibraryEntry>>, TError,{telegramId: string;data: BodyType<AdminGroupLibraryEntryUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminGroupLibraryEntry>>,
+        TError,
+        {telegramId: string;data: BodyType<AdminGroupLibraryEntryUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminGroupLibraryEntryMutationOptions(options));
     }
 
 export const getListAdminNotificationsUrl = () => {

@@ -33,6 +33,9 @@ import {
   SyncAdminGroupLibraryResponse,
   ImportAdminGroupLibraryEntryParams,
   ImportAdminGroupLibraryEntryResponse,
+  UpdateAdminGroupLibraryEntryBody,
+  UpdateAdminGroupLibraryEntryParams,
+  UpdateAdminGroupLibraryEntryResponse,
   UpdateAdminCampaignStatusParams,
   UpdateAdminCampaignStatusBody,
   UpdateAdminCampaignStatusResponse,
@@ -92,6 +95,7 @@ import {
   getAdminActiveGroupDirectory,
   importAdminGroupLibraryEntry,
   syncAdminGroupLibrary,
+  updateAdminGroupLibraryEntry,
 } from "../lib/admin-active-group-directory";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
@@ -178,6 +182,26 @@ router.post("/admin/active-groups/:telegramId/import", async (req, res): Promise
   const result = await importAdminGroupLibraryEntry(params.data.telegramId);
   if (!result) return void sendError(res, 404, "Nhóm chưa được phát hiện trong thư viện admin.");
   res.json(ImportAdminGroupLibraryEntryResponse.parse(result));
+});
+
+router.patch("/admin/active-groups/:telegramId", async (req, res): Promise<void> => {
+  const params = UpdateAdminGroupLibraryEntryParams.safeParse(req.params);
+  const body = UpdateAdminGroupLibraryEntryBody.safeParse(req.body);
+  if (!params.success || !body.success) return void sendError(res, 400, "Cấu hình nhóm trial không hợp lệ");
+  try {
+    const result = await updateAdminGroupLibraryEntry({
+      telegramId: params.data.telegramId,
+      trialVisible: body.data.trialVisible,
+      trialTitle: body.data.trialTitle?.trim() || null,
+    });
+    if (!result) return void sendError(res, 404, "Không tìm thấy nhóm trong thư viện admin.");
+    res.json(UpdateAdminGroupLibraryEntryResponse.parse(result));
+  } catch (error) {
+    if (error instanceof Error && error.message === "TRIAL_GROUP_LIMIT_REACHED") {
+      return void sendError(res, 409, "Chỉ được chọn tối đa 2 nhóm trial.");
+    }
+    throw error;
+  }
 });
 
 router.get("/admin/notifications", async (_req, res): Promise<void> => {

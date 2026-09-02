@@ -11,6 +11,12 @@ import type { GroupLibraryAccountMembership } from './groupLibraryAccountMembers
 export interface AdminActiveGroup {
   id: string;
   title: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  trialTitle: string | null;
+  trialVisible: boolean;
   /** @nullable */
   username: string | null;
   /** @nullable */

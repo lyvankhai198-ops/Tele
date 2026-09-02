@@ -1599,6 +1599,12 @@ export interface GroupLibraryAccountMembership {
 export interface AdminActiveGroup {
   id: string;
   title: string;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  trialTitle: string | null;
+  trialVisible: boolean;
   /** @nullable */
   username: string | null;
   /** @nullable */
@@ -1622,6 +1628,22 @@ export interface AdminGroupLibrarySyncResult {
 
 export interface AdminGroupLibraryImportResult {
   imported: boolean;
+}
+
+export interface AdminGroupLibraryEntryUpdateInput {
+  trialVisible: boolean;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  trialTitle: string | null;
+}
+
+export interface AdminGroupLibraryEntryUpdateResult {
+  updated: boolean;
+  trialVisible: boolean;
+  /** @nullable */
+  trialTitle: string | null;
 }
 
 export interface AdminSubscriptionUpdateInput {
