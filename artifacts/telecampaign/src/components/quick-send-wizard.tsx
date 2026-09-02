@@ -151,12 +151,15 @@ const copy = {
     messageHint: "Không cần tạo mẫu tin riêng — hệ thống sẽ lưu lại tự động khi bạn bắt đầu.",
     textMode: "Nhập tin nhắn",
     forwardMode: "Forward tin đã lưu",
+    forwardNote: "Vào Cài đặt → Tin nhắn đã lưu → tạo nội dung tin nhắn, sau đó quay lại đây và nhấn Đồng bộ. Tính năng này cho phép gửi tin nhắn có icon Premium.",
     textLabel: "Nội dung tin nhắn",
     textPlaceholder: "Nhập nội dung bạn muốn gửi...",
     savedLabel: "Chọn tin trong Tin nhắn đã lưu",
+    syncSaved: "Đồng bộ",
     savedPlaceholder: "Chọn một tin nhắn đã lưu",
     savedLoading: "Đang tải tin nhắn...",
     savedEmpty: "Không tìm thấy tin nhắn đã lưu.",
+    savedError: "Không thể tải Tin nhắn đã lưu. Hãy thử đồng bộ lại.",
     mediaMessage: "Tin nhắn có media",
     reviewTitle: "Sẵn sàng để bắt đầu?",
     reviewHint: "Kiểm tra nhanh lần cuối trước khi tạo và chạy chiến dịch.",
@@ -241,12 +244,15 @@ const copy = {
     messageHint: "No need to create a separate template — it will be saved automatically when you start.",
     textMode: "Enter a message",
     forwardMode: "Forward saved message",
+    forwardNote: "Go to Settings → Saved Messages → create your message, then come back here and press Sync. This lets you send messages with Premium icons.",
     textLabel: "Message content",
     textPlaceholder: "Enter the message you want to send...",
     savedLabel: "Choose from Saved Messages",
+    syncSaved: "Sync",
     savedPlaceholder: "Choose a saved message",
     savedLoading: "Loading messages...",
     savedEmpty: "No saved messages found.",
+    savedError: "Saved Messages could not be loaded. Try syncing again.",
     mediaMessage: "Message with media",
     reviewTitle: "Ready to start?",
     reviewHint: "Take one last look before the campaign is created and queued.",
@@ -769,7 +775,11 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                     </button>
                     <button type="button" onClick={() => { setMode("forward"); setFormError(null); }} className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${mode === "forward" ? "border-[#1d3bb8] bg-[#eef2ff] ring-2 ring-[#1d3bb8]/10" : "border-[#e2e8f0] hover:border-[#cbd5e1]"}`} data-testid="quick-send-mode-forward">
                       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${mode === "forward" ? "bg-[#1d3bb8] text-white" : "bg-[#f1f5f9] text-[#64748b]"}`}><Forward className="h-5 w-5" /></span>
-                      <span><span className="block text-[14px] font-extrabold text-[#0f172a]">{c.forwardMode}</span><span className="mt-1 block text-[12px] font-medium text-[#64748b]">Saved Messages</span></span>
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-extrabold text-[#0f172a]">{c.forwardMode}</span>
+                        <span className="mt-1 block text-[12px] font-medium text-[#64748b]">Saved Messages</span>
+                        <span className="mt-2 block text-[10px] font-semibold leading-relaxed text-[#64748b]">{c.forwardNote}</span>
+                      </span>
                     </button>
                   </div>
                   {mode === "text" ? (
@@ -778,14 +788,27 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                       <textarea value={content} onChange={(event) => setContent(event.target.value)} rows={7} placeholder={c.textPlaceholder} className="w-full resize-y rounded-2xl border border-[#dbe2ea] px-4 py-3.5 text-[14px] font-medium leading-relaxed outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="quick-send-content" />
                     </label>
                   ) : (
-                    <label className="block">
-                      <span className="mb-2 block text-[13px] font-bold text-[#334155]">{c.savedLabel}</span>
+                    <div className="block">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-[13px] font-bold text-[#334155]">{c.savedLabel}</span>
+                        <button
+                          type="button"
+                          onClick={() => void accountSavedMessages.refetch()}
+                          disabled={!accountId || accountSavedMessages.isFetching}
+                          className="inline-flex shrink-0 items-center gap-1.5 text-[12px] font-extrabold text-[#1a2b88] disabled:opacity-50"
+                          data-testid="quick-send-sync-saved-messages"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${accountSavedMessages.isFetching ? "animate-spin" : ""}`} />{c.syncSaved}
+                        </button>
+                      </div>
                       <select value={sourceMessageId} onChange={(event) => { setSourceMessageId(event.target.value); const message = (accountSavedMessages.data ?? []).find((item) => item.id === event.target.value); if (message?.text) setContent(message.text); }} disabled={accountSavedMessages.isLoading} className="h-12 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 disabled:bg-[#f8fafc]" data-testid="quick-send-saved-message">
                         <option value="">{accountSavedMessages.isLoading ? c.savedLoading : c.savedPlaceholder}</option>
                         {(accountSavedMessages.data ?? []).map((message) => <option value={message.id} key={message.id}>{message.text.slice(0, 100) || c.mediaMessage}</option>)}
                       </select>
-                      {!accountSavedMessages.isLoading && !(accountSavedMessages.data ?? []).length && <p className="mt-2 text-[12px] font-semibold text-[#64748b]">{c.savedEmpty}</p>}
-                    </label>
+                      {accountSavedMessages.isError
+                        ? <p className="mt-2 text-[12px] font-semibold text-[#dc2626]">{c.savedError}</p>
+                        : !accountSavedMessages.isLoading && !(accountSavedMessages.data ?? []).length && <p className="mt-2 text-[12px] font-semibold text-[#64748b]">{c.savedEmpty}</p>}
+                    </div>
                   )}
                 </section>
               )}
