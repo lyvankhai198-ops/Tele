@@ -88,6 +88,7 @@ const copy = {
     validationSchedule: "Invalid schedule date/time.",
     toastCreated: "Campaign created.",
     toastUpdated: "Campaign updated.",
+    toastReopened: "Campaign updated and reopened for delivery.",
     toastPaused: "Campaign paused.",
     toastResumed: "Campaign resumed.",
     automaticResume: "Will resume automatically on a new day",
@@ -198,6 +199,7 @@ const copy = {
     validationSchedule: "Thời gian lên lịch không hợp lệ.",
     toastCreated: "Đã tạo chiến dịch.",
     toastUpdated: "Đã cập nhật chiến dịch.",
+    toastReopened: "Đã cập nhật và mở lại chiến dịch để gửi.",
     toastPaused: "Đã dừng chiến dịch.",
     toastResumed: "Chiến dịch đã tiếp tục.",
     automaticResume: "Tự động chạy lại vào ngày mới",
@@ -403,10 +405,11 @@ export default function Campaigns() {
   }
 
   async function handleFormSaved() {
+    const reopeningFailedCampaign = editingCampaign?.status === "completed_with_errors";
     await Promise.all([campaigns.refetch(), templates.refetch()]);
     setShowForm(false);
     setEditingCampaign(null);
-    setToast(editingCampaign ? c.toastUpdated : c.toastCreated);
+    setToast(reopeningFailedCampaign ? c.toastReopened : editingCampaign ? c.toastUpdated : c.toastCreated);
   }
 
   function openClone(campaign: Campaign) {
@@ -577,6 +580,8 @@ export default function Campaigns() {
                                    ? <span className="inline-flex h-10 items-center justify-center rounded-xl bg-[#eff6ff] px-3 text-center text-[12px] font-extrabold text-[#1d4ed8]">{c.automaticResume}</span>
                                    : <button onClick={() => requestQueue(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>}
                               </div>
+                             : campaign.status === "completed_with_errors"
+                               ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
                             : <span className="h-10" />}
                       </div>
                        <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
