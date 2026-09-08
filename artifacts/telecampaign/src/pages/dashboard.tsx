@@ -24,7 +24,7 @@ import {
   useGetUpgradeSummary,
 } from "@workspace/api-client-react";
 import type { AdminNotification } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { QuickSendWizard } from "@/components/quick-send-wizard";
 import { shouldShowQuickSend } from "@/lib/onboarding";
@@ -47,18 +47,18 @@ export default function Dashboard() {
     },
   });
   const [location, setLocation] = useLocation();
+  const search = useSearch();
   const [selectedNotice, setSelectedNotice] = useState<AdminNotification | null>(null);
   const [quickSendOpen, setQuickSendOpen] = useState(false);
 
   useEffect(() => {
-    const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
-    const notificationId = new URLSearchParams(query).get("notificationId");
+    const notificationId = new URLSearchParams(search).get("notificationId");
     if (!notificationId || !data) return;
     const notice = data.adminNotifications.find((candidate) => candidate.id === notificationId);
     if (!notice) return;
     setSelectedNotice(notice);
     setLocation("/dashboard", { replace: true });
-  }, [data, location, setLocation]);
+  }, [data, search, setLocation]);
 
   if (isLoading) {
     return (
