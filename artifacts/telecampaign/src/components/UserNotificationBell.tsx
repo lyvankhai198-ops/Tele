@@ -121,7 +121,11 @@ export function UserNotificationBell() {
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          const nextOpen = !open;
+          setOpen(nextOpen);
+          if (nextOpen) void notificationsQuery.refetch();
+        }}
         className={`relative grid h-10 w-10 place-items-center rounded-xl border transition-colors ${
           open
             ? "border-[#b8d9d5] bg-[#e8f1f0] text-[#075e68]"
