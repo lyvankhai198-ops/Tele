@@ -130,7 +130,7 @@ export function UserNotificationBell() {
           setOpen(nextOpen);
           if (nextOpen) void notificationsQuery.refetch();
         }}
-        className={`relative grid h-10 w-10 place-items-center rounded-xl border transition-colors ${
+        className={`relative grid h-9 w-9 place-items-center rounded-xl border transition-colors ${
           open
             ? "border-[#b8d9d5] bg-[#e8f1f0] text-[#075e68]"
             : "border-[#dfe7ea] bg-[#fcfdfd] text-[#61727b] hover:border-[#b8d9d5] hover:bg-[#f4faf9] hover:text-[#075e68]"
@@ -139,10 +139,10 @@ export function UserNotificationBell() {
         aria-expanded={open}
         data-testid="user-notifications-bell"
       >
-        <Bell className="h-[19px] w-[19px]" strokeWidth={2.2} />
+        <Bell className="h-[17px] w-[17px]" strokeWidth={2.2} />
         {unreadCount > 0 && (
           <span
-            className="absolute -right-1 -top-1 grid min-h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-white bg-[#c65b4d] px-1 text-[9px] font-extrabold leading-none text-white"
+            className="absolute -right-1 -top-1 grid min-h-[17px] min-w-[17px] place-items-center rounded-full border-2 border-white bg-[#c65b4d] px-1 text-[8px] font-extrabold leading-none text-white"
             aria-label={`${unreadCount} unread notifications`}
           >
             {unreadCount > 99 ? "99+" : unreadCount}
