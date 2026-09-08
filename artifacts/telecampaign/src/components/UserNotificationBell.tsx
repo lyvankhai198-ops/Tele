@@ -106,7 +106,11 @@ export function UserNotificationBell() {
   const openNotification = (notification: UserNotification) => {
     markRead(notification);
     setOpen(false);
-    if (notification.href) setLocation(notification.href);
+    if (notification.kind === "admin") {
+      setLocation(`/dashboard?notificationId=${encodeURIComponent(notification.id)}`);
+    } else if (notification.href) {
+      setLocation(notification.href);
+    }
   };
 
   const markAll = () => {
@@ -193,7 +197,12 @@ export function UserNotificationBell() {
                         <span className={`text-[13px] leading-5 ${notification.isRead ? "font-bold text-[#475569]" : "font-extrabold text-[#0f172a]"}`}>{title}</span>
                         {!notification.isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1d4ed8]" aria-label={text.label} />}
                       </span>
-                      <span className="mt-1 block line-clamp-2 text-[12px] font-medium leading-5 text-[#64748b]">{body || (notification.kind === "subscription" ? text.subscription : text.admin)}</span>
+                       <span
+                         className="mt-1 block max-h-10 overflow-hidden text-[12px] font-medium leading-5 text-[#64748b]"
+                         style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
+                       >
+                         {body || (notification.kind === "subscription" ? text.subscription : text.admin)}
+                       </span>
                       <span className="mt-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-[#94a3b8]">
                         {formatDate(notification.createdAt, language)}
                         {notification.isRead && <><Check className="h-3 w-3" />{text.marked}</>}

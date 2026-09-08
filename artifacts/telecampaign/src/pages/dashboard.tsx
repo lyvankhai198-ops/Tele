@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetDashboardQueryKey,
@@ -49,6 +49,16 @@ export default function Dashboard() {
   const [location, setLocation] = useLocation();
   const [selectedNotice, setSelectedNotice] = useState<AdminNotification | null>(null);
   const [quickSendOpen, setQuickSendOpen] = useState(false);
+
+  useEffect(() => {
+    const query = location.includes("?") ? location.slice(location.indexOf("?") + 1) : "";
+    const notificationId = new URLSearchParams(query).get("notificationId");
+    if (!notificationId || !data) return;
+    const notice = data.adminNotifications.find((candidate) => candidate.id === notificationId);
+    if (!notice) return;
+    setSelectedNotice(notice);
+    setLocation("/dashboard", { replace: true });
+  }, [data, location, setLocation]);
 
   if (isLoading) {
     return (
