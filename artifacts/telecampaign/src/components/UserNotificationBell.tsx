@@ -143,7 +143,7 @@ export function UserNotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[min(370px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.16)]">
+        <div className="fixed left-4 right-4 top-[82px] z-50 w-auto overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.16)] sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+10px)] sm:w-[min(370px,calc(100vw-2rem))]">
           <div className="flex items-center justify-between border-b border-[#eef2f6] px-4 py-3.5">
             <div>
               <p className="text-sm font-extrabold text-[#0f172a]">{text.title}</p>
