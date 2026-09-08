@@ -1963,16 +1963,19 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       }
 
       const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
-      const sentByDestination = new Map<string, number>();
-      let latestSentAt: Date | null = null;
-      for (const target of existingTargets) {
-        if (target.status === "sent") {
-          sentByDestination.set(target.destinationId, (sentByDestination.get(target.destinationId) ?? 0) + 1);
-          if (target.sentAt && (!latestSentAt || target.sentAt.getTime() > latestSentAt.getTime())) {
-            latestSentAt = target.sentAt;
-          }
-        }
-      }
+       const reopeningCompletedCampaign = ["completed", "completed_with_errors"].includes(lockedCampaign.status);
+       const sentByDestination = new Map<string, number>();
+       let latestSentAt: Date | null = null;
+       if (!reopeningCompletedCampaign) {
+         for (const target of existingTargets) {
+           if (target.status === "sent") {
+             sentByDestination.set(target.destinationId, (sentByDestination.get(target.destinationId) ?? 0) + 1);
+             if (target.sentAt && (!latestSentAt || target.sentAt.getTime() > latestSentAt.getTime())) {
+               latestSentAt = target.sentAt;
+             }
+           }
+         }
+       }
       const randomRoundDelay = () => roundDelayMinSeconds
         + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1));
       const firstRoundAfterLastSend = latestSentAt
@@ -2006,10 +2009,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         }
       }
 
-       // A completed campaign is the user's fast recovery path:
-      // preserve confirmed sends above, rebuild only the failed/review work,
-      // and queue the remaining deliveries using the newly selected schedule.
-       const reopeningCompletedCampaign = ["completed", "completed_with_errors"].includes(lockedCampaign.status);
+       // Editing a completed campaign starts a fresh run on the same campaign:
+       // the old delivery history is replaced by a new schedule beginning at 0.
        const nextStatus = reopeningCompletedCampaign
         ? (targetRows.length > 0 ? "queued" : "completed")
         : lockedCampaign.status;
@@ -2034,10 +2035,14 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         pauseReason: nextStatus === "queued" ? null : lockedCampaign.pauseReason,
         updatedAt: new Date(),
       }).where(eq(campaignsTable.id, lockedCampaign.id)).returning();
-      await tx.delete(campaignTargetsTable).where(and(
-        eq(campaignTargetsTable.campaignId, lockedCampaign.id),
-        inArray(campaignTargetsTable.status, ["pending", "failed", "requires_review", "cancelled"]),
-      ));
+       await tx.delete(campaignTargetsTable).where(
+         reopeningCompletedCampaign
+           ? eq(campaignTargetsTable.campaignId, lockedCampaign.id)
+           : and(
+             eq(campaignTargetsTable.campaignId, lockedCampaign.id),
+             inArray(campaignTargetsTable.status, ["pending", "failed", "requires_review", "cancelled"]),
+           ),
+       );
       if (targetRows.length > 0) await tx.insert(campaignTargetsTable).values(targetRows);
       return { kind: "success" as const, campaign };
     });

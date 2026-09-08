@@ -95,6 +95,7 @@ const copy = {
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
     repeatCountHint: "Max 300 (admin configured).",
+    completedRerunHint: "This completed campaign will start a fresh run from 0 with the repeat count below.",
     delayBetweenRounds: "Delay between rounds",
     delayMinRoundLabel: "Min delay between rounds (sec)",
     delayMaxRoundLabel: "Max delay between rounds (sec)",
@@ -146,6 +147,7 @@ const copy = {
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
     repeatCountHint: "Tối đa 300 (admin cấu hình).",
+    completedRerunHint: "Chiến dịch đã hoàn thành sẽ bắt đầu một lượt chạy mới từ 0 theo số vòng lặp bên dưới.",
     delayBetweenRounds: "Delay giữa các vòng lặp",
     delayMinRoundLabel: "Delay min giữa mỗi vòng lặp (giây)",
     delayMaxRoundLabel: "Delay max giữa mỗi vòng lặp (giây)",
@@ -646,7 +648,11 @@ export function CampaignFormModal({
 
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldRepeatCount}</span>
-          <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{c.repeatCountHint}</span>
+          <span className="mb-2 block text-[12px] font-medium text-[#64748b]">
+            {editingCampaign && ["completed", "completed_with_errors"].includes(editingCampaign.status)
+              ? c.completedRerunHint
+              : c.repeatCountHint}
+          </span>
           <input type="number" min="1" max="300" value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
         </label>
 
