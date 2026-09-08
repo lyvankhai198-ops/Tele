@@ -217,7 +217,7 @@ export function AppLayout({
             
              <div className="flex items-center gap-3 sm:gap-4">
               {headerAction}
-               {user?.role !== "admin" && <UserNotificationBell />}
+                <UserNotificationBell />
                {isAdminSection && user?.role === "admin" && (
                  <button
                    type="button"
