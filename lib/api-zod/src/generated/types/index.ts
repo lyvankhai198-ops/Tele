@@ -160,3 +160,8 @@ export * from './updateProxyInputStatus';
 export * from './updateProxyInputType';
 export * from './upgradeSummary';
 export * from './usageMetric';
+export * from './userNotification';
+export * from './userNotificationKind';
+export * from './userNotificationLevel';
+export * from './userNotificationList';
+export * from './userNotificationsReadResult';

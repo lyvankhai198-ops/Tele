@@ -13,6 +13,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 export * from "./user-daily-message-quotas";
 export * from "./admin-system-events";
+export * from "./user-notification-reads";
 
 export const proxiesTable = pgTable("proxies", {
   id: uuid("id").primaryKey().defaultRandom(),

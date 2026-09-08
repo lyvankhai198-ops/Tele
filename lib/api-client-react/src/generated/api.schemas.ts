@@ -847,6 +847,46 @@ export interface AdminNotificationUpload {
   objectPath: string;
 }
 
+export type UserNotificationKind = typeof UserNotificationKind[keyof typeof UserNotificationKind];
+
+
+export const UserNotificationKind = {
+  admin: 'admin',
+  subscription: 'subscription',
+} as const;
+
+export type UserNotificationLevel = typeof UserNotificationLevel[keyof typeof UserNotificationLevel];
+
+
+export const UserNotificationLevel = {
+  info: 'info',
+  warning: 'warning',
+  success: 'success',
+} as const;
+
+export interface UserNotification {
+  id: string;
+  kind: UserNotificationKind;
+  level: UserNotificationLevel;
+  title: string;
+  body: string;
+  titleEn: string;
+  bodyEn: string;
+  /** @nullable */
+  href: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface UserNotificationList {
+  notifications: UserNotification[];
+  unreadCount: number;
+}
+
+export interface UserNotificationsReadResult {
+  markedCount: number;
+}
+
 export type AdminSystemEventEventType = typeof AdminSystemEventEventType[keyof typeof AdminSystemEventEventType];
 
 

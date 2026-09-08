@@ -24,6 +24,7 @@ import {
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { getListAdminSystemEventsQueryKey, useGetGroupLibraryAccess, useGetSystemDefaults, useListAdminSystemEvents } from "@workspace/api-client-react";
+import { UserNotificationBell } from "@/components/UserNotificationBell";
 
 export type PageKey =
   | "dashboard"
@@ -216,6 +217,7 @@ export function AppLayout({
             
              <div className="flex items-center gap-3 sm:gap-4">
               {headerAction}
+               {user?.role !== "admin" && <UserNotificationBell />}
                {isAdminSection && user?.role === "admin" && (
                  <button
                    type="button"

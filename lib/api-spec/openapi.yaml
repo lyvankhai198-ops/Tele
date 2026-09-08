@@ -625,6 +625,45 @@ paths:
               schema: { $ref: "#/components/schemas/UpgradeSummary" }
         "401": { description: Authentication is required }
         "503": { description: Ownership migration is pending }
+  /notifications:
+    get:
+      operationId: listUserNotifications
+      tags: [notifications]
+      responses:
+        "200":
+          description: Current user's admin and subscription notifications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserNotificationList" }
+        "401": { description: Authentication is required }
+        "503": { description: Ownership migration is pending }
+  /notifications/read-all:
+    post:
+      operationId: markAllUserNotificationsRead
+      tags: [notifications]
+      responses:
+        "200":
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserNotificationsReadResult" }
+        "401": { description: Authentication is required }
+        "503": { description: Ownership migration is pending }
+  /notifications/{notificationId}/read:
+    post:
+      operationId: markUserNotificationRead
+      tags: [notifications]
+      parameters:
+        - { $ref: "#/components/parameters/UserNotificationId" }
+      responses:
+        "200":
+          description: Notification read state updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserNotification" }
+        "401": { description: Authentication is required }
+        "404": { description: Notification not found }
+        "503": { description: Ownership migration is pending }
   /admin/purchase-settings:
     get:
       operationId: getAdminPurchaseSettings
@@ -1273,6 +1312,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    UserNotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema: { type: string }
     AdminUserId:
       name: userId
       in: path
@@ -1749,6 +1793,33 @@ components:
       properties:
         uploadURL: { type: string }
         objectPath: { type: string }
+    UserNotification:
+      type: object
+      required: [id, kind, level, title, body, titleEn, bodyEn, href, isRead, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [admin, subscription] }
+        level: { type: string, enum: [info, warning, success] }
+        title: { type: string }
+        body: { type: string }
+        titleEn: { type: string }
+        bodyEn: { type: string }
+        href: { type: ["string", "null"] }
+        isRead: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    UserNotificationList:
+      type: object
+      required: [notifications, unreadCount]
+      properties:
+        notifications:
+          type: array
+          items: { $ref: "#/components/schemas/UserNotification" }
+        unreadCount: { type: number }
+    UserNotificationsReadResult:
+      type: object
+      required: [markedCount]
+      properties:
+        markedCount: { type: number }
     AdminSystemEvent:
       type: object
       required: [id, eventType, level, title, titleEn, body, bodyEn, metadata, isRead, createdAt]

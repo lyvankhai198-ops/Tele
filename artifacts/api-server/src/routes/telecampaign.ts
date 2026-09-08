@@ -18,6 +18,10 @@ import {
   GetGroupLibraryAccessResponse,
   GetGroupLibraryResponse,
   GetTelegramConfigResponse,
+  ListUserNotificationsResponse,
+  MarkAllUserNotificationsReadResponse,
+  MarkUserNotificationReadParams,
+  MarkUserNotificationReadResponse,
   ListActivityQueryParams,
   ListActivityResponse,
   ListCalendarItemsQueryParams,
@@ -117,6 +121,11 @@ import { adminNotificationResponse, isNotificationActive } from "../lib/admin-no
 import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
 import { canScheduleTelegramDestination } from "../lib/telegram-errors";
 import { logger } from "../lib/logger";
+import {
+  listUserNotifications,
+  markAllUserNotificationsRead,
+  markUserNotificationRead,
+} from "../lib/user-notifications";
 
 const router: IRouter = Router();
 const activityDestinationAccounts = alias(telegramAccountsTable, "activity_destination_accounts");
@@ -509,6 +518,35 @@ async function completeDevelopmentDemoLogin(input: {
 }
 
 router.use(requireAuth);
+
+router.get("/notifications", async (req, res): Promise<void> => {
+  const result = await listUserNotifications({
+    userId: currentUserId(req),
+    includeSubscriptionReminder: req.authUser?.role !== "admin",
+    limit: 20,
+  });
+  res.json(ListUserNotificationsResponse.parse(result));
+});
+
+router.post("/notifications/read-all", async (req, res): Promise<void> => {
+  const markedCount = await markAllUserNotificationsRead({
+    userId: currentUserId(req),
+    includeSubscriptionReminder: req.authUser?.role !== "admin",
+  });
+  res.json(MarkAllUserNotificationsReadResponse.parse({ markedCount }));
+});
+
+router.post("/notifications/:notificationId/read", async (req, res): Promise<void> => {
+  const params = MarkUserNotificationReadParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, "Mã thông báo không hợp lệ.");
+  const notification = await markUserNotificationRead({
+    userId: currentUserId(req),
+    notificationId: params.data.notificationId,
+    includeSubscriptionReminder: req.authUser?.role !== "admin",
+  });
+  if (!notification) return void sendError(res, 404, "Không tìm thấy thông báo.");
+  res.json(MarkUserNotificationReadResponse.parse(notification));
+});
 
 router.get("/upgrade", async (req, res): Promise<void> => {
   const [subscription, purchaseSettings, plans] = await Promise.all([

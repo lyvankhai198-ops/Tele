@@ -1157,6 +1157,46 @@ export const GetUpgradeSummaryResponse = zod.object({
 })
 
 
+export const ListUserNotificationsResponse = zod.object({
+  "notifications": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['admin', 'subscription']),
+  "level": zod.enum(['info', 'warning', 'success']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "titleEn": zod.string(),
+  "bodyEn": zod.string(),
+  "href": zod.string().nullable(),
+  "isRead": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})),
+  "unreadCount": zod.number()
+})
+
+
+export const MarkAllUserNotificationsReadResponse = zod.object({
+  "markedCount": zod.number()
+})
+
+
+export const MarkUserNotificationReadParams = zod.object({
+  "notificationId": zod.coerce.string()
+})
+
+export const MarkUserNotificationReadResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['admin', 'subscription']),
+  "level": zod.enum(['info', 'warning', 'success']),
+  "title": zod.string(),
+  "body": zod.string(),
+  "titleEn": zod.string(),
+  "bodyEn": zod.string(),
+  "href": zod.string().nullable(),
+  "isRead": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const GetAdminPurchaseSettingsResponse = zod.object({
   "telegramPurchaseUrl": zod.string().nullable()
 })
