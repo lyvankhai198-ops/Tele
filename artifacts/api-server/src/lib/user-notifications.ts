@@ -1,6 +1,9 @@
 import { and, desc, eq, gt, inArray, isNull, lte, or } from "drizzle-orm";
 import {
   adminNotificationsTable,
+  activityLogsTable,
+  campaignTargetsTable,
+  campaignsTable,
   db,
   userNotificationReadsTable,
 } from "@workspace/db";
@@ -11,7 +14,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type UserNotification = {
   id: string;
-  kind: "admin" | "subscription";
+  kind: "admin" | "subscription" | "campaign";
   level: "info" | "warning" | "success";
   title: string;
   body: string;
@@ -71,6 +74,44 @@ export async function listUserNotifications(input: {
     .from(adminNotificationsTable)
     .where(activeNotificationFilter(now))
     .orderBy(desc(adminNotificationsTable.createdAt));
+  const campaignCompletionRows = await db
+    .select({
+      id: activityLogsTable.id,
+      campaignId: activityLogsTable.campaignId,
+      campaignName: campaignsTable.name,
+      message: activityLogsTable.message,
+      level: activityLogsTable.level,
+      metadata: activityLogsTable.metadata,
+      createdAt: activityLogsTable.createdAt,
+    })
+    .from(activityLogsTable)
+    .innerJoin(campaignsTable, and(
+      eq(activityLogsTable.campaignId, campaignsTable.id),
+      eq(campaignsTable.ownerUserId, input.userId),
+    ))
+    .where(and(
+      eq(activityLogsTable.ownerUserId, input.userId),
+      eq(activityLogsTable.event, "campaign.completed"),
+    ))
+    .orderBy(desc(activityLogsTable.createdAt))
+    .limit(20);
+  const campaignIds = [...new Set(campaignCompletionRows.map((row) => row.campaignId).filter((id): id is string => Boolean(id)))];
+  const failedTargetRows = campaignIds.length === 0
+    ? []
+    : await db
+      .select({
+        campaignId: campaignTargetsTable.campaignId,
+        status: campaignTargetsTable.status,
+      })
+      .from(campaignTargetsTable)
+      .where(and(
+        inArray(campaignTargetsTable.campaignId, campaignIds),
+        inArray(campaignTargetsTable.status, ["failed", "requires_review"]),
+      ));
+  const failedCounts = new Map<string, number>();
+  for (const row of failedTargetRows) {
+    failedCounts.set(row.campaignId, (failedCounts.get(row.campaignId) ?? 0) + 1);
+  }
 
   const subscriptionReminderNotification = input.includeSubscriptionReminder
     ? subscriptionReminder(await getSubscription(input.userId), now)
@@ -89,6 +130,32 @@ export async function listUserNotifications(input: {
       createdAt: notification.publishedAt ?? notification.scheduledAt ?? notification.createdAt,
     })),
     ...(subscriptionReminderNotification ? [subscriptionReminderNotification] : []),
+    ...campaignCompletionRows
+      .filter((row): row is typeof row & { campaignId: string } => Boolean(row.campaignId))
+      .map((row) => {
+        const failedCount = failedCounts.get(row.campaignId) ?? Number(
+          (row.metadata && typeof row.metadata === "object" && "failedCount" in row.metadata)
+            ? row.metadata.failedCount
+            : 0,
+        );
+        const hasErrors = failedCount > 0;
+        return {
+          id: row.id,
+          kind: "campaign" as const,
+          level: hasErrors ? "warning" as const : "success" as const,
+          title: hasErrors ? `Chiến dịch "${row.campaignName}" đã hoàn tất với lỗi` : `Chiến dịch "${row.campaignName}" đã hoàn tất`,
+          body: hasErrors
+            ? `Có ${failedCount} lượt lỗi. Bấm vào thông báo để chỉnh sửa thời gian, xử lý lỗi và tiếp tục chạy chiến dịch.`
+            : "Bấm vào thông báo để chỉnh sửa thời gian hoặc chạy lại chiến dịch nếu cần.",
+          titleEn: hasErrors ? `Campaign "${row.campaignName}" completed with errors` : `Campaign "${row.campaignName}" completed`,
+          bodyEn: hasErrors
+            ? `${failedCount} delivery${failedCount === 1 ? "" : "ies"} failed. Open this notification to edit the schedule, fix the errors, and continue the campaign.`
+            : "Open this notification to edit the schedule or run the campaign again if needed.",
+          href: `/dashboard/campaigns?editCampaignId=${encodeURIComponent(row.campaignId)}`,
+          isRead: false,
+          createdAt: row.createdAt,
+        };
+      }),
   ].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
   const keys = candidates.map((notification) => notification.id);

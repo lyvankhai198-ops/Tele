@@ -612,6 +612,7 @@ export const ListCampaignsResponseItem = zod.object({
   "targetCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
+  "completedCount": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),
@@ -690,6 +691,7 @@ export const CreateCampaignResponse = zod.object({
   "targetCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
+  "completedCount": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),
@@ -763,6 +765,7 @@ export const UpdateCampaignStatusResponse = zod.object({
   "targetCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
+  "completedCount": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),
@@ -821,6 +824,7 @@ export const CloneCampaignResponse = zod.object({
   "targetCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
+  "completedCount": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),
@@ -920,6 +924,7 @@ export const GetDashboardResponse = zod.object({
   "targetCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
+  "completedCount": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),
@@ -1160,7 +1165,7 @@ export const GetUpgradeSummaryResponse = zod.object({
 export const ListUserNotificationsResponse = zod.object({
   "notifications": zod.array(zod.object({
   "id": zod.string(),
-  "kind": zod.enum(['admin', 'subscription']),
+  "kind": zod.enum(['admin', 'subscription', 'campaign']),
   "level": zod.enum(['info', 'warning', 'success']),
   "title": zod.string(),
   "body": zod.string(),
@@ -1185,7 +1190,7 @@ export const MarkUserNotificationReadParams = zod.object({
 
 export const MarkUserNotificationReadResponse = zod.object({
   "id": zod.string(),
-  "kind": zod.enum(['admin', 'subscription']),
+  "kind": zod.enum(['admin', 'subscription', 'campaign']),
   "level": zod.enum(['info', 'warning', 'success']),
   "title": zod.string(),
   "body": zod.string(),
@@ -2481,6 +2486,7 @@ export const CloneAdminUserCampaignResponse = zod.object({
   "targetCount": zod.number(),
   "sentCount": zod.number(),
   "failedCount": zod.number(),
+  "completedCount": zod.number(),
   "dailyQuota": zod.object({
   "limit": zod.number().nullable(),
   "used": zod.number(),

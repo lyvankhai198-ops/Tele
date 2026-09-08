@@ -702,13 +702,17 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
   }
   const errorTargets = targets.filter(({ target }) => Boolean(target.lastError));
   const waitingTargets = [...nextPendingByDestination.values()];
+  const sentCount = targets.filter(({ target }) => target.status === "sent").length;
+  const failedCount = targets.filter(({ target }) => ["failed", "requires_review"].includes(target.status)).length;
+  const cancelledCount = targets.filter(({ target }) => target.status === "cancelled").length;
   return {
     ...campaign,
     cloneMode: campaignCloneMode(campaign),
     targetCount: targets.length,
     destinationIds: campaign.destinationIds ?? [...new Set(targets.map(({ target }) => target.destinationId))],
-    sentCount: targets.filter(({ target }) => target.status === "sent").length,
-    failedCount: targets.filter(({ target }) => ["failed", "requires_review"].includes(target.status)).length,
+    sentCount,
+    failedCount,
+    completedCount: sentCount + failedCount + cancelledCount,
     dailyQuota: {
       limit: quotaLimit,
       used: quotaLimit === null ? quotaUsed : Math.min(quotaUsed, quotaLimit),
@@ -737,16 +741,36 @@ async function finalizeCampaignIfTerminal(campaignId: string) {
   const remaining = await db.select().from(campaignTargetsTable)
     .where(and(eq(campaignTargetsTable.campaignId, campaignId), inArray(campaignTargetsTable.status, ["pending", "sending"])));
   if (remaining.length > 0) return;
-  const reviewOrFailure = await db.select().from(campaignTargetsTable)
-    .where(and(eq(campaignTargetsTable.campaignId, campaignId), inArray(campaignTargetsTable.status, ["failed", "requires_review"])));
-  await db.update(campaignsTable).set({
-    status: reviewOrFailure.length > 0 ? "completed_with_errors" : "completed",
+  const terminalTargets = await db.select({ status: campaignTargetsTable.status })
+    .from(campaignTargetsTable)
+    .where(eq(campaignTargetsTable.campaignId, campaignId));
+  const failedCount = terminalTargets.filter(({ status }) => ["failed", "requires_review"].includes(status)).length;
+  const sentCount = terminalTargets.filter(({ status }) => status === "sent").length;
+  const [completedCampaign] = await db.update(campaignsTable).set({
+    status: "completed",
     pauseReason: null,
     updatedAt: new Date(),
   }).where(and(
     eq(campaignsTable.id, campaignId),
-    inArray(campaignsTable.status, ["queued", "running"]),
-  ));
+    inArray(campaignsTable.status, ["queued", "running", "completed_with_errors"]),
+  )).returning({
+    id: campaignsTable.id,
+    ownerUserId: campaignsTable.ownerUserId,
+    name: campaignsTable.name,
+  });
+  if (!completedCampaign) return;
+  await recordActivity({
+    ownerUserId: completedCampaign.ownerUserId,
+    event: "campaign.completed",
+    message: `Campaign "${completedCampaign.name}" completed`,
+    level: failedCount > 0 ? "warning" : "success",
+    campaignId: completedCampaign.id,
+    metadata: {
+      sentCount,
+      failedCount,
+      totalCount: terminalTargets.length,
+    },
+  });
 }
 
 async function markTargetForReview(targetId: string, reason: string) {

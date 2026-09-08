@@ -26,6 +26,7 @@ import {
 import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { useLocation, useSearch } from "wouter";
 
 // ---------------------------------------------------------------------------
 // Bilingual copy
@@ -317,7 +318,7 @@ function statusLabel(status: string, c: (typeof copy)["en"] | (typeof copy)["vi"
     paused: c.statusPaused,
     draft: c.statusDraft,
     completed: c.statusCompleted,
-    completed_with_errors: c.statusCompletedErrors,
+    completed_with_errors: c.statusCompleted,
     cancelled: c.statusCancelled,
   };
   return map[status] ?? status;
@@ -347,6 +348,8 @@ function resumesAfterDailyQuota(campaign: Campaign) {
 export default function Campaigns() {
   const { language } = useLanguage();
   const c = copy[language];
+  const [, setLocation] = useLocation();
+  const searchParams = useSearch();
 
   const campaigns = useListCampaigns();
   const accounts = useListTelegramAccounts();
@@ -404,12 +407,21 @@ export default function Campaigns() {
     setShowForm(true);
   }
 
+  useEffect(() => {
+    const editCampaignId = new URLSearchParams(searchParams).get("editCampaignId");
+    if (!editCampaignId || !campaigns.data) return;
+    const campaign = campaigns.data.find((item) => item.id === editCampaignId);
+    if (!campaign) return;
+    openEdit(campaign);
+    setLocation("/dashboard/campaigns", { replace: true });
+  }, [campaigns.data, searchParams, setLocation]);
+
   async function handleFormSaved() {
-    const reopeningFailedCampaign = editingCampaign?.status === "completed_with_errors";
+    const reopeningCompletedCampaign = editingCampaign?.status === "completed" || editingCampaign?.status === "completed_with_errors";
     await Promise.all([campaigns.refetch(), templates.refetch()]);
     setShowForm(false);
     setEditingCampaign(null);
-    setToast(reopeningFailedCampaign ? c.toastReopened : editingCampaign ? c.toastUpdated : c.toastCreated);
+    setToast(reopeningCompletedCampaign ? c.toastReopened : editingCampaign ? c.toastUpdated : c.toastCreated);
   }
 
   function openClone(campaign: Campaign) {
@@ -530,7 +542,6 @@ export default function Campaigns() {
             <option value="running">{c.statusRunning}</option>
             <option value="paused">{c.statusPaused}</option>
             <option value="completed">{c.statusCompleted}</option>
-            <option value="completed_with_errors">{c.statusCompletedErrors}</option>
           </select>
         </div>
 
@@ -540,7 +551,7 @@ export default function Campaigns() {
             : listedCampaigns.length
               ? <div className="divide-y divide-[#eef2f6]">{listedCampaigns.map((campaign) => {
                   const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
-                  const complete = campaign.targetCount ? Math.round((campaign.sentCount / campaign.targetCount) * 100) : 0;
+                  const complete = campaign.targetCount ? Math.round((campaign.completedCount / campaign.targetCount) * 100) : 0;
                   const autoResumes = resumesAfterDailyQuota(campaign);
                    const safetyNote = temporaryRestrictionCampaignNote(campaign, language, c);
                   return (
@@ -550,7 +561,7 @@ export default function Campaigns() {
                           <button onClick={() => setDetails(campaign)} className="truncate text-left text-[15px] font-extrabold text-[#1839b5] hover:underline">{campaign.name}</button>
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] font-semibold text-[#64748b]">
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${isActive(campaign.status) ? "bg-[#eff6ff] text-[#0f172a]" : campaign.status === "paused" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#f1f5f9] text-[#64748b]"}`}>{statusLabel(campaign.status, c)}</span>
-                            <span>{campaign.sentCount}/{campaign.targetCount}</span>
+                            <span>{campaign.completedCount}/{campaign.targetCount}</span>
                              <span className="rounded-full bg-[#eef6ff] px-2 py-1 text-[#1d4ed8]">{c.dailyQuotaLabel}: {campaignDailyQuotaLabel(campaign, c)}</span>
                             <span>OK {campaign.sentCount} · {c.errorsLabel} {campaign.failedCount}</span>
                           </div>
@@ -580,7 +591,7 @@ export default function Campaigns() {
                                    ? <span className="inline-flex h-10 items-center justify-center rounded-xl bg-[#eff6ff] px-3 text-center text-[12px] font-extrabold text-[#1d4ed8]">{c.automaticResume}</span>
                                    : <button onClick={() => requestQueue(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>}
                               </div>
-                             : campaign.status === "completed_with_errors"
+                             : campaign.status === "completed" || campaign.status === "completed_with_errors"
                                ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
                             : <span className="h-10" />}
                       </div>

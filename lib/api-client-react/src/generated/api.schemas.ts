@@ -404,6 +404,7 @@ export interface Campaign {
   targetCount: number;
   sentCount: number;
   failedCount: number;
+  completedCount: number;
   dailyQuota: CampaignDailyQuota;
   destinationIds: string[];
   errors: CampaignTargetError[];
@@ -853,6 +854,7 @@ export type UserNotificationKind = typeof UserNotificationKind[keyof typeof User
 export const UserNotificationKind = {
   admin: 'admin',
   subscription: 'subscription',
+  campaign: 'campaign',
 } as const;
 
 export type UserNotificationLevel = typeof UserNotificationLevel[keyof typeof UserNotificationLevel];

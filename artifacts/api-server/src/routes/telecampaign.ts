@@ -1878,8 +1878,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   if (editing && parsed.data.status !== undefined) {
     return void sendError(res, 400, "Update campaign details and status in separate requests");
   }
-  if (editing && !["draft", "paused", "completed_with_errors"].includes(existing.status)) {
-    return void sendError(res, 409, "Only draft, paused, or campaigns completed with errors can be edited");
+   if (editing && !["draft", "paused", "completed", "completed_with_errors"].includes(existing.status)) {
+     return void sendError(res, 409, "Only draft, paused, or completed campaigns can be edited");
   }
   const isAdminClone = campaignCloneMode(existing) === "admin";
   if (isAdminClone && (
@@ -1895,8 +1895,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       const [lockedCampaign] = await tx.select().from(campaignsTable)
         .where(and(eq(campaignsTable.id, existing.id), eq(campaignsTable.ownerUserId, ownerUserId)));
       if (!lockedCampaign) return { kind: "error" as const, status: 404, message: "Campaign not found" };
-      if (!["draft", "paused", "completed_with_errors"].includes(lockedCampaign.status)) {
-        return { kind: "error" as const, status: 409, message: "Only draft, paused, or campaigns completed with errors can be edited" };
+       if (!["draft", "paused", "completed", "completed_with_errors"].includes(lockedCampaign.status)) {
+         return { kind: "error" as const, status: 409, message: "Only draft, paused, or completed campaigns can be edited" };
       }
 
       await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${lockedCampaign.id} FOR UPDATE`);
@@ -2006,11 +2006,11 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         }
       }
 
-      // A completed-with-errors campaign is the user's fast recovery path:
+       // A completed campaign is the user's fast recovery path:
       // preserve confirmed sends above, rebuild only the failed/review work,
       // and queue the remaining deliveries using the newly selected schedule.
-      const reopeningFailedCampaign = lockedCampaign.status === "completed_with_errors";
-      const nextStatus = reopeningFailedCampaign
+       const reopeningCompletedCampaign = ["completed", "completed_with_errors"].includes(lockedCampaign.status);
+       const nextStatus = reopeningCompletedCampaign
         ? (targetRows.length > 0 ? "queued" : "completed")
         : lockedCampaign.status;
       const [campaign] = await tx.update(campaignsTable).set({

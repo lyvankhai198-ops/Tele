@@ -43,6 +43,7 @@ export interface Campaign {
   targetCount: number;
   sentCount: number;
   failedCount: number;
+  completedCount: number;
   dailyQuota: CampaignDailyQuota;
   destinationIds: string[];
   errors: CampaignTargetError[];

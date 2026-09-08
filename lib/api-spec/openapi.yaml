@@ -1525,7 +1525,7 @@ components:
         sourceMessageId: { type: ["string", "null"] }
     Campaign:
       type: object
-      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, cloneMode, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, dailyQuota, destinationIds, errors]
+      required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, cloneMode, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, completedCount, dailyQuota, destinationIds, errors]
       properties:
         id: { type: string }
         name: { type: string }
@@ -1550,6 +1550,7 @@ components:
         targetCount: { type: number }
         sentCount: { type: number }
         failedCount: { type: number }
+        completedCount: { type: number }
         dailyQuota: { $ref: "#/components/schemas/CampaignDailyQuota" }
         destinationIds:
           type: array
@@ -1798,7 +1799,7 @@ components:
       required: [id, kind, level, title, body, titleEn, bodyEn, href, isRead, createdAt]
       properties:
         id: { type: string }
-        kind: { type: string, enum: [admin, subscription] }
+        kind: { type: string, enum: [admin, subscription, campaign] }
         level: { type: string, enum: [info, warning, success] }
         title: { type: string }
         body: { type: string }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, Check, CheckCheck, KeyRound, Megaphone } from "lucide-react";
+import { Bell, Check, CheckCheck, CircleCheck, KeyRound, Megaphone } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
@@ -21,6 +21,7 @@ const copy = {
     marked: "Đã đọc",
     admin: "Thông báo từ Admin",
     subscription: "Nhắc gia hạn key",
+    campaign: "Chiến dịch hoàn tất",
   },
   en: {
     label: "Notifications",
@@ -30,6 +31,7 @@ const copy = {
     marked: "Read",
     admin: "Admin announcement",
     subscription: "Renewal reminder",
+    campaign: "Campaign completed",
   },
 } as const;
 
@@ -43,6 +45,8 @@ function formatDate(value: string, language: "vi" | "en") {
 function NotificationIcon({ kind }: { kind: UserNotification["kind"] }) {
   return kind === "subscription"
     ? <KeyRound className="h-4 w-4" />
+    : kind === "campaign"
+      ? <CircleCheck className="h-4 w-4" />
     : <Megaphone className="h-4 w-4" />;
 }
 
@@ -188,7 +192,11 @@ export function UserNotificationBell() {
                     data-testid={`user-notification-${notification.id}`}
                   >
                     <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-                      notification.kind === "subscription" ? "bg-[#fff7ed] text-[#ea580c]" : "bg-[#eef2ff] text-[#1d4ed8]"
+                       notification.kind === "subscription"
+                         ? "bg-[#fff7ed] text-[#ea580c]"
+                         : notification.kind === "campaign"
+                           ? "bg-[#ecfdf5] text-[#047857]"
+                           : "bg-[#eef2ff] text-[#1d4ed8]"
                     }`}>
                       <NotificationIcon kind={notification.kind} />
                     </span>
@@ -201,7 +209,13 @@ export function UserNotificationBell() {
                          className="mt-1 block max-h-10 overflow-hidden text-[12px] font-medium leading-5 text-[#64748b]"
                          style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
                        >
-                         {body || (notification.kind === "subscription" ? text.subscription : text.admin)}
+                          {body || (
+                            notification.kind === "subscription"
+                              ? text.subscription
+                              : notification.kind === "campaign"
+                                ? text.campaign
+                                : text.admin
+                          )}
                        </span>
                       <span className="mt-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-[#94a3b8]">
                         {formatDate(notification.createdAt, language)}

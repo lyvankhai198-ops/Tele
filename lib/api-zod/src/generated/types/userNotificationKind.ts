@@ -12,4 +12,5 @@ export type UserNotificationKind = typeof UserNotificationKind[keyof typeof User
 export const UserNotificationKind = {
   admin: 'admin',
   subscription: 'subscription',
+  campaign: 'campaign',
 } as const;
