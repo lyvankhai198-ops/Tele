@@ -1,21 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AuthCaptcha } from "@workspace/api-client-react";
+import type { AuthCaptcha, SupportSession } from "@workspace/api-client-react";
 import { localizedErrorMessage, type Language } from "@/lib/i18n";
 
 export type AuthUser = {
   id: string;
   username: string;
   role: "user" | "admin";
+  support: SupportSession | null;
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
+  refresh: () => Promise<void>;
   getCaptcha: () => Promise<AuthCaptcha>;
   register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
   login: (username: string, password: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
   logout: () => Promise<void>;
+  exitSupport: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -109,9 +112,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient]);
 
+  const exitSupport = useCallback(async () => {
+    try {
+      await authRequest<void>("/support/exit", currentLanguage(), { method: "POST" });
+    } finally {
+      queryClient.clear();
+      await refresh();
+    }
+  }, [queryClient, refresh]);
+
   const value = useMemo(
-    () => ({ user, isLoading, getCaptcha, register, login, logout }),
-    [getCaptcha, isLoading, login, logout, register, user],
+    () => ({ user, isLoading, refresh, getCaptcha, register, login, logout, exitSupport }),
+    [exitSupport, getCaptcha, isLoading, login, logout, refresh, register, user],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

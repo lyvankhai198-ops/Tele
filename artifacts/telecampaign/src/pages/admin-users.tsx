@@ -19,6 +19,7 @@ import {
   useGetAdminUser,
   useUpdateAdminUserSubscription,
   useUpdateAdminUserQuota,
+  useStartAdminUserSupportSession,
   getGetAdminOverviewQueryKey,
   getGetAdminUserQueryKey,
   getListAdminUsersQueryKey,
@@ -26,6 +27,7 @@ import {
   type AdminUser,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 import { Users, Search, Filter, ShieldAlert, CheckCircle2, ChevronRight, Activity, AlertTriangle } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -143,6 +145,7 @@ export default function AdminUsersPage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { language } = useLanguage();
+  const { refresh } = useAuth();
   const text = copy[language];
 
   const [search, setSearch] = useState("");
@@ -183,9 +186,28 @@ export default function AdminUsersPage() {
 
   const updateMutation = useUpdateAdminUserSubscription();
   const quotaMutation = useUpdateAdminUserQuota();
+  const supportMutation = useStartAdminUserSupportSession();
+  const [startingSupportUserId, setStartingSupportUserId] = useState<string | null>(null);
   const [formQuotaExemptFrom, setFormQuotaExemptFrom] = useState("");
   const [formQuotaExemptUntil, setFormQuotaExemptUntil] = useState("");
   const modalUser = selectedUser ?? editingUser;
+
+  const handleStartSupport = async (user: AdminUser) => {
+    setStartingSupportUserId(user.id);
+    try {
+      await supportMutation.mutateAsync({ userId: user.id });
+      queryClient.clear();
+      await refresh();
+      setLocation("/dashboard");
+    } catch (cause) {
+      setToastMessage({
+        text: localizedErrorMessage(cause, language, text.loadError),
+        isError: true,
+      });
+    } finally {
+      setStartingSupportUserId(null);
+    }
+  };
 
   const handleOpenEdit = (user: AdminUser) => {
     setEditingUser(user);
@@ -401,11 +423,12 @@ export default function AdminUsersPage() {
                         {text.updateAction}
                       </button>
                       <button
-                        onClick={() => setLocation(`/admin/users/${user.id}/support`)}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border-transparent bg-[#1a2b88] px-3 py-1.5 text-[12px] font-extrabold text-white hover:bg-[#152473] transition-all shadow-sm"
+                        onClick={() => void handleStartSupport(user)}
+                        disabled={startingSupportUserId === user.id}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border-transparent bg-[#1a2b88] px-3 py-1.5 text-[12px] font-extrabold text-white hover:bg-[#152473] transition-all shadow-sm disabled:cursor-wait disabled:opacity-60"
                         data-testid={`btn-support-${user.id}`}
                       >
-                        {text.supportAction}
+                        {startingSupportUserId === user.id ? "Đang mở..." : text.supportAction}
                         <ChevronRight className="h-3.5 w-3.5 opacity-70" />
                       </button>
                     </div>

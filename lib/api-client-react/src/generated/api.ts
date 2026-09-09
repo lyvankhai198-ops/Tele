@@ -87,6 +87,7 @@ import type {
   RegistrationInput,
   RevokeSessionsResult,
   Subscription,
+  SupportSession,
   SupportSettingsResponse,
   SyncResult,
   SystemDefaults,
@@ -683,6 +684,71 @@ export function useGetAuthUser<TData = Awaited<ReturnType<typeof getAuthUser>>, 
 
 
 
+
+export const getExitSupportSessionUrl = () => {
+
+
+
+
+  return `/api/auth/support/exit`
+}
+
+export const exitSupportSession = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getExitSupportSessionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getExitSupportSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exitSupportSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exitSupportSession>>, TError,void, TContext> => {
+
+const mutationKey = ['exitSupportSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exitSupportSession>>, void> = () => {
+
+
+          return  exitSupportSession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExitSupportSessionMutationResult = NonNullable<Awaited<ReturnType<typeof exitSupportSession>>>
+
+    export type ExitSupportSessionMutationError = ErrorType<unknown>
+
+    export const useExitSupportSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exitSupportSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exitSupportSession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getExitSupportSessionMutationOptions(options));
+    }
 
 export const getMigrateLegacyAuthOwnerUrl = () => {
 
@@ -5603,6 +5669,71 @@ export function useGetAdminUserSupport<TData = Awaited<ReturnType<typeof getAdmi
 
 
 
+
+export const getStartAdminUserSupportSessionUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/users/${userId}/support-session`
+}
+
+export const startAdminUserSupportSession = async (userId: string, options?: Parameters<typeof customFetch>[1]): Promise<SupportSession> => {
+
+  return customFetch<SupportSession>(getStartAdminUserSupportSessionUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartAdminUserSupportSessionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startAdminUserSupportSession>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startAdminUserSupportSession>>, TError,{userId: string}, TContext> => {
+
+const mutationKey = ['startAdminUserSupportSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startAdminUserSupportSession>>, {userId: string}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  startAdminUserSupportSession(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartAdminUserSupportSessionMutationResult = NonNullable<Awaited<ReturnType<typeof startAdminUserSupportSession>>>
+
+    export type StartAdminUserSupportSessionMutationError = ErrorType<void>
+
+    export const useStartAdminUserSupportSession = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startAdminUserSupportSession>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startAdminUserSupportSession>>,
+        TError,
+        {userId: string},
+        TContext
+      > => {
+      return useMutation(getStartAdminUserSupportSessionMutationOptions(options));
+    }
 
 export const getCloneAdminUserCampaignUrl = (userId: string,
     campaignId: string,) => {

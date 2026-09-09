@@ -6,9 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AuthUserRole } from './authUserRole';
+import type { SupportSession } from './supportSession';
 
 export interface AuthUser {
   id: string;
   username: string;
   role: AuthUserRole;
+  /** @nullable */
+  support: SupportSession | null;
 }

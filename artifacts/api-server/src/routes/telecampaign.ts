@@ -133,7 +133,7 @@ const notificationMediaStorage = new NotificationMediaStorage();
 const sendError = (res: any, status: number, error: string) => {
   res.status(status).json({ error });
 };
-const currentUserId = (req: any): string => req.userId;
+const currentUserId = (req: any): string => req.workspaceUserId ?? req.userId;
 const normalizePhone = (phone: string) => phone.trim().replace(/[\s-]/g, "");
 const maskPhone = (phone: string) => `••••${phone.slice(-4)}`;
 const revokedTelegramSessionMessage = "Phiên Telegram đã hết hiệu lực. Hãy vào mục Tài khoản Telegram và bấm Xác minh để đăng nhập lại.";
@@ -518,11 +518,18 @@ async function completeDevelopmentDemoLogin(input: {
 }
 
 router.use(requireAuth);
+router.use((req, res, next): void => {
+  if (req.supportSession && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    res.status(403).json({ error: "Phiên hỗ trợ đang ở chế độ chỉ xem." });
+    return;
+  }
+  next();
+});
 
 router.get("/notifications", async (req, res): Promise<void> => {
   const result = await listUserNotifications({
     userId: currentUserId(req),
-    includeSubscriptionReminder: req.authUser?.role !== "admin",
+    includeSubscriptionReminder: req.authUser?.role !== "admin" || Boolean(req.supportSession),
     limit: 20,
   });
   res.json(ListUserNotificationsResponse.parse(result));
@@ -531,7 +538,7 @@ router.get("/notifications", async (req, res): Promise<void> => {
 router.post("/notifications/read-all", async (req, res): Promise<void> => {
   const markedCount = await markAllUserNotificationsRead({
     userId: currentUserId(req),
-    includeSubscriptionReminder: req.authUser?.role !== "admin",
+    includeSubscriptionReminder: req.authUser?.role !== "admin" || Boolean(req.supportSession),
   });
   res.json(MarkAllUserNotificationsReadResponse.parse({ markedCount }));
 });
@@ -542,7 +549,7 @@ router.post("/notifications/:notificationId/read", async (req, res): Promise<voi
   const notification = await markUserNotificationRead({
     userId: currentUserId(req),
     notificationId: params.data.notificationId,
-    includeSubscriptionReminder: req.authUser?.role !== "admin",
+    includeSubscriptionReminder: req.authUser?.role !== "admin" || Boolean(req.supportSession),
   });
   if (!notification) return void sendError(res, 404, "Không tìm thấy thông báo.");
   res.json(MarkUserNotificationReadResponse.parse(notification));
@@ -646,7 +653,7 @@ function planMeetsGroupLibraryMinimum(
 async function requireGroupLibrarySubscription(req: any, res: any, next: any): Promise<void> {
   // Administrators retain access to the directory even when their own
   // subscription has expired.
-  if (req.authUser?.role === "admin") {
+  if (req.authUser?.role === "admin" && !req.supportSession) {
     next();
     return;
   }
@@ -655,7 +662,7 @@ async function requireGroupLibrarySubscription(req: any, res: any, next: any): P
 
 router.get("/group-library/access", async (req, res): Promise<void> => {
   const settings = await getSystemSettings();
-  const isAdmin = req.authUser?.role === "admin";
+  const isAdmin = req.authUser?.role === "admin" && !req.supportSession;
   if (isAdmin) {
     res.json(GetGroupLibraryAccessResponse.parse({
       visible: settings.groupLibraryVisibleToUsers,
@@ -681,7 +688,7 @@ router.get("/group-library/access", async (req, res): Promise<void> => {
 
 router.get("/group-library", requireGroupLibrarySubscription, async (req, res): Promise<void> => {
   const settings = await getSystemSettings();
-  const isAdmin = req.authUser?.role === "admin";
+  const isAdmin = req.authUser?.role === "admin" && !req.supportSession;
   if (!isAdmin && !settings.groupLibraryVisibleToUsers) {
     return void sendError(res, 403, "Thư viện nhóm hiện không khả dụng cho người dùng.");
   }
@@ -735,7 +742,7 @@ router.use(requireActiveSubscription);
 router.get("/storage/admin-notifications/:notificationId/media", async (req, res): Promise<void> => {
   const [notification] = await db.select().from(adminNotificationsTable)
     .where(eq(adminNotificationsTable.id, req.params.notificationId)).limit(1);
-  if (!notification?.mediaPath || (!isNotificationActive(notification) && req.authUser?.role !== "admin")) {
+  if (!notification?.mediaPath || (!isNotificationActive(notification) && (req.authUser?.role !== "admin" || req.supportSession))) {
     sendError(res, 404, "Media không tồn tại.");
     return;
   }

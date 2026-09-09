@@ -43,7 +43,12 @@ export const RegisterAuthBody = zod.object({
 export const RegisterAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
-  "role": zod.enum(['user', 'admin'])
+  "role": zod.enum(['user', 'admin']),
+  "support": zod.object({
+  "targetUserId": zod.string(),
+  "targetUsername": zod.string(),
+  "expiresAt": zod.coerce.date()
+}).nullable()
 })
 
 
@@ -67,7 +72,12 @@ export const LoginAuthBody = zod.object({
 export const LoginAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
-  "role": zod.enum(['user', 'admin'])
+  "role": zod.enum(['user', 'admin']),
+  "support": zod.object({
+  "targetUserId": zod.string(),
+  "targetUsername": zod.string(),
+  "expiresAt": zod.coerce.date()
+}).nullable()
 })
 
 
@@ -116,8 +126,16 @@ export const RevokeOtherAuthSessionsResponse = zod.object({
 export const GetAuthUserResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
-  "role": zod.enum(['user', 'admin'])
+  "role": zod.enum(['user', 'admin']),
+  "support": zod.object({
+  "targetUserId": zod.string(),
+  "targetUsername": zod.string(),
+  "expiresAt": zod.coerce.date()
+}).nullable()
 })
+
+
+export const ExitSupportSessionResponse = zod.void()
 
 
 export const migrateLegacyAuthOwnerHeaderXAuthMigrationTokenMin = 32;
@@ -2450,6 +2468,17 @@ export const GetAdminUserSupportResponse = zod.object({
   "accountId": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
+})
+
+
+export const StartAdminUserSupportSessionParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const StartAdminUserSupportSessionResponse = zod.object({
+  "targetUserId": zod.string(),
+  "targetUsername": zod.string(),
+  "expiresAt": zod.coerce.date()
 })
 
 

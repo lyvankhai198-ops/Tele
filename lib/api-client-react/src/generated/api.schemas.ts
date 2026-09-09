@@ -17,10 +17,18 @@ export const AuthUserRole = {
   admin: 'admin',
 } as const;
 
+export interface SupportSession {
+  targetUserId: string;
+  targetUsername: string;
+  expiresAt: string;
+}
+
 export interface AuthUser {
   id: string;
   username: string;
   role: AuthUserRole;
+  /** @nullable */
+  support: SupportSession | null;
 }
 
 export interface RegistrationInput {

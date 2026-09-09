@@ -8,18 +8,22 @@ import {
   type SafeAuthUser,
 } from "../lib/auth";
 import { getSubscription } from "../lib/subscriptions";
+import { resolveSupportSession, SUPPORT_COOKIE_NAME, type SupportContext } from "../lib/support-session";
 
 declare global {
   namespace Express {
     interface Request {
       authUser?: SafeAuthUser;
       userId?: string;
+      workspaceUserId?: string;
+      supportSession?: SupportContext;
+      supportSessionInvalid?: boolean;
       isAuthenticated: () => boolean;
     }
   }
 }
 
-export async function authMiddleware(req: Request, _res: Response, next: NextFunction): Promise<void> {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   req.isAuthenticated = () => Boolean(req.authUser);
   const token = req.cookies?.[SESSION_COOKIE_NAME];
   if (typeof token !== "string" || !token) {
@@ -32,6 +36,24 @@ export async function authMiddleware(req: Request, _res: Response, next: NextFun
     if (user) {
       req.authUser = user;
       req.userId = user.id;
+      const supportToken = req.cookies?.[SUPPORT_COOKIE_NAME];
+      if (typeof supportToken === "string" && supportToken) {
+        const support = user.role === "admin"
+          ? await resolveSupportSession(supportToken, user.id)
+          : null;
+        if (support) {
+          req.supportSession = support;
+          req.workspaceUserId = support.targetUserId;
+        } else {
+          req.supportSessionInvalid = true;
+          res.clearCookie(SUPPORT_COOKIE_NAME, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/",
+          });
+        }
+      }
     }
   } catch (error) {
     req.log.error({ err: error }, "Unable to resolve authentication session");
@@ -56,10 +78,18 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     res.status(403).json({ error: "Bạn không có quyền quản trị." });
     return;
   }
+  if (req.supportSession) {
+    res.status(403).json({ error: "Không thể mở khu vực quản trị trong phiên hỗ trợ." });
+    return;
+  }
   next();
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (req.supportSessionInvalid) {
+    res.status(401).json({ error: "Support session has expired" });
+    return;
+  }
   if (!req.authUser || !req.userId) {
     res.status(401).json({ error: "Authentication is required" });
     return;
@@ -84,6 +114,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 }
 
 export async function requireActiveSubscription(req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (req.supportSession) {
+    next();
+    return;
+  }
   if (!req.userId) {
     res.status(401).json({ error: "Authentication is required" });
     return;

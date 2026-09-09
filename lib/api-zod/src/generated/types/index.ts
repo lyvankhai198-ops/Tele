@@ -139,6 +139,7 @@ export * from './registrationInput';
 export * from './revokeSessionsResult';
 export * from './subscription';
 export * from './subscriptionStatus';
+export * from './supportSession';
 export * from './supportSettings';
 export * from './supportSettingsResponse';
 export * from './syncResult';

@@ -100,6 +100,16 @@ export const authSessionsTable = pgTable("auth_sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const supportSessionsTable = pgTable("support_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  adminUserId: uuid("admin_user_id").notNull().references(() => appUsersTable.id, { onDelete: "cascade" }),
+  targetUserId: uuid("target_user_id").notNull().references(() => appUsersTable.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const destinationsTable = pgTable("destinations", {
   id: uuid("id").primaryKey().defaultRandom(),
   accountId: uuid("account_id").notNull().references(() => telegramAccountsTable.id, { onDelete: "cascade" }),

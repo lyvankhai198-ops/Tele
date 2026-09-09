@@ -124,6 +124,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AuthUser" }
         "401": { description: Authentication is required }
+  /auth/support/exit:
+    post:
+      operationId: exitSupportSession
+      tags: [auth]
+      responses:
+        "204": { description: Support session ended }
   /auth/legacy-owner-mappings:
     post:
       operationId: migrateLegacyAuthOwner
@@ -1182,6 +1188,22 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: User not found }
         "400": { description: Invalid user identifier }
+  /admin/users/{userId}/support-session:
+    post:
+      operationId: startAdminUserSupportSession
+      tags: [admin]
+      parameters:
+        - { $ref: "#/components/parameters/AdminUserId" }
+      responses:
+        "200":
+          description: Read-only support session started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportSession" }
+        "400": { description: Invalid user identifier or self-support request }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: User not found }
   /admin/users/{userId}/campaigns/{campaignId}/clone:
     post:
       operationId: cloneAdminUserCampaign
@@ -1342,11 +1364,21 @@ components:
         - status
     AuthUser:
       type: object
-      required: [id, username, role]
+      required: [id, username, role, support]
       properties:
         id: { type: string }
         username: { type: string }
         role: { type: string, enum: [user, admin] }
+        support:
+          type: ["object", "null"]
+          $ref: "#/components/schemas/SupportSession"
+    SupportSession:
+      type: object
+      required: [targetUserId, targetUsername, expiresAt]
+      properties:
+        targetUserId: { type: string }
+        targetUsername: { type: string }
+        expiresAt: { type: string, format: date-time }
     RegistrationInput:
       type: object
       required: [username, password, confirmPassword, captchaChallengeId, captchaCode]

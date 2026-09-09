@@ -85,7 +85,8 @@ export function AppLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [location, setLocation] = useLocation();
   const { language, setLanguage, t } = useLanguage();
-  const { user, logout } = useAuth();
+  const { user, logout, exitSupport } = useAuth();
+  const isSupportMode = Boolean(user?.support);
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const systemDefaults = useGetSystemDefaults();
   const isAdminSection = location === "/admin" || location.startsWith("/admin/");
@@ -94,7 +95,7 @@ export function AppLayout({
     {
       query: {
         queryKey: getListAdminSystemEventsQueryKey({ range: "all", limit: 1 }),
-        enabled: isAdminSection && user?.role === "admin",
+        enabled: isAdminSection && user?.role === "admin" && !isSupportMode,
         staleTime: 30_000,
       },
     },
@@ -116,6 +117,11 @@ export function AppLayout({
   }
 
   async function signOut() {
+    if (isSupportMode) {
+      await exitSupport();
+      setLocation("/admin/users", { replace: true });
+      return;
+    }
     await logout();
     setLocation("/login", { replace: true });
   }
@@ -140,7 +146,7 @@ export function AppLayout({
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
           {navigation.filter((item) => (
-            (!item.adminOnly || user?.role === "admin")
+            (!item.adminOnly || (user?.role === "admin" && !isSupportMode))
             && (!item.groupLibraryOnly || groupLibraryAccess.data?.visible)
           )).map((item) => {
             const Icon = item.icon;
@@ -218,7 +224,7 @@ export function AppLayout({
              <div className="flex items-center gap-3 sm:gap-4">
               {headerAction}
                 <UserNotificationBell />
-               {isAdminSection && user?.role === "admin" && (
+               {isAdminSection && user?.role === "admin" && !isSupportMode && (
                  <button
                    type="button"
                    onClick={() => setLocation("/admin/system-events")}
@@ -239,7 +245,7 @@ export function AppLayout({
                    )}
                  </button>
                )}
-              {!hideUpgrade && <button
+              {!hideUpgrade && !isSupportMode && <button
                 onClick={() => setLocation("/upgrade")}
                  className={`bg-[#1a2b88] hover:bg-[#152473] text-white text-[13px] font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${nationalDayThemeActive ? "national-day-upgrade" : ""}`}
                 data-testid="header-upgrade"
@@ -280,6 +286,38 @@ export function AppLayout({
           </section>
         )}
         
+        {isSupportMode && user?.support && (
+          <section
+            className="border-b border-[#f2c98b] bg-[#fff8e8] px-4 py-3 text-[#7a4b08] sm:px-6 lg:px-8"
+            role="status"
+            data-testid="support-mode-banner"
+          >
+            <div className="mx-auto flex max-w-[1440px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <LifeBuoy className="mt-0.5 h-5 w-5 shrink-0 text-[#b7791f]" aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold">
+                    {language === "vi" ? "Đang hỗ trợ tài khoản" : "Supporting account"} @{user.support.targetUsername}
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium text-[#956c2c]">
+                    {language === "vi"
+                      ? "Chế độ chỉ xem. Phiên hỗ trợ sẽ tự hết hạn."
+                      : "Read-only mode. This support session expires automatically."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[#e3b96f] bg-white px-3.5 py-2 text-xs font-extrabold text-[#7a4b08] transition hover:bg-[#fff1cc]"
+                data-testid="exit-support"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                {language === "vi" ? "Kết thúc hỗ trợ" : "End support"}
+              </button>
+            </div>
+          </section>
+        )}
         {banner}
         
         <div className={`flex-1 p-4 sm:p-6 lg:p-8 ${nationalDayThemeActive ? "national-day-content" : ""}`}>

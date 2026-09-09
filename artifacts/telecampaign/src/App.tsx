@@ -483,7 +483,7 @@ function WorkspaceRoute({ children }: { children: ReactNode }) {
     );
   }
   if (!user) return <Redirect to="/login" replace />;
-  return <SubscriptionGate>{children}</SubscriptionGate>;
+  return user.support ? <>{children}</> : <SubscriptionGate>{children}</SubscriptionGate>;
 }
 
 function SubscriptionGate({ children }: { children: ReactNode }) {
@@ -543,6 +543,7 @@ function AdminRoute({ children }: { children: ReactNode }) {
         <LoaderCircle className="h-6 w-6 animate-spin text-[#65b8f8]" />
       </main>
     );
+  if (user?.support) return <Redirect to="/dashboard" replace />;
   return user?.role === 'admin' ? <LanguageOverride language="vi">{children}</LanguageOverride> : <Redirect to="/dashboard" replace />;
 }
 

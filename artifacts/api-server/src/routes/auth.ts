@@ -28,6 +28,11 @@ import {
   validateUsername,
   verifyPassword,
 } from "../lib/auth";
+import {
+  revokeSupportSession,
+  SUPPORT_COOKIE_NAME,
+  supportSessionCookieOptions,
+} from "../lib/support-session";
 import { requireSession } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
 import { recordActivity } from "../lib/activity";
@@ -176,6 +181,19 @@ function clearSessionCookie(res: any): void {
   });
 }
 
+function clearSupportCookie(res: any): void {
+  res.clearCookie(SUPPORT_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
+}
+
+function authUserResponse(user: Awaited<ReturnType<typeof resolveAuthenticatedUser>>): typeof user & { support: null } {
+  return { ...user, support: null };
+}
+
 function isUniqueViolation(error: unknown): boolean {
   let current = error;
   for (let depth = 0; depth < 3 && current && typeof current === "object"; depth += 1) {
@@ -271,8 +289,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       level: "success",
       metadata: { ip: req.ip ?? null },
     });
+    clearSupportCookie(res);
     setSessionCookie(res, token);
-    res.status(201).json(RegisterAuthResponse.parse(authenticatedUser));
+    res.status(201).json(RegisterAuthResponse.parse(authUserResponse(authenticatedUser)));
   } catch (error) {
     if (isUniqueViolation(error)) {
       res.status(409).json({ error: "Tên đăng nhập đã tồn tại" });
@@ -347,8 +366,9 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     level: "success",
     metadata: { ip: req.ip ?? null },
   });
+  clearSupportCookie(res);
   setSessionCookie(res, token);
-  res.json(LoginAuthResponse.parse(authenticatedUser));
+  res.json(LoginAuthResponse.parse(authUserResponse(authenticatedUser)));
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
@@ -356,7 +376,32 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
   if (typeof token === "string" && token) {
     await invalidateSession(token);
   }
+  const supportToken = req.cookies?.[SUPPORT_COOKIE_NAME];
+  if (typeof supportToken === "string" && supportToken && req.userId) {
+    await revokeSupportSession(supportToken, req.userId);
+  }
+  clearSupportCookie(res);
   clearSessionCookie(res);
+  res.sendStatus(204);
+});
+
+router.post("/auth/support/exit", async (req, res): Promise<void> => {
+  const token = req.cookies?.[SUPPORT_COOKIE_NAME];
+  if (typeof token === "string" && token && req.userId) {
+    if (req.supportSession) {
+      await recordAuthActivityBestEffort(req, {
+        ownerUserId: req.userId,
+        event: "admin.support_ended",
+        level: "info",
+        message: `Ended a read-only support session for user ${req.supportSession.targetUsername}`,
+        metadata: {
+          targetUserId: req.supportSession.targetUserId,
+        },
+      });
+    }
+    await revokeSupportSession(token, req.userId);
+  }
+  clearSupportCookie(res);
   res.sendStatus(204);
 });
 
@@ -515,7 +560,16 @@ router.post("/auth/revoke-other-sessions", requireSession, async (req, res): Pro
 });
 
 router.get("/auth/me", requireSession, (req, res): void => {
-  res.json(GetAuthUserResponse.parse(req.authUser));
+  res.json(GetAuthUserResponse.parse({
+    ...req.authUser,
+    support: req.supportSession
+      ? {
+        targetUserId: req.supportSession.targetUserId,
+        targetUsername: req.supportSession.targetUsername,
+        expiresAt: req.supportSession.expiresAt,
+      }
+      : null,
+  }));
 });
 
 router.post("/auth/legacy-owner-mappings", requireSession, async (req, res): Promise<void> => {

@@ -16,6 +16,7 @@ import {
   GetAdminUserSupportResponse,
   GetAdminUserSupportCampaignTargetsQueryParams,
   GetAdminUserSupportCampaignTargetsResponse,
+  StartAdminUserSupportSessionResponse,
   CloneAdminUserCampaignParams,
   CloneAdminUserCampaignBody,
   CloneAdminUserCampaignResponse,
@@ -114,6 +115,7 @@ import {
   NotificationMediaUploadError,
 } from "../lib/notificationMediaStorage";
 import { getStorageStatus } from "../lib/storage-status";
+import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
 import {
   listAdminSystemEvents,
   markAdminSystemEventRead,
@@ -491,6 +493,41 @@ router.get("/admin/users/:userId/support", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetAdminUserSupportResponse.parse(support));
+});
+
+router.post("/admin/users/:userId/support-session", async (req, res): Promise<void> => {
+  const parsed = GetAdminUserParams.safeParse(req.params);
+  if (!parsed.success) {
+    sendError(res, 400, "Người dùng không hợp lệ.");
+    return;
+  }
+  if (parsed.data.userId === req.userId) {
+    sendError(res, 400, "Admin không thể tự mở phiên hỗ trợ cho chính mình.");
+    return;
+  }
+  const [target] = await db
+    .select({ id: appUsersTable.id })
+    .from(appUsersTable)
+    .where(eq(appUsersTable.id, parsed.data.userId))
+    .limit(1);
+  if (!target) {
+    sendError(res, 404, "Không tìm thấy người dùng.");
+    return;
+  }
+
+  const { token, context } = await createSupportSession(req.userId!, parsed.data.userId);
+  res.cookie(SUPPORT_COOKIE_NAME, token, supportSessionCookieOptions());
+  await recordActivity({
+    ownerUserId: req.userId!,
+    event: "admin.support_started",
+    level: "info",
+    message: `Started a read-only support session for user ${context.targetUsername}`,
+    metadata: {
+      targetUserId: context.targetUserId,
+      expiresAt: context.expiresAt.toISOString(),
+    },
+  });
+  res.json(StartAdminUserSupportSessionResponse.parse(context));
 });
 
 router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
