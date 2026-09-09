@@ -537,8 +537,10 @@ router.use((req, res, next): void => {
       "roundDelayMinSeconds",
       "roundDelayMaxSeconds",
     ].includes(key));
-  if (req.supportSession && !isCampaignDetailsEdit && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-    res.status(403).json({ error: "Phiên hỗ trợ chỉ cho phép chỉnh sửa thông tin chiến dịch." });
+  const isGroupSync = req.method === "POST"
+    && /^\/telegram\/accounts\/[^/]+\/sync$/.test(req.path);
+  if (req.supportSession && !isCampaignDetailsEdit && !isGroupSync && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    res.status(403).json({ error: "Phiên hỗ trợ chỉ cho phép chỉnh sửa campaign và đồng bộ nhóm." });
     return;
   }
   next();

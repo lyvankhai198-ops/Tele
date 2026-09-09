@@ -301,8 +301,8 @@ export function AppLayout({
                   </p>
                   <p className="mt-0.5 text-xs font-medium text-[#956c2c]">
                     {language === "vi"
-                      ? "Có thể chỉnh sửa thông tin chiến dịch; các thao tác chạy, dừng, xóa và quản trị vẫn bị khóa."
-                      : "Campaign details can be edited; run, pause, delete, and admin actions remain locked."}
+                      ? "Có thể chỉnh sửa campaign và đồng bộ nhóm; các thao tác chạy, dừng, xóa và quản trị vẫn bị khóa."
+                      : "Campaigns can be edited and groups synced; run, pause, delete, and admin actions remain locked."}
                   </p>
                 </div>
               </div>
