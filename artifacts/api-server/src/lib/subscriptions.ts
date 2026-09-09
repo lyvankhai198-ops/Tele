@@ -100,6 +100,23 @@ export function canRedeemLicensePlan(
   return PLAN_ORDER.indexOf(licensePlan) > PLAN_ORDER.indexOf(currentPlan);
 }
 
+export function calculateLicenseActivationExpiry(input: {
+  currentPlan: PlanCode | null;
+  currentExpiresAt: Date | null | undefined;
+  licensePlan: PlanCode;
+  durationDays: number;
+  now: Date;
+}): Date {
+  const isPlanUpgrade = input.currentPlan !== null
+    && PLAN_ORDER.indexOf(input.licensePlan) > PLAN_ORDER.indexOf(input.currentPlan);
+  const retainedUntil = !isPlanUpgrade
+    && input.currentExpiresAt
+    && input.currentExpiresAt > input.now
+    ? input.currentExpiresAt.getTime()
+    : input.now.getTime();
+  return new Date(retainedUntil + input.durationDays * DAY_MS);
+}
+
 export function planAccountLimit(plan: PlanCode, catalog: PlanCatalog = PLAN_CATALOG): number | null {
   const item = catalog.find((entry) => entry.code === plan);
   return item ? item.accountLimit : 1;
@@ -678,8 +695,13 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
     }).where(and(eq(licenseKeysTable.id, license.id), isNull(licenseKeysTable.claimedAt), isNull(licenseKeysTable.revokedAt))).returning();
     if (!claimed) return { ok: false as const, reason: "invalid_or_used" as const };
 
-    const retainedUntil = current?.expiresAt && current.expiresAt > now ? current.expiresAt.getTime() : now.getTime();
-    const nextExpiresAt = new Date(retainedUntil + license.durationDays * DAY_MS);
+    const nextExpiresAt = calculateLicenseActivationExpiry({
+      currentPlan,
+      currentExpiresAt: current?.expiresAt,
+      licensePlan: license.plan,
+      durationDays: license.durationDays,
+      now,
+    });
     const values = {
       plan: license.plan,
       startedAt: now,

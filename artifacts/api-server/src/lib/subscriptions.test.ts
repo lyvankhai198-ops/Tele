@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
-import { canRedeemLicensePlan, isActiveUnclaimedPlusTrial, TRIAL_DURATION_DAYS } from "./subscriptions";
+import {
+  calculateLicenseActivationExpiry,
+  canRedeemLicensePlan,
+  isActiveUnclaimedPlusTrial,
+  TRIAL_DURATION_DAYS,
+} from "./subscriptions";
 
 const now = new Date("2026-08-27T05:00:00.000Z");
 const trialStartedAt = new Date(now.getTime() - 19 * 60 * 60 * 1000);
@@ -55,5 +60,28 @@ assert.equal(canRedeemLicensePlan("plus", "plus", false), false);
 assert.equal(canRedeemLicensePlan(null, "plus", false), true);
 assert.equal(canRedeemLicensePlan("plus", "pro", false), true);
 assert.equal(canRedeemLicensePlan("pro", "plus", false), false);
+
+const activePlusExpiresAt = new Date("2026-09-30T05:00:00.000Z");
+assert.equal(
+  calculateLicenseActivationExpiry({
+    currentPlan: "plus",
+    currentExpiresAt: activePlusExpiresAt,
+    licensePlan: "pro",
+    durationDays: 30,
+    now,
+  }).toISOString(),
+  "2026-09-26T05:00:00.000Z",
+);
+
+assert.equal(
+  calculateLicenseActivationExpiry({
+    currentPlan: "plus",
+    currentExpiresAt: activePlusExpiresAt,
+    licensePlan: "plus",
+    durationDays: 30,
+    now,
+  }).toISOString(),
+  "2026-10-30T05:00:00.000Z",
+);
 
 console.log("Trial PLUS activation policy checks passed.");
