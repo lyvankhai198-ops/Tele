@@ -519,8 +519,26 @@ async function completeDevelopmentDemoLogin(input: {
 
 router.use(requireAuth);
 router.use((req, res, next): void => {
-  if (req.supportSession && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-    res.status(403).json({ error: "Phiên hỗ trợ đang ở chế độ chỉ xem." });
+  const isCampaignDetailsEdit = req.method === "PATCH"
+    && /^\/campaigns\/[^/]+$/.test(req.path)
+    && req.body
+    && typeof req.body === "object"
+    && !Array.isArray(req.body)
+    && req.body.status === undefined
+    && Object.keys(req.body).length > 0
+    && Object.keys(req.body).every((key) => [
+      "name",
+      "telegramAccountId",
+      "templateId",
+      "destinationIds",
+      "scheduledAt",
+      "timezone",
+      "repeatCount",
+      "roundDelayMinSeconds",
+      "roundDelayMaxSeconds",
+    ].includes(key));
+  if (req.supportSession && !isCampaignDetailsEdit && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    res.status(403).json({ error: "Phiên hỗ trợ chỉ cho phép chỉnh sửa thông tin chiến dịch." });
     return;
   }
   next();

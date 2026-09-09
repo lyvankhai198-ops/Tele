@@ -25,6 +25,7 @@ import {
 } from "@workspace/api-client-react";
 import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
+import { useAuth } from "@/lib/auth";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { useLocation, useSearch } from "wouter";
 
@@ -347,6 +348,8 @@ function resumesAfterDailyQuota(campaign: Campaign) {
 // ---------------------------------------------------------------------------
 export default function Campaigns() {
   const { language } = useLanguage();
+  const { user } = useAuth();
+  const isSupportMode = Boolean(user?.support);
   const c = copy[language];
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
@@ -517,7 +520,7 @@ export default function Campaigns() {
 
   return (
     <AppLayout activePage="campaigns" title={c.pageTitle} hideUpgrade headerAction={
-      <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
+      !isSupportMode && <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
     }>
       <div className="mx-auto max-w-[900px]">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -577,7 +580,11 @@ export default function Campaigns() {
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2">
                         <button onClick={() => setDetails(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] text-[14px] font-extrabold text-[#0f172a] hover:bg-[#f8fafc]"><Eye className="h-[17px] w-[17px]" />{c.detailsBtn}</button>
-                        {isActive(campaign.status)
+                        {isSupportMode
+                          ? (campaign.status === "draft" || campaign.status === "paused" || campaign.status === "completed" || campaign.status === "completed_with_errors")
+                            ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
+                            : <span className="h-10" />
+                          : isActive(campaign.status)
                           ? <button onClick={() => void changeCampaignStatus(campaign, "paused")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f04444] text-[14px] font-extrabold text-white hover:bg-[#dc2626]"><CirclePause className="h-[17px] w-[17px]" />{c.pauseBtn}</button>
                           : campaign.status === "draft"
                              ? <div className="grid grid-cols-2 gap-2">
@@ -595,10 +602,12 @@ export default function Campaigns() {
                                ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
                             : <span className="h-10" />}
                       </div>
-                       <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
-                         {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
-                         {c.cloneBtn}
-                       </button>
+                        {!isSupportMode && (
+                          <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
+                            {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
+                            {c.cloneBtn}
+                          </button>
+                        )}
                        {campaign.cloneMode === "admin" && campaign.status === "draft" && (
                         <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
                           {c.clonedDraft}
@@ -609,7 +618,7 @@ export default function Campaigns() {
                            {c.userClonedDraft}
                          </p>
                        )}
-                      <button onClick={() => void remove(campaign)} disabled={updateStatus.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#f99a9d] text-[14px] font-extrabold text-white hover:bg-[#f57c80]"><Trash2 className="h-[17px] w-[17px]" />{c.deleteBtn}</button>
+                       {!isSupportMode && <button onClick={() => void remove(campaign)} disabled={updateStatus.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#f99a9d] text-[14px] font-extrabold text-white hover:bg-[#f57c80]"><Trash2 className="h-[17px] w-[17px]" />{c.deleteBtn}</button>}
                     </article>
                   );
                 })}</div>
@@ -617,7 +626,7 @@ export default function Campaigns() {
                   icon={Plus}
                   title={search || status !== "all" ? c.emptyFilterTitle : c.emptyTitle}
                   detail={search || status !== "all" ? c.emptyFilterDetail : c.emptyDetail}
-                  action={!search && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
+                   action={!isSupportMode && !search && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
                 />}
         </Panel>
       </div>
