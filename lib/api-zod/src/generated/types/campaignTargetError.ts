@@ -15,4 +15,5 @@ export interface CampaignTargetError {
   lastError: string | null;
   /** @nullable */
   nextAttemptAt: Date | null;
+  updatedAt: Date;
 }

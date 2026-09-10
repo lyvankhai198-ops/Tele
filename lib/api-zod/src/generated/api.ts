@@ -645,7 +645,8 @@ export const ListCampaignsResponseItem = zod.object({
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable()
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
@@ -724,7 +725,8 @@ export const CreateCampaignResponse = zod.object({
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable()
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 
@@ -798,7 +800,8 @@ export const UpdateCampaignStatusResponse = zod.object({
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable()
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 
@@ -857,7 +860,8 @@ export const CloneCampaignResponse = zod.object({
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable()
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 
@@ -957,7 +961,8 @@ export const GetDashboardResponse = zod.object({
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable()
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
 }))
 })),
   "recentActivity": zod.array(zod.object({
@@ -2530,7 +2535,8 @@ export const CloneAdminUserCampaignResponse = zod.object({
   "status": zod.string(),
   "attempts": zod.number(),
   "lastError": zod.string().nullable(),
-  "nextAttemptAt": zod.coerce.date().nullable()
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
 }))
 })
 

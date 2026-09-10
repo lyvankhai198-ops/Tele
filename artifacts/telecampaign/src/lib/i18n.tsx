@@ -584,6 +584,12 @@ export function localizedDeliveryErrorMessage(error: unknown, language: Language
       : "Source message error: the message selected for forwarding was changed or is no longer available in Saved Messages. The system refreshed this message once but could not recover it. Select the current message again. (Telegram: MESSAGE_ID_INVALID)";
   }
 
+  if (/Request was unsuccessful(?: \d+ time\(s\))?/i.test(cleanMessage)) {
+    return language === "vi"
+      ? "Yêu cầu gửi Telegram không thành công sau nhiều lần thử. Hãy kiểm tra tài khoản và quyền đăng trong nhóm trước khi thử lại."
+      : "Telegram could not complete the send request after repeated attempts. Check the account and posting permission before retrying.";
+  }
+
   const unavailableEntity = cleanMessage.match(/Telegram (?:entity for|destination) ["“](.+?)["”] is unavailable/i);
   if (unavailableEntity) {
     const destinationTitle = unavailableEntity[1];

@@ -728,6 +728,7 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
         attempts: target.attempts,
         lastError: target.lastError,
         nextAttemptAt: target.nextAttemptAt,
+        updatedAt: target.updatedAt,
       }))
       .sort((a, b) => {
         const aTime = a.nextAttemptAt?.getTime() ?? Number.MAX_SAFE_INTEGER;

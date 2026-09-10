@@ -1624,7 +1624,7 @@ components:
         telegramAccountId: { type: string }
     CampaignTargetError:
       type: object
-      required: [destinationId, destinationTitle, status, attempts, lastError, nextAttemptAt]
+      required: [destinationId, destinationTitle, status, attempts, lastError, nextAttemptAt, updatedAt]
       properties:
         destinationId: { type: string }
         destinationTitle: { type: string }
@@ -1632,6 +1632,7 @@ components:
         attempts: { type: number }
         lastError: { type: ["string", "null"] }
         nextAttemptAt: { type: ["string", "null"], format: date-time }
+        updatedAt: { type: string, format: date-time }
     CampaignUpdateInput:
       type: object
       properties:

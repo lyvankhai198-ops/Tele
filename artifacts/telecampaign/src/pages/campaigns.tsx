@@ -141,6 +141,7 @@ const copy = {
     detailErrorTitle: "Delivery errors",
     detailErrorEmpty: "No delivery errors recorded.",
     detailErrorAttempts: "attempts",
+    detailErrorRecordedAt: "Recorded:",
     detailErrorNextRetry: "Next retry:",
     genericError: "Could not complete the operation. Please try again.",
   },
@@ -252,6 +253,7 @@ const copy = {
     detailErrorTitle: "Chi tiết lỗi gửi",
     detailErrorEmpty: "Chưa ghi nhận lỗi gửi.",
     detailErrorAttempts: "lần thử",
+    detailErrorRecordedAt: "Ghi nhận lúc:",
     detailErrorNextRetry: "Lần thử tiếp:",
     genericError: "Không thể hoàn tất thao tác. Vui lòng thử lại.",
   },
@@ -266,6 +268,19 @@ function formatSchedule(value: Date | string | null, language: "en" | "vi") {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatErrorRecordedAt(value: Date | string, language: "en" | "vi") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-GB", {
+    year: "numeric",
+    month: language === "vi" ? "2-digit" : "long",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
 }
 
 function isWaitingRetry(error: Campaign["errors"][number]) {
@@ -864,6 +879,7 @@ export default function Campaigns() {
                                  <span className="shrink-0 font-bold">{error.attempts} {c.detailErrorAttempts}</span>
                                </div>
                                <p className="mt-1 break-words font-medium">{localizedDeliveryErrorMessage(error.lastError, language, c.genericError)}</p>
+                                <p className="mt-1 text-[11px] font-semibold">{c.detailErrorRecordedAt} {formatErrorRecordedAt(error.updatedAt, language)}</p>
                                {error.nextAttemptAt && <p className="mt-1 text-[11px] font-semibold">{c.detailErrorNextRetry} {formatSchedule(error.nextAttemptAt, language)}</p>}
                              </div>
                            ))}

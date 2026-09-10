@@ -377,6 +377,7 @@ export interface CampaignTargetError {
   lastError: string | null;
   /** @nullable */
   nextAttemptAt: string | null;
+  updatedAt: string;
 }
 
 export interface Campaign {
