@@ -25,6 +25,7 @@ export interface AdminActiveGroup {
   /** @nullable */
   memberCount: number | null;
   isPublished: boolean;
+  isNew: boolean;
   roundDelays: AdminGroupRoundDelay[];
   accountMemberships?: GroupLibraryAccountMembership[];
 }

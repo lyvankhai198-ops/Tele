@@ -13,6 +13,7 @@ const rows: SavedGroupRow[] = [
     username: "@tech_forum",
     kind: "forum",
     memberCount: 1200,
+    publishedAt: "2026-09-11T10:00:00.000Z",
     roundDelayMinSeconds: 15,
     roundDelayMaxSeconds: 30,
   },
@@ -53,6 +54,7 @@ const techGroup = directory.groups.find((group) => group.id === "-100123");
 assert.ok(techGroup);
 assert.equal(techGroup.telegramLink, "https://t.me/tech_forum");
 assert.equal(techGroup.isPublished, true);
+assert.equal(techGroup.isNew, true);
 assert.deepEqual(
   techGroup.roundDelays.map((delay) => [
     delay.minSeconds,
@@ -83,6 +85,7 @@ const pendingDirectory = aggregateSavedGroupRows([{
   roundDelayMaxSeconds: null,
 }]);
 assert.equal(pendingDirectory.groups[0]?.isPublished, false);
+assert.equal(pendingDirectory.groups[0]?.isNew, false);
 
 const sortedDirectory = aggregateSavedGroupRows([
   {

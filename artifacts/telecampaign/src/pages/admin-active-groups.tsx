@@ -12,6 +12,7 @@ import {
   useListDestinations,
   useListTelegramAccounts,
   useImportAdminGroupLibraryEntry,
+  useRevokeAdminGroupLibraryEntry,
   useUpdateAdminGroupLibraryEntry,
   useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
@@ -26,6 +27,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  Undo2,
   Users,
 } from "lucide-react";
 import { CampaignFormModal, type CampaignFormPrefill } from "@/components/campaign-form-modal";
@@ -56,6 +58,11 @@ const text = {
   importingGroup: "Đang import...",
   importSuccess: (title: string) => `Đã import “${title}” vào thư viện user.`,
   importFailed: "Không thể import nhóm vào thư viện. Vui lòng thử lại.",
+  revokeGroup: "Thu hồi khỏi thư viện user",
+  revokingGroup: "Đang thu hồi...",
+  revokeConfirm: (title: string) => `Thu hồi nhóm “${title}” khỏi thư viện user?`,
+  revokeSuccess: (title: string) => `Đã thu hồi “${title}” khỏi thư viện user.`,
+  revokeFailed: "Không thể thu hồi nhóm. Vui lòng thử lại.",
   openGroup: "Mở nhóm",
   trialVisible: "Hiển thị trong trial",
   trialTitle: "Tên hiển thị trial",
@@ -103,6 +110,7 @@ const workspaceText = {
     lockedDetail: (plan: string) => `Gói hiện tại chưa đủ điều kiện. Nâng cấp lên ${plan.toUpperCase()} hoặc cao hơn để mở link Telegram.`,
     noGroups: "Chưa có nhóm nào trong Thư Viện Nhóm ( MMO ).",
     noGroupsDetail: "Vui lòng quay lại sau khi thư viện được cập nhật.",
+    newGroup: "Mới",
     noSearchResults: "Không tìm thấy nhóm phù hợp.",
     loading: "Đang tải Thư Viện Nhóm ( MMO )...",
     loadError: "Không thể tải Thư Viện Nhóm ( MMO ).",
@@ -153,6 +161,7 @@ const workspaceText = {
     noGroups: "No groups are available in Group Library (MMO) yet.",
     noGroupsDetail: "Please check back after the library is updated.",
     noSearchResults: "No matching groups found.",
+    newGroup: "New",
     loading: "Loading Group Library (MMO)...",
     loadError: "Could not load Group Library (MMO).",
     retry: "Retry",
@@ -216,10 +225,12 @@ type GroupCardProps = {
   onCreate: (group: AdminActiveGroup, delay?: AdminActiveGroup["roundDelays"][number], preferredAccountId?: string) => void;
   onEdit: (campaign: Campaign) => void;
   onImport: (group: AdminActiveGroup) => void;
+  onRevoke: (group: AdminActiveGroup) => void;
   onSaveTrial: (group: AdminActiveGroup, trialVisible: boolean, trialTitle: string) => void;
   trialSaving: boolean;
   importDisabled: boolean;
   importing: boolean;
+  revoking: boolean;
   mode: "admin" | "workspace";
   canOpenLinks: boolean;
   openGroupLabel: string;
@@ -228,6 +239,9 @@ type GroupCardProps = {
   membersLabel: string;
   lockedButtonLabel: string;
   hiddenGroupNameLabel: string;
+  newGroupLabel: string;
+  revokeGroupLabel: string;
+  revokingGroupLabel: string;
   numberLocale: string;
   roundDelayLabel: string;
   secondsLabel: string;
@@ -258,10 +272,12 @@ function GroupCard({
   onCreate,
   onEdit,
   onImport,
+  onRevoke,
   onSaveTrial,
   trialSaving,
   importDisabled,
   importing,
+  revoking,
   mode,
   canOpenLinks,
   openGroupLabel,
@@ -270,6 +286,9 @@ function GroupCard({
   membersLabel,
   lockedButtonLabel,
   hiddenGroupNameLabel,
+  newGroupLabel,
+  revokeGroupLabel,
+  revokingGroupLabel,
   numberLocale,
   roundDelayLabel,
   secondsLabel,
@@ -349,6 +368,14 @@ function GroupCard({
                 {text.newGroup}
               </span>
             )}
+            {!isAdmin && group.isNew && (
+              <span
+                className="rounded-full bg-[#ecfdf5] px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#047857]"
+                data-testid={`badge-new-user-group-${group.id}`}
+              >
+                {newGroupLabel}
+              </span>
+            )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-[#64748b]">
             {group.username && <span>@{group.username.replace(/^@/, "")}</span>}
@@ -366,6 +393,18 @@ function GroupCard({
             >
               {importing && <LoaderCircle className="h-3 w-3 animate-spin" />}
               {importing ? text.importingGroup : text.importGroup}
+            </button>
+          )}
+          {isAdmin && group.isPublished && (
+            <button
+              type="button"
+              onClick={() => onRevoke(group)}
+              disabled={revoking}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#fecaca] bg-[#fff1f2] px-2.5 py-1.5 text-[10px] font-extrabold text-[#be123c] transition hover:bg-[#ffe4e6] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid={`button-revoke-admin-active-group-${group.id}`}
+            >
+              {revoking ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+              {revoking ? revokingGroupLabel : revokeGroupLabel}
             </button>
           )}
           {group.telegramLink && (isAdmin || canOpenLinks || group.trialVisible) ? (
@@ -584,6 +623,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [feedbackIsError, setFeedbackIsError] = useState(false);
   const [importingGroupId, setImportingGroupId] = useState<string | null>(null);
+  const [revokingGroupId, setRevokingGroupId] = useState<string | null>(null);
   const [updatingTrialGroupId, setUpdatingTrialGroupId] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState<{
     editingCampaign: Campaign | null;
@@ -614,6 +654,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   });
   const syncTelegram = useSyncTelegramDestinations();
   const importGroup = useImportAdminGroupLibraryEntry();
+  const revokeGroup = useRevokeAdminGroupLibraryEntry();
   const updateTrialGroup = useUpdateAdminGroupLibraryEntry();
   const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
@@ -674,6 +715,23 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       setFeedbackIsError(true);
     } finally {
       setImportingGroupId(null);
+    }
+  }
+
+  async function handleRevoke(group: AdminActiveGroup) {
+    if (!window.confirm(text.revokeConfirm(group.title))) return;
+    setRevokingGroupId(group.id);
+    setSyncFeedback(null);
+    setFeedbackIsError(false);
+    try {
+      await revokeGroup.mutateAsync({ telegramId: group.id });
+      await query.refetch();
+      setSyncFeedback(text.revokeSuccess(group.title));
+    } catch {
+      setSyncFeedback(text.revokeFailed);
+      setFeedbackIsError(true);
+    } finally {
+      setRevokingGroupId(null);
     }
   }
 
@@ -838,10 +896,12 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 onCreate={openCreateCampaign}
                 onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
                 onImport={(selectedGroup) => void handleImport(selectedGroup)}
+                onRevoke={(selectedGroup) => void handleRevoke(selectedGroup)}
                  onSaveTrial={(selectedGroup, trialVisible, trialTitle) => void handleSaveTrial(selectedGroup, trialVisible, trialTitle)}
                  trialSaving={updateTrialGroup.isPending && updatingTrialGroupId === group.id}
                 importDisabled={importGroup.isPending}
                 importing={importGroup.isPending && importingGroupId === group.id}
+                revoking={revokeGroup.isPending && revokingGroupId === group.id}
                 mode={mode}
                  canOpenLinks={canOpenLinks}
                 openGroupLabel={isAdmin ? text.openGroup : localizedWorkspaceText.openGroup}
@@ -850,6 +910,9 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 membersLabel={isAdmin ? text.members : localizedWorkspaceText.members}
                 lockedButtonLabel={localizedWorkspaceText.lockedButton}
                 hiddenGroupNameLabel={localizedWorkspaceText.hiddenGroupName}
+                 newGroupLabel={isAdmin ? text.newGroup : localizedWorkspaceText.newGroup}
+                 revokeGroupLabel={text.revokeGroup}
+                 revokingGroupLabel={text.revokingGroup}
                 numberLocale={language === "en" ? "en-US" : "vi-VN"}
                 roundDelayLabel={isAdmin ? text.roundDelay : localizedWorkspaceText.roundDelay}
                 secondsLabel={isAdmin ? text.seconds : localizedWorkspaceText.seconds}

@@ -21,6 +21,7 @@ export * from './adminCampaignStatusInputStatus';
 export * from './adminGroupLibraryEntryUpdateInput';
 export * from './adminGroupLibraryEntryUpdateResult';
 export * from './adminGroupLibraryImportResult';
+export * from './adminGroupLibraryRevokeResult';
 export * from './adminGroupLibrarySyncResult';
 export * from './adminGroupRoundDelay';
 export * from './adminLicenseDistribution';

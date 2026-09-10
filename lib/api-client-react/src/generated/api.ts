@@ -29,6 +29,7 @@ import type {
   AdminGroupLibraryEntryUpdateInput,
   AdminGroupLibraryEntryUpdateResult,
   AdminGroupLibraryImportResult,
+  AdminGroupLibraryRevokeResult,
   AdminGroupLibrarySyncResult,
   AdminLicenseKey,
   AdminLicenseKeySecret,
@@ -4918,6 +4919,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getImportAdminGroupLibraryEntryMutationOptions(options));
+    }
+
+export const getRevokeAdminGroupLibraryEntryUrl = (telegramId: string,) => {
+
+
+
+
+  return `/api/admin/active-groups/${telegramId}/revoke`
+}
+
+export const revokeAdminGroupLibraryEntry = async (telegramId: string, options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupLibraryRevokeResult> => {
+
+  return customFetch<AdminGroupLibraryRevokeResult>(getRevokeAdminGroupLibraryEntryUrl(telegramId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeAdminGroupLibraryEntryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAdminGroupLibraryEntry>>, TError,{telegramId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeAdminGroupLibraryEntry>>, TError,{telegramId: string}, TContext> => {
+
+const mutationKey = ['revokeAdminGroupLibraryEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeAdminGroupLibraryEntry>>, {telegramId: string}> = (props) => {
+          const {telegramId} = props ?? {};
+
+          return  revokeAdminGroupLibraryEntry(telegramId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeAdminGroupLibraryEntryMutationResult = NonNullable<Awaited<ReturnType<typeof revokeAdminGroupLibraryEntry>>>
+
+    export type RevokeAdminGroupLibraryEntryMutationError = ErrorType<void>
+
+    export const useRevokeAdminGroupLibraryEntry = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAdminGroupLibraryEntry>>, TError,{telegramId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeAdminGroupLibraryEntry>>,
+        TError,
+        {telegramId: string},
+        TContext
+      > => {
+      return useMutation(getRevokeAdminGroupLibraryEntryMutationOptions(options));
     }
 
 export const getUpdateAdminGroupLibraryEntryUrl = (telegramId: string,) => {

@@ -21,6 +21,7 @@ export type SavedGroupRow = {
   kind: string;
   memberCount: number | null;
   isPublished?: boolean;
+  publishedAt?: Date | string | null;
   trialVisible?: boolean;
   firstCapturedAt?: Date | string | null;
   roundDelayMinSeconds: number | null;
@@ -54,6 +55,7 @@ export type AdminActiveGroupDirectoryRecord = {
     kind: string;
     memberCount: number | null;
     isPublished: boolean;
+    isNew: boolean;
     trialVisible: boolean;
     roundDelays: Array<{
       minSeconds: number;
@@ -93,6 +95,7 @@ export function redactGroupLibraryGroups(
       username: null,
       telegramLink: null,
       isPublished: true,
+      isNew: false,
       trialVisible: false,
     })),
   ];
@@ -168,6 +171,7 @@ export function aggregateSavedGroupRows(
     kind: string;
     memberCount: number | null;
     isPublished: boolean;
+    isNew: boolean;
     trialVisible: boolean;
     firstCapturedAt: Date | string | null;
     roundDelays: AdminActiveGroupDirectoryRecord["groups"][number]["roundDelays"];
@@ -183,6 +187,7 @@ export function aggregateSavedGroupRows(
       kind: row.kind,
       memberCount: row.memberCount,
       isPublished: row.isPublished !== false,
+      isNew: Boolean(row.publishedAt),
       trialVisible: row.trialVisible === true,
       firstCapturedAt: row.firstCapturedAt ?? null,
       roundDelays: [],
@@ -213,6 +218,7 @@ export function aggregateSavedGroupRows(
       });
     }
     rowsByTelegramId.set(row.telegramId, group);
+    if (row.publishedAt) group.isNew = true;
   }
 
   return {
@@ -319,10 +325,23 @@ export async function importAdminGroupLibraryEntry(telegramId: string): Promise<
   if (!entry) return null;
   if (!entry.isPublished) {
     await db.update(groupLibraryEntriesTable)
-      .set({ isPublished: true, updatedAt: new Date() })
+      .set({ isPublished: true, publishedAt: new Date(), updatedAt: new Date() })
       .where(eq(groupLibraryEntriesTable.id, entry.id));
   }
   return { imported: true };
+}
+
+export async function revokeAdminGroupLibraryEntry(telegramId: string): Promise<{ revoked: true } | null> {
+  const [updated] = await db.update(groupLibraryEntriesTable)
+    .set({
+      isPublished: false,
+      publishedAt: null,
+      trialVisible: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(groupLibraryEntriesTable.telegramId, telegramId))
+    .returning({ id: groupLibraryEntriesTable.id });
+  return updated ? { revoked: true } : null;
 }
 
 export async function getAdminActiveGroupDirectory(
@@ -340,6 +359,7 @@ export async function getAdminActiveGroupDirectory(
       kind: groupLibraryEntriesTable.kind,
       memberCount: groupLibraryEntriesTable.memberCount,
       isPublished: groupLibraryEntriesTable.isPublished,
+      publishedAt: groupLibraryEntriesTable.publishedAt,
       trialVisible: groupLibraryEntriesTable.trialVisible,
       firstCapturedAt: groupLibraryEntriesTable.firstCapturedAt,
       roundDelayMinSeconds: campaignsTable.roundDelayMinSeconds,

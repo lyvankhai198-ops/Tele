@@ -1664,6 +1664,7 @@ export interface AdminActiveGroup {
   /** @nullable */
   memberCount: number | null;
   isPublished: boolean;
+  isNew: boolean;
   roundDelays: AdminGroupRoundDelay[];
   accountMemberships?: GroupLibraryAccountMembership[];
 }
@@ -1679,6 +1680,10 @@ export interface AdminGroupLibrarySyncResult {
 
 export interface AdminGroupLibraryImportResult {
   imported: boolean;
+}
+
+export interface AdminGroupLibraryRevokeResult {
+  revoked: boolean;
 }
 
 export interface AdminGroupLibraryEntryUpdateInput {

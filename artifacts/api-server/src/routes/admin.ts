@@ -34,6 +34,7 @@ import {
   SyncAdminGroupLibraryResponse,
   ImportAdminGroupLibraryEntryParams,
   ImportAdminGroupLibraryEntryResponse,
+  RevokeAdminGroupLibraryEntryResponse,
   UpdateAdminGroupLibraryEntryBody,
   UpdateAdminGroupLibraryEntryParams,
   UpdateAdminGroupLibraryEntryResponse,
@@ -95,6 +96,7 @@ import { getAdminUserSupport, getAdminUserSupportCampaignTargets } from "../lib/
 import {
   getAdminActiveGroupDirectory,
   importAdminGroupLibraryEntry,
+  revokeAdminGroupLibraryEntry,
   syncAdminGroupLibrary,
   updateAdminGroupLibraryEntry,
 } from "../lib/admin-active-group-directory";
@@ -184,6 +186,14 @@ router.post("/admin/active-groups/:telegramId/import", async (req, res): Promise
   const result = await importAdminGroupLibraryEntry(params.data.telegramId);
   if (!result) return void sendError(res, 404, "Nhóm chưa được phát hiện trong thư viện admin.");
   res.json(ImportAdminGroupLibraryEntryResponse.parse(result));
+});
+
+router.post("/admin/active-groups/:telegramId/revoke", async (req, res): Promise<void> => {
+  const params = ImportAdminGroupLibraryEntryParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const result = await revokeAdminGroupLibraryEntry(params.data.telegramId);
+  if (!result) return void sendError(res, 404, "Không tìm thấy nhóm trong thư viện admin.");
+  res.json(RevokeAdminGroupLibraryEntryResponse.parse(result));
 });
 
 router.patch("/admin/active-groups/:telegramId", async (req, res): Promise<void> => {
