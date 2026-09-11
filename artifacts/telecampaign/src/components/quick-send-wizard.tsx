@@ -71,11 +71,18 @@ type QuickSendDraft = {
 };
 
 const QUICK_SEND_DRAFT_KEY = "telecampaign.quick-send-draft";
+const QUICK_SEND_DEFAULTS = {
+  repeatCount: "300",
+  delayMin: "3600",
+  delayMax: "3600",
+} as const;
+
 function readQuickSendDraft(): QuickSendDraft | null {
   if (typeof window === "undefined") return null;
   try {
     const value = JSON.parse(window.localStorage.getItem(QUICK_SEND_DRAFT_KEY) ?? "null") as Partial<QuickSendDraft> | null;
     if (!value || typeof value !== "object") return null;
+    const hasLegacyDefaults = value.repeatCount === "1" && value.delayMin === "1" && value.delayMax === "3";
     return {
       accountId: typeof value.accountId === "string" ? value.accountId : "",
       destinationIds: Array.isArray(value.destinationIds) ? value.destinationIds.filter((id): id is string => typeof id === "string") : [],
@@ -86,9 +93,9 @@ function readQuickSendDraft(): QuickSendDraft | null {
       scheduleMode: value.scheduleMode === "later" ? "later" : "now",
       scheduleDate: typeof value.scheduleDate === "string" ? value.scheduleDate : "",
       scheduleTime: typeof value.scheduleTime === "string" ? value.scheduleTime : "",
-      repeatCount: typeof value.repeatCount === "string" ? value.repeatCount : "1",
-      delayMin: typeof value.delayMin === "string" ? value.delayMin : "1",
-      delayMax: typeof value.delayMax === "string" ? value.delayMax : "3",
+      repeatCount: hasLegacyDefaults ? QUICK_SEND_DEFAULTS.repeatCount : typeof value.repeatCount === "string" ? value.repeatCount : QUICK_SEND_DEFAULTS.repeatCount,
+      delayMin: hasLegacyDefaults ? QUICK_SEND_DEFAULTS.delayMin : typeof value.delayMin === "string" ? value.delayMin : QUICK_SEND_DEFAULTS.delayMin,
+      delayMax: hasLegacyDefaults ? QUICK_SEND_DEFAULTS.delayMax : typeof value.delayMax === "string" ? value.delayMax : QUICK_SEND_DEFAULTS.delayMax,
     };
   } catch {
     return null;
@@ -136,8 +143,6 @@ const copy = {
     groupReview: "Đã tham gia · cần đồng bộ lại",
     groupNotJoined: "Chưa tham gia / chưa đồng bộ",
     searchGroups: "Tìm nhóm...",
-    selectAll: "Chọn tất cả",
-    deselectAll: "Bỏ chọn tất cả",
     noGroups: "Chưa có nhóm được phép gửi. Hãy đồng bộ lại tài khoản.",
     temporaryRestrictionHint: (until: string) => `Tạm hạn chế đến ${until}`,
     temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} nhóm đã chọn đang bị hạn chế tạm thời. Hãy xác nhận lịch chạy từ ${suggestedAt}.`,
@@ -229,8 +234,6 @@ const copy = {
     groupReview: "Joined · sync again to confirm",
     groupNotJoined: "Not joined / not synchronized",
     searchGroups: "Search groups...",
-    selectAll: "Select all",
-    deselectAll: "Deselect all",
     noGroups: "No groups with posting permission yet. Sync the account again.",
     temporaryRestrictionHint: (until: string) => `Temporarily restricted until ${until}`,
     temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} selected group${count === 1 ? " is" : "s are"} temporarily restricted. Confirm a schedule at or after ${suggestedAt}.`,
@@ -325,9 +328,9 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   const [scheduleMode, setScheduleMode] = useState<ScheduleMode>(initialDraft.current?.scheduleMode ?? "now");
   const [scheduleDate, setScheduleDate] = useState(initialDraft.current?.scheduleDate ?? "");
   const [scheduleTime, setScheduleTime] = useState(initialDraft.current?.scheduleTime ?? "");
-  const [repeatCount, setRepeatCount] = useState(initialDraft.current?.repeatCount ?? "1");
-  const [delayMin, setDelayMin] = useState(initialDraft.current?.delayMin ?? "1");
-  const [delayMax, setDelayMax] = useState(initialDraft.current?.delayMax ?? "3");
+  const [repeatCount, setRepeatCount] = useState(initialDraft.current?.repeatCount ?? QUICK_SEND_DEFAULTS.repeatCount);
+  const [delayMin, setDelayMin] = useState(initialDraft.current?.delayMin ?? QUICK_SEND_DEFAULTS.delayMin);
+  const [delayMax, setDelayMax] = useState(initialDraft.current?.delayMax ?? QUICK_SEND_DEFAULTS.delayMax);
   const [formError, setFormError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState(false);
@@ -369,7 +372,6 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     { dateStyle: "short", timeStyle: "short" },
   ).format(value);
   const selectedMessage = (accountSavedMessages.data ?? []).find((message) => message.id === sourceMessageId);
-  const allVisibleSelected = accountDestinations.length > 0 && accountDestinations.every((item) => destinationIds.includes(item.id));
   const isCreating = createTemplate.isPending || createCampaign.isPending;
 
   useEffect(() => {
@@ -482,12 +484,6 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     setDestinationIds((current) => current.includes(destinationId)
       ? current.filter((id) => id !== destinationId)
       : [...current, destinationId]);
-  }
-
-  function toggleAllDestinations() {
-    setDestinationIds((current) => allVisibleSelected
-      ? current.filter((id) => !accountDestinations.some((item) => item.id === id))
-      : [...new Set([...current, ...accountDestinations.map((item) => item.id)])]);
   }
 
   function applySuggestedRestrictionSchedule() {
@@ -673,7 +669,6 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                             </div>
                             <div className="flex items-center justify-between gap-3">
                               <span className="text-[12px] font-bold text-[#64748b]">{c.selectedGroups(destinationIds.length)}</span>
-                              {accountDestinations.length > 0 && <button type="button" onClick={toggleAllDestinations} className="text-[12px] font-extrabold text-[#1d3bb8]">{allVisibleSelected ? c.deselectAll : c.selectAll}</button>}
                             </div>
                           </div>
                           <div className="rounded-2xl border border-[#e2e8f0] p-3">
