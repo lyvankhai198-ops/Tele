@@ -17,7 +17,7 @@ const SCRYPT_P = 1;
 
 export const SESSION_COOKIE_NAME = "telecampaign_session";
 
-export type SafeAuthUser = Pick<AppUser, "id" | "username" | "role">;
+export type SafeAuthUser = Pick<AppUser, "id" | "username" | "role" | "mustChangePassword">;
 export class OwnershipMigrationPendingError extends Error {
   constructor(public readonly unmappedOwners: number) {
     super("Legacy workspace ownership needs a secure migration before TeleCampaign data can be accessed.");
@@ -93,6 +93,10 @@ export function createSessionToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
+export function createTemporaryPassword(): string {
+  return `Tc-${randomBytes(12).toString("base64url")}-9a`;
+}
+
 export function sessionExpiresAt(): Date {
   return new Date(Date.now() + SESSION_TTL_MS);
 }
@@ -113,7 +117,12 @@ export async function resolveAuthenticatedUser(user: SafeAuthUser): Promise<Safe
     const [promoted] = await db.update(appUsersTable)
       .set({ role: "admin", updatedAt: new Date() })
       .where(eq(appUsersTable.id, user.id))
-      .returning({ id: appUsersTable.id, username: appUsersTable.username, role: appUsersTable.role });
+      .returning({
+        id: appUsersTable.id,
+        username: appUsersTable.username,
+        role: appUsersTable.role,
+        mustChangePassword: appUsersTable.mustChangePassword,
+      });
     return promoted ?? { ...user, role: "admin" };
   }
   return user;
@@ -121,7 +130,12 @@ export async function resolveAuthenticatedUser(user: SafeAuthUser): Promise<Safe
 
 export async function getAuthenticatedUser(token: string): Promise<SafeAuthUser | null> {
   const [user] = await db
-    .select({ id: appUsersTable.id, username: appUsersTable.username, role: appUsersTable.role })
+    .select({
+      id: appUsersTable.id,
+      username: appUsersTable.username,
+      role: appUsersTable.role,
+      mustChangePassword: appUsersTable.mustChangePassword,
+    })
     .from(authSessionsTable)
     .innerJoin(appUsersTable, eq(authSessionsTable.userId, appUsersTable.id))
     .where(and(

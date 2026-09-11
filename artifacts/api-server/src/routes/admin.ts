@@ -13,6 +13,8 @@ import {
   ListAdminUsersResponse,
   GetAdminUserParams,
   GetAdminUserResponse,
+  ResetAdminUserPasswordParams,
+  ResetAdminUserPasswordResponse,
   GetAdminUserSupportResponse,
   GetAdminUserSupportCampaignTargetsQueryParams,
   GetAdminUserSupportCampaignTargetsResponse,
@@ -73,6 +75,7 @@ import {
   adminNotificationsTable,
   activityLogsTable,
   appUsersTable,
+  authSessionsTable,
   campaignTargetsTable,
   campaignsTable,
   destinationsTable,
@@ -93,6 +96,7 @@ import {
   revealAdminLicenseKey,
 } from "../lib/subscriptions";
 import { getAdminUserSupport, getAdminUserSupportCampaignTargets } from "../lib/admin-user-support";
+import { createTemporaryPassword, hashPassword } from "../lib/auth";
 import {
   getAdminActiveGroupDirectory,
   importAdminGroupLibraryEntry,
@@ -489,6 +493,75 @@ router.get("/admin/users/:userId", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetAdminUserResponse.parse(user));
+});
+
+router.post("/admin/users/:userId/password-reset", async (req, res): Promise<void> => {
+  const params = ResetAdminUserPasswordParams.safeParse(req.params);
+  if (!params.success) {
+    sendError(res, 400, "Người dùng không hợp lệ.");
+    return;
+  }
+  if (params.data.userId === req.userId) {
+    sendError(res, 400, "Admin không thể tự reset mật khẩu của chính mình.");
+    return;
+  }
+
+  const temporaryPassword = createTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const now = new Date();
+  const target = await db.transaction(async (tx) => {
+    const [candidate] = await tx
+      .select({ id: appUsersTable.id })
+      .from(appUsersTable)
+      .where(eq(appUsersTable.id, params.data.userId))
+      .limit(1);
+    if (!candidate) return null;
+
+    await tx.execute(sql`SELECT 1 FROM ${appUsersTable} WHERE ${appUsersTable.id} = ${candidate.id} FOR UPDATE`);
+    const [lockedUser] = await tx
+      .select({
+        id: appUsersTable.id,
+        username: appUsersTable.username,
+      })
+      .from(appUsersTable)
+      .where(eq(appUsersTable.id, candidate.id))
+      .limit(1);
+    if (!lockedUser) return null;
+
+    await tx.update(appUsersTable)
+      .set({
+        passwordHash,
+        mustChangePassword: true,
+        updatedAt: now,
+      })
+      .where(eq(appUsersTable.id, lockedUser.id));
+    await tx.update(authSessionsTable)
+      .set({ invalidatedAt: now })
+      .where(and(
+        eq(authSessionsTable.userId, lockedUser.id),
+        isNull(authSessionsTable.invalidatedAt),
+      ));
+    return lockedUser;
+  });
+
+  if (!target) {
+    sendError(res, 404, "Không tìm thấy người dùng.");
+    return;
+  }
+
+  await recordActivity({
+    ownerUserId: req.userId!,
+    event: "admin.user_password_reset",
+    message: `Reset the password for user ${target.username}`,
+    level: "warning",
+    metadata: { targetUserId: target.id },
+  });
+  res.json(ResetAdminUserPasswordResponse.parse({
+    userId: target.id,
+    username: target.username,
+    temporaryPassword,
+    mustChangePassword: true,
+  }));
 });
 
 router.get("/admin/users/:userId/support", async (req, res): Promise<void> => {

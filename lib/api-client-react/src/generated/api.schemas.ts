@@ -27,6 +27,7 @@ export interface AuthUser {
   id: string;
   username: string;
   role: AuthUserRole;
+  mustChangePassword: boolean;
   /** @nullable */
   support: SupportSession | null;
 }
@@ -113,6 +114,17 @@ export interface PasswordChangeInput {
 
 export interface RevokeSessionsResult {
   revokedCount: number;
+}
+
+export interface AdminPasswordResetResult {
+  userId: string;
+  username: string;
+  /**
+     * @minLength 10
+     * @maxLength 128
+     */
+  temporaryPassword: string;
+  mustChangePassword: boolean;
 }
 
 export interface LegacyOwnerMappingInput {

@@ -11,7 +11,7 @@ function ErrorNotice({ message }: { message: string | null }) {
 }
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, refresh } = useAuth();
   const { language, t } = useLanguage();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -43,6 +43,7 @@ export default function Settings() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      await refresh();
       setPasswordSuccess(t("Password changed successfully. Other sessions were signed out."));
     } catch (error) {
       setPasswordError(localizedErrorMessage(error, language, t("Could not change password. Please try again.")));

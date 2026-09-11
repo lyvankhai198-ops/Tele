@@ -44,6 +44,7 @@ export const RegisterAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
+  "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
   "targetUsername": zod.string(),
@@ -73,6 +74,7 @@ export const LoginAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
+  "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
   "targetUsername": zod.string(),
@@ -127,6 +129,7 @@ export const GetAuthUserResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
+  "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
   "targetUsername": zod.string(),
@@ -2461,6 +2464,23 @@ export const GetAdminUserResponse = zod.object({
   "telegramAccounts": zod.number(),
   "campaigns": zod.number()
 })
+})
+
+
+export const ResetAdminUserPasswordParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const resetAdminUserPasswordResponseTemporaryPasswordMin = 10;
+export const resetAdminUserPasswordResponseTemporaryPasswordMax = 128;
+
+
+
+export const ResetAdminUserPasswordResponse = zod.object({
+  "userId": zod.string(),
+  "username": zod.string(),
+  "temporaryPassword": zod.string().min(resetAdminUserPasswordResponseTemporaryPasswordMin).max(resetAdminUserPasswordResponseTemporaryPasswordMax),
+  "mustChangePassword": zod.boolean()
 })
 
 

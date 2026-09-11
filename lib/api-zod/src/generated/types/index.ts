@@ -42,6 +42,7 @@ export * from './adminOperationCampaign';
 export * from './adminOperations';
 export * from './adminOperationTarget';
 export * from './adminOverview';
+export * from './adminPasswordResetResult';
 export * from './adminPlanDistribution';
 export * from './adminStorageArea';
 export * from './adminStorageDisk';

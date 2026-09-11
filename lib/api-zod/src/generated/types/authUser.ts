@@ -12,6 +12,7 @@ export interface AuthUser {
   id: string;
   username: string;
   role: AuthUserRole;
+  mustChangePassword: boolean;
   /** @nullable */
   support: SupportSession | null;
 }

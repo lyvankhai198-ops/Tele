@@ -475,6 +475,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function WorkspaceRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
   if (isLoading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0b1420] text-[#dce8f5]">
@@ -483,6 +484,9 @@ function WorkspaceRoute({ children }: { children: ReactNode }) {
     );
   }
   if (!user) return <Redirect to="/login" replace />;
+  if (user.mustChangePassword && location !== "/dashboard/settings") {
+    return <Redirect to="/dashboard/settings" replace />;
+  }
   return user.support ? <>{children}</> : <SubscriptionGate>{children}</SubscriptionGate>;
 }
 

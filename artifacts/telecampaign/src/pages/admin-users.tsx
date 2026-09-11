@@ -20,15 +20,17 @@ import {
   useUpdateAdminUserSubscription,
   useUpdateAdminUserQuota,
   useStartAdminUserSupportSession,
+  useResetAdminUserPassword,
   getGetAdminOverviewQueryKey,
   getGetAdminUserQueryKey,
   getListAdminUsersQueryKey,
   type PlanCode,
   type AdminUser,
+  type AdminPasswordResetResult,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { Users, Search, Filter, ShieldAlert, CheckCircle2, ChevronRight, Activity, AlertTriangle } from "lucide-react";
+import { Users, Search, Filter, ShieldAlert, CheckCircle2, ChevronRight, Activity, AlertTriangle, Copy, KeyRound, LoaderCircle } from "lucide-react";
 import { useLocation } from "wouter";
 
 const copy = {
@@ -63,6 +65,16 @@ const copy = {
     quotaSaving: "Saving...",
     quotaSaved: "Daily quota access updated.",
     updateAction: "Update Plan",
+    resetAction: "Reset Password",
+    resetConfirm: (username: string) => `Reset the password for @${username}? Their current sessions will be signed out.`,
+    resetModalTitle: "Temporary password",
+    resetModalDetail: (username: string) => `Give this one-time password to @${username}. It will be required to change the password after sign-in.`,
+    resetWarning: "This password is shown only in this window. Copy it before closing.",
+    resetTemporaryPassword: "Temporary password",
+    resetCopy: "Copy password",
+    resetCopied: "Copied",
+    resetClose: "Close",
+    resetError: "Could not reset the user's password.",
     emptyTitle: "No users found",
     emptyDetail: "No users match your current search and filter criteria.",
     modalTitle: "Update Subscription",
@@ -112,6 +124,16 @@ const copy = {
     quotaSaving: "Đang lưu...",
     quotaSaved: "Đã cập nhật quyền quota tin nhắn/ngày.",
     updateAction: "Cập nhật Gói",
+    resetAction: "Đặt lại mật khẩu",
+    resetConfirm: (username: string) => `Đặt lại mật khẩu cho @${username}? Các phiên đăng nhập hiện tại của khách sẽ bị đăng xuất.`,
+    resetModalTitle: "Mật khẩu tạm thời",
+    resetModalDetail: (username: string) => `Gửi mật khẩu dùng một lần này cho @${username}. Khách sẽ bắt buộc đổi mật khẩu sau khi đăng nhập.`,
+    resetWarning: "Mật khẩu chỉ hiển thị trong cửa sổ này. Hãy sao chép trước khi đóng.",
+    resetTemporaryPassword: "Mật khẩu tạm thời",
+    resetCopy: "Sao chép mật khẩu",
+    resetCopied: "Đã sao chép",
+    resetClose: "Đóng",
+    resetError: "Không thể đặt lại mật khẩu cho người dùng.",
     emptyTitle: "Không tìm thấy",
     emptyDetail: "Không có người dùng nào phù hợp với bộ lọc hiện tại.",
     modalTitle: "Cập nhật Gói dịch vụ",
@@ -187,7 +209,10 @@ export default function AdminUsersPage() {
   const updateMutation = useUpdateAdminUserSubscription();
   const quotaMutation = useUpdateAdminUserQuota();
   const supportMutation = useStartAdminUserSupportSession();
+  const resetPasswordMutation = useResetAdminUserPassword();
   const [startingSupportUserId, setStartingSupportUserId] = useState<string | null>(null);
+  const [resetPasswordResult, setResetPasswordResult] = useState<AdminPasswordResetResult | null>(null);
+  const [resetPasswordCopied, setResetPasswordCopied] = useState(false);
   const [formQuotaExemptFrom, setFormQuotaExemptFrom] = useState("");
   const [formQuotaExemptUntil, setFormQuotaExemptUntil] = useState("");
   const modalUser = selectedUser ?? editingUser;
@@ -206,6 +231,30 @@ export default function AdminUsersPage() {
       });
     } finally {
       setStartingSupportUserId(null);
+    }
+  };
+
+  const handleResetPassword = async (user: AdminUser) => {
+    if (!window.confirm(text.resetConfirm(user.username))) return;
+    try {
+      const result = await resetPasswordMutation.mutateAsync({ userId: user.id });
+      setResetPasswordResult(result);
+      setResetPasswordCopied(false);
+    } catch (cause) {
+      setToastMessage({
+        text: localizedErrorMessage(cause, language, text.resetError),
+        isError: true,
+      });
+    }
+  };
+
+  const copyResetPassword = async () => {
+    if (!resetPasswordResult) return;
+    try {
+      await navigator.clipboard.writeText(resetPasswordResult.temporaryPassword);
+      setResetPasswordCopied(true);
+    } catch {
+      setToastMessage({ text: text.resetError, isError: true });
     }
   };
 
@@ -423,6 +472,15 @@ export default function AdminUsersPage() {
                         {text.updateAction}
                       </button>
                       <button
+                        onClick={() => void handleResetPassword(user)}
+                        disabled={resetPasswordMutation.isPending}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#fed7aa] bg-[#fff7ed] px-3 py-1.5 text-[12px] font-extrabold text-[#c2410c] hover:bg-[#ffedd5] transition-all disabled:cursor-wait disabled:opacity-60"
+                        data-testid={`btn-reset-password-${user.id}`}
+                      >
+                        {resetPasswordMutation.isPending && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                        {text.resetAction}
+                      </button>
+                      <button
                         onClick={() => void handleStartSupport(user)}
                         disabled={startingSupportUserId === user.id}
                         className="inline-flex items-center justify-center gap-1.5 rounded-xl border-transparent bg-[#1a2b88] px-3 py-1.5 text-[12px] font-extrabold text-white hover:bg-[#152473] transition-all shadow-sm disabled:cursor-wait disabled:opacity-60"
@@ -570,6 +628,42 @@ export default function AdminUsersPage() {
               >
                 {updateMutation.isPending ? text.saving : text.confirmAction}
               </PrimaryButton>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {resetPasswordResult && (
+        <Modal
+          title={text.resetModalTitle}
+          description={text.resetModalDetail(resetPasswordResult.username)}
+          onClose={() => setResetPasswordResult(null)}
+        >
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-[#fed7aa] bg-[#fff7ed] p-4">
+              <div className="flex items-start gap-3">
+                <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-[#c2410c]" />
+                <p className="text-[13px] font-semibold leading-5 text-[#9a3412]">{text.resetWarning}</p>
+              </div>
+            </div>
+            <div>
+              <span className="mb-2 block text-[13px] font-bold text-[#475569]">{text.resetTemporaryPassword}</span>
+              <div className="flex items-center gap-2 rounded-2xl border border-[#cbd5e1] bg-[#f8fafc] p-3">
+                <code className="min-w-0 flex-1 break-all text-[16px] font-extrabold tracking-wide text-[#0f172a]">
+                  {resetPasswordResult.temporaryPassword}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => void copyResetPassword()}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#1a2b88] px-3 py-2 text-[12px] font-extrabold text-white transition hover:bg-[#152473]"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  {resetPasswordCopied ? text.resetCopied : text.resetCopy}
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-[#eef2f6] pt-4">
+              <QuietButton onClick={() => setResetPasswordResult(null)}>{text.resetClose}</QuietButton>
             </div>
           </div>
         </Modal>

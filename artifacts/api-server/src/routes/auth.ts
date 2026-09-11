@@ -266,7 +266,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       const [created] = await tx
         .insert(appUsersTable)
         .values({ username, usernameNormalized: username, passwordHash })
-        .returning({ id: appUsersTable.id, username: appUsersTable.username, role: appUsersTable.role });
+        .returning({
+          id: appUsersTable.id,
+          username: appUsersTable.username,
+          role: appUsersTable.role,
+          mustChangePassword: appUsersTable.mustChangePassword,
+        });
       const trialStartedAt = new Date();
       await tx.insert(subscriptionsTable).values({
         ownerUserId: created.id,
@@ -358,6 +363,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     id: user.id,
     username: user.username,
     role: user.role,
+    mustChangePassword: user.mustChangePassword,
   });
   await recordActivity({
     ownerUserId: user.id,
@@ -466,7 +472,7 @@ router.post("/auth/change-password", requireSession, async (req, res): Promise<v
 
       const passwordHash = await hashPassword(parsed.data.newPassword);
       await tx.update(appUsersTable)
-        .set({ passwordHash, updatedAt: new Date() })
+        .set({ passwordHash, mustChangePassword: false, updatedAt: new Date() })
         .where(eq(appUsersTable.id, req.userId!));
       await tx.update(authSessionsTable)
         .set({ invalidatedAt: new Date() })
