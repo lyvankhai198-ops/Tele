@@ -101,6 +101,9 @@ import type {
   TelegramLoginPasswordInput,
   TelegramLoginResult,
   TelegramLoginStart,
+  TelegramQrAccountInput,
+  TelegramQrLoginStart,
+  TelegramQrLoginStatus,
   TelegramSavedMessage,
   UpdateProxyInput,
   UpgradeSummary,
@@ -1024,6 +1027,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateTelegramAccountMutationOptions(options));
     }
 
+export const getCreateTelegramQrAccountUrl = () => {
+
+
+
+
+  return `/api/telegram/accounts/qr`
+}
+
+export const createTelegramQrAccount = async (telegramQrAccountInput: TelegramQrAccountInput, options?: Parameters<typeof customFetch>[1]): Promise<TelegramQrLoginStart> => {
+
+  return customFetch<TelegramQrLoginStart>(getCreateTelegramQrAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(telegramQrAccountInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTelegramQrAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTelegramQrAccount>>, TError,{data: BodyType<TelegramQrAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTelegramQrAccount>>, TError,{data: BodyType<TelegramQrAccountInput>}, TContext> => {
+
+const mutationKey = ['createTelegramQrAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTelegramQrAccount>>, {data: BodyType<TelegramQrAccountInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTelegramQrAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTelegramQrAccountMutationResult = NonNullable<Awaited<ReturnType<typeof createTelegramQrAccount>>>
+    export type CreateTelegramQrAccountMutationBody = BodyType<TelegramQrAccountInput>
+    export type CreateTelegramQrAccountMutationError = ErrorType<void>
+
+    export const useCreateTelegramQrAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTelegramQrAccount>>, TError,{data: BodyType<TelegramQrAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTelegramQrAccount>>,
+        TError,
+        {data: BodyType<TelegramQrAccountInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTelegramQrAccountMutationOptions(options));
+    }
+
 export const getDeleteTelegramAccountUrl = (accountId: string,) => {
 
 
@@ -1349,6 +1417,214 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getConfirmTelegramLoginPasswordMutationOptions(options));
+    }
+
+export const getStartTelegramQrLoginUrl = (accountId: string,) => {
+
+
+
+
+  return `/api/telegram/accounts/${accountId}/login/qr`
+}
+
+export const startTelegramQrLogin = async (accountId: string, options?: Parameters<typeof customFetch>[1]): Promise<TelegramQrLoginStart> => {
+
+  return customFetch<TelegramQrLoginStart>(getStartTelegramQrLoginUrl(accountId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getStartTelegramQrLoginMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTelegramQrLogin>>, TError,{accountId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startTelegramQrLogin>>, TError,{accountId: string}, TContext> => {
+
+const mutationKey = ['startTelegramQrLogin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startTelegramQrLogin>>, {accountId: string}> = (props) => {
+          const {accountId} = props ?? {};
+
+          return  startTelegramQrLogin(accountId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartTelegramQrLoginMutationResult = NonNullable<Awaited<ReturnType<typeof startTelegramQrLogin>>>
+
+    export type StartTelegramQrLoginMutationError = ErrorType<void>
+
+    export const useStartTelegramQrLogin = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTelegramQrLogin>>, TError,{accountId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startTelegramQrLogin>>,
+        TError,
+        {accountId: string},
+        TContext
+      > => {
+      return useMutation(getStartTelegramQrLoginMutationOptions(options));
+    }
+
+export const getGetTelegramQrLoginStatusUrl = (accountId: string,
+    challengeId: string,) => {
+
+
+
+
+  return `/api/telegram/accounts/${accountId}/login/qr/${challengeId}`
+}
+
+export const getTelegramQrLoginStatus = async (accountId: string,
+    challengeId: string, options?: Parameters<typeof customFetch>[1]): Promise<TelegramQrLoginStatus> => {
+
+  return customFetch<TelegramQrLoginStatus>(getGetTelegramQrLoginStatusUrl(accountId,challengeId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTelegramQrLoginStatusQueryKey = (accountId: string,
+    challengeId: string,) => {
+    return [
+    `/api/telegram/accounts/${accountId}/login/qr/${challengeId}`
+    ] as const;
+    }
+
+
+export const getGetTelegramQrLoginStatusQueryOptions = <TData = Awaited<ReturnType<typeof getTelegramQrLoginStatus>>, TError = ErrorType<void>>(accountId: string,
+    challengeId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramQrLoginStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTelegramQrLoginStatusQueryKey(accountId,challengeId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTelegramQrLoginStatus>>> = ({ signal }) => getTelegramQrLoginStatus(accountId,challengeId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: accountId !== null && accountId !== undefined && challengeId !== null && challengeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTelegramQrLoginStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTelegramQrLoginStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getTelegramQrLoginStatus>>>
+export type GetTelegramQrLoginStatusQueryError = ErrorType<void>
+
+
+
+export function useGetTelegramQrLoginStatus<TData = Awaited<ReturnType<typeof getTelegramQrLoginStatus>>, TError = ErrorType<void>>(
+ accountId: string,
+    challengeId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelegramQrLoginStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTelegramQrLoginStatusQueryOptions(accountId,challengeId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCancelTelegramQrLoginUrl = (accountId: string,
+    challengeId: string,) => {
+
+
+
+
+  return `/api/telegram/accounts/${accountId}/login/qr/${challengeId}`
+}
+
+export const cancelTelegramQrLogin = async (accountId: string,
+    challengeId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getCancelTelegramQrLoginUrl(accountId,challengeId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelTelegramQrLoginMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelTelegramQrLogin>>, TError,{accountId: string;challengeId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelTelegramQrLogin>>, TError,{accountId: string;challengeId: string}, TContext> => {
+
+const mutationKey = ['cancelTelegramQrLogin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelTelegramQrLogin>>, {accountId: string;challengeId: string}> = (props) => {
+          const {accountId,challengeId} = props ?? {};
+
+          return  cancelTelegramQrLogin(accountId,challengeId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelTelegramQrLoginMutationResult = NonNullable<Awaited<ReturnType<typeof cancelTelegramQrLogin>>>
+
+    export type CancelTelegramQrLoginMutationError = ErrorType<void>
+
+    export const useCancelTelegramQrLogin = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelTelegramQrLogin>>, TError,{accountId: string;challengeId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelTelegramQrLogin>>,
+        TError,
+        {accountId: string;challengeId: string},
+        TContext
+      > => {
+      return useMutation(getCancelTelegramQrLoginMutationOptions(options));
     }
 
 export const getListDestinationsUrl = () => {

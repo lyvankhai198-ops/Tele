@@ -171,6 +171,106 @@ export async function confirmTelegramTwoFactorPassword(input: {
   }
 }
 
+export type TelegramQrCode = { loginLink: string; expiresAt: Date };
+
+export type TelegramQrLoginCallbacks = {
+  onQrCode: (qrCode: TelegramQrCode) => Promise<void> | void;
+  onTwoFactor: (hint?: string) => Promise<void> | void;
+  onConnected: (user: TelegramLoginUser, session: string) => Promise<void>;
+  onError: (error: unknown) => Promise<void> | void;
+};
+
+export type TelegramQrLoginHandle = {
+  session: string;
+  firstQrCode: Promise<TelegramQrCode>;
+  completion: Promise<void>;
+  submitPassword: (password: string) => boolean;
+  cancel: () => Promise<void>;
+};
+
+export async function startTelegramQrLogin(
+  credentials: TelegramCredentials,
+  proxy: TelegramProxyConfig | undefined,
+  callbacks: TelegramQrLoginCallbacks,
+): Promise<TelegramQrLoginHandle> {
+  const client = createTelegramClient("", credentials, proxy);
+  await client.connect();
+
+  let firstQrResolved = false;
+  let resolveFirstQr!: (qrCode: TelegramQrCode) => void;
+  let rejectFirstQr!: (error: unknown) => void;
+  const firstQrCode = new Promise<TelegramQrCode>((resolve, reject) => {
+    resolveFirstQr = resolve;
+    rejectFirstQr = reject;
+  });
+  let resolvePassword: ((password: string) => void) | null = null;
+  let cancelled = false;
+
+  const completion = (async () => {
+    try {
+      const user = await client.signInUserWithQrCode(credentials, {
+        qrCode: async ({ token, expires }) => {
+          const qrCode = {
+            loginLink: `tg://login?token=${token.toString("base64url")}`,
+            expiresAt: new Date(expires * 1000),
+          };
+          if (!firstQrResolved) {
+            firstQrResolved = true;
+            resolveFirstQr(qrCode);
+          }
+          await callbacks.onQrCode(qrCode);
+        },
+        password: async (hint) => {
+          return new Promise<string>((resolve, reject) => {
+            if (cancelled) {
+              reject(new Error("AUTH_USER_CANCEL"));
+              return;
+            }
+            resolvePassword = (password) => {
+              resolvePassword = null;
+              resolve(password);
+            };
+            Promise.resolve(callbacks.onTwoFactor(hint)).catch(reject);
+          });
+        },
+        onError: async (error) => {
+          await callbacks.onError(error);
+          const details = String((error as { errorMessage?: unknown })?.errorMessage ?? error).toUpperCase();
+          return !details.includes("PASSWORD_HASH_INVALID") && !details.includes("PASSWORD_EMPTY");
+        },
+      });
+      await callbacks.onConnected(telegramLoginUser(user), savedSession(client));
+    } catch (error) {
+      if (!firstQrResolved) {
+        firstQrResolved = true;
+        rejectFirstQr(error);
+      }
+      if (!cancelled) await callbacks.onError(error);
+      throw error;
+    } finally {
+      await destroyQuietly(client);
+    }
+  })();
+
+  const cancel = async () => {
+    cancelled = true;
+    resolvePassword?.("AUTH_USER_CANCEL");
+    await destroyQuietly(client);
+  };
+
+  return {
+    session: savedSession(client),
+    firstQrCode,
+    completion,
+    submitPassword: (password) => {
+      if (!resolvePassword) return false;
+      resolvePassword(password);
+      return true;
+    },
+    cancel,
+  };
+}
+
 function telegramId(entity: TelegramEntity): string {
   return String(entity.id ?? "");
 }

@@ -41,6 +41,8 @@ import {
   CreateMessageTemplateResponse,
   CreateTelegramAccountBody,
   CreateTelegramAccountResponse,
+  CreateTelegramQrAccountBody,
+  CreateTelegramQrAccountResponse,
   StartTelegramLoginParams,
   StartTelegramLoginResponse,
   ConfirmTelegramLoginCodeParams,
@@ -49,6 +51,12 @@ import {
   ConfirmTelegramLoginPasswordParams,
   ConfirmTelegramLoginPasswordBody,
   ConfirmTelegramLoginPasswordResponse,
+  StartTelegramQrLoginParams,
+  StartTelegramQrLoginResponse,
+  GetTelegramQrLoginStatusParams,
+  GetTelegramQrLoginStatusResponse,
+  CancelTelegramQrLoginParams,
+  CancelTelegramQrLoginResponse,
   DeleteTelegramAccountParams,
   DeleteTelegramAccountResponse,
   SyncTelegramDestinationsParams,
@@ -88,7 +96,7 @@ import {
 import { campaignCloneMode, campaignSummary, rebaseCampaignScheduleForResume } from "../lib/campaigns";
 import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
-import { getTelegramConfiguration } from "../lib/telegram-config";
+import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
 import {
   confirmTelegramPhoneCode,
@@ -102,6 +110,8 @@ import {
   isTelegramSessionRevoked,
   listTelegramSavedMessages,
   phoneForAccount,
+  startTelegramQrLogin,
+  type TelegramQrLoginHandle,
   startTelegramPhoneLogin,
   syncAccountDestinations,
 } from "../lib/telegram";
@@ -150,6 +160,12 @@ const MAX_CONCURRENT_PROXY_TESTS_PER_USER = 1;
 const proxyTestLimits = new Map<string, { active: number; attempts: number[] }>();
 type WaitingLoginStatus = "waiting_code" | "waiting_password";
 type ProcessingLoginStatus = "processing_code" | "processing_password";
+type LoginCompletionStatus = ProcessingLoginStatus | "waiting_qr";
+const qrLoginHandles = new Map<string, {
+  accountId: string;
+  ownerUserId: string;
+  handle: TelegramQrLoginHandle;
+}>();
 
 function telegramRpcErrorCode(error: unknown): string | null {
   const telegramError = error as { errorMessage?: unknown; message?: unknown } | null;
@@ -274,6 +290,11 @@ async function validateForwardTemplateSource(sourceAccountId: string | null | un
 }
 
 async function startLoginChallenge(account: typeof telegramAccountsTable.$inferSelect) {
+  for (const [challengeId, pending] of qrLoginHandles) {
+    if (pending.accountId === account.id && pending.ownerUserId === account.ownerUserId) {
+      await stopQrLogin(challengeId);
+    }
+  }
   const login = await startTelegramPhoneLogin(credentialsForAccount(account), phoneForAccount(account), await getTelegramProxyConfig(account));
   const expiresAt = new Date(Date.now() + LOGIN_CHALLENGE_TTL_MS);
   await db.update(authChallengesTable).set({ status: "expired" })
@@ -297,6 +318,111 @@ async function startLoginChallenge(account: typeof telegramAccountsTable.$inferS
     account: authorizingAccount,
     challenge: { id: challenge.id, expiresAt: challenge.expiresAt, delivery: login.delivery },
   };
+}
+
+function qrPasswordError(error: unknown): boolean {
+  const details = String((error as { errorMessage?: unknown })?.errorMessage ?? error).toUpperCase();
+  return details.includes("PASSWORD_HASH_INVALID") || details.includes("PASSWORD_EMPTY");
+}
+
+async function stopQrLogin(challengeId: string, status: "expired" | "cancelled" = "cancelled") {
+  const pending = qrLoginHandles.get(challengeId);
+  qrLoginHandles.delete(challengeId);
+  if (pending) await pending.handle.cancel();
+  await db.update(authChallengesTable).set({
+    status,
+    loginLink: null,
+    sessionEncrypted: null,
+    error: status === "expired" ? "Telegram QR login challenge expired" : "Telegram QR login cancelled",
+  }).where(and(eq(authChallengesTable.id, challengeId), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])));
+  if (pending) {
+    await db.update(telegramAccountsTable).set({ status: "saved", updatedAt: new Date() })
+      .where(and(eq(telegramAccountsTable.id, pending.accountId), eq(telegramAccountsTable.status, "authorizing")));
+  }
+}
+
+async function startQrLoginChallenge(account: typeof telegramAccountsTable.$inferSelect) {
+  for (const [challengeId, pending] of qrLoginHandles) {
+    if (pending.accountId === account.id && pending.ownerUserId === account.ownerUserId) {
+      await stopQrLogin(challengeId);
+    }
+  }
+  const expiresAt = new Date(Date.now() + LOGIN_CHALLENGE_TTL_MS);
+  await db.update(authChallengesTable).set({ status: "expired", loginLink: null })
+    .where(and(
+      eq(authChallengesTable.accountId, account.id),
+      inArray(authChallengesTable.status, ["waiting_code", "waiting_password", "processing_code", "processing_password", "waiting_qr"]),
+    ));
+  const [challenge] = await db.insert(authChallengesTable).values({
+    accountId: account.id,
+    ownerUserId: account.ownerUserId,
+    status: "waiting_qr",
+    expiresAt,
+  }).returning();
+  await db.update(telegramAccountsTable).set({ status: "authorizing", updatedAt: new Date() })
+    .where(eq(telegramAccountsTable.id, account.id));
+
+  try {
+    let handle!: TelegramQrLoginHandle;
+    handle = await startTelegramQrLogin(credentialsForAccount(account), await getTelegramProxyConfig(account), {
+      onQrCode: async (qrCode) => {
+        await db.update(authChallengesTable).set({
+          loginLink: encryptSecret(qrCode.loginLink),
+          error: null,
+        }).where(and(eq(authChallengesTable.id, challenge.id), eq(authChallengesTable.status, "waiting_qr")));
+      },
+      onTwoFactor: async () => {
+        await db.update(authChallengesTable).set({
+          status: "waiting_password",
+          requiresTwoFactor: true,
+          loginLink: null,
+          error: null,
+        }).where(and(eq(authChallengesTable.id, challenge.id), eq(authChallengesTable.status, "waiting_qr")));
+      },
+      onConnected: async (user, session) => {
+        const latestAccount = await ownedTelegramAccount(account.id, account.ownerUserId);
+        if (!latestAccount) throw new Error("Telegram account is no longer active");
+        await completeTelegramLogin({
+          account: latestAccount,
+          challengeId: challenge.id,
+          challengeStatus: "waiting_qr",
+          session,
+          user,
+        });
+      },
+      onError: async (error) => {
+        if (qrPasswordError(error)) return;
+        await db.update(authChallengesTable).set({
+          status: "expired",
+          loginLink: null,
+          sessionEncrypted: null,
+          error: String((error as { errorMessage?: unknown })?.errorMessage ?? "Telegram QR login failed"),
+        }).where(and(eq(authChallengesTable.id, challenge.id), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])));
+        await db.update(telegramAccountsTable).set({ status: "saved", updatedAt: new Date() })
+          .where(and(eq(telegramAccountsTable.id, account.id), eq(telegramAccountsTable.status, "authorizing")));
+      },
+    });
+    await db.update(authChallengesTable).set({ sessionEncrypted: encryptSecret(handle.session) })
+      .where(eq(authChallengesTable.id, challenge.id));
+    qrLoginHandles.set(challenge.id, { accountId: account.id, ownerUserId: account.ownerUserId, handle });
+    void handle.completion.finally(() => {
+      qrLoginHandles.delete(challenge.id);
+    }).catch(() => undefined);
+    const firstQrCode = await handle.firstQrCode;
+    const [authorizingAccount] = await db.select().from(telegramAccountsTable).where(eq(telegramAccountsTable.id, account.id));
+    return {
+      account: authorizingAccount,
+      challenge: {
+        id: challenge.id,
+        expiresAt,
+        delivery: "qr" as const,
+        qrUrl: firstQrCode.loginLink,
+      },
+    };
+  } catch (error) {
+    await stopQrLogin(challenge.id, "expired").catch(() => undefined);
+    throw error;
+  }
 }
 
 async function startDevelopmentDemoLoginChallenge(account: typeof telegramAccountsTable.$inferSelect) {
@@ -421,7 +547,7 @@ async function recordLoginAttemptFailure(input: {
 async function completeTelegramLogin(input: {
   account: typeof telegramAccountsTable.$inferSelect;
   challengeId: string;
-  challengeStatus: ProcessingLoginStatus;
+  challengeStatus: LoginCompletionStatus;
   session: string;
   user: { id: string; username: string | null; name: string | null };
 }) {
@@ -1172,6 +1298,61 @@ router.post("/telegram/accounts", async (req, res): Promise<void> => {
   }
 });
 
+router.post("/telegram/accounts/qr", async (req, res): Promise<void> => {
+  const parsed = CreateTelegramQrAccountBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, parsed.error.message);
+  if (!Number.isInteger(parsed.data.daily_limit)) {
+    return void sendError(res, 400, "Limit/ngày phải là số nguyên.");
+  }
+
+  let credentials: { apiId: number; apiHash: string };
+  try {
+    credentials = requireTelegramConfiguration();
+  } catch (error) {
+    req.log.warn({ err: error }, "Telegram QR login requested without server API configuration");
+    return void sendError(res, 503, "Tích hợp Telegram chưa được cấu hình trên máy chủ. Hãy cấu hình TELEGRAM_API_ID và TELEGRAM_API_HASH.");
+  }
+
+  const allowance = await getTelegramAccountAllowance(currentUserId(req));
+  if (allowance.accountLimit !== null && allowance.used >= allowance.accountLimit) {
+    return void sendError(res, 403, `Gói ${allowance.plan.toUpperCase()} chỉ cho phép ${allowance.accountLimit} tài khoản Telegram. Hãy nâng cấp để kết nối thêm.`);
+  }
+
+  let createdAccountId: string | null = null;
+  try {
+    const [account] = await db.insert(telegramAccountsTable).values({
+      ownerUserId: currentUserId(req),
+      name: "Telegram QR",
+      apiId: credentials.apiId,
+      apiHashEncrypted: encryptSecret(credentials.apiHash),
+      dailyLimit: parsed.data.daily_limit,
+      status: "saved",
+    }).returning();
+    createdAccountId = account.id;
+
+    const loginStart = await startQrLoginChallenge(account);
+    await recordActivity({
+      ownerUserId: currentUserId(req),
+      event: "account.login_started",
+      message: "Telegram QR login started",
+      accountId: account.id,
+      level: "info",
+    });
+    res.status(201).json(CreateTelegramQrAccountResponse.parse({
+      account: telegramAccountResponse(loginStart.account),
+      challenge: loginStart.challenge,
+    }));
+  } catch (error) {
+    req.log.error({ err: error }, "Unable to create Telegram QR account");
+    if (createdAccountId) {
+      await db.delete(telegramAccountsTable).where(eq(telegramAccountsTable.id, createdAccountId)).catch((cleanupError) => {
+        req.log.error({ err: cleanupError, accountId: createdAccountId }, "Unable to clean up failed Telegram QR account");
+      });
+    }
+    sendError(res, 500, "Không thể tạo đăng nhập QR Telegram lúc này. Hãy kiểm tra cấu hình máy chủ hoặc thử lại sau.");
+  }
+});
+
 router.post("/telegram/accounts/:accountId/login", async (req, res): Promise<void> => {
   const params = StartTelegramLoginParams.safeParse(req.params);
   if (!params.success) return void sendError(res, 400, params.error.message);
@@ -1191,6 +1372,93 @@ router.post("/telegram/accounts/:accountId/login", async (req, res): Promise<voi
       .where(eq(telegramAccountsTable.id, account.id));
     sendError(res, 502, "Không thể gửi mã xác minh Telegram. Hãy thử lại sau.");
   }
+});
+
+router.post("/telegram/accounts/:accountId/login/qr", async (req, res): Promise<void> => {
+  const params = StartTelegramQrLoginParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const account = await ownedTelegramAccount(params.data.accountId, currentUserId(req));
+  if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  if (account.sessionEncrypted) return void sendError(res, 409, "Tài khoản này đã đăng nhập.");
+  try {
+    const loginStart = await startQrLoginChallenge(account);
+    await recordActivity({
+      ownerUserId: currentUserId(req),
+      event: "account.login_started",
+      message: "Telegram QR verification started",
+      accountId: account.id,
+      level: "info",
+    });
+    res.status(201).json(StartTelegramQrLoginResponse.parse({
+      account: telegramAccountResponse(loginStart.account),
+      challenge: loginStart.challenge,
+    }));
+  } catch (error) {
+    req.log.warn({ err: error, accountId: account.id }, "Unable to start Telegram QR login");
+    await db.update(telegramAccountsTable).set({ status: "saved", updatedAt: new Date() })
+      .where(and(eq(telegramAccountsTable.id, account.id), eq(telegramAccountsTable.status, "authorizing")));
+    sendError(res, 502, "Không thể tạo mã QR Telegram. Hãy thử lại sau.");
+  }
+});
+
+router.get("/telegram/accounts/:accountId/login/qr/:challengeId", async (req, res): Promise<void> => {
+  const params = GetTelegramQrLoginStatusParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const ownerUserId = currentUserId(req);
+  const [row] = await db.select({
+    challenge: authChallengesTable,
+    account: telegramAccountsTable,
+  }).from(authChallengesTable).innerJoin(
+    telegramAccountsTable,
+    eq(authChallengesTable.accountId, telegramAccountsTable.id),
+  ).where(and(
+    eq(authChallengesTable.id, params.data.challengeId),
+    eq(authChallengesTable.accountId, params.data.accountId),
+    eq(authChallengesTable.ownerUserId, ownerUserId),
+    eq(telegramAccountsTable.ownerUserId, ownerUserId),
+    isNull(telegramAccountsTable.deletedAt),
+  ));
+  if (!row) return void sendError(res, 404, "Không tìm thấy yêu cầu QR Telegram.");
+
+  let status: "waiting_qr" | "requires_2fa" | "connected" | "expired" | "cancelled";
+  if (row.challenge.status === "waiting_qr" || row.challenge.status === "waiting_password") {
+    if (row.challenge.expiresAt.getTime() <= Date.now()) {
+      await stopQrLogin(row.challenge.id, "expired");
+      status = "expired";
+    } else {
+      status = row.challenge.status === "waiting_password" ? "requires_2fa" : "waiting_qr";
+    }
+  } else if (row.challenge.status === "authorized") {
+    status = "connected";
+  } else if (row.challenge.status === "cancelled") {
+    status = "cancelled";
+  } else {
+    status = "expired";
+  }
+
+  const [currentAccount] = await db.select().from(telegramAccountsTable).where(eq(telegramAccountsTable.id, row.account.id));
+  res.json(GetTelegramQrLoginStatusResponse.parse({
+    status,
+    account: telegramAccountResponse(currentAccount ?? row.account),
+    expiresAt: row.challenge.expiresAt,
+    qrUrl: status === "waiting_qr" && row.challenge.loginLink
+      ? decryptSecret(row.challenge.loginLink)
+      : null,
+  }));
+});
+
+router.delete("/telegram/accounts/:accountId/login/qr/:challengeId", async (req, res): Promise<void> => {
+  const params = CancelTelegramQrLoginParams.safeParse(req.params);
+  if (!params.success) return void sendError(res, 400, params.error.message);
+  const ownerUserId = currentUserId(req);
+  const [challenge] = await db.select({ id: authChallengesTable.id }).from(authChallengesTable).where(and(
+    eq(authChallengesTable.id, params.data.challengeId),
+    eq(authChallengesTable.accountId, params.data.accountId),
+    eq(authChallengesTable.ownerUserId, ownerUserId),
+  ));
+  if (!challenge) return void sendError(res, 404, "Không tìm thấy yêu cầu QR Telegram.");
+  await stopQrLogin(challenge.id);
+  res.status(204).send();
 });
 
 router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promise<void> => {
@@ -1308,6 +1576,23 @@ router.post("/telegram/accounts/:accountId/login/password", async (req, res): Pr
   if (!params.success || !parsed.success) return void sendError(res, 400, "Mật khẩu 2FA không hợp lệ.");
   const account = await ownedTelegramAccount(params.data.accountId, currentUserId(req));
   if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  const [qrChallenge] = await db.select().from(authChallengesTable).where(and(
+    eq(authChallengesTable.id, parsed.data.challengeId),
+    eq(authChallengesTable.accountId, account.id),
+    eq(authChallengesTable.ownerUserId, currentUserId(req)),
+    eq(authChallengesTable.status, "waiting_password"),
+    gt(authChallengesTable.expiresAt, new Date()),
+  ));
+  const pendingQrLogin = qrChallenge ? qrLoginHandles.get(qrChallenge.id) : undefined;
+  if (pendingQrLogin) {
+    if (!pendingQrLogin.handle.submitPassword(parsed.data.password)) {
+      return void sendError(res, 409, "Yêu cầu QR Telegram không còn chờ mật khẩu. Hãy quét lại mã QR.");
+    }
+    return void res.json(ConfirmTelegramLoginPasswordResponse.parse({
+      status: "requires_2fa",
+      account: telegramAccountResponse(account),
+    }));
+  }
   const reservation = await activeLoginChallenge({
     accountId: account.id,
     ownerUserId: currentUserId(req),
@@ -1358,6 +1643,11 @@ router.delete("/telegram/accounts/:accountId", async (req, res): Promise<void> =
   const [account] = await db.select().from(telegramAccountsTable)
     .where(and(eq(telegramAccountsTable.id, params.data.accountId), eq(telegramAccountsTable.ownerUserId, currentUserId(req)), isNull(telegramAccountsTable.deletedAt)));
   if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  for (const [challengeId, pending] of qrLoginHandles) {
+    if (pending.accountId === account.id && pending.ownerUserId === account.ownerUserId) {
+      await stopQrLogin(challengeId);
+    }
+  }
 
   const destinations = await db.select({ id: destinationsTable.id }).from(destinationsTable)
     .where(eq(destinationsTable.accountId, account.id));

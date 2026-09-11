@@ -223,7 +223,40 @@ export const CreateTelegramAccountResponse = zod.object({
   "challenge": zod.object({
   "id": zod.string(),
   "expiresAt": zod.coerce.date(),
-  "delivery": zod.enum(['app', 'sms'])
+  "delivery": zod.enum(['app', 'sms', 'qr']),
+  "qrUrl": zod.string().nullish()
+})
+})
+
+
+export const createTelegramQrAccountBodyDailyLimitDefault = 200;
+export const createTelegramQrAccountBodyDailyLimitMax = 100000;
+
+
+
+export const CreateTelegramQrAccountBody = zod.object({
+  "daily_limit": zod.number().min(1).max(createTelegramQrAccountBodyDailyLimitMax).default(createTelegramQrAccountBodyDailyLimitDefault)
+})
+
+export const CreateTelegramQrAccountResponse = zod.object({
+  "account": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "username": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "api_id": zod.number().nullable(),
+  "telegramUserId": zod.string().nullable(),
+  "status": zod.string(),
+  "daily_limit": zod.number(),
+  "proxyId": zod.string().nullable(),
+  "lastSyncAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+}),
+  "challenge": zod.object({
+  "id": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "delivery": zod.enum(['app', 'sms', 'qr']),
+  "qrUrl": zod.string().nullish()
 })
 })
 
@@ -267,7 +300,8 @@ export const StartTelegramLoginResponse = zod.object({
   "challenge": zod.object({
   "id": zod.string(),
   "expiresAt": zod.coerce.date(),
-  "delivery": zod.enum(['app', 'sms'])
+  "delivery": zod.enum(['app', 'sms', 'qr']),
+  "qrUrl": zod.string().nullish()
 })
 })
 
@@ -335,6 +369,66 @@ export const ConfirmTelegramLoginPasswordResponse = zod.object({
   "createdAt": zod.coerce.date()
 })
 })
+
+
+export const StartTelegramQrLoginParams = zod.object({
+  "accountId": zod.coerce.string()
+})
+
+export const StartTelegramQrLoginResponse = zod.object({
+  "account": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "username": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "api_id": zod.number().nullable(),
+  "telegramUserId": zod.string().nullable(),
+  "status": zod.string(),
+  "daily_limit": zod.number(),
+  "proxyId": zod.string().nullable(),
+  "lastSyncAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+}),
+  "challenge": zod.object({
+  "id": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "delivery": zod.enum(['app', 'sms', 'qr']),
+  "qrUrl": zod.string().nullish()
+})
+})
+
+
+export const GetTelegramQrLoginStatusParams = zod.object({
+  "accountId": zod.coerce.string(),
+  "challengeId": zod.coerce.string()
+})
+
+export const GetTelegramQrLoginStatusResponse = zod.object({
+  "status": zod.enum(['waiting_qr', 'requires_2fa', 'connected', 'expired', 'cancelled']),
+  "account": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "username": zod.string().nullable(),
+  "phone": zod.string().nullable(),
+  "api_id": zod.number().nullable(),
+  "telegramUserId": zod.string().nullable(),
+  "status": zod.string(),
+  "daily_limit": zod.number(),
+  "proxyId": zod.string().nullable(),
+  "lastSyncAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+}),
+  "expiresAt": zod.coerce.date(),
+  "qrUrl": zod.string().nullable()
+})
+
+
+export const CancelTelegramQrLoginParams = zod.object({
+  "accountId": zod.coerce.string(),
+  "challengeId": zod.coerce.string()
+})
+
+export const CancelTelegramQrLoginResponse = zod.void()
 
 
 export const ListDestinationsResponseItem = zod.object({

@@ -7,6 +7,7 @@ import {
   Key,
   LoaderCircle,
   Plus,
+  QrCode,
   RefreshCw,
   Send,
   Smartphone,
@@ -19,12 +20,17 @@ import {
   useConfirmTelegramLoginCode,
   useConfirmTelegramLoginPassword,
   useCreateTelegramAccount,
+  useCreateTelegramQrAccount,
   useDeleteTelegramAccount,
   useGetSystemDefaults,
+  useGetTelegramQrLoginStatus,
   useListTelegramAccounts,
+  useStartTelegramQrLogin,
+  useCancelTelegramQrLogin,
   useStartTelegramLogin,
   useSyncTelegramDestinations,
 } from "@workspace/api-client-react";
+import QRCode from "qrcode";
 import { AppLayout, Input, Toast } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 
@@ -67,7 +73,7 @@ const copy = {
     prepare: "Prepare your account",
     prepareDescription: "Use only a Telegram account you are authorized to manage.",
     api: "Open Telegram API",
-    apiDescription: "Open my.telegram.org in a browser and sign in with your Telegram account.",
+    apiDescription: "Get api_id and api_hash from my.telegram.org → API development tools.",
     app: "Create an application",
     appDescription: "Open API development tools and create an application.",
     credentials: "Copy API credentials",
@@ -80,12 +86,15 @@ const copy = {
     saveStepDescription: "The account appears in the list with its saved limit and login status.",
     addTitle: "Add Telegram account",
     addDescription: "Enter the Telegram account details below.",
+    methodApi: "Method 1: Sign in with API ID / API Hash",
+    methodQr: "Method 2: Sign in with Telegram QR code",
     apiNote: "Get your api_id and api_hash from",
     apiId: "api_id",
     apiHash: "api_hash",
     phoneNumber: "Telegram phone number",
     phonePlaceholder: "+84...",
     save: "Save",
+    saveAndQr: "Save & use QR",
     verify: "Verify",
     verificationTitle: "Verify Telegram",
     verificationDescription: "Enter the code Telegram sent to your account.",
@@ -100,6 +109,14 @@ const copy = {
     sentViaApp: "Telegram sent the code in the Telegram app. Use only the newest message; older codes are no longer valid.",
     sentViaSms: "Telegram sent the code by SMS. Use only the newest message; older codes are no longer valid.",
     tryAgain: "Try again",
+    useQr: "Use QR code instead",
+    qrTitle: "Scan Telegram QR code",
+    qrDescription: "Open Telegram on your phone, go to Settings → Devices → Link Desktop Device, then scan this code.",
+    qrWaiting: "Waiting for Telegram to confirm the scan...",
+    qrTwoFactor: "Telegram accepted the QR scan. Enter your 2FA password to finish.",
+    qrExpired: "This QR code has expired. Generate a new one to try again.",
+    qrCancel: "Cancel",
+    qrRegenerate: "Generate new QR",
   },
   vi: {
     requestFailed: "Yêu cầu không thể hoàn thành.",
@@ -139,7 +156,7 @@ const copy = {
     prepare: "Chuẩn bị tài khoản",
     prepareDescription: "Chỉ dùng tài khoản Telegram bạn được phép quản lý.",
     api: "Mở Telegram API",
-    apiDescription: "Truy cập my.telegram.org trên trình duyệt và đăng nhập bằng tài khoản Telegram.",
+    apiDescription: "Lấy api_id và api_hash tại my.telegram.org → API development tools.",
     app: "Tạo ứng dụng",
     appDescription: "Mở API development tools và tạo application.",
     credentials: "Lấy API credentials",
@@ -152,12 +169,15 @@ const copy = {
     saveStepDescription: "Tài khoản sẽ xuất hiện trong danh sách với limit và trạng thái đăng nhập.",
     addTitle: "Thêm tài khoản Telegram",
     addDescription: "Nhập thông tin tài khoản Telegram bên dưới.",
+    methodApi: "Phương thức 1: Đăng nhập bằng API ID / API Hash",
+    methodQr: "Phương thức 2: Đăng nhập bằng mã QR Telegram",
     apiNote: "Lấy api_id và api_hash tại",
     apiId: "api_id",
     apiHash: "api_hash",
     phoneNumber: "Số điện thoại Telegram",
     phonePlaceholder: "+84...",
     save: "Lưu",
+    saveAndQr: "Lưu & dùng QR",
     verify: "Xác minh",
     verificationTitle: "Xác minh Telegram",
     verificationDescription: "Nhập mã Telegram đã gửi đến tài khoản của bạn.",
@@ -172,6 +192,14 @@ const copy = {
     sentViaApp: "Telegram đã gửi mã trong ứng dụng. Chỉ dùng tin nhắn mới nhất; mã cũ không còn hiệu lực.",
     sentViaSms: "Telegram đã gửi mã qua SMS. Chỉ dùng tin nhắn mới nhất; mã cũ không còn hiệu lực.",
     tryAgain: "Thử lại",
+    useQr: "Đăng nhập bằng mã QR",
+    qrTitle: "Quét mã QR Telegram",
+    qrDescription: "Mở Telegram trên điện thoại, vào Cài đặt → Thiết bị → Liên kết thiết bị máy tính, rồi quét mã này.",
+    qrWaiting: "Đang chờ Telegram xác nhận quét mã...",
+    qrTwoFactor: "Telegram đã nhận mã QR. Nhập mật khẩu 2FA để hoàn tất.",
+    qrExpired: "Mã QR đã hết hạn. Hãy tạo mã mới để thử lại.",
+    qrCancel: "Hủy",
+    qrRegenerate: "Tạo mã QR mới",
   },
 } as const;
 
@@ -279,8 +307,10 @@ function HelpStep({
 type LoginFlow = {
   accountId: string;
   challengeId: string;
-  delivery: "app" | "sms";
-  step: "code" | "password";
+  delivery: "app" | "sms" | "qr";
+  step: "code" | "password" | "qr";
+  qrUrl?: string | null;
+  expiresAt?: string;
 };
 
 export default function Accounts() {
@@ -289,10 +319,13 @@ export default function Accounts() {
   const queryClient = useQueryClient();
   const accounts = useListTelegramAccounts();
   const createAccount = useCreateTelegramAccount();
+  const createQrAccount = useCreateTelegramQrAccount();
   const deleteAccount = useDeleteTelegramAccount();
   const startLogin = useStartTelegramLogin();
   const confirmCode = useConfirmTelegramLoginCode();
   const confirmPassword = useConfirmTelegramLoginPassword();
+  const startQrLogin = useStartTelegramQrLogin();
+  const cancelQrLogin = useCancelTelegramQrLogin();
   const sync = useSyncTelegramDestinations();
   const systemDefaults = useGetSystemDefaults();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -302,17 +335,20 @@ export default function Accounts() {
   const [apiHash, setApiHash] = useState("");
   const [phone, setPhone] = useState("");
   const [dailyLimit, setDailyLimit] = useState("200");
+  const [addMethod, setAddMethod] = useState<"choose" | "api">("choose");
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [loginFlow, setLoginFlow] = useState<LoginFlow | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [twoFactorPassword, setTwoFactorPassword] = useState("");
+  const [qrImage, setQrImage] = useState("");
   const loginSubmissionLocked = useRef(false);
   const defaultDailyLimit = String(systemDefaults.data?.defaultAccountDailyLimit ?? 200);
 
   const closeAddModal = () => {
     setShowAddModal(false);
+    setAddMethod("choose");
     setApiId("");
     setApiHash("");
     setPhone("");
@@ -320,11 +356,23 @@ export default function Accounts() {
   };
   const openAddModal = () => {
     setDailyLimit(defaultDailyLimit);
+    setAddMethod("choose");
     setShowAddModal(true);
   };
 
   const invalidateAccounts = () => queryClient.invalidateQueries({ queryKey: getListTelegramAccountsQueryKey() });
   const isLoginPending = startLogin.isPending || confirmCode.isPending || confirmPassword.isPending;
+  const qrStatus = useGetTelegramQrLoginStatus(
+    loginFlow?.accountId ?? "",
+    loginFlow?.challengeId ?? "",
+    {
+      query: {
+        queryKey: ["telegram-qr-login-status", loginFlow?.accountId ?? "", loginFlow?.challengeId ?? ""],
+        enabled: loginFlow?.delivery === "qr",
+        refetchInterval: loginFlow?.delivery === "qr" ? 1500 : false,
+      },
+    },
+  );
 
   const completeTelegramLogin = () => {
     void invalidateAccounts();
@@ -332,16 +380,21 @@ export default function Accounts() {
     setToast(text.loginComplete);
   };
 
-  const openCodeVerification = (data: { account: { id: string }; challenge: { id: string; delivery: "app" | "sms" } }) => {
+  const openCodeVerification = (data: { account: { id: string }; challenge: { id: string; delivery: "app" | "sms" | "qr" } }) => {
+    const delivery = data.challenge.delivery === "sms" ? "sms" : "app";
     setVerificationCode("");
     setTwoFactorPassword("");
-    setLoginFlow({ accountId: data.account.id, challengeId: data.challenge.id, delivery: data.challenge.delivery, step: "code" });
+    setLoginFlow({ accountId: data.account.id, challengeId: data.challenge.id, delivery, step: "code" });
   };
 
   const closeLoginDialog = () => {
+    if (loginFlow?.delivery === "qr" && !cancelQrLogin.isPending) {
+      cancelQrLogin.mutate({ accountId: loginFlow.accountId, challengeId: loginFlow.challengeId });
+    }
     loginSubmissionLocked.current = false;
     setVerificationCode("");
     setTwoFactorPassword("");
+    setQrImage("");
     setLoginFlow(null);
   };
 
@@ -362,8 +415,105 @@ export default function Accounts() {
     });
   };
 
-  const saveAccount = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const startQrAccountLogin = (accountId: string) => {
+    if (loginSubmissionLocked.current) return;
+    loginSubmissionLocked.current = true;
+    startQrLogin.mutate({ accountId }, {
+      onSuccess: (data) => {
+        void invalidateAccounts();
+        setQrImage("");
+        setLoginFlow({
+          accountId: data.account.id,
+          challengeId: data.challenge.id,
+          delivery: "qr",
+          step: "qr",
+          qrUrl: data.challenge.qrUrl,
+          expiresAt: data.challenge.expiresAt,
+        });
+      },
+      onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onSettled: () => {
+        loginSubmissionLocked.current = false;
+      },
+    });
+  };
+
+  const openQrLogin = (data: { account: { id: string }; challenge: { id: string; qrUrl?: string | null; expiresAt: string } }) => {
+    void invalidateAccounts();
+    closeAddModal();
+    setQrImage("");
+    setLoginFlow({
+      accountId: data.account.id,
+      challengeId: data.challenge.id,
+      delivery: "qr",
+      step: "qr",
+      qrUrl: data.challenge.qrUrl,
+      expiresAt: data.challenge.expiresAt,
+    });
+  };
+
+  const startDirectQrAccountLogin = () => {
+    if (loginSubmissionLocked.current) return;
+    const parsedDailyLimit = Number(dailyLimit);
+    if (!Number.isInteger(parsedDailyLimit) || parsedDailyLimit < 1) {
+      setToast(text.requestFailed);
+      return;
+    }
+    loginSubmissionLocked.current = true;
+    createQrAccount.mutate({ data: { daily_limit: parsedDailyLimit } }, {
+      onSuccess: openQrLogin,
+      onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onSettled: () => {
+        loginSubmissionLocked.current = false;
+      },
+    });
+  };
+
+  useEffect(() => {
+    if (loginFlow?.delivery !== "qr" || !loginFlow.qrUrl || loginFlow.step !== "qr") {
+      setQrImage("");
+      return;
+    }
+    let active = true;
+    void QRCode.toDataURL(loginFlow.qrUrl, {
+      width: 280,
+      margin: 2,
+      color: { dark: "#0f172a", light: "#ffffff" },
+    }).then((url) => {
+      if (active) setQrImage(url);
+    }).catch(() => {
+      if (active) setQrImage("");
+    });
+    return () => {
+      active = false;
+    };
+  }, [loginFlow?.delivery, loginFlow?.qrUrl, loginFlow?.step]);
+
+  useEffect(() => {
+    const status = qrStatus.data;
+    if (!status || loginFlow?.delivery !== "qr") return;
+    if (status.status === "waiting_qr") {
+      if (status.qrUrl && status.qrUrl !== loginFlow.qrUrl) {
+        setLoginFlow((current) => current ? { ...current, qrUrl: status.qrUrl, expiresAt: status.expiresAt, step: "qr" } : current);
+      }
+      return;
+    }
+    if (status.status === "requires_2fa") {
+      setLoginFlow((current) => current ? { ...current, step: "password", qrUrl: null } : current);
+      setTwoFactorPassword("");
+      return;
+    }
+    if (status.status === "connected") {
+      completeTelegramLogin();
+      return;
+    }
+    if (status.status === "expired" || status.status === "cancelled") {
+      setToast(text.qrExpired);
+      closeLoginDialog();
+    }
+  }, [qrStatus.data?.status, qrStatus.data?.qrUrl]);
+
+  const submitAccount = () => {
     const parsedApiId = Number(apiId);
     const parsedDailyLimit = Number(dailyLimit);
     if (!Number.isInteger(parsedApiId) || !Number.isInteger(parsedDailyLimit) || !apiHash.trim() || !phone.trim()) {
@@ -386,6 +536,11 @@ export default function Accounts() {
       },
       onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
     });
+  };
+
+  const saveAccount = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    submitAccount();
   };
 
   const submitVerificationCode = (event: React.FormEvent<HTMLFormElement>) => {
@@ -420,7 +575,12 @@ export default function Accounts() {
       data: { challengeId: loginFlow.challengeId, password: twoFactorPassword },
     }, {
       onSuccess: () => {
-        completeTelegramLogin();
+        if (loginFlow.delivery === "qr") {
+          setTwoFactorPassword("");
+          setToast(text.qrWaiting);
+        } else {
+          completeTelegramLogin();
+        }
       },
       onError: (error) => {
         setTwoFactorPassword("");
@@ -566,36 +726,58 @@ export default function Accounts() {
 
       {showAddModal && (
         <AccountsDialog title={text.addTitle} description={text.addDescription} onClose={closeAddModal} testId="telegram-accounts-add-dialog">
-          <form className="space-y-5" onSubmit={saveAccount}>
-            <p className="rounded-2xl border border-[#bde4f9] bg-[#f0f9ff] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#0369a1]">
-              {text.apiNote}{" "}
-              <a
-                href="https://my.telegram.org"
-                target="_blank"
-                rel="noreferrer"
-                className="font-extrabold underline decoration-[#7dd3fc] underline-offset-2 hover:text-[#075985]"
-              >
-                my.telegram.org
-              </a>{" "}
-              <span>→ API development tools.</span>
-            </p>
-            <Input label={text.apiId} value={apiId} onChange={setApiId} placeholder="12345678" type="number" />
-            <Input label={text.apiHash} value={apiHash} onChange={setApiHash} placeholder="0123456789abcdef" type="password" />
-            <Input label={text.phoneNumber} value={phone} onChange={setPhone} placeholder={text.phonePlaceholder} type="tel" />
-            <Input label={text.dailyLimit} value={dailyLimit} onChange={setDailyLimit} placeholder="200" type="number" />
-            <div className="flex justify-end pt-3">
-              <button type="submit" disabled={createAccount.isPending} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2aabee] px-6 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4] disabled:cursor-not-allowed disabled:opacity-50" data-testid="telegram-accounts-save">
-                {createAccount.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}{text.save}
+          {addMethod === "choose" ? (
+            <div className="space-y-4">
+              <button type="button" onClick={() => setAddMethod("api")} className="flex w-full items-start gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5 text-left shadow-sm transition-all hover:border-[#7dd3fc] hover:bg-[#f8fcff] hover:shadow-md" data-testid="telegram-accounts-method-api">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#eaf6fd] text-[#1c93d4]"><Key className="h-5 w-5" /></span>
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-extrabold text-[#0f172a]">{text.methodApi}</span>
+                  <span className="mt-1 block text-[13px] font-medium leading-relaxed text-[#64748b]">{text.apiDescription}</span>
+                </span>
+              </button>
+              <button type="button" onClick={startDirectQrAccountLogin} disabled={createQrAccount.isPending} className="flex w-full items-start gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5 text-left shadow-sm transition-all hover:border-[#7dd3fc] hover:bg-[#f8fcff] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60" data-testid="telegram-accounts-method-qr">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#f0f9ff] text-[#0369a1]"><QrCode className="h-5 w-5" /></span>
+                <span className="min-w-0">
+                  <span className="block text-[15px] font-extrabold text-[#0f172a]">{text.methodQr}</span>
+                  <span className="mt-1 block text-[13px] font-medium leading-relaxed text-[#64748b]">{createQrAccount.isPending ? text.loading : text.qrDescription}</span>
+                </span>
               </button>
             </div>
-          </form>
+          ) : (
+            <form className="space-y-5" onSubmit={saveAccount}>
+              <p className="rounded-2xl border border-[#bde4f9] bg-[#f0f9ff] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#0369a1]">
+                {text.apiNote}{" "}
+                <a
+                  href="https://my.telegram.org"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-extrabold underline decoration-[#7dd3fc] underline-offset-2 hover:text-[#075985]"
+                >
+                  my.telegram.org
+                </a>{" "}
+                <span>→ API development tools.</span>
+              </p>
+              <Input label={text.apiId} value={apiId} onChange={setApiId} placeholder="12345678" type="number" />
+              <Input label={text.apiHash} value={apiHash} onChange={setApiHash} placeholder="0123456789abcdef" type="password" />
+              <Input label={text.phoneNumber} value={phone} onChange={setPhone} placeholder={text.phonePlaceholder} type="tel" />
+              <Input label={text.dailyLimit} value={dailyLimit} onChange={setDailyLimit} placeholder="200" type="number" />
+              <div className="flex flex-col-reverse gap-3 pt-3 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setAddMethod("choose")} disabled={createAccount.isPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f1f5f9] px-5 text-[14px] font-bold text-[#475569] ring-1 ring-inset ring-[#e2e8f0] transition-colors hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50">
+                  {text.qrCancel}
+                </button>
+                <button type="submit" disabled={createAccount.isPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4] disabled:cursor-not-allowed disabled:opacity-50" data-testid="telegram-accounts-save">
+                  {createAccount.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}{text.save}
+                </button>
+              </div>
+            </form>
+          )}
         </AccountsDialog>
       )}
 
       {loginFlow && (
         <AccountsDialog
-          title={loginFlow.step === "code" ? text.verificationTitle : text.twoFactorTitle}
-          description={loginFlow.step === "code" ? text.verificationDescription : text.twoFactorDescription}
+          title={loginFlow.step === "code" ? text.verificationTitle : loginFlow.step === "qr" ? text.qrTitle : text.twoFactorTitle}
+          description={loginFlow.step === "code" ? text.verificationDescription : loginFlow.step === "qr" ? text.qrDescription : text.twoFactorDescription}
           onClose={closeLoginDialog}
           testId="telegram-accounts-login-dialog"
         >
@@ -606,6 +788,9 @@ export default function Accounts() {
               </p>
               <Input label={text.code} value={verificationCode} onChange={setVerificationCode} placeholder={text.codePlaceholder} type="text" />
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+                 <button type="button" onClick={() => startQrAccountLogin(loginFlow.accountId)} disabled={isLoginPending || startQrLogin.isPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f0f9ff] px-5 text-[14px] font-bold text-[#0369a1] ring-1 ring-inset ring-[#bae6fd] transition-colors hover:bg-[#e0f2fe] disabled:cursor-not-allowed disabled:opacity-50" data-testid="telegram-accounts-use-qr">
+                   {startQrLogin.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}{text.useQr}
+                 </button>
                 <button type="button" onClick={() => startAccountLogin(loginFlow.accountId)} disabled={isLoginPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f1f5f9] px-5 text-[14px] font-bold text-[#475569] transition-colors hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50" data-testid="telegram-accounts-resend-code">
                   {startLogin.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}{text.resendCode}
                 </button>
@@ -614,9 +799,29 @@ export default function Accounts() {
                 </button>
               </div>
             </form>
+           ) : loginFlow.step === "qr" ? (
+             <div className="space-y-5">
+               <div className="flex justify-center rounded-2xl border border-[#e2e8f0] bg-white p-4">
+                 {qrImage ? (
+                   <img src={qrImage} alt={text.qrTitle} className="h-[280px] w-[280px] rounded-xl" />
+                 ) : (
+                   <div className="grid h-[280px] w-[280px] place-items-center rounded-xl bg-[#f8fafc] text-center text-[13px] font-semibold text-[#64748b]">
+                     <LoaderCircle className="h-7 w-7 animate-spin text-[#2aabee]" />
+                   </div>
+                 )}
+               </div>
+               <p className="rounded-xl bg-[#f0f9ff] px-4 py-3 text-center text-[13px] font-semibold text-[#0369a1]">{text.qrWaiting}</p>
+               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                 <button type="button" onClick={() => startQrAccountLogin(loginFlow.accountId)} disabled={startQrLogin.isPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f1f5f9] px-5 text-[14px] font-bold text-[#475569] transition-colors hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50">
+                   {startQrLogin.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}{text.qrRegenerate}
+                 </button>
+                 <button type="button" onClick={closeLoginDialog} className="inline-flex h-11 items-center justify-center rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4]">{text.qrCancel}</button>
+               </div>
+             </div>
           ) : (
             <form className="space-y-5" onSubmit={submitTwoFactorPassword}>
               <Input label={text.twoFactorPassword} value={twoFactorPassword} onChange={setTwoFactorPassword} type="password" />
+               {loginFlow.delivery === "qr" && <p className="rounded-xl bg-[#f0f9ff] px-4 py-3 text-[13px] font-semibold text-[#0369a1]">{text.qrTwoFactor}</p>}
               <div className="flex justify-end pt-2">
                 <button type="submit" disabled={isLoginPending || !twoFactorPassword} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4] disabled:cursor-not-allowed disabled:opacity-50" data-testid="telegram-accounts-confirm-password">
                   {confirmPassword.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}{text.confirmPassword}

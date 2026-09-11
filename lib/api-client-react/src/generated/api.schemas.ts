@@ -181,6 +181,14 @@ export interface TelegramAccountInput {
   daily_limit: number;
 }
 
+export interface TelegramQrAccountInput {
+  /**
+     * @minimum 1
+     * @maximum 100000
+     */
+  daily_limit: number;
+}
+
 export interface TelegramAccountDeletion {
   message: string;
 }
@@ -191,12 +199,14 @@ export type TelegramLoginChallengeDelivery = typeof TelegramLoginChallengeDelive
 export const TelegramLoginChallengeDelivery = {
   app: 'app',
   sms: 'sms',
+  qr: 'qr',
 } as const;
 
 export interface TelegramLoginChallenge {
   id: string;
   expiresAt: string;
   delivery: TelegramLoginChallengeDelivery;
+  qrUrl?: string | null;
 }
 
 export interface TelegramLoginStart {
@@ -235,6 +245,29 @@ export const TelegramLoginResultStatus = {
 export interface TelegramLoginResult {
   status: TelegramLoginResultStatus;
   account: TelegramAccount;
+}
+
+export interface TelegramQrLoginStart {
+  account: TelegramAccount;
+  challenge: TelegramLoginChallenge;
+}
+
+export type TelegramQrLoginStatusStatus = typeof TelegramQrLoginStatusStatus[keyof typeof TelegramQrLoginStatusStatus];
+
+
+export const TelegramQrLoginStatusStatus = {
+  waiting_qr: 'waiting_qr',
+  requires_2fa: 'requires_2fa',
+  connected: 'connected',
+  expired: 'expired',
+  cancelled: 'cancelled',
+} as const;
+
+export interface TelegramQrLoginStatus {
+  status: TelegramQrLoginStatusStatus;
+  account: TelegramAccount;
+  expiresAt: string;
+  qrUrl: string | null;
 }
 
 export interface SyncResult {

@@ -193,6 +193,23 @@ paths:
               schema: { $ref: "#/components/schemas/TelegramLoginStart" }
         "403":
           description: Telegram account quota exceeded
+  /telegram/accounts/qr:
+    post:
+      operationId: createTelegramQrAccount
+      tags: [telegram]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelegramQrAccountInput" }
+      responses:
+        "201":
+          description: Telegram QR login started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramQrLoginStart" }
+        "403": { description: Telegram account quota exceeded }
+        "503": { description: Telegram server API configuration is missing }
   /telegram/accounts/{accountId}:
     delete:
       operationId: deleteTelegramAccount
@@ -266,6 +283,42 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TelegramLoginResult" }
         "409": { description: "Challenge is invalid, expired, or no longer active" }
+  /telegram/accounts/{accountId}/login/qr:
+    post:
+      operationId: startTelegramQrLogin
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+      responses:
+        "201":
+          description: Telegram QR login started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramQrLoginStart" }
+        "409": { description: Account is not ready for a new login attempt }
+  /telegram/accounts/{accountId}/login/qr/{challengeId}:
+    get:
+      operationId: getTelegramQrLoginStatus
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+        - { name: challengeId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Telegram QR login status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TelegramQrLoginStatus" }
+        "404": { description: QR login challenge not found }
+    delete:
+      operationId: cancelTelegramQrLogin
+      tags: [telegram]
+      parameters:
+        - { $ref: "#/components/parameters/AccountId" }
+        - { name: challengeId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: QR login cancelled }
+        "404": { description: QR login challenge not found }
   /destinations:
     get:
       operationId: listDestinations
@@ -1484,6 +1537,11 @@ components:
         api_hash: { type: string, minLength: 1, maxLength: 128 }
         phone: { type: string, minLength: 7, maxLength: 24 }
         daily_limit: { type: number, minimum: 1, maximum: 100000, default: 200 }
+    TelegramQrAccountInput:
+      type: object
+      required: [daily_limit]
+      properties:
+        daily_limit: { type: number, minimum: 1, maximum: 100000, default: 200 }
     TelegramAccountDeletion:
       type: object
       required: [message]
@@ -1495,7 +1553,8 @@ components:
       properties:
         id: { type: string }
         expiresAt: { type: string, format: date-time }
-        delivery: { type: string, enum: [app, sms] }
+        delivery: { type: string, enum: [app, sms, qr] }
+        qrUrl: { type: string, nullable: true }
     TelegramLoginStart:
       type: object
       required: [account, challenge]
@@ -1520,6 +1579,20 @@ components:
       properties:
         status: { type: string, enum: [connected, requires_2fa] }
         account: { $ref: "#/components/schemas/TelegramAccount" }
+    TelegramQrLoginStart:
+      type: object
+      required: [account, challenge]
+      properties:
+        account: { $ref: "#/components/schemas/TelegramAccount" }
+        challenge: { $ref: "#/components/schemas/TelegramLoginChallenge" }
+    TelegramQrLoginStatus:
+      type: object
+      required: [status, account, expiresAt, qrUrl]
+      properties:
+        status: { type: string, enum: [waiting_qr, requires_2fa, connected, expired, cancelled] }
+        account: { $ref: "#/components/schemas/TelegramAccount" }
+        expiresAt: { type: string, format: date-time }
+        qrUrl: { type: string, nullable: true }
     SyncResult:
       type: object
       required: [count]
