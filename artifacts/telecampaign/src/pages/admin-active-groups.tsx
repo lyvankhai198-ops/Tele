@@ -638,7 +638,16 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     },
   });
   const groupLibraryAccess = useGetGroupLibraryAccess();
-  const workspaceQuery = useGetGroupLibrary({ query: { queryKey: getGetGroupLibraryQueryKey(), enabled: !isAdmin && groupLibraryAccess.data?.canView === true } });
+  const workspaceSearch = search.trim();
+  const workspaceQuery = useGetGroupLibrary(
+    isAdmin ? undefined : { q: workspaceSearch || undefined },
+    {
+      query: {
+        queryKey: getGetGroupLibraryQueryKey(isAdmin ? undefined : { q: workspaceSearch || undefined }),
+        enabled: !isAdmin && groupLibraryAccess.data?.canView === true,
+      },
+    },
+  );
   const canOpenLinks = groupLibraryAccess.data?.canOpenLinks === true;
   const userDataEnabled = isAdmin || groupLibraryAccess.data?.canView === true;
   const accounts = useListTelegramAccounts({ query: { queryKey: getListTelegramAccountsQueryKey(), enabled: userDataEnabled } });
@@ -662,8 +671,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const pageText = isAdmin ? text : localizedWorkspaceText;
   const needle = search.trim().toLowerCase();
   const filteredGroups = useMemo(
-    () => (isAdmin || canOpenLinks) ? groups.filter((group) => groupMatches(group, needle)) : groups,
-    [canOpenLinks, groups, isAdmin, needle],
+    () => isAdmin ? groups.filter((group) => groupMatches(group, needle)) : groups,
+    [groups, isAdmin, needle],
   );
   const connectedAccounts = useMemo(
     () => (accounts.data ?? []).filter((account) => account.status === "connected"),
@@ -850,7 +859,6 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              disabled={!isAdmin && !canOpenLinks}
               placeholder={pageText.search}
               className="h-10 w-full rounded-xl border border-[#dbe2ea] pl-9 pr-3 text-[12px] font-semibold outline-none transition focus:border-[#1a2b88] disabled:cursor-not-allowed disabled:bg-[#f8fafc] disabled:text-[#94a3b8]"
               data-testid="input-search-admin-active-groups"

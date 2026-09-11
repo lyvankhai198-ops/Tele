@@ -16,6 +16,7 @@ import {
   GetSystemDefaultsResponse,
   GetSupportSettingsResponse,
   GetGroupLibraryAccessResponse,
+  GetGroupLibraryQueryParams,
   GetGroupLibraryResponse,
   GetTelegramConfigResponse,
   ListUserNotificationsResponse,
@@ -114,7 +115,11 @@ import {
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
-import { getAdminActiveGroupDirectory, redactGroupLibraryGroups } from "../lib/admin-active-group-directory";
+import {
+  filterGroupLibraryGroups,
+  getAdminActiveGroupDirectory,
+  redactGroupLibraryGroups,
+} from "../lib/admin-active-group-directory";
 import { testProxyConnection } from "../lib/proxy-test";
 import { resolveCampaignScheduleStart } from "../lib/campaign-schedule";
 import { adminNotificationResponse, isNotificationActive } from "../lib/admin-notifications";
@@ -707,6 +712,8 @@ router.get("/group-library/access", async (req, res): Promise<void> => {
 });
 
 router.get("/group-library", requireGroupLibrarySubscription, async (req, res): Promise<void> => {
+  const parsed = GetGroupLibraryQueryParams.safeParse(req.query);
+  if (!parsed.success) return void sendError(res, 400, parsed.error.message);
   const settings = await getSystemSettings();
   const isAdmin = req.authUser?.role === "admin" && !req.supportSession;
   if (!isAdmin && !settings.groupLibraryVisibleToUsers) {
@@ -719,7 +726,8 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
     && planMeetsGroupLibraryMinimum(subscription.plan, settings.groupLibraryMinimumJoinPlan)
   );
   const directory = await getAdminActiveGroupDirectory({ includeUnpublished: false });
-  const groupIds = directory.groups.map((group) => group.id);
+  const filteredGroups = filterGroupLibraryGroups(directory.groups, parsed.data.q);
+  const groupIds = filteredGroups.map((group) => group.id);
   const membershipRows = isAdmin || groupIds.length === 0
     ? []
     : await db.select({
@@ -742,7 +750,7 @@ router.get("/group-library", requireGroupLibrarySubscription, async (req, res): 
     existing.push(membership);
     membershipsByTelegramId.set(membership.telegramId, existing);
   }
-  const visibleGroups = redactGroupLibraryGroups(directory.groups, canOpenLinks);
+  const visibleGroups = redactGroupLibraryGroups(filteredGroups, canOpenLinks);
   res.json(GetGroupLibraryResponse.parse({
     groups: visibleGroups.map((group) => ({
       ...group,

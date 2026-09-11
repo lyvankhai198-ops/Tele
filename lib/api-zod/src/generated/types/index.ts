@@ -100,6 +100,7 @@ export * from './dashboardMetricSummary';
 export * from './dashboardSummary';
 export * from './destination';
 export * from './getAdminUserSupportCampaignTargetsParams';
+export * from './getGroupLibraryParams';
 export * from './groupLibraryAccess';
 export * from './groupLibraryAccessMinimumJoinPlan';
 export * from './groupLibraryAccountMembership';

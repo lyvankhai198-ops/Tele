@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   aggregateSavedGroupRows,
   dedupeRunningGroupLibraryCandidates,
+  filterGroupLibraryGroups,
   redactGroupLibraryGroups,
   type SavedGroupRow,
 } from "./admin-active-group-directory";
@@ -223,7 +224,7 @@ assert.equal(lockedGroups[0]?.id, directory.groups[0]?.id);
 assert.equal(lockedGroups[0]?.title, directory.groups[0]?.title);
 assert.equal(lockedGroups[0]?.telegramLink, directory.groups[0]?.telegramLink);
 assert.equal(lockedGroups[1]?.id, directory.groups[1]?.id);
-assert.equal(lockedGroups[2]?.id, "locked-group-3");
+assert.equal(lockedGroups[2]?.id, "locked-group-1");
 assert.notEqual(lockedGroups[2]?.id, directoryWithThreeGroups.groups[2]?.id);
 assert.equal(lockedGroups[2]?.title, "••••••••••");
 assert.equal(lockedGroups[2]?.username, null);
@@ -231,6 +232,7 @@ assert.equal(lockedGroups[2]?.telegramLink, null);
 assert.equal(lockedGroups[2]?.kind, directoryWithThreeGroups.groups[2]?.kind);
 assert.equal(lockedGroups[2]?.memberCount, directoryWithThreeGroups.groups[2]?.memberCount);
 assert.equal(lockedGroups[2]?.isPublished, true);
+assert.equal(lockedGroups[2]?.isNew, true);
 assert.deepEqual(
   lockedGroups[2]?.roundDelays.map((delay) => [delay.minSeconds, delay.maxSeconds]),
   [
@@ -239,6 +241,15 @@ assert.deepEqual(
   ],
 );
 assert.strictEqual(redactGroupLibraryGroups(directory.groups, true), directory.groups);
+
+assert.deepEqual(
+  filterGroupLibraryGroups(directoryWithThreeGroups.groups, "CONG NGHE").map((group) => group.id),
+  ["-100123"],
+);
+assert.deepEqual(
+  filterGroupLibraryGroups(directoryWithThreeGroups.groups, "locked_group").map((group) => group.id),
+  ["-100777"],
+);
 
 const configuredPreview = redactGroupLibraryGroups([
   {

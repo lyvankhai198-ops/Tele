@@ -1765,6 +1765,14 @@ export type ListActivityParams = {
 limit?: number;
 };
 
+export type GetGroupLibraryParams = {
+/**
+ * Search group title, trial title, username, or group kind
+ * @maxLength 120
+ */
+q?: string;
+};
+
 export type ListAdminLicenseKeysParams = {
 status?: LicenseKeyStatus;
 plan?: PlanCode;

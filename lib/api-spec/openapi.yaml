@@ -610,6 +610,12 @@ paths:
     get:
       operationId: getGroupLibrary
       tags: [destinations]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Search group title, trial title, username, or group kind
+          schema: { type: string, maxLength: 120 }
       responses:
         "200":
           description: Persisted Telegram groups visible to the current user

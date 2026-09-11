@@ -71,6 +71,27 @@ export type AdminActiveGroupDirectoryRecord = {
 
 const GROUP_LIBRARY_TRIAL_PREVIEW_LIMIT = 2;
 
+function normalizeGroupSearchValue(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase();
+}
+
+export function filterGroupLibraryGroups(
+  groups: AdminActiveGroupDirectoryRecord["groups"],
+  search: string | undefined,
+): AdminActiveGroupDirectoryRecord["groups"] {
+  const needle = normalizeGroupSearchValue(search?.trim() ?? "");
+  if (!needle) return groups;
+  return groups.filter((group) => [
+    group.title,
+    group.trialTitle,
+    group.username,
+    group.kind,
+  ].some((value) => value && normalizeGroupSearchValue(value).includes(needle)));
+}
+
 export function redactGroupLibraryGroups(
   groups: AdminActiveGroupDirectoryRecord["groups"],
   canOpenLinks: boolean,
@@ -95,7 +116,6 @@ export function redactGroupLibraryGroups(
       username: null,
       telegramLink: null,
       isPublished: true,
-      isNew: false,
       trialVisible: false,
     })),
   ];

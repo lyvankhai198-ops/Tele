@@ -1102,6 +1102,14 @@ export const GetGroupLibraryAccessResponse = zod.object({
 })
 
 
+export const getGroupLibraryQueryQMax = 120;
+
+
+
+export const GetGroupLibraryQueryParams = zod.object({
+  "q": zod.coerce.string().max(getGroupLibraryQueryQMax).optional().describe('Search group title, trial title, username, or group kind')
+})
+
 export const getGroupLibraryResponseGroupsItemTrialTitleMax = 120;
 
 export const getGroupLibraryResponseGroupsItemRoundDelaysItemErrorRateMin = 0;

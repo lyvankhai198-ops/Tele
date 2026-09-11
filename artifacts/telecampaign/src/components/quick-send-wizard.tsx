@@ -304,7 +304,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   const systemDefaults = useGetSystemDefaults();
   const sync = useSyncTelegramDestinations();
   const groupLibraryAccess = useGetGroupLibraryAccess();
-  const groupLibrary = useGetGroupLibrary({
+  const groupLibrary = useGetGroupLibrary(undefined, {
     query: {
       queryKey: getGetGroupLibraryQueryKey(),
       enabled: groupLibraryAccess.data?.canView === true,
