@@ -1944,27 +1944,6 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   const completedAllowance = scope === "completed" ? await getCampaignAllowance(ownerUserId) : null;
   const resumed: Array<{ id: string; name: string; sourceId?: string }> = [];
 
-  function localDay(value: Date, timezone: string) {
-    try {
-      return new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(value);
-    } catch {
-      return value.toISOString().slice(0, 10);
-    }
-  }
-
-  function scheduleFitsSelectedDay(times: Date[], campaignStart: Date, timezone: string) {
-    const selectedDay = localDay(startAt, timezone);
-    return localDay(campaignStart, timezone) === selectedDay
-      && times.every((time) => localDay(time, timezone) === selectedDay);
-  }
-
-  const scheduleOverflowReason = "Lịch dự kiến vượt sang ngày khác; hãy giảm khoảng cách giữa campaign hoặc chọn giờ bắt đầu sớm hơn.";
-
   for (const candidate of candidates) {
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
@@ -2056,12 +2035,10 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
             campaign.roundDelayMaxSeconds - campaign.roundDelayMinSeconds + 1
           ));
         const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
-        const projectedTimes: Date[] = [];
         let roundStartAt = campaignStart.getTime();
         for (let round = 0; round < campaign.repeatCount; round += 1) {
           for (const destination of destinations) {
             const nextAttemptAt = new Date(roundStartAt);
-            projectedTimes.push(nextAttemptAt);
             targetRows.push({
               campaignId: campaign.id,
               destinationId: destination.id,
@@ -2080,9 +2057,6 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
         }
         if (!targetRows.length) {
           return { kind: "skip" as const, reason: "Campaign không còn destination để tạo lượt chạy mới." };
-        }
-        if (!scheduleFitsSelectedDay(projectedTimes, campaignStart, campaign.timezone)) {
-          return { kind: "skip" as const, reason: scheduleOverflowReason };
         }
 
         const [run] = await tx.insert(campaignsTable).values({
@@ -2122,10 +2096,6 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       ), null as Date | null);
       if (!earliest) return { kind: "skip" as const, reason: "Không xác định được lịch gửi còn lại." };
       const shiftMs = campaignStart.getTime() - earliest.getTime();
-      const shiftedTimes = pending.map((target) => new Date(target.nextAttemptAt!.getTime() + shiftMs));
-      if (!scheduleFitsSelectedDay(shiftedTimes, campaignStart, campaign.timezone)) {
-        return { kind: "skip" as const, reason: scheduleOverflowReason };
-      }
       await Promise.all(pending.map((target) => tx.update(campaignTargetsTable).set({
         nextAttemptAt: new Date(target.nextAttemptAt!.getTime() + shiftMs),
         updatedAt: now,
