@@ -55,6 +55,8 @@ import type {
   AdminUserSupportCampaignTargets,
   AuthCaptcha,
   AuthUser,
+  BulkCampaignControlInput,
+  BulkCampaignControlResult,
   CalendarItem,
   Campaign,
   CampaignCloneReadiness,
@@ -2713,6 +2715,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateCampaignMutationOptions(options));
+    }
+
+export const getBulkControlCampaignsUrl = () => {
+
+
+
+
+  return `/api/campaigns/bulk-control`
+}
+
+export const bulkControlCampaigns = async (bulkCampaignControlInput: BulkCampaignControlInput, options?: Parameters<typeof customFetch>[1]): Promise<BulkCampaignControlResult> => {
+
+  return customFetch<BulkCampaignControlResult>(getBulkControlCampaignsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bulkCampaignControlInput)
+  }
+);}
+
+
+
+
+
+export const getBulkControlCampaignsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkControlCampaigns>>, TError,{data: BodyType<BulkCampaignControlInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkControlCampaigns>>, TError,{data: BodyType<BulkCampaignControlInput>}, TContext> => {
+
+const mutationKey = ['bulkControlCampaigns'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkControlCampaigns>>, {data: BodyType<BulkCampaignControlInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkControlCampaigns(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkControlCampaignsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkControlCampaigns>>>
+    export type BulkControlCampaignsMutationBody = BodyType<BulkCampaignControlInput>
+    export type BulkControlCampaignsMutationError = ErrorType<unknown>
+
+    export const useBulkControlCampaigns = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkControlCampaigns>>, TError,{data: BodyType<BulkCampaignControlInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkControlCampaigns>>,
+        TError,
+        {data: BodyType<BulkCampaignControlInput>},
+        TContext
+      > => {
+      return useMutation(getBulkControlCampaignsMutationOptions(options));
     }
 
 export const getUpdateCampaignStatusUrl = (campaignId: string,) => {

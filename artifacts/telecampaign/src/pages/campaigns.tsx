@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Copy,
+  CircleStop,
+  Clock3,
   Eye,
   LoaderCircle,
   CirclePause,
@@ -16,6 +18,7 @@ import {
   useCloneCampaign,
   useGetCampaignCloneReadiness,
   useGetTelegramSavedMessage,
+  useBulkControlCampaigns,
   useListCampaigns,
   useListMessageTemplates,
   useListTelegramAccounts,
@@ -51,6 +54,21 @@ const copy = {
     detailsBtn: "Details",
     pauseBtn: "Pause",
     resumeBtn: "Resume",
+    bulkPauseBtn: "Stop all",
+    bulkResumeBtn: "Run all",
+    bulkPauseConfirm: (count: number) => `Pause ${count} active campaign${count === 1 ? "" : "s"}?`,
+    bulkResumeTitle: "Run all paused campaigns",
+    bulkResumeDetail: "Continue only the pending deliveries. Sent deliveries will not be sent again.",
+    bulkIntervalLabel: "Gap between campaigns (minutes)",
+    bulkIntervalHint: "The next campaign starts after this gap.",
+    bulkStartDateLabel: "Schedule date",
+    bulkStartTimeLabel: "First start time",
+    bulkApply: "Run all",
+    bulkCancel: "Cancel",
+    bulkNoActive: "There are no active campaigns to stop.",
+    bulkNoPaused: "There are no paused campaigns with pending deliveries.",
+    bulkPausedResult: (count: number) => `Paused ${count} campaign${count === 1 ? "" : "s"}.`,
+    bulkResumedResult: (count: number, skipped: number) => `Queued ${count} campaign${count === 1 ? "" : "s"}${skipped ? `; ${skipped} skipped.` : "."}`,
     editBtn: "Edit",
     cloneBtn: "Clone",
     deleteBtn: "Delete",
@@ -163,6 +181,21 @@ const copy = {
     detailsBtn: "Chi tiết",
     pauseBtn: "Dừng",
     resumeBtn: "Tiếp tục",
+    bulkPauseBtn: "Dừng tất cả",
+    bulkResumeBtn: "Chạy lại tất cả",
+    bulkPauseConfirm: (count: number) => `Tạm dừng ${count} chiến dịch đang chạy?`,
+    bulkResumeTitle: "Chạy lại tất cả chiến dịch",
+    bulkResumeDetail: "Chỉ tiếp tục các lượt gửi đang chờ. Những lượt đã gửi thành công sẽ không gửi lại.",
+    bulkIntervalLabel: "Khoảng cách giữa các chiến dịch (phút)",
+    bulkIntervalHint: "Chiến dịch tiếp theo sẽ bắt đầu sau khoảng thời gian này.",
+    bulkStartDateLabel: "Ngày bắt đầu",
+    bulkStartTimeLabel: "Giờ bắt đầu đầu tiên",
+    bulkApply: "Chạy lại tất cả",
+    bulkCancel: "Hủy",
+    bulkNoActive: "Không có chiến dịch đang chạy để dừng.",
+    bulkNoPaused: "Không có chiến dịch đã dừng còn lượt gửi chờ.",
+    bulkPausedResult: (count: number) => `Đã dừng ${count} chiến dịch.`,
+    bulkResumedResult: (count: number, skipped: number) => `Đã xếp lịch ${count} chiến dịch${skipped ? `; bỏ qua ${skipped} chiến dịch.` : "."}`,
     editBtn: "Chỉnh sửa",
     cloneBtn: "Nhân bản",
     deleteBtn: "Xóa",
@@ -270,6 +303,17 @@ function formatSchedule(value: Date | string | null, language: "en" | "vi") {
   }).format(new Date(value));
 }
 
+function localDateInputValue(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeInputValue(value = new Date()) {
+  return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+}
+
 function formatErrorRecordedAt(value: Date | string, language: "en" | "vi") {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
@@ -373,6 +417,7 @@ export default function Campaigns() {
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
+  const bulkControl = useBulkControlCampaigns();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
@@ -388,6 +433,10 @@ export default function Campaigns() {
   const [cloneSourceCampaign, setCloneSourceCampaign] = useState<Campaign | null>(null);
   const [cloneTargetAccountId, setCloneTargetAccountId] = useState("");
   const [cloneError, setCloneError] = useState<string | null>(null);
+  const [bulkResumeOpen, setBulkResumeOpen] = useState(false);
+  const [bulkIntervalMinutes, setBulkIntervalMinutes] = useState("10");
+  const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
+  const [bulkScheduleTime, setBulkScheduleTime] = useState(() => localTimeInputValue());
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
     query: { enabled: Boolean(forwardCampaign?.id) } as any,
   });
@@ -455,6 +504,62 @@ export default function Campaigns() {
       if (details?.id === campaign.id) setDetails(updatedCampaign);
       await campaigns.refetch();
       setToast(nextStatus === "paused" ? c.toastPaused : c.toastResumed);
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
+  async function pauseAllCampaigns() {
+    const activeCount = (campaigns.data ?? []).filter((campaign) => isActive(campaign.status)).length;
+    if (!activeCount) {
+      setToast(c.bulkNoActive);
+      return;
+    }
+    if (!window.confirm(c.bulkPauseConfirm(activeCount))) return;
+    try {
+      const result = await bulkControl.mutateAsync({ data: { action: "pause" } });
+      await campaigns.refetch();
+      setToast(c.bulkPausedResult(result.updatedCount));
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
+  function openBulkResume() {
+    const pausedCount = (campaigns.data ?? []).filter((campaign) => campaign.status === "paused").length;
+    if (!pausedCount) {
+      setToast(c.bulkNoPaused);
+      return;
+    }
+    const now = new Date();
+    setBulkIntervalMinutes("10");
+    setBulkScheduleDate(localDateInputValue(now));
+    setBulkScheduleTime(localTimeInputValue(now));
+    setBulkResumeOpen(true);
+  }
+
+  async function submitBulkResume() {
+    const intervalMinutes = Number(bulkIntervalMinutes);
+    if (!Number.isInteger(intervalMinutes) || intervalMinutes < 0 || intervalMinutes > 4320 || !bulkScheduleDate || !bulkScheduleTime) {
+      setToast(c.genericError);
+      return;
+    }
+    try {
+      const scheduledAt = new Date(`${bulkScheduleDate}T${bulkScheduleTime}:00`);
+      if (Number.isNaN(scheduledAt.getTime())) {
+        setToast(c.genericError);
+        return;
+      }
+      const result = await bulkControl.mutateAsync({
+        data: {
+          action: "resume",
+          intervalSeconds: intervalMinutes * 60,
+          scheduledAt: scheduledAt.toISOString(),
+        },
+      });
+      await campaigns.refetch();
+      setBulkResumeOpen(false);
+      setToast(c.bulkResumedResult(result.updatedCount, result.skippedCount));
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
     }
@@ -562,6 +667,30 @@ export default function Campaigns() {
             <option value="completed">{c.statusCompleted}</option>
           </select>
         </div>
+        {!isSupportMode && (
+          <div className="mb-5 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void pauseAllCampaigns()}
+              disabled={bulkControl.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f04444] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#dc2626] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="campaigns-pause-all"
+            >
+              {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleStop className="h-4 w-4" />}
+              {c.bulkPauseBtn}
+            </button>
+            <button
+              type="button"
+              onClick={openBulkResume}
+              disabled={bulkControl.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="campaigns-resume-all"
+            >
+              {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              {c.bulkResumeBtn}
+            </button>
+          </div>
+        )}
 
         <Panel className="overflow-hidden">
           {campaigns.isLoading
@@ -655,6 +784,75 @@ export default function Campaigns() {
           }}
           onSaved={handleFormSaved}
         />
+      )}
+
+      {bulkResumeOpen && (
+        <Modal
+          title={c.bulkResumeTitle}
+          description={c.bulkResumeDetail}
+          onClose={() => {
+            if (!bulkControl.isPending) setBulkResumeOpen(false);
+          }}
+        >
+          <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkIntervalLabel}</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  max="4320"
+                  step="1"
+                  value={bulkIntervalMinutes}
+                  onChange={(event) => setBulkIntervalMinutes(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                  data-testid="campaigns-bulk-interval"
+                />
+                <span className="shrink-0 text-[13px] font-bold text-[#64748b]">min</span>
+              </div>
+              <span className="mt-1.5 block text-[11px] font-medium text-[#94a3b8]">{c.bulkIntervalHint}</span>
+            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkStartDateLabel}</span>
+                <input
+                  type="date"
+                  value={bulkScheduleDate}
+                  onChange={(event) => setBulkScheduleDate(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                  data-testid="campaigns-bulk-date"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkStartTimeLabel}</span>
+                <div className="relative">
+                  <Clock3 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
+                  <input
+                    type="time"
+                    value={bulkScheduleTime}
+                    onChange={(event) => setBulkScheduleTime(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white pl-9 pr-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                    data-testid="campaigns-bulk-time"
+                  />
+                </div>
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBulkResumeOpen(false)}
+                disabled={bulkControl.isPending}
+                className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50"
+              >
+                {c.bulkCancel}
+              </button>
+              <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={bulkControl.isPending}>
+                {bulkControl.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {c.bulkApply}
+              </PrimaryButton>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {cloneSourceCampaign && (

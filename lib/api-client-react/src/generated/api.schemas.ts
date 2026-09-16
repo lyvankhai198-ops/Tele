@@ -545,6 +545,46 @@ export interface CampaignUpdateInput {
   roundDelayMaxSeconds?: number;
 }
 
+export type BulkCampaignControlInputAction = typeof BulkCampaignControlInputAction[keyof typeof BulkCampaignControlInputAction];
+
+
+export const BulkCampaignControlInputAction = {
+  pause: 'pause',
+  resume: 'resume',
+} as const;
+
+export interface BulkCampaignControlInput {
+  action: BulkCampaignControlInputAction;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  intervalSeconds?: number;
+  /** @nullable */
+  scheduledAt?: string | null;
+}
+
+export type BulkCampaignControlResultAction = typeof BulkCampaignControlResultAction[keyof typeof BulkCampaignControlResultAction];
+
+
+export const BulkCampaignControlResultAction = {
+  pause: 'pause',
+  resume: 'resume',
+} as const;
+
+export type BulkCampaignControlResultSkippedItem = {
+  id: string;
+  name: string;
+  reason: string;
+};
+
+export interface BulkCampaignControlResult {
+  action: BulkCampaignControlResultAction;
+  updatedCount: number;
+  skippedCount: number;
+  skipped: BulkCampaignControlResultSkippedItem[];
+}
+
 export interface AdminCampaignCloneInput {
   telegramAccountId: string;
 }

@@ -79,6 +79,8 @@ import {
   UpdateCampaignStatusBody,
   UpdateCampaignStatusParams,
   UpdateCampaignStatusResponse,
+  BulkControlCampaignsBody,
+  BulkControlCampaignsResponse,
 } from "@workspace/api-zod";
 import {
   activityLogsTable,
@@ -1881,6 +1883,182 @@ router.get("/campaigns", async (req, res): Promise<void> => {
   const campaigns = await db.select().from(campaignsTable)
     .where(eq(campaignsTable.ownerUserId, currentUserId(req))).orderBy(desc(campaignsTable.createdAt));
   res.json(ListCampaignsResponse.parse(await Promise.all(campaigns.map(campaignSummary))));
+});
+
+router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
+  const parsed = BulkControlCampaignsBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, parsed.error.message);
+
+  const ownerUserId = currentUserId(req);
+  const now = new Date();
+  const intervalSeconds = parsed.data.intervalSeconds ?? 600;
+  if (!Number.isInteger(intervalSeconds) || intervalSeconds < 0 || intervalSeconds > 259200) {
+    return void sendError(res, 400, "Khoảng cách giữa các campaign phải là số nguyên từ 0 đến 259200 giây.");
+  }
+
+  if (parsed.data.action === "pause") {
+    const paused = await db.update(campaignsTable).set({
+      status: "paused",
+      pauseReason: "manual",
+      updatedAt: now,
+    }).where(and(
+      eq(campaignsTable.ownerUserId, ownerUserId),
+      inArray(campaignsTable.status, ["queued", "running"]),
+    )).returning({ id: campaignsTable.id, name: campaignsTable.name });
+
+    await Promise.all(paused.map((campaign) => recordActivity({
+      event: "campaign.paused",
+      message: `Paused campaign "${campaign.name}"`,
+      ownerUserId,
+      campaignId: campaign.id,
+      level: "success",
+      metadata: { bulk: true },
+    })));
+
+    return void res.json(BulkControlCampaignsResponse.parse({
+      action: "pause",
+      updatedCount: paused.length,
+      skippedCount: 0,
+      skipped: [],
+    }));
+  }
+
+  const requestedStart = parsed.data.scheduledAt ?? now;
+  if (!(requestedStart instanceof Date) || Number.isNaN(requestedStart.getTime())) {
+    return void sendError(res, 400, "Thời gian bắt đầu không hợp lệ.");
+  }
+  const startAt = new Date(Math.max(now.getTime(), requestedStart.getTime()));
+  const candidates = await db.select().from(campaignsTable).where(and(
+    eq(campaignsTable.ownerUserId, ownerUserId),
+    eq(campaignsTable.status, "paused"),
+  )).orderBy(campaignsTable.createdAt);
+  const skipped: Array<{ id: string; name: string; reason: string }> = [];
+  const resumed: Array<{ id: string; name: string }> = [];
+
+  for (const candidate of candidates) {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
+      const [campaign] = await tx.select().from(campaignsTable).where(and(
+        eq(campaignsTable.id, candidate.id),
+        eq(campaignsTable.ownerUserId, ownerUserId),
+      ));
+      if (!campaign || campaign.status !== "paused") {
+        return { kind: "skip" as const, reason: "Trạng thái campaign đã thay đổi." };
+      }
+
+      await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${campaign.id} FOR UPDATE`);
+      const targets = await tx.select({
+        id: campaignTargetsTable.id,
+        destinationId: campaignTargetsTable.destinationId,
+        status: campaignTargetsTable.status,
+        lastError: campaignTargetsTable.lastError,
+        nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+      }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, campaign.id));
+      const pending = targets.filter((target) => (
+        target.status === "pending"
+        && target.lastError === null
+        && target.nextAttemptAt !== null
+      ));
+      if (!pending.length) {
+        return { kind: "skip" as const, reason: "Không còn lượt gửi đang chờ để tiếp tục." };
+      }
+
+      if (!campaign.telegramAccountId || !campaign.templateId) {
+        return { kind: "skip" as const, reason: "Campaign thiếu tài khoản Telegram hoặc mẫu tin." };
+      }
+      const [account] = await tx.select().from(telegramAccountsTable).where(and(
+        eq(telegramAccountsTable.id, campaign.telegramAccountId),
+        eq(telegramAccountsTable.ownerUserId, ownerUserId),
+        isNull(telegramAccountsTable.deletedAt),
+      ));
+      if (!account || account.status !== "connected" || !account.sessionEncrypted) {
+        return { kind: "skip" as const, reason: "Tài khoản Telegram chưa kết nối." };
+      }
+      const [template] = await tx.select().from(messageTemplatesTable).where(and(
+        eq(messageTemplatesTable.id, campaign.templateId),
+        eq(messageTemplatesTable.ownerUserId, ownerUserId),
+      ));
+      if (!template) {
+        return { kind: "skip" as const, reason: "Mẫu tin không còn tồn tại." };
+      }
+      if (campaignCloneMode(campaign) === "admin" && template.mode !== "forward") {
+        return { kind: "skip" as const, reason: "Campaign clone admin phải dùng mẫu forward." };
+      }
+      if (template.mode === "forward" && (
+        template.sourceAccountId !== campaign.telegramAccountId || !template.sourceMessageId
+      )) {
+        return { kind: "skip" as const, reason: "Mẫu forward chưa chọn đúng Tin nhắn đã lưu." };
+      }
+      const destinationIds = [...new Set(
+        campaign.destinationIds?.length
+          ? campaign.destinationIds
+          : targets.map((target) => target.destinationId),
+      )];
+      const destinations = destinationIds.length
+        ? await tx.select().from(destinationsTable).where(and(
+          inArray(destinationsTable.id, destinationIds),
+          eq(destinationsTable.accountId, campaign.telegramAccountId),
+        ))
+        : [];
+      if (
+        destinations.length !== destinationIds.length
+        || destinations.some((destination) => !canScheduleTelegramDestination(destination, campaign.scheduledAt))
+      ) {
+        return { kind: "skip" as const, reason: "Có destination chưa sẵn sàng để gửi." };
+      }
+
+      const earliest = pending.reduce((value, target) => (
+        !value || target.nextAttemptAt! < value ? target.nextAttemptAt! : value
+      ), null as Date | null);
+      if (!earliest) return { kind: "skip" as const, reason: "Không xác định được lịch gửi còn lại." };
+
+      const campaignStart = new Date(startAt.getTime() + resumed.length * intervalSeconds * 1000);
+      const shiftMs = campaignStart.getTime() - earliest.getTime();
+      await Promise.all(pending.map((target) => tx.update(campaignTargetsTable).set({
+        nextAttemptAt: new Date(target.nextAttemptAt!.getTime() + shiftMs),
+        updatedAt: now,
+      }).where(and(
+        eq(campaignTargetsTable.id, target.id),
+        eq(campaignTargetsTable.status, "pending"),
+        isNull(campaignTargetsTable.lastError),
+      ))));
+
+      const [updated] = await tx.update(campaignsTable).set({
+        status: "queued",
+        pauseReason: null,
+        scheduledAt: campaignStart > now ? campaignStart : null,
+        scheduleAnchorAt: campaignStart,
+        updatedAt: now,
+      }).where(and(
+        eq(campaignsTable.id, campaign.id),
+        eq(campaignsTable.status, "paused"),
+      )).returning({ id: campaignsTable.id, name: campaignsTable.name });
+      return updated
+        ? { kind: "resumed" as const, campaign: updated }
+        : { kind: "skip" as const, reason: "Campaign đã được xử lý bởi thao tác khác." };
+    });
+
+    if (result.kind === "resumed") {
+      resumed.push(result.campaign);
+      await recordActivity({
+        event: "campaign.resumed",
+        message: `Resumed campaign "${result.campaign.name}" from bulk control`,
+        ownerUserId,
+        campaignId: result.campaign.id,
+        level: "success",
+        metadata: { bulk: true, intervalSeconds },
+      });
+    } else {
+      skipped.push({ id: candidate.id, name: candidate.name, reason: result.reason });
+    }
+  }
+
+  return void res.json(BulkControlCampaignsResponse.parse({
+    action: "resume",
+    updatedCount: resumed.length,
+    skippedCount: skipped.length,
+    skipped,
+  }));
 });
 
 router.post("/campaigns", async (req, res): Promise<void> => {

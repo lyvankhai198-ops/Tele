@@ -528,6 +528,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Campaign" }
+  /campaigns/bulk-control:
+    post:
+      operationId: bulkControlCampaigns
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkCampaignControlInput" }
+      responses:
+        "200":
+          description: Bulk campaign control result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCampaignControlResult" }
   /campaigns/{campaignId}:
     patch:
       operationId: updateCampaignStatus
@@ -1771,6 +1786,29 @@ components:
         repeatCount: { type: number, minimum: 1, maximum: 300 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
+    BulkCampaignControlInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [pause, resume] }
+        intervalSeconds: { type: number, minimum: 0, maximum: 259200, default: 600 }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+    BulkCampaignControlResult:
+      type: object
+      required: [action, updatedCount, skippedCount, skipped]
+      properties:
+        action: { type: string, enum: [pause, resume] }
+        updatedCount: { type: number }
+        skippedCount: { type: number }
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, name, reason]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              reason: { type: string }
     AdminCampaignCloneInput:
       type: object
       required: [telegramAccountId]
