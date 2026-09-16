@@ -553,8 +553,18 @@ export const BulkCampaignControlInputAction = {
   resume: 'resume',
 } as const;
 
+export type BulkCampaignControlInputScope = typeof BulkCampaignControlInputScope[keyof typeof BulkCampaignControlInputScope];
+
+
+export const BulkCampaignControlInputScope = {
+  queued: 'queued',
+  paused: 'paused',
+  completed: 'completed',
+} as const;
+
 export interface BulkCampaignControlInput {
   action: BulkCampaignControlInputAction;
+  scope?: BulkCampaignControlInputScope;
   /**
      * @minimum 0
      * @maximum 259200

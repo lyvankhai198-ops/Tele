@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BulkCampaignControlInputAction } from './bulkCampaignControlInputAction';
+import type { BulkCampaignControlInputScope } from './bulkCampaignControlInputScope';
 
 export interface BulkCampaignControlInput {
   action: BulkCampaignControlInputAction;
+  scope?: BulkCampaignControlInputScope;
   /**
      * @minimum 0
      * @maximum 259200

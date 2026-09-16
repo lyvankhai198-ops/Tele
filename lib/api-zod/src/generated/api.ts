@@ -828,7 +828,7 @@ export const CreateCampaignResponse = zod.object({
 })
 
 
-export const bulkControlCampaignsBodyIntervalSecondsDefault = 600;
+export const bulkControlCampaignsBodyScopeDefault = `paused`;
 export const bulkControlCampaignsBodyIntervalSecondsMin = 0;
 export const bulkControlCampaignsBodyIntervalSecondsMax = 259200;
 
@@ -836,7 +836,8 @@ export const bulkControlCampaignsBodyIntervalSecondsMax = 259200;
 
 export const BulkControlCampaignsBody = zod.object({
   "action": zod.enum(['pause', 'resume']),
-  "intervalSeconds": zod.number().min(bulkControlCampaignsBodyIntervalSecondsMin).max(bulkControlCampaignsBodyIntervalSecondsMax).default(bulkControlCampaignsBodyIntervalSecondsDefault),
+  "scope": zod.enum(['queued', 'paused', 'completed']).default(bulkControlCampaignsBodyScopeDefault),
+  "intervalSeconds": zod.number().min(bulkControlCampaignsBodyIntervalSecondsMin).max(bulkControlCampaignsBodyIntervalSecondsMax).optional(),
   "scheduledAt": zod.coerce.date().nullish()
 })
 

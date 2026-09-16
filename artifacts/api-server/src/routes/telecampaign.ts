@@ -1891,10 +1891,6 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
 
   const ownerUserId = currentUserId(req);
   const now = new Date();
-  const intervalSeconds = parsed.data.intervalSeconds ?? 600;
-  if (!Number.isInteger(intervalSeconds) || intervalSeconds < 0 || intervalSeconds > 259200) {
-    return void sendError(res, 400, "Khoảng cách giữa các campaign phải là số nguyên từ 0 đến 259200 giây.");
-  }
 
   if (parsed.data.action === "pause") {
     const paused = await db.update(campaignsTable).set({
@@ -1923,17 +1919,51 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
     }));
   }
 
+  const scope = parsed.data.scope ?? "paused";
+  const intervalSeconds = parsed.data.intervalSeconds;
+  if (intervalSeconds === undefined
+    || !Number.isInteger(intervalSeconds)
+    || intervalSeconds < 0
+    || intervalSeconds > 259200) {
+    return void sendError(res, 400, "Khoảng cách giữa các campaign là bắt buộc và phải là số nguyên từ 0 đến 259200 giây.");
+  }
+
   const requestedStart = parsed.data.scheduledAt ?? now;
   if (!(requestedStart instanceof Date) || Number.isNaN(requestedStart.getTime())) {
     return void sendError(res, 400, "Thời gian bắt đầu không hợp lệ.");
   }
   const startAt = new Date(Math.max(now.getTime(), requestedStart.getTime()));
+  const eligibleStatuses = scope === "completed"
+    ? ["completed", "completed_with_errors"] as const
+    : [scope] as const;
   const candidates = await db.select().from(campaignsTable).where(and(
     eq(campaignsTable.ownerUserId, ownerUserId),
-    eq(campaignsTable.status, "paused"),
+    inArray(campaignsTable.status, eligibleStatuses),
   )).orderBy(campaignsTable.createdAt);
   const skipped: Array<{ id: string; name: string; reason: string }> = [];
-  const resumed: Array<{ id: string; name: string }> = [];
+  const completedAllowance = scope === "completed" ? await getCampaignAllowance(ownerUserId) : null;
+  const resumed: Array<{ id: string; name: string; sourceId?: string }> = [];
+
+  function localDay(value: Date, timezone: string) {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(value);
+    } catch {
+      return value.toISOString().slice(0, 10);
+    }
+  }
+
+  function scheduleFitsSelectedDay(times: Date[], campaignStart: Date, timezone: string) {
+    const selectedDay = localDay(startAt, timezone);
+    return localDay(campaignStart, timezone) === selectedDay
+      && times.every((time) => localDay(time, timezone) === selectedDay);
+  }
+
+  const scheduleOverflowReason = "Lịch dự kiến vượt sang ngày khác; hãy giảm khoảng cách giữa campaign hoặc chọn giờ bắt đầu sớm hơn.";
 
   for (const candidate of candidates) {
     const result = await db.transaction(async (tx) => {
@@ -1942,7 +1972,12 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
         eq(campaignsTable.id, candidate.id),
         eq(campaignsTable.ownerUserId, ownerUserId),
       ));
-      if (!campaign || campaign.status !== "paused") {
+      const stillEligible = campaign && (
+        scope === "completed"
+          ? ["completed", "completed_with_errors"].includes(campaign.status)
+          : campaign.status === scope
+      );
+      if (!stillEligible) {
         return { kind: "skip" as const, reason: "Trạng thái campaign đã thay đổi." };
       }
 
@@ -1959,8 +1994,14 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
         && target.lastError === null
         && target.nextAttemptAt !== null
       ));
-      if (!pending.length) {
+      if (scope !== "completed" && !pending.length) {
         return { kind: "skip" as const, reason: "Không còn lượt gửi đang chờ để tiếp tục." };
+      }
+
+      if (scope === "completed" && completedAllowance?.campaignLimit !== null
+        && completedAllowance
+        && completedAllowance.used + resumed.length >= completedAllowance.campaignLimit) {
+        return { kind: "skip" as const, reason: "Đã đạt giới hạn số campaign của gói hiện tại." };
       }
 
       if (!campaign.telegramAccountId || !campaign.templateId) {
@@ -2000,20 +2041,91 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
           eq(destinationsTable.accountId, campaign.telegramAccountId),
         ))
         : [];
+      const campaignStart = new Date(startAt.getTime() + resumed.length * intervalSeconds * 1000);
+      const scheduleAtForValidation = campaignStart > now ? campaignStart : null;
       if (
         destinations.length !== destinationIds.length
-        || destinations.some((destination) => !canScheduleTelegramDestination(destination, campaign.scheduledAt))
+        || destinations.some((destination) => !canScheduleTelegramDestination(destination, scheduleAtForValidation))
       ) {
         return { kind: "skip" as const, reason: "Có destination chưa sẵn sàng để gửi." };
+      }
+
+      if (scope === "completed") {
+        const randomRoundDelay = () => campaign.roundDelayMinSeconds
+          + Math.floor(Math.random() * (
+            campaign.roundDelayMaxSeconds - campaign.roundDelayMinSeconds + 1
+          ));
+        const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
+        const projectedTimes: Date[] = [];
+        let roundStartAt = campaignStart.getTime();
+        for (let round = 0; round < campaign.repeatCount; round += 1) {
+          for (const destination of destinations) {
+            const nextAttemptAt = new Date(roundStartAt);
+            projectedTimes.push(nextAttemptAt);
+            targetRows.push({
+              campaignId: campaign.id,
+              destinationId: destination.id,
+              status: "pending",
+              attempts: 0,
+              quotaReservedAt: null,
+              nextAttemptAt,
+              lastError: null,
+              sentMessageId: null,
+              sentAt: null,
+            });
+          }
+          if (round < campaign.repeatCount - 1) {
+            roundStartAt += randomRoundDelay() * 1000;
+          }
+        }
+        if (!targetRows.length) {
+          return { kind: "skip" as const, reason: "Campaign không còn destination để tạo lượt chạy mới." };
+        }
+        if (!scheduleFitsSelectedDay(projectedTimes, campaignStart, campaign.timezone)) {
+          return { kind: "skip" as const, reason: scheduleOverflowReason };
+        }
+
+        const [run] = await tx.insert(campaignsTable).values({
+          ownerUserId,
+          name: `${campaign.name} (Lượt chạy mới)`,
+          content: campaign.content,
+          telegramAccountId: campaign.telegramAccountId,
+          templateId: campaign.templateId,
+          templateMode: campaign.templateMode,
+          templateSourceAccountId: campaign.templateSourceAccountId,
+          templateSourceMessageId: campaign.templateSourceMessageId,
+          clonedFromCampaignId: campaign.id,
+          clonedFromUserId: campaign.clonedFromUserId ?? ownerUserId,
+          destinationIds,
+          mediaUrl: campaign.mediaUrl,
+          status: "queued",
+          pauseReason: null,
+          scheduledAt: scheduleAtForValidation,
+          scheduleAnchorAt: campaignStart,
+          timezone: campaign.timezone,
+          maxRetries: campaign.maxRetries,
+          repeatCount: campaign.repeatCount,
+          delayMinSeconds: 0,
+          delayMaxSeconds: 0,
+          roundDelayMinSeconds: campaign.roundDelayMinSeconds,
+          roundDelayMaxSeconds: campaign.roundDelayMaxSeconds,
+        }).returning({ id: campaignsTable.id, name: campaignsTable.name });
+        await tx.insert(campaignTargetsTable).values(targetRows.map((target) => ({
+          ...target,
+          campaignId: run.id,
+        })));
+        return { kind: "created" as const, campaign: run, sourceId: campaign.id };
       }
 
       const earliest = pending.reduce((value, target) => (
         !value || target.nextAttemptAt! < value ? target.nextAttemptAt! : value
       ), null as Date | null);
       if (!earliest) return { kind: "skip" as const, reason: "Không xác định được lịch gửi còn lại." };
-
-      const campaignStart = new Date(startAt.getTime() + resumed.length * intervalSeconds * 1000);
       const shiftMs = campaignStart.getTime() - earliest.getTime();
+      const shiftedTimes = pending.map((target) => new Date(target.nextAttemptAt!.getTime() + shiftMs));
+      if (!scheduleFitsSelectedDay(shiftedTimes, campaignStart, campaign.timezone)) {
+        return { kind: "skip" as const, reason: scheduleOverflowReason };
+      }
       await Promise.all(pending.map((target) => tx.update(campaignTargetsTable).set({
         nextAttemptAt: new Date(target.nextAttemptAt!.getTime() + shiftMs),
         updatedAt: now,
@@ -2026,27 +2138,34 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       const [updated] = await tx.update(campaignsTable).set({
         status: "queued",
         pauseReason: null,
-        scheduledAt: campaignStart > now ? campaignStart : null,
+        scheduledAt: scheduleAtForValidation,
         scheduleAnchorAt: campaignStart,
         updatedAt: now,
       }).where(and(
         eq(campaignsTable.id, campaign.id),
-        eq(campaignsTable.status, "paused"),
+        eq(campaignsTable.status, scope),
       )).returning({ id: campaignsTable.id, name: campaignsTable.name });
       return updated
         ? { kind: "resumed" as const, campaign: updated }
         : { kind: "skip" as const, reason: "Campaign đã được xử lý bởi thao tác khác." };
     });
 
-    if (result.kind === "resumed") {
-      resumed.push(result.campaign);
+    if (result.kind === "resumed" || result.kind === "created") {
+      resumed.push({ ...result.campaign, ...(result.kind === "created" ? { sourceId: result.sourceId } : {}) });
       await recordActivity({
-        event: "campaign.resumed",
-        message: `Resumed campaign "${result.campaign.name}" from bulk control`,
+        event: result.kind === "created" ? "campaign.bulk_rerun_created" : "campaign.resumed",
+        message: result.kind === "created"
+          ? `Created a new run "${result.campaign.name}" from bulk control`
+          : `Resumed campaign "${result.campaign.name}" from bulk control`,
         ownerUserId,
         campaignId: result.campaign.id,
         level: "success",
-        metadata: { bulk: true, intervalSeconds },
+        metadata: {
+          bulk: true,
+          scope,
+          intervalSeconds,
+          ...(result.kind === "created" ? { sourceCampaignId: result.sourceId } : {}),
+        },
       });
     } else {
       skipped.push({ id: candidate.id, name: candidate.name, reason: result.reason });

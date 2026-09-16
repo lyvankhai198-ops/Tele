@@ -1791,7 +1791,8 @@ components:
       required: [action]
       properties:
         action: { type: string, enum: [pause, resume] }
-        intervalSeconds: { type: number, minimum: 0, maximum: 259200, default: 600 }
+        scope: { type: string, enum: [queued, paused, completed], default: paused }
+        intervalSeconds: { type: number, minimum: 0, maximum: 259200 }
         scheduledAt: { type: ["string", "null"], format: date-time }
     BulkCampaignControlResult:
       type: object

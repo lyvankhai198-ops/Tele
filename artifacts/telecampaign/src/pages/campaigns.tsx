@@ -57,16 +57,22 @@ const copy = {
     bulkPauseBtn: "Stop all",
     bulkResumeBtn: "Run all",
     bulkPauseConfirm: (count: number) => `Pause ${count} active campaign${count === 1 ? "" : "s"}?`,
-    bulkResumeTitle: "Run all paused campaigns",
-    bulkResumeDetail: "Continue only the pending deliveries. Sent deliveries will not be sent again.",
+    bulkResumeTitle: "Run campaigns",
+    bulkResumeDetail: "Choose which filtered campaign status to run. Running campaigns are not changed.",
+    bulkScopeLabel: "Campaigns to run",
+    bulkScopeQueued: "Queued campaigns",
+    bulkScopePaused: "Paused campaigns",
+    bulkScopeCompleted: "Completed campaigns (new run)",
+    bulkScopeHint: "Completed campaigns create a new run and keep the previous history.",
     bulkIntervalLabel: "Gap between campaigns (minutes)",
     bulkIntervalHint: "The next campaign starts after this gap.",
     bulkStartDateLabel: "Schedule date",
     bulkStartTimeLabel: "First start time",
-    bulkApply: "Run all",
+    bulkApply: "Run selected campaigns",
     bulkCancel: "Cancel",
     bulkNoActive: "There are no active campaigns to stop.",
     bulkNoPaused: "There are no paused campaigns with pending deliveries.",
+    bulkNoEligible: "There are no campaigns available for this status filter.",
     bulkPausedResult: (count: number) => `Paused ${count} campaign${count === 1 ? "" : "s"}.`,
     bulkResumedResult: (count: number, skipped: number) => `Queued ${count} campaign${count === 1 ? "" : "s"}${skipped ? `; ${skipped} skipped.` : "."}`,
     editBtn: "Edit",
@@ -184,16 +190,22 @@ const copy = {
     bulkPauseBtn: "Dừng tất cả",
     bulkResumeBtn: "Chạy lại tất cả",
     bulkPauseConfirm: (count: number) => `Tạm dừng ${count} chiến dịch đang chạy?`,
-    bulkResumeTitle: "Chạy lại tất cả chiến dịch",
-    bulkResumeDetail: "Chỉ tiếp tục các lượt gửi đang chờ. Những lượt đã gửi thành công sẽ không gửi lại.",
+    bulkResumeTitle: "Chạy lại chiến dịch",
+    bulkResumeDetail: "Chọn trạng thái chiến dịch cần chạy theo bộ lọc. Chiến dịch đang chạy sẽ không bị đổi.",
+    bulkScopeLabel: "Chiến dịch cần chạy",
+    bulkScopeQueued: "Chiến dịch đang chờ",
+    bulkScopePaused: "Chiến dịch đã dừng",
+    bulkScopeCompleted: "Chiến dịch hoàn thành (tạo lượt mới)",
+    bulkScopeHint: "Chiến dịch hoàn thành sẽ tạo lượt chạy mới và giữ nguyên lịch sử cũ.",
     bulkIntervalLabel: "Khoảng cách giữa các chiến dịch (phút)",
     bulkIntervalHint: "Chiến dịch tiếp theo sẽ bắt đầu sau khoảng thời gian này.",
     bulkStartDateLabel: "Ngày bắt đầu",
     bulkStartTimeLabel: "Giờ bắt đầu đầu tiên",
-    bulkApply: "Chạy lại tất cả",
+    bulkApply: "Chạy các chiến dịch đã chọn",
     bulkCancel: "Hủy",
     bulkNoActive: "Không có chiến dịch đang chạy để dừng.",
     bulkNoPaused: "Không có chiến dịch đã dừng còn lượt gửi chờ.",
+    bulkNoEligible: "Không có chiến dịch phù hợp với bộ lọc trạng thái hiện tại.",
     bulkPausedResult: (count: number) => `Đã dừng ${count} chiến dịch.`,
     bulkResumedResult: (count: number, skipped: number) => `Đã xếp lịch ${count} chiến dịch${skipped ? `; bỏ qua ${skipped} chiến dịch.` : "."}`,
     editBtn: "Chỉnh sửa",
@@ -388,6 +400,8 @@ function isActive(status: string) {
   return status === "queued" || status === "running";
 }
 
+type BulkResumeScope = "queued" | "paused" | "completed";
+
 function campaignDailyQuotaLabel(
   campaign: Campaign,
   c: (typeof copy)["en"] | (typeof copy)["vi"],
@@ -434,7 +448,8 @@ export default function Campaigns() {
   const [cloneTargetAccountId, setCloneTargetAccountId] = useState("");
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [bulkResumeOpen, setBulkResumeOpen] = useState(false);
-  const [bulkIntervalMinutes, setBulkIntervalMinutes] = useState("10");
+  const [bulkResumeScope, setBulkResumeScope] = useState<BulkResumeScope>("paused");
+  const [bulkIntervalMinutes, setBulkIntervalMinutes] = useState("");
   const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
   const [bulkScheduleTime, setBulkScheduleTime] = useState(() => localTimeInputValue());
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
@@ -458,8 +473,23 @@ export default function Campaigns() {
   const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected");
   const listedCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) => {
     const needle = search.trim().toLowerCase();
-    return (!needle || campaign.name.toLowerCase().includes(needle)) && (status === "all" || campaign.status === status);
+    const matchesStatus = status === "all"
+      || campaign.status === status
+      || (status === "completed" && campaign.status === "completed_with_errors");
+    return (!needle || campaign.name.toLowerCase().includes(needle)) && matchesStatus;
   }), [campaigns.data, search, status]);
+  const bulkScopeOptions = useMemo(() => {
+    const available = new Set<BulkResumeScope>();
+    for (const campaign of campaigns.data ?? []) {
+      if (campaign.status === "queued") available.add("queued");
+      if (campaign.status === "paused") available.add("paused");
+      if (campaign.status === "completed" || campaign.status === "completed_with_errors") available.add("completed");
+    }
+    if (status === "queued") return available.has("queued") ? ["queued" as const] : [];
+    if (status === "paused") return available.has("paused") ? ["paused" as const] : [];
+    if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
+    return (["queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
+  }, [campaigns.data, status]);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
@@ -526,21 +556,21 @@ export default function Campaigns() {
   }
 
   function openBulkResume() {
-    const pausedCount = (campaigns.data ?? []).filter((campaign) => campaign.status === "paused").length;
-    if (!pausedCount) {
-      setToast(c.bulkNoPaused);
+    if (!bulkScopeOptions.length) {
+      setToast(c.bulkNoEligible);
       return;
     }
     const now = new Date();
-    setBulkIntervalMinutes("10");
+    setBulkResumeScope(bulkScopeOptions[0]);
+    setBulkIntervalMinutes("");
     setBulkScheduleDate(localDateInputValue(now));
     setBulkScheduleTime(localTimeInputValue(now));
     setBulkResumeOpen(true);
   }
 
   async function submitBulkResume() {
-    const intervalMinutes = Number(bulkIntervalMinutes);
-    if (!Number.isInteger(intervalMinutes) || intervalMinutes < 0 || intervalMinutes > 4320 || !bulkScheduleDate || !bulkScheduleTime) {
+    const intervalMinutes = Number(bulkIntervalMinutes.trim());
+    if (!bulkIntervalMinutes.trim() || !Number.isInteger(intervalMinutes) || intervalMinutes < 0 || intervalMinutes > 4320 || !bulkScheduleDate || !bulkScheduleTime) {
       setToast(c.genericError);
       return;
     }
@@ -553,6 +583,7 @@ export default function Campaigns() {
       const result = await bulkControl.mutateAsync({
         data: {
           action: "resume",
+          scope: bulkResumeScope,
           intervalSeconds: intervalMinutes * 60,
           scheduledAt: scheduledAt.toISOString(),
         },
@@ -795,6 +826,28 @@ export default function Campaigns() {
           }}
         >
           <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkScopeLabel}</span>
+              <select
+                value={bulkResumeScope}
+                onChange={(event) => setBulkResumeScope(event.target.value as BulkResumeScope)}
+                className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                data-testid="campaigns-bulk-scope"
+              >
+                {bulkScopeOptions.map((scopeOption) => (
+                  <option key={scopeOption} value={scopeOption}>
+                    {scopeOption === "queued"
+                      ? c.bulkScopeQueued
+                      : scopeOption === "paused"
+                        ? c.bulkScopePaused
+                        : c.bulkScopeCompleted}
+                  </option>
+                ))}
+              </select>
+              {bulkResumeScope === "completed" && (
+                <span className="mt-1.5 block text-[11px] font-medium text-[#94a3b8]">{c.bulkScopeHint}</span>
+              )}
+            </label>
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkIntervalLabel}</span>
               <div className="flex items-center gap-2">

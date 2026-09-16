@@ -82,6 +82,7 @@ export * from './authUser';
 export * from './authUserRole';
 export * from './bulkCampaignControlInput';
 export * from './bulkCampaignControlInputAction';
+export * from './bulkCampaignControlInputScope';
 export * from './bulkCampaignControlResult';
 export * from './bulkCampaignControlResultAction';
 export * from './bulkCampaignControlResultSkippedItem';
