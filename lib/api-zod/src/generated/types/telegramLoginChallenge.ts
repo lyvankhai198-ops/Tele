@@ -11,4 +11,5 @@ export interface TelegramLoginChallenge {
   id: string;
   expiresAt: Date;
   delivery: TelegramLoginChallengeDelivery;
+  qrUrl?: string | null;
 }

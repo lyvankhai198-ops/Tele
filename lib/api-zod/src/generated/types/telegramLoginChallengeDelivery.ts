@@ -12,4 +12,5 @@ export type TelegramLoginChallengeDelivery = typeof TelegramLoginChallengeDelive
 export const TelegramLoginChallengeDelivery = {
   app: 'app',
   sms: 'sms',
+  qr: 'qr',
 } as const;
