@@ -478,6 +478,69 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
   }
 }
 
+export type TelegramGroupJoinStatus = "joined" | "already_joined" | "skipped";
+
+export type TelegramGroupJoinInput = {
+  username: string | null;
+  telegramLink: string | null;
+};
+
+function telegramErrorText(error: unknown): string {
+  const value = error as { errorMessage?: unknown; message?: unknown };
+  return [value?.errorMessage, value?.message].filter((item): item is string => typeof item === "string").join(" ");
+}
+
+function telegramJoinTarget(input: TelegramGroupJoinInput): { username?: string; inviteHash?: string } | null {
+  const link = input.telegramLink?.trim();
+  if (link) {
+    try {
+      const url = new URL(link);
+      const segments = url.pathname.split("/").filter(Boolean);
+      const first = segments[0] ?? "";
+      const inviteHash = first === "+" ? segments[1] : first.startsWith("+") ? first.slice(1) : first === "joinchat" ? segments[1] : undefined;
+      if (inviteHash) return { inviteHash };
+      if (first && first !== "c" && first !== "joinchat") {
+        const username = first.replace(/^@/, "").trim();
+        if (username) return { username };
+      }
+    } catch {
+      // Fall back to the stored username when an older library row has an invalid URL.
+    }
+  }
+
+  const username = input.username?.replace(/^@/, "").trim();
+  return username ? { username } : null;
+}
+
+export async function joinTelegramGroupWithClient(
+  client: TelegramClient,
+  input: TelegramGroupJoinInput,
+): Promise<{ status: TelegramGroupJoinStatus; reason: string | null }> {
+  const target = telegramJoinTarget(input);
+  if (!target) {
+    return {
+      status: "skipped",
+      reason: "Nhóm không có username hoặc link mời để tự động tham gia.",
+    };
+  }
+
+  try {
+    if (target.inviteHash) {
+      await client.invoke(new Api.messages.ImportChatInvite({ hash: target.inviteHash }));
+    } else {
+      const entity = await client.getInputEntity(target.username!);
+      await client.invoke(new Api.channels.JoinChannel({ channel: entity as any }));
+    }
+    return { status: "joined", reason: null };
+  } catch (error) {
+    const message = telegramErrorText(error);
+    if (message.includes("USER_ALREADY_PARTICIPANT")) {
+      return { status: "already_joined", reason: "Tài khoản đã tham gia nhóm." };
+    }
+    throw error;
+  }
+}
+
 export async function getTelegramProxyConfig(account: typeof telegramAccountsTable.$inferSelect): Promise<TelegramProxyConfig | undefined> {
   if (!account.proxyId) return undefined;
   const [proxy] = await db.select().from(proxiesTable).where(and(

@@ -34,6 +34,8 @@ import {
   GetAdminOperationsResponse,
   GetAdminActiveGroupDirectoryResponse,
   SyncAdminGroupLibraryResponse,
+  BulkJoinAdminGroupLibraryBody,
+  BulkJoinAdminGroupLibraryResponse,
   ImportAdminGroupLibraryEntryParams,
   ImportAdminGroupLibraryEntryResponse,
   RevokeAdminGroupLibraryEntryResponse,
@@ -104,6 +106,12 @@ import {
   syncAdminGroupLibrary,
   updateAdminGroupLibraryEntry,
 } from "../lib/admin-active-group-directory";
+import {
+  disconnectQuietly,
+  getAccountClient,
+  joinTelegramGroupWithClient,
+  syncAccountDestinations,
+} from "../lib/telegram";
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
@@ -182,6 +190,77 @@ router.get("/admin/active-groups", async (_req, res): Promise<void> => {
 
 router.post("/admin/active-groups", async (_req, res): Promise<void> => {
   res.status(201).json(SyncAdminGroupLibraryResponse.parse(await syncAdminGroupLibrary()));
+});
+
+router.post("/admin/active-groups/join", async (req, res): Promise<void> => {
+  const body = BulkJoinAdminGroupLibraryBody.safeParse(req.body);
+  if (!body.success) return void sendError(res, 400, "Tài khoản Telegram được chọn không hợp lệ.");
+
+  const [account] = await db.select({
+    id: telegramAccountsTable.id,
+    status: telegramAccountsTable.status,
+  }).from(telegramAccountsTable).where(and(
+    eq(telegramAccountsTable.id, body.data.telegramAccountId),
+    isNull(telegramAccountsTable.deletedAt),
+  )).limit(1);
+  if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  if (account.status !== "connected") {
+    return void sendError(res, 409, "Tài khoản Telegram chưa kết nối.");
+  }
+
+  const directory = await getAdminActiveGroupDirectory();
+  const results: Array<{
+    telegramId: string;
+    title: string;
+    status: "joined" | "already_joined" | "skipped" | "failed";
+    reason: string | null;
+  }> = [];
+  let client: Awaited<ReturnType<typeof getAccountClient>>["client"] | null = null;
+
+  try {
+    ({ client } = await getAccountClient(account.id));
+    for (const [index, group] of directory.groups.entries()) {
+      try {
+        const result = await joinTelegramGroupWithClient(client, {
+          username: group.username,
+          telegramLink: group.telegramLink,
+        });
+        results.push({ telegramId: group.id, title: group.title, ...result });
+      } catch (error) {
+        results.push({
+          telegramId: group.id,
+          title: group.title,
+          status: "failed",
+          reason: error instanceof Error && error.message
+            ? error.message.slice(0, 300)
+            : "Telegram từ chối thao tác tham gia nhóm.",
+        });
+      }
+      if (index < directory.groups.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      }
+    }
+  } finally {
+    if (client) await disconnectQuietly(client);
+  }
+
+  try {
+    await syncAccountDestinations(account.id);
+  } catch (error) {
+    // Joining already succeeded on Telegram; a later account sync can repair
+    // the local destination view without asking the account to join again.
+    console.warn("Bulk group join completed but destination sync failed", error);
+  }
+
+  res.json(BulkJoinAdminGroupLibraryResponse.parse({
+    accountId: account.id,
+    totalCount: results.length,
+    joinedCount: results.filter((result) => result.status === "joined").length,
+    alreadyJoinedCount: results.filter((result) => result.status === "already_joined").length,
+    skippedCount: results.filter((result) => result.status === "skipped").length,
+    failedCount: results.filter((result) => result.status === "failed").length,
+    results,
+  }));
 });
 
 router.post("/admin/active-groups/:telegramId/import", async (req, res): Promise<void> => {

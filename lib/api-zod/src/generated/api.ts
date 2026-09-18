@@ -2162,6 +2162,26 @@ export const SyncAdminGroupLibraryResponse = zod.object({
 })
 
 
+export const BulkJoinAdminGroupLibraryBody = zod.object({
+  "telegramAccountId": zod.string()
+})
+
+export const BulkJoinAdminGroupLibraryResponse = zod.object({
+  "accountId": zod.string(),
+  "totalCount": zod.number(),
+  "joinedCount": zod.number(),
+  "alreadyJoinedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "failedCount": zod.number(),
+  "results": zod.array(zod.object({
+  "telegramId": zod.string(),
+  "title": zod.string(),
+  "status": zod.enum(['joined', 'already_joined', 'skipped', 'failed']),
+  "reason": zod.string().nullable()
+}))
+})
+
+
 export const ImportAdminGroupLibraryEntryParams = zod.object({
   "telegramId": zod.coerce.string()
 })

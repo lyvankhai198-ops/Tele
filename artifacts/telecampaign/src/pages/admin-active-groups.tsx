@@ -16,7 +16,9 @@ import {
   useUpdateAdminGroupLibraryEntry,
   useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
+  useBulkJoinAdminGroupLibrary,
   type AdminActiveGroup,
+  type AdminGroupLibraryBulkJoinResult,
   type Campaign,
   type Destination,
   type TelegramAccount,
@@ -31,7 +33,7 @@ import {
   Users,
 } from "lucide-react";
 import { CampaignFormModal, type CampaignFormPrefill } from "@/components/campaign-form-modal";
-import { AppLayout, EmptyState, Panel, SectionHeader } from "@/components/layout/AppLayout";
+import { AppLayout, EmptyState, Modal, Panel, SectionHeader } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
 
 const text = {
@@ -99,6 +101,23 @@ const text = {
   editCampaign: "Chỉnh sửa",
   createdCampaign: "Đã tạo campaign từ nhóm.",
   updatedCampaign: "Đã cập nhật campaign.",
+  bulkJoin: "Tham gia hàng loạt",
+  bulkJoinTitle: "Tham gia hàng loạt nhóm",
+  bulkJoinDescription: "Chọn đúng một tài khoản Telegram. Hệ thống sẽ lần lượt tham gia tất cả nhóm đang có trong Thư Viện Nhóm.",
+  bulkJoinAccount: "Tài khoản Telegram thực hiện",
+  bulkJoinSelect: "Chọn tài khoản",
+  bulkJoinStart: "Bắt đầu tham gia",
+  bulkJoining: "Đang tham gia...",
+  bulkJoinClose: "Đóng",
+  bulkJoinResults: "Kết quả từng nhóm",
+  bulkJoinSummary: (joined: number, alreadyJoined: number, skipped: number, failed: number) =>
+    `Đã tham gia ${joined}, đã có sẵn ${alreadyJoined}, bỏ qua ${skipped}, lỗi ${failed}.`,
+  bulkJoinSuccess: "Đã hoàn tất thao tác tham gia hàng loạt. Kiểm tra kết quả chi tiết trong hộp thoại.",
+  bulkJoinNoAccount: "Chưa có tài khoản Telegram đã kết nối.",
+  bulkJoinJoined: "Đã tham gia",
+  bulkJoinAlreadyJoined: "Đã tham gia trước đó",
+  bulkJoinSkipped: "Đã bỏ qua",
+  bulkJoinFailed: "Thất bại",
 } as const;
 
 const workspaceText = {
@@ -625,6 +644,9 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const [importingGroupId, setImportingGroupId] = useState<string | null>(null);
   const [revokingGroupId, setRevokingGroupId] = useState<string | null>(null);
   const [updatingTrialGroupId, setUpdatingTrialGroupId] = useState<string | null>(null);
+  const [bulkJoinModalOpen, setBulkJoinModalOpen] = useState(false);
+  const [bulkJoinAccountId, setBulkJoinAccountId] = useState("");
+  const [bulkJoinResult, setBulkJoinResult] = useState<AdminGroupLibraryBulkJoinResult | null>(null);
   const [campaignForm, setCampaignForm] = useState<{
     editingCampaign: Campaign | null;
     prefill?: CampaignFormPrefill;
@@ -665,6 +687,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const importGroup = useImportAdminGroupLibraryEntry();
   const revokeGroup = useRevokeAdminGroupLibraryEntry();
   const updateTrialGroup = useUpdateAdminGroupLibraryEntry();
+  const bulkJoinGroups = useBulkJoinAdminGroupLibrary();
   const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
   const directoryQuery = isAdmin ? query : workspaceQuery;
@@ -763,6 +786,39 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     }
   }
 
+  async function handleBulkJoin() {
+    if (!bulkJoinAccountId) return;
+    setBulkJoinResult(null);
+    setSyncFeedback(null);
+    setFeedbackIsError(false);
+    try {
+      const result = await bulkJoinGroups.mutateAsync({
+        data: { telegramAccountId: bulkJoinAccountId },
+      });
+      setBulkJoinResult(result);
+      await Promise.all([
+        destinations.refetch(),
+        query.refetch(),
+      ]);
+      setSyncFeedback(text.bulkJoinSuccess);
+    } catch {
+      setSyncFeedback(text.syncFailed);
+      setFeedbackIsError(true);
+    }
+  }
+
+  function openBulkJoinModal() {
+    setBulkJoinResult(null);
+    setBulkJoinAccountId((current) => current || connectedAccounts[0]?.id || "");
+    setBulkJoinModalOpen(true);
+  }
+
+  function closeBulkJoinModal() {
+    if (bulkJoinGroups.isPending) return;
+    setBulkJoinModalOpen(false);
+    setBulkJoinResult(null);
+  }
+
   useEffect(() => {
     if (isAdmin || !groupLibraryAccess.data?.canView || accounts.isLoading || autoSyncStarted.current) return;
     autoSyncStarted.current = true;
@@ -805,21 +861,35 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           eyebrow={isAdmin ? "Admin Center" : localizedWorkspaceText.eyebrow}
           title={pageText.title}
           detail={pageText.subtitle}
-           action={(isAdmin || groupLibraryAccess.data?.canView === true) ? (
-            <button
-              type="button"
-               onClick={() => void handleSync()}
-               disabled={directoryQuery.isFetching || syncLibrary.isPending || syncTelegram.isPending || accounts.isLoading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 py-2.5 text-[11px] font-extrabold text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa] disabled:cursor-not-allowed disabled:opacity-60"
-               data-testid={isAdmin ? "button-refresh-admin-active-groups" : "button-refresh-group-library"}
-            >
-               {syncLibrary.isPending || syncTelegram.isPending
-                 ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                 : <RefreshCw className="h-3.5 w-3.5" />}
-               {syncLibrary.isPending || syncTelegram.isPending
-                 ? (isAdmin ? text.syncing : localizedWorkspaceText.syncing)
-                 : (isAdmin ? text.sync : localizedWorkspaceText.sync)}
-            </button>
+            action={(isAdmin || groupLibraryAccess.data?.canView === true) ? (
+              <div className="flex flex-wrap justify-end gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={openBulkJoinModal}
+                    disabled={bulkJoinGroups.isPending || accounts.isLoading || !connectedAccounts.length || !groups.length}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1a2b88] px-3.5 py-2.5 text-[11px] font-extrabold text-white transition hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-60"
+                    data-testid="button-bulk-join-admin-active-groups"
+                  >
+                    {bulkJoinGroups.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Users className="h-3.5 w-3.5" />}
+                    {bulkJoinGroups.isPending ? text.bulkJoining : text.bulkJoin}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void handleSync()}
+                  disabled={directoryQuery.isFetching || syncLibrary.isPending || syncTelegram.isPending || accounts.isLoading}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 py-2.5 text-[11px] font-extrabold text-[#1a2b88] transition hover:border-[#1a2b88] hover:bg-[#eef2fa] disabled:cursor-not-allowed disabled:opacity-60"
+                  data-testid={isAdmin ? "button-refresh-admin-active-groups" : "button-refresh-group-library"}
+                >
+                  {syncLibrary.isPending || syncTelegram.isPending
+                    ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />}
+                  {syncLibrary.isPending || syncTelegram.isPending
+                    ? (isAdmin ? text.syncing : localizedWorkspaceText.syncing)
+                    : (isAdmin ? text.sync : localizedWorkspaceText.sync)}
+                </button>
+              </div>
             ) : undefined}
         />
          {syncFeedback && (
@@ -951,6 +1021,107 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
             onClose={() => setCampaignForm(null)}
             onSaved={handleCampaignSaved}
           />
+        )}
+        {isAdmin && bulkJoinModalOpen && (
+          <Modal
+            title={text.bulkJoinTitle}
+            description={text.bulkJoinDescription}
+            onClose={closeBulkJoinModal}
+            wide
+          >
+            {!bulkJoinResult ? (
+              <div className="space-y-5">
+                <label className="block">
+                  <span className="mb-2 block text-[11px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.bulkJoinAccount}</span>
+                  <select
+                    value={bulkJoinAccountId}
+                    onChange={(event) => setBulkJoinAccountId(event.target.value)}
+                    disabled={bulkJoinGroups.isPending}
+                    className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[12px] font-semibold outline-none focus:border-[#1a2b88] disabled:cursor-not-allowed disabled:bg-[#f8fafc]"
+                    data-testid="select-bulk-join-account"
+                  >
+                    {!connectedAccounts.length && <option value="">{text.bulkJoinNoAccount}</option>}
+                    {connectedAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}{account.username ? ` · @${account.username.replace(/^@/, "")}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-3 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
+                  Sẽ xử lý {groups.length.toLocaleString("vi-VN")} nhóm trong thư viện, lần lượt từng nhóm. Nhóm không có username hoặc link mời sẽ được báo là bỏ qua.
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeBulkJoinModal}
+                    disabled={bulkJoinGroups.isPending}
+                    className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2.5 text-[11px] font-extrabold text-[#475569] hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {text.bulkJoinClose}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleBulkJoin()}
+                    disabled={bulkJoinGroups.isPending || !bulkJoinAccountId || !connectedAccounts.length}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#1a2b88] px-4 py-2.5 text-[11px] font-extrabold text-white hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-60"
+                    data-testid="button-start-bulk-join"
+                  >
+                    {bulkJoinGroups.isPending && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                    {bulkJoinGroups.isPending ? text.bulkJoining : text.bulkJoinStart}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-[#d1fae5] bg-[#ecfdf5] p-3 text-[11px] font-bold text-[#047857]">
+                  {text.bulkJoinSummary(
+                    bulkJoinResult.joinedCount,
+                    bulkJoinResult.alreadyJoinedCount,
+                    bulkJoinResult.skippedCount,
+                    bulkJoinResult.failedCount,
+                  )}
+                </div>
+                <div>
+                  <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.bulkJoinResults}</p>
+                  <div className="max-h-[45dvh] space-y-1.5 overflow-y-auto">
+                    {bulkJoinResult.results.map((result) => {
+                      const statusLabel = result.status === "joined"
+                        ? text.bulkJoinJoined
+                        : result.status === "already_joined"
+                          ? text.bulkJoinAlreadyJoined
+                          : result.status === "skipped"
+                            ? text.bulkJoinSkipped
+                            : text.bulkJoinFailed;
+                      const statusClass = result.status === "failed"
+                        ? "bg-[#fff1f2] text-[#be123c]"
+                        : result.status === "skipped"
+                          ? "bg-[#fff7ed] text-[#c2410c]"
+                          : "bg-[#ecfdf5] text-[#047857]";
+                      return (
+                        <div key={result.telegramId} className="rounded-lg border border-[#eef2f6] bg-[#f8fafc] px-3 py-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="min-w-0 truncate text-[11px] font-extrabold text-[#334155]">{result.title}</span>
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-extrabold ${statusClass}`}>{statusLabel}</span>
+                          </div>
+                          {result.reason && <p className="mt-1 text-[10px] font-semibold leading-relaxed text-[#64748b]">{result.reason}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={closeBulkJoinModal}
+                    className="rounded-xl bg-[#1a2b88] px-4 py-2.5 text-[11px] font-extrabold text-white hover:bg-[#152473]"
+                  >
+                    {text.bulkJoinClose}
+                  </button>
+                </div>
+              </div>
+            )}
+          </Modal>
         )}
       </div>
     </AppLayout>

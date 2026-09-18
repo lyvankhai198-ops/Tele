@@ -1773,6 +1773,38 @@ export interface AdminGroupLibrarySyncResult {
   candidateCount: number;
 }
 
+export interface AdminGroupLibraryBulkJoinInput {
+  telegramAccountId: string;
+}
+
+export type AdminGroupLibraryJoinResultStatus = typeof AdminGroupLibraryJoinResultStatus[keyof typeof AdminGroupLibraryJoinResultStatus];
+
+
+export const AdminGroupLibraryJoinResultStatus = {
+  joined: 'joined',
+  already_joined: 'already_joined',
+  skipped: 'skipped',
+  failed: 'failed',
+} as const;
+
+export interface AdminGroupLibraryJoinResult {
+  telegramId: string;
+  title: string;
+  status: AdminGroupLibraryJoinResultStatus;
+  /** @nullable */
+  reason: string | null;
+}
+
+export interface AdminGroupLibraryBulkJoinResult {
+  accountId: string;
+  totalCount: number;
+  joinedCount: number;
+  alreadyJoinedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  results: AdminGroupLibraryJoinResult[];
+}
+
 export interface AdminGroupLibraryImportResult {
   imported: boolean;
 }

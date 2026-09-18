@@ -26,6 +26,8 @@ import type {
   AdminActiveGroupDirectory,
   AdminCampaignCloneInput,
   AdminCampaignStatusInput,
+  AdminGroupLibraryBulkJoinInput,
+  AdminGroupLibraryBulkJoinResult,
   AdminGroupLibraryEntryUpdateInput,
   AdminGroupLibraryEntryUpdateResult,
   AdminGroupLibraryImportResult,
@@ -5206,6 +5208,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getSyncAdminGroupLibraryMutationOptions(options));
+    }
+
+export const getBulkJoinAdminGroupLibraryUrl = () => {
+
+
+
+
+  return `/api/admin/active-groups/join`
+}
+
+export const bulkJoinAdminGroupLibrary = async (adminGroupLibraryBulkJoinInput: AdminGroupLibraryBulkJoinInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupLibraryBulkJoinResult> => {
+
+  return customFetch<AdminGroupLibraryBulkJoinResult>(getBulkJoinAdminGroupLibraryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminGroupLibraryBulkJoinInput)
+  }
+);}
+
+
+
+
+
+export const getBulkJoinAdminGroupLibraryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkJoinAdminGroupLibrary>>, TError,{data: BodyType<AdminGroupLibraryBulkJoinInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkJoinAdminGroupLibrary>>, TError,{data: BodyType<AdminGroupLibraryBulkJoinInput>}, TContext> => {
+
+const mutationKey = ['bulkJoinAdminGroupLibrary'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkJoinAdminGroupLibrary>>, {data: BodyType<AdminGroupLibraryBulkJoinInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkJoinAdminGroupLibrary(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkJoinAdminGroupLibraryMutationResult = NonNullable<Awaited<ReturnType<typeof bulkJoinAdminGroupLibrary>>>
+    export type BulkJoinAdminGroupLibraryMutationBody = BodyType<AdminGroupLibraryBulkJoinInput>
+    export type BulkJoinAdminGroupLibraryMutationError = ErrorType<void>
+
+    export const useBulkJoinAdminGroupLibrary = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkJoinAdminGroupLibrary>>, TError,{data: BodyType<AdminGroupLibraryBulkJoinInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkJoinAdminGroupLibrary>>,
+        TError,
+        {data: BodyType<AdminGroupLibraryBulkJoinInput>},
+        TContext
+      > => {
+      return useMutation(getBulkJoinAdminGroupLibraryMutationOptions(options));
     }
 
 export const getImportAdminGroupLibraryEntryUrl = (telegramId: string,) => {

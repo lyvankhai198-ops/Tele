@@ -1049,6 +1049,26 @@ paths:
               schema: { $ref: "#/components/schemas/AdminGroupLibrarySyncResult" }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
+  /admin/active-groups/join:
+    post:
+      operationId: bulkJoinAdminGroupLibrary
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminGroupLibraryBulkJoinInput" }
+      responses:
+        "200":
+          description: Bulk Telegram group join result for the selected administrator account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupLibraryBulkJoinResult" }
+        "400": { description: Invalid account selection }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Telegram account was not found }
+        "409": { description: Telegram account is not connected }
   /admin/active-groups/{telegramId}/import:
     post:
       operationId: importAdminGroupLibraryEntry
@@ -2633,6 +2653,32 @@ components:
       properties:
         addedCount: { type: number }
         candidateCount: { type: number }
+    AdminGroupLibraryBulkJoinInput:
+      type: object
+      required: [telegramAccountId]
+      properties:
+        telegramAccountId: { type: string }
+    AdminGroupLibraryJoinResult:
+      type: object
+      required: [telegramId, title, status, reason]
+      properties:
+        telegramId: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [joined, already_joined, skipped, failed] }
+        reason: { type: ["string", "null"] }
+    AdminGroupLibraryBulkJoinResult:
+      type: object
+      required: [accountId, totalCount, joinedCount, alreadyJoinedCount, skippedCount, failedCount, results]
+      properties:
+        accountId: { type: string }
+        totalCount: { type: number }
+        joinedCount: { type: number }
+        alreadyJoinedCount: { type: number }
+        skippedCount: { type: number }
+        failedCount: { type: number }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/AdminGroupLibraryJoinResult" }
     AdminGroupLibraryImportResult:
       type: object
       required: [imported]
