@@ -557,6 +557,7 @@ export type BulkCampaignControlInputScope = typeof BulkCampaignControlInputScope
 
 
 export const BulkCampaignControlInputScope = {
+  draft: 'draft',
   queued: 'queued',
   paused: 'paused',
   completed: 'completed',

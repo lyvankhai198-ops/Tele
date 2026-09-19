@@ -1983,8 +1983,14 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
         return { kind: "skip" as const, reason: "Đã đạt giới hạn số campaign của gói hiện tại." };
       }
 
-      if (!campaign.telegramAccountId || !campaign.templateId) {
-        return { kind: "skip" as const, reason: "Campaign thiếu tài khoản Telegram hoặc mẫu tin." };
+      if (!campaign.telegramAccountId) {
+        return { kind: "skip" as const, reason: "Campaign thiếu tài khoản Telegram." };
+      }
+      if (campaign.templateMode === "text" && !campaign.content.trim()) {
+        return { kind: "skip" as const, reason: "Campaign text chưa có nội dung." };
+      }
+      if (campaign.templateMode === "forward" && !campaign.templateId) {
+        return { kind: "skip" as const, reason: "Campaign forward thiếu mẫu tin." };
       }
       const [account] = await tx.select().from(telegramAccountsTable).where(and(
         eq(telegramAccountsTable.id, campaign.telegramAccountId),
@@ -1994,17 +2000,19 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       if (!account || account.status !== "connected" || !account.sessionEncrypted) {
         return { kind: "skip" as const, reason: "Tài khoản Telegram chưa kết nối." };
       }
-      const [template] = await tx.select().from(messageTemplatesTable).where(and(
-        eq(messageTemplatesTable.id, campaign.templateId),
-        eq(messageTemplatesTable.ownerUserId, ownerUserId),
-      ));
-      if (!template) {
+      const [template] = campaign.templateId
+        ? await tx.select().from(messageTemplatesTable).where(and(
+          eq(messageTemplatesTable.id, campaign.templateId),
+          eq(messageTemplatesTable.ownerUserId, ownerUserId),
+        ))
+        : [];
+      if (campaign.templateMode === "forward" && !template) {
         return { kind: "skip" as const, reason: "Mẫu tin không còn tồn tại." };
       }
-      if (campaignCloneMode(campaign) === "admin" && template.mode !== "forward") {
+      if (template && campaignCloneMode(campaign) === "admin" && template.mode !== "forward") {
         return { kind: "skip" as const, reason: "Campaign clone admin phải dùng mẫu forward." };
       }
-      if (template.mode === "forward" && (
+      if (template?.mode === "forward" && (
         template.sourceAccountId !== campaign.telegramAccountId || !template.sourceMessageId
       )) {
         return { kind: "skip" as const, reason: "Mẫu forward chưa chọn đúng Tin nhắn đã lưu." };

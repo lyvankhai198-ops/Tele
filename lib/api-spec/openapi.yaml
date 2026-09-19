@@ -1852,7 +1852,7 @@ components:
       required: [action]
       properties:
         action: { type: string, enum: [pause, resume] }
-        scope: { type: string, enum: [queued, paused, completed], default: paused }
+        scope: { type: string, enum: [draft, queued, paused, completed], default: paused }
         intervalSeconds: { type: number, minimum: 0, maximum: 259200 }
         scheduledAt: { type: ["string", "null"], format: date-time }
     BulkCampaignControlResult:

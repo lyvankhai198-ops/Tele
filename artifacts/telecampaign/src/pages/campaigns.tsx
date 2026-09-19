@@ -60,11 +60,12 @@ const copy = {
     bulkResumeTitle: "Run campaigns",
     bulkResumeDetail: "Choose which filtered campaign status to run. Running campaigns are not changed.",
     bulkScopeLabel: "Campaigns to run",
+    bulkScopeDraft: "Draft campaigns",
     bulkScopeQueued: "Queued campaigns",
     bulkScopePaused: "Paused campaigns",
     bulkScopeCompleted: "Completed campaigns (new run)",
     bulkScopeHint: "Completed campaigns create a new run and keep the previous history.",
-    bulkIntervalLabel: "Gap between campaigns (minutes)",
+    bulkIntervalLabel: "Gap between campaign starts (minutes)",
     bulkIntervalHint: "The next campaign starts after this gap.",
     bulkStartDateLabel: "Schedule date",
     bulkStartTimeLabel: "First start time",
@@ -193,12 +194,13 @@ const copy = {
     bulkResumeTitle: "Chạy lại chiến dịch",
     bulkResumeDetail: "Chọn trạng thái chiến dịch cần chạy theo bộ lọc. Chiến dịch đang chạy sẽ không bị đổi.",
     bulkScopeLabel: "Chiến dịch cần chạy",
+    bulkScopeDraft: "Chiến dịch bản nháp",
     bulkScopeQueued: "Chiến dịch đang chờ",
     bulkScopePaused: "Chiến dịch đã dừng",
     bulkScopeCompleted: "Chiến dịch hoàn thành (tạo lượt mới)",
     bulkScopeHint: "Chiến dịch hoàn thành sẽ tạo lượt chạy mới và giữ nguyên lịch sử cũ.",
-    bulkIntervalLabel: "Khoảng cách giữa các chiến dịch (phút)",
-    bulkIntervalHint: "Chiến dịch tiếp theo sẽ bắt đầu sau khoảng thời gian này.",
+    bulkIntervalLabel: "Khoảng cách giữa thời điểm bắt đầu campaign (phút)",
+    bulkIntervalHint: "Campaign tiếp theo sẽ bắt đầu sau khoảng thời gian này.",
     bulkStartDateLabel: "Ngày bắt đầu",
     bulkStartTimeLabel: "Giờ bắt đầu đầu tiên",
     bulkApply: "Chạy các chiến dịch đã chọn",
@@ -400,7 +402,7 @@ function isActive(status: string) {
   return status === "queued" || status === "running";
 }
 
-type BulkResumeScope = "queued" | "paused" | "completed";
+type BulkResumeScope = "draft" | "queued" | "paused" | "completed";
 
 function campaignDailyQuotaLabel(
   campaign: Campaign,
@@ -481,14 +483,16 @@ export default function Campaigns() {
   const bulkScopeOptions = useMemo(() => {
     const available = new Set<BulkResumeScope>();
     for (const campaign of campaigns.data ?? []) {
+      if (campaign.status === "draft") available.add("draft");
       if (campaign.status === "queued") available.add("queued");
       if (campaign.status === "paused") available.add("paused");
       if (campaign.status === "completed" || campaign.status === "completed_with_errors") available.add("completed");
     }
+    if (status === "draft") return available.has("draft") ? ["draft" as const] : [];
     if (status === "queued") return available.has("queued") ? ["queued" as const] : [];
     if (status === "paused") return available.has("paused") ? ["paused" as const] : [];
     if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
-    return (["queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
+    return (["draft", "queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
   }, [campaigns.data, status]);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
@@ -836,7 +840,9 @@ export default function Campaigns() {
               >
                 {bulkScopeOptions.map((scopeOption) => (
                   <option key={scopeOption} value={scopeOption}>
-                    {scopeOption === "queued"
+                    {scopeOption === "draft"
+                      ? c.bulkScopeDraft
+                      : scopeOption === "queued"
                       ? c.bulkScopeQueued
                       : scopeOption === "paused"
                         ? c.bulkScopePaused

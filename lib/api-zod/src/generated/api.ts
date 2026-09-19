@@ -836,7 +836,7 @@ export const bulkControlCampaignsBodyIntervalSecondsMax = 259200;
 
 export const BulkControlCampaignsBody = zod.object({
   "action": zod.enum(['pause', 'resume']),
-  "scope": zod.enum(['queued', 'paused', 'completed']).default(bulkControlCampaignsBodyScopeDefault),
+  "scope": zod.enum(['draft', 'queued', 'paused', 'completed']).default(bulkControlCampaignsBodyScopeDefault),
   "intervalSeconds": zod.number().min(bulkControlCampaignsBodyIntervalSecondsMin).max(bulkControlCampaignsBodyIntervalSecondsMax).optional(),
   "scheduledAt": zod.coerce.date().nullish()
 })
