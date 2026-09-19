@@ -1535,6 +1535,7 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "postJoinCampaign": zod.object({
   "enabled": zod.boolean(),
   "content": zod.string().max(getAdminSystemSettingsResponsePostJoinCampaignContentMax),
+  "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf),
   "roundDelayMinSeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
@@ -1696,6 +1697,7 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "postJoinCampaign": zod.object({
   "enabled": zod.boolean(),
   "content": zod.string().max(updateAdminSystemSettingsBodyPostJoinCampaignContentMax),
+  "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf),
@@ -1856,6 +1858,7 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "postJoinCampaign": zod.object({
   "enabled": zod.boolean(),
   "content": zod.string().max(updateAdminSystemSettingsResponsePostJoinCampaignContentMax),
+  "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
@@ -2286,6 +2289,7 @@ export const GetAdminGroupJoinStatusResponse = zod.object({
   "postJoinCampaign": zod.object({
   "enabled": zod.boolean(),
   "content": zod.string().max(getAdminGroupJoinStatusResponsePostJoinCampaignContentMax),
+  "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMultipleOf),
   "roundDelayMinSeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
@@ -2333,6 +2337,7 @@ export const UpdateAdminGroupJoinAutomationBody = zod.object({
   "postJoinCampaign": zod.object({
   "enabled": zod.boolean(),
   "content": zod.string().max(updateAdminGroupJoinAutomationBodyPostJoinCampaignContentMax),
+  "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf),
@@ -2360,6 +2365,7 @@ export const UpdateAdminGroupJoinAutomationResponse = zod.object({
   "postJoinCampaign": zod.object({
   "enabled": zod.boolean(),
   "content": zod.string().max(updateAdminGroupJoinAutomationResponsePostJoinCampaignContentMax),
+  "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),

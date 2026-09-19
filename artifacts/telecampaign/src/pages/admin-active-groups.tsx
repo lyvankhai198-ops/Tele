@@ -930,6 +930,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
           postJoinCampaign: {
             ...postJoinDraft,
             content: postJoinDraft.content.trim(),
+            templateId: null,
           },
         },
       });

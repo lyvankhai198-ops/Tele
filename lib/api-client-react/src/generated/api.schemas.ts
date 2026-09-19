@@ -1319,6 +1319,8 @@ export interface PostJoinCampaignSettings {
   enabled: boolean;
   /** @maxLength 4096 */
   content: string;
+  /** @nullable */
+  templateId?: string | null;
   /**
      * @minimum 1
      * @maximum 300

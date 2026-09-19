@@ -8,6 +8,7 @@ import {
   campaignsTable,
   destinationsTable,
   groupLibraryEntriesTable,
+  messageTemplatesTable,
   telegramAccountsTable,
 } from "@workspace/db";
 import { logger } from "./logger";
@@ -194,15 +195,21 @@ async function createPostJoinCampaign(input: {
 
     const now = new Date();
     const campaignStatus = config.mode === "send" ? "queued" : "draft";
+    const [template] = config.templateId
+      ? await tx.select().from(messageTemplatesTable).where(and(
+        eq(messageTemplatesTable.id, config.templateId),
+        eq(messageTemplatesTable.ownerUserId, input.ownerUserId),
+      )).limit(1)
+      : [];
     const [campaign] = await tx.insert(campaignsTable).values({
       ownerUserId: input.ownerUserId,
       name: `Tự động sau khi tham gia: ${input.groupTitle}`.slice(0, 160),
-      content: config.content,
+      content: template?.content ?? config.content,
       telegramAccountId: input.accountId,
-      templateId: null,
-      templateMode: "text",
-      templateSourceAccountId: null,
-      templateSourceMessageId: null,
+      templateId: template?.id ?? null,
+      templateMode: template?.mode ?? "text",
+      templateSourceAccountId: template?.sourceAccountId ?? null,
+      templateSourceMessageId: template?.sourceMessageId ?? null,
       destinationIds: [destination.id],
       mediaUrl: null,
       status: campaignStatus,

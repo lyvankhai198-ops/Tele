@@ -27,6 +27,7 @@ export type SupportSettings = {
 export type PostJoinCampaignSettings = {
   enabled: boolean;
   content: string;
+  templateId?: string | null;
   repeatCount: number;
   roundDelayMinSeconds: number;
   roundDelayMaxSeconds: number;
@@ -273,6 +274,9 @@ function normalizedPostJoinCampaign(
     content: typeof stored?.content === "string" && stored.content.trim().length <= 4096
       ? stored.content.trim()
       : fallback.content,
+    templateId: typeof stored?.templateId === "string" && stored.templateId.trim()
+      ? stored.templateId
+      : null,
     repeatCount: isFiniteInteger(stored?.repeatCount, 1, 300) ? stored.repeatCount : fallback.repeatCount,
     roundDelayMinSeconds: min <= max ? min : fallback.roundDelayMinSeconds,
     roundDelayMaxSeconds: min <= max ? max : fallback.roundDelayMaxSeconds,

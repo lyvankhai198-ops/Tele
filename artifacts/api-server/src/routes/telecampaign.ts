@@ -128,7 +128,7 @@ import {
   getConfiguredPlanCatalog,
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
-import { getSystemSettings } from "../lib/system-settings";
+import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
 import {
   filterGroupLibraryGroups,
   getAdminActiveGroupDirectory,
@@ -2161,6 +2161,9 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
 });
 
 router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
+  if (req.authUser?.role !== "admin" || req.supportSession) {
+    return void sendError(res, 403, "Chỉ quản trị viên mới được đổi mẫu tin tự động.");
+  }
   const parsed = BulkUpdateCampaignTemplateBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
 
@@ -2240,6 +2243,15 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
       skipped.push({ id: candidate.id, name: candidate.name, reason: result.reason });
     }
   }
+
+  const settings = await getSystemSettings();
+  await updateSystemSettings({
+    ...settings,
+    postJoinCampaign: {
+      ...settings.postJoinCampaign,
+      templateId: template.id,
+    },
+  }, ownerUserId);
 
   return void res.json(BulkUpdateCampaignTemplateResponse.parse({
     updatedCount: updated.length,

@@ -448,6 +448,7 @@ export default function Campaigns() {
   const { language } = useLanguage();
   const { user } = useAuth();
   const isSupportMode = Boolean(user?.support);
+  const isAdmin = user?.role === "admin" && !isSupportMode;
   const c = copy[language];
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
@@ -778,7 +779,7 @@ export default function Campaigns() {
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {c.bulkResumeBtn}
             </button>
-            <button
+            {isAdmin && (<button
               type="button"
               onClick={openBulkTemplate}
               disabled={bulkControl.isPending || bulkTemplate.isPending}
@@ -787,7 +788,7 @@ export default function Campaigns() {
             >
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {c.bulkTemplateBtn}
-            </button>
+            </button>)}
           </div>
         )}
 
