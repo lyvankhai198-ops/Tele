@@ -17,16 +17,18 @@ import {
   Users,
   X,
 } from "lucide-react";
-import type { Destination } from "@workspace/api-client-react";
+import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
   useCreateMessageTemplate,
   getGetGroupLibraryQueryKey,
+  getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   useGetGroupLibrary,
   useGetGroupLibraryAccess,
   useGetSystemDefaults,
   useListDestinations,
+  useListCampaigns,
   useListTelegramAccounts,
   useListTelegramSavedMessages,
   useSyncTelegramDestinations,
@@ -144,6 +146,7 @@ const copy = {
     groupNotJoined: "Chưa tham gia / chưa đồng bộ",
     searchGroups: "Tìm nhóm...",
     noGroups: "Chưa có nhóm được phép gửi. Hãy đồng bộ lại tài khoản.",
+    activeCampaignHint: (details: string) => `Đang chạy: ${details}`,
     temporaryRestrictionHint: (until: string) => `Tạm hạn chế đến ${until}`,
     temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} nhóm đã chọn đang bị hạn chế tạm thời. Hãy xác nhận lịch chạy từ ${suggestedAt}.`,
     applySuggestedSchedule: "Dùng thời gian an toàn đề xuất",
@@ -235,6 +238,7 @@ const copy = {
     groupNotJoined: "Not joined / not synchronized",
     searchGroups: "Search groups...",
     noGroups: "No groups with posting permission yet. Sync the account again.",
+    activeCampaignHint: (details: string) => `Already running: ${details}`,
     temporaryRestrictionHint: (until: string) => `Temporarily restricted until ${until}`,
     temporaryRestrictionWarning: (count: number, suggestedAt: string) => `${count} selected group${count === 1 ? " is" : "s are"} temporarily restricted. Confirm a schedule at or after ${suggestedAt}.`,
     applySuggestedSchedule: "Use suggested safe time",
@@ -304,6 +308,14 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       staleTime: DESTINATION_SYNC_TTL_MS,
     },
   });
+  const campaigns = useListCampaigns({
+    query: {
+      queryKey: getListCampaignsQueryKey(),
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
+  });
   const systemDefaults = useGetSystemDefaults();
   const sync = useSyncTelegramDestinations();
   const groupLibraryAccess = useGetGroupLibraryAccess();
@@ -361,6 +373,24 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     () => new Set((destinations.data ?? []).filter((destination) => destination.accountId === accountId && destination.canPost).map((destination) => destination.id)),
     [accountId, destinations.data],
   );
+  const activeCampaignsByDestination = useMemo(() => {
+    const result = new Map<string, Campaign[]>();
+    for (const campaign of campaigns.data ?? []) {
+      if (
+        !["queued", "running"].includes(campaign.status)
+        || campaign.telegramAccountId !== accountId
+      ) continue;
+      for (const destinationId of campaign.destinationIds) {
+        const current = result.get(destinationId) ?? [];
+        current.push(campaign);
+        result.set(destinationId, current);
+      }
+    }
+    return result;
+  }, [accountId, campaigns.data]);
+  const selectedAccountName = selectedAccount
+    ? `${selectedAccount.name}${selectedAccount.phone ? ` · ${selectedAccount.phone}` : ""}`
+    : c.accountPlaceholder;
 
   const selectedDestinations = (destinations.data ?? []).filter((destination) => destinationIds.includes(destination.id));
   const selectedTemporaryDestinations = selectedDestinations.filter((destination) =>
@@ -684,6 +714,15 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                                         {c.temporaryRestrictionHint(formatRestrictionTime(new Date(destination.restrictedUntil!)))}
                                       </span>
                                     )}
+                                      {(activeCampaignsByDestination.get(destination.id) ?? []).length > 0 && (
+                                        <span className="mt-0.5 block text-[10px] font-semibold leading-snug text-[#b45309]">
+                                          {c.activeCampaignHint(
+                                            (activeCampaignsByDestination.get(destination.id) ?? [])
+                                              .map((campaign) => `${campaign.name} · ${selectedAccountName}`)
+                                              .join(" · "),
+                                          )}
+                                        </span>
+                                      )}
                                   </span>
                                 </button>
                               )) : <p className="px-2 py-5 text-center text-[13px] font-medium text-[#64748b]">{sync.isPending ? c.loadingGroups : c.noGroups}</p>}

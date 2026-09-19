@@ -9,9 +9,11 @@ import {
 import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
+  getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   useGetSystemDefaults,
   useListDestinations,
+  useListCampaigns,
   useListMessageTemplates,
   useListTelegramAccounts,
   useSyncTelegramDestinations,
@@ -79,6 +81,7 @@ const copy = {
     noGroupsHint: "No groups found for this account.",
     unavailableDestination: "No posting permission",
     unavailableDestinationHint: "Telegram posting permission is unavailable for this group.",
+    activeCampaignHint: (details: string) => `Already running: ${details}`,
     selectedUnavailableWarning: "A selected group no longer has posting permission. Deselect every group marked in red before saving so the campaign can continue with the other groups.",
     syncingDestinations: "Refreshing groups and posting permissions...",
     cachedDestinations: "Groups were synced recently. Showing saved permissions.",
@@ -131,6 +134,7 @@ const copy = {
     noGroupsHint: "Không tìm thấy nhóm nào của tài khoản này.",
     unavailableDestination: "Không có quyền đăng",
     unavailableDestinationHint: "Nhóm này hiện chưa thể nhận tin vì Telegram đã hạn chế quyền đăng.",
+    activeCampaignHint: (details: string) => `Đang chạy: ${details}`,
     selectedUnavailableWarning: "Có nhóm đang chọn không còn quyền đăng. Hãy bỏ chọn tất cả nhóm có nhãn đỏ trước khi lưu để chiến dịch tiếp tục với các nhóm khác.",
     syncingDestinations: "Đang cập nhật nhóm và quyền đăng...",
     cachedDestinations: "Nhóm đã được đồng bộ gần đây. Đang hiển thị quyền đã lưu.",
@@ -227,6 +231,14 @@ export function CampaignFormModal({
       staleTime: DESTINATION_SYNC_TTL_MS,
     },
   });
+  const campaigns = useListCampaigns({
+    query: {
+      queryKey: getListCampaignsQueryKey(),
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+      staleTime: 0,
+    },
+  });
   const templates = useListMessageTemplates();
   const systemDefaults = useGetSystemDefaults();
   const createCampaign = useCreateCampaign();
@@ -295,6 +307,26 @@ export function CampaignFormModal({
     && !destination.canPost
     && temporaryRestrictionUntil(destination) === null,
   );
+  const activeCampaignsByDestination = useMemo(() => {
+    const result = new Map<string, Campaign[]>();
+    for (const campaign of campaigns.data ?? []) {
+      if (
+        campaign.id === editingCampaign?.id
+        || !["queued", "running"].includes(campaign.status)
+        || campaign.telegramAccountId !== form.accountId
+      ) continue;
+      for (const destinationId of campaign.destinationIds) {
+        const current = result.get(destinationId) ?? [];
+        current.push(campaign);
+        result.set(destinationId, current);
+      }
+    }
+    return result;
+  }, [campaigns.data, editingCampaign?.id, form.accountId]);
+  const selectedAccount = connectedAccounts.find((account) => account.id === form.accountId);
+  const selectedAccountName = selectedAccount
+    ? `${selectedAccount.name}${selectedAccount.phone ? ` · ${selectedAccount.phone}` : ""}`
+    : c.fieldAccountPlaceholder;
   const formatRestrictionTime = (value: Date) => new Intl.DateTimeFormat(
     language === "vi" ? "vi-VN" : "en-US",
     { dateStyle: "short", timeStyle: "short" },
@@ -627,6 +659,15 @@ export function CampaignFormModal({
                                     : c.unavailableDestinationHint}
                                </span>
                              )}
+                               {(activeCampaignsByDestination.get(destination.id) ?? []).length > 0 && (
+                                <span className="mt-0.5 block text-[10px] font-semibold leading-snug text-[#b45309]">
+                                  {c.activeCampaignHint(
+                                    (activeCampaignsByDestination.get(destination.id) ?? [])
+                                      .map((campaign) => `${campaign.name} · ${selectedAccountName}`)
+                                      .join(" · "),
+                                  )}
+                                </span>
+                               )}
                            </span>
                           {destination.kind === "topic" && <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[10px] font-extrabold text-[#c2410c]">{c.topicBadge}</span>}
                            {!destination.canPost && (
