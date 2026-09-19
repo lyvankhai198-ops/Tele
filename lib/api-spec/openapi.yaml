@@ -543,6 +543,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BulkCampaignControlResult" }
+  /campaigns/bulk-template:
+    post:
+      operationId: bulkUpdateCampaignTemplate
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkCampaignTemplateInput" }
+      responses:
+        "200":
+          description: Bulk campaign template update result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
   /campaigns/{campaignId}:
     patch:
       operationId: updateCampaignStatus
@@ -1860,6 +1875,26 @@ components:
       required: [action, updatedCount, skippedCount, skipped]
       properties:
         action: { type: string, enum: [pause, resume] }
+        updatedCount: { type: number }
+        skippedCount: { type: number }
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, name, reason]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              reason: { type: string }
+    BulkCampaignTemplateInput:
+      type: object
+      required: [templateId]
+      properties:
+        templateId: { type: string, minLength: 1 }
+    BulkCampaignTemplateResult:
+      type: object
+      required: [updatedCount, skippedCount, skipped]
+      properties:
         updatedCount: { type: number }
         skippedCount: { type: number }
         skipped:

@@ -596,6 +596,23 @@ export interface BulkCampaignControlResult {
   skipped: BulkCampaignControlResultSkippedItem[];
 }
 
+export interface BulkCampaignTemplateInput {
+  /** @minLength 1 */
+  templateId: string;
+}
+
+export type BulkCampaignTemplateResultSkippedItem = {
+  id: string;
+  name: string;
+  reason: string;
+};
+
+export interface BulkCampaignTemplateResult {
+  updatedCount: number;
+  skippedCount: number;
+  skipped: BulkCampaignTemplateResultSkippedItem[];
+}
+
 export interface AdminCampaignCloneInput {
   telegramAccountId: string;
 }

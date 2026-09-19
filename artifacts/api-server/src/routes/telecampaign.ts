@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createReadStream } from "node:fs";
-import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
@@ -81,6 +81,8 @@ import {
   UpdateCampaignStatusResponse,
   BulkControlCampaignsBody,
   BulkControlCampaignsResponse,
+  BulkUpdateCampaignTemplateBody,
+  BulkUpdateCampaignTemplateResponse,
 } from "@workspace/api-zod";
 import {
   activityLogsTable,
@@ -2153,6 +2155,94 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   return void res.json(BulkControlCampaignsResponse.parse({
     action: "resume",
     updatedCount: resumed.length,
+    skippedCount: skipped.length,
+    skipped,
+  }));
+});
+
+router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
+  const parsed = BulkUpdateCampaignTemplateBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, parsed.error.message);
+
+  const ownerUserId = currentUserId(req);
+  const [template] = await db.select().from(messageTemplatesTable).where(and(
+    eq(messageTemplatesTable.id, parsed.data.templateId),
+    eq(messageTemplatesTable.ownerUserId, ownerUserId),
+  ));
+  if (!template) return void sendError(res, 404, "Không tìm thấy mẫu tin nhắn.");
+
+  const automaticPrefix = "Tự động";
+  const candidates = await db.select({
+    id: campaignsTable.id,
+    name: campaignsTable.name,
+  }).from(campaignsTable).where(and(
+    eq(campaignsTable.ownerUserId, ownerUserId),
+    like(campaignsTable.name, `${automaticPrefix}%`),
+    inArray(campaignsTable.status, ["draft", "paused", "queued", "running"]),
+  )).orderBy(campaignsTable.createdAt);
+  const skipped: Array<{ id: string; name: string; reason: string }> = [];
+  const updated: Array<{ id: string; name: string }> = [];
+
+  for (const candidate of candidates) {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} FOR UPDATE`);
+      const [campaign] = await tx.select().from(campaignsTable).where(and(
+        eq(campaignsTable.id, candidate.id),
+        eq(campaignsTable.ownerUserId, ownerUserId),
+      ));
+      if (!campaign || !campaign.name.startsWith(automaticPrefix)
+        || !["draft", "paused", "queued", "running"].includes(campaign.status)) {
+        return { kind: "skip" as const, reason: "Campaign không còn thuộc phạm vi đổi mẫu tin." };
+      }
+      if (!campaign.telegramAccountId) {
+        return { kind: "skip" as const, reason: "Campaign thiếu tài khoản Telegram." };
+      }
+      if (campaignCloneMode(campaign) === "admin" && template.mode !== "forward") {
+        return { kind: "skip" as const, reason: "Campaign tự động clone admin phải dùng mẫu forward." };
+      }
+      if (template.mode === "forward" && (
+        template.sourceAccountId !== campaign.telegramAccountId || !template.sourceMessageId
+      )) {
+        return { kind: "skip" as const, reason: "Mẫu forward phải lấy Tin nhắn đã lưu từ đúng tài khoản Telegram của campaign." };
+      }
+
+      const [changed] = await tx.update(campaignsTable).set({
+        content: template.content,
+        templateId: template.id,
+        templateMode: template.mode,
+        templateSourceAccountId: template.mode === "forward" ? template.sourceAccountId : null,
+        templateSourceMessageId: template.mode === "forward" ? template.sourceMessageId : null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(campaignsTable.id, campaign.id),
+        inArray(campaignsTable.status, ["draft", "paused", "queued", "running"]),
+      )).returning({ id: campaignsTable.id, name: campaignsTable.name });
+      return changed
+        ? { kind: "updated" as const, campaign: changed }
+        : { kind: "skip" as const, reason: "Campaign đã được xử lý bởi thao tác khác." };
+    });
+
+    if (result.kind === "updated") {
+      updated.push(result.campaign);
+      await recordActivity({
+        event: "campaign.bulk_template_updated",
+        message: `Updated automatic campaign "${result.campaign.name}" with a new message template`,
+        ownerUserId,
+        campaignId: result.campaign.id,
+        level: "success",
+        metadata: {
+          templateId: template.id,
+          campaignNamePrefix: automaticPrefix,
+          statuses: ["draft", "paused", "queued", "running"],
+        },
+      });
+    } else {
+      skipped.push({ id: candidate.id, name: candidate.name, reason: result.reason });
+    }
+  }
+
+  return void res.json(BulkUpdateCampaignTemplateResponse.parse({
+    updatedCount: updated.length,
     skippedCount: skipped.length,
     skipped,
   }));

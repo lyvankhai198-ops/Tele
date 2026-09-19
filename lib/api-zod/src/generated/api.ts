@@ -853,6 +853,24 @@ export const BulkControlCampaignsResponse = zod.object({
 })
 
 
+
+
+
+export const BulkUpdateCampaignTemplateBody = zod.object({
+  "templateId": zod.string().min(1)
+})
+
+export const BulkUpdateCampaignTemplateResponse = zod.object({
+  "updatedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
+})
+
+
 export const UpdateCampaignStatusParams = zod.object({
   "campaignId": zod.coerce.string()
 })

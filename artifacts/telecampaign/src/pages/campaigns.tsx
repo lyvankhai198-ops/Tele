@@ -19,6 +19,7 @@ import {
   useGetCampaignCloneReadiness,
   useGetTelegramSavedMessage,
   useBulkControlCampaigns,
+  useBulkUpdateCampaignTemplate,
   useListCampaigns,
   useListMessageTemplates,
   useListTelegramAccounts,
@@ -56,6 +57,7 @@ const copy = {
     resumeBtn: "Resume",
     bulkPauseBtn: "Stop all",
     bulkResumeBtn: "Run all",
+    bulkTemplateBtn: "Change automatic templates",
     bulkPauseConfirm: (count: number) => `Pause ${count} active campaign${count === 1 ? "" : "s"}?`,
     bulkResumeTitle: "Run campaigns",
     bulkResumeDetail: "Choose which filtered campaign status to run. Running campaigns are not changed.",
@@ -71,6 +73,16 @@ const copy = {
     bulkStartTimeLabel: "First start time",
     bulkApply: "Run selected campaigns",
     bulkCancel: "Cancel",
+    bulkTemplateTitle: "Change automatic campaign templates",
+    bulkTemplateDetail: "Only campaigns whose name starts with “Tự động” and are Draft, Paused, or Running are included. Other campaigns are not changed.",
+    bulkTemplateLabel: "New message template",
+    bulkTemplatePlaceholder: "Select a message template",
+    bulkTemplateScope: (count: number) => `${count} automatic campaign${count === 1 ? "" : "s"} will be updated.`,
+    bulkTemplateNoCandidates: "There are no matching automatic campaigns in Draft, Paused, or Running status.",
+    bulkTemplateNoTemplates: "Create a message template before using this action.",
+    bulkTemplateApply: "Change templates",
+    bulkTemplateResult: (updated: number, skipped: number) => `Changed ${updated} automatic campaign${updated === 1 ? "" : "s"}${skipped ? `; ${skipped} skipped.` : "."}`,
+    bulkTemplatePreviewMore: (count: number) => `and ${count} more…`,
     bulkNoActive: "There are no active campaigns to stop.",
     bulkNoPaused: "There are no paused campaigns with pending deliveries.",
     bulkNoEligible: "There are no campaigns available for this status filter.",
@@ -190,6 +202,7 @@ const copy = {
     resumeBtn: "Tiếp tục",
     bulkPauseBtn: "Dừng tất cả",
     bulkResumeBtn: "Chạy lại tất cả",
+    bulkTemplateBtn: "Đổi mẫu tin tự động",
     bulkPauseConfirm: (count: number) => `Tạm dừng ${count} chiến dịch đang chạy?`,
     bulkResumeTitle: "Chạy lại chiến dịch",
     bulkResumeDetail: "Chọn trạng thái chiến dịch cần chạy theo bộ lọc. Chiến dịch đang chạy sẽ không bị đổi.",
@@ -205,6 +218,16 @@ const copy = {
     bulkStartTimeLabel: "Giờ bắt đầu đầu tiên",
     bulkApply: "Chạy các chiến dịch đã chọn",
     bulkCancel: "Hủy",
+    bulkTemplateTitle: "Đổi mẫu tin chiến dịch tự động",
+    bulkTemplateDetail: "Chỉ campaign có tên bắt đầu bằng “Tự động” và đang ở trạng thái Bản nháp, Tạm dừng hoặc Đang chạy mới được đổi. Campaign khác không bị tác động.",
+    bulkTemplateLabel: "Mẫu tin nhắn mới",
+    bulkTemplatePlaceholder: "Chọn mẫu tin nhắn",
+    bulkTemplateScope: (count: number) => `Sẽ cập nhật ${count} campaign tự động.`,
+    bulkTemplateNoCandidates: "Không có campaign tự động phù hợp ở trạng thái Bản nháp, Tạm dừng hoặc Đang chạy.",
+    bulkTemplateNoTemplates: "Hãy tạo mẫu tin nhắn trước khi dùng thao tác này.",
+    bulkTemplateApply: "Đổi mẫu tin",
+    bulkTemplateResult: (updated: number, skipped: number) => `Đã đổi mẫu tin cho ${updated} campaign tự động${skipped ? `; bỏ qua ${skipped} campaign.` : "."}`,
+    bulkTemplatePreviewMore: (count: number) => `và ${count} campaign khác…`,
     bulkNoActive: "Không có chiến dịch đang chạy để dừng.",
     bulkNoPaused: "Không có chiến dịch đã dừng còn lượt gửi chờ.",
     bulkNoEligible: "Không có chiến dịch phù hợp với bộ lọc trạng thái hiện tại.",
@@ -434,6 +457,7 @@ export default function Campaigns() {
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
   const bulkControl = useBulkControlCampaigns();
+  const bulkTemplate = useBulkUpdateCampaignTemplate();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
@@ -454,6 +478,8 @@ export default function Campaigns() {
   const [bulkIntervalMinutes, setBulkIntervalMinutes] = useState("");
   const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
   const [bulkScheduleTime, setBulkScheduleTime] = useState(() => localTimeInputValue());
+  const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
+  const [bulkTemplateId, setBulkTemplateId] = useState("");
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
     query: { enabled: Boolean(forwardCampaign?.id) } as any,
   });
@@ -494,6 +520,10 @@ export default function Campaigns() {
     if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
     return (["draft", "queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
   }, [campaigns.data, status]);
+  const automaticCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) =>
+    campaign.name.startsWith("Tự động")
+    && ["draft", "paused", "queued", "running"].includes(campaign.status),
+  ), [campaigns.data]);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
@@ -595,6 +625,30 @@ export default function Campaigns() {
       await campaigns.refetch();
       setBulkResumeOpen(false);
       setToast(c.bulkResumedResult(result.updatedCount, result.skippedCount));
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
+  function openBulkTemplate() {
+    if (!automaticCampaigns.length) {
+      setToast(c.bulkTemplateNoCandidates);
+      return;
+    }
+    setBulkTemplateId("");
+    setBulkTemplateOpen(true);
+  }
+
+  async function submitBulkTemplate() {
+    if (!bulkTemplateId) {
+      setToast(c.bulkTemplateNoTemplates);
+      return;
+    }
+    try {
+      const result = await bulkTemplate.mutateAsync({ data: { templateId: bulkTemplateId } });
+      await campaigns.refetch();
+      setBulkTemplateOpen(false);
+      setToast(c.bulkTemplateResult(result.updatedCount, result.skippedCount));
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
     }
@@ -703,11 +757,11 @@ export default function Campaigns() {
           </select>
         </div>
         {!isSupportMode && (
-          <div className="mb-5 grid grid-cols-2 gap-2">
+          <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
               type="button"
               onClick={() => void pauseAllCampaigns()}
-              disabled={bulkControl.isPending}
+              disabled={bulkControl.isPending || bulkTemplate.isPending}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f04444] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#dc2626] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-pause-all"
             >
@@ -717,12 +771,22 @@ export default function Campaigns() {
             <button
               type="button"
               onClick={openBulkResume}
-              disabled={bulkControl.isPending}
+              disabled={bulkControl.isPending || bulkTemplate.isPending}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-resume-all"
             >
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {c.bulkResumeBtn}
+            </button>
+            <button
+              type="button"
+              onClick={openBulkTemplate}
+              disabled={bulkControl.isPending || bulkTemplate.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1d3bb8] bg-white px-3 text-[13px] font-extrabold text-[#1d3bb8] shadow-sm transition hover:bg-[#eff6ff] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="campaigns-bulk-template"
+            >
+              {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              {c.bulkTemplateBtn}
             </button>
           </div>
         )}
@@ -908,6 +972,63 @@ export default function Campaigns() {
               <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={bulkControl.isPending}>
                 {bulkControl.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {c.bulkApply}
+              </PrimaryButton>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {bulkTemplateOpen && (
+        <Modal
+          title={c.bulkTemplateTitle}
+          description={c.bulkTemplateDetail}
+          onClose={() => {
+            if (!bulkTemplate.isPending) setBulkTemplateOpen(false);
+          }}
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-[13px] font-semibold leading-relaxed text-[#1e3a8a]">
+              <p className="font-extrabold">{c.bulkTemplateScope(automaticCampaigns.length)}</p>
+              <p className="mt-1 text-[12px] font-medium">Bản nháp, Tạm dừng, Đang chờ và Đang chạy được kiểm tra theo đúng tiền tố tên.</p>
+              <div className="mt-3 space-y-1 text-[12px]">
+                {automaticCampaigns.slice(0, 8).map((campaign) => (
+                  <p key={campaign.id} className="truncate">• {campaign.name}</p>
+                ))}
+                {automaticCampaigns.length > 8 && <p>{c.bulkTemplatePreviewMore(automaticCampaigns.length - 8)}</p>}
+              </div>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkTemplateLabel}</span>
+              <select
+                value={bulkTemplateId}
+                onChange={(event) => setBulkTemplateId(event.target.value)}
+                disabled={bulkTemplate.isPending || !templates.data?.length}
+                className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 disabled:bg-[#f8fafc]"
+                data-testid="campaigns-bulk-template-select"
+              >
+                <option value="">{c.bulkTemplatePlaceholder}</option>
+                {(templates.data ?? []).map((template) => (
+                  <option value={template.id} key={template.id}>{template.name}{template.mode === "forward" ? " · Forward" : ""}</option>
+                ))}
+              </select>
+            </label>
+            {!templates.data?.length && <p className="rounded-xl bg-[#fff7ed] px-3.5 py-3 text-[12px] font-semibold text-[#9a3412]">{c.bulkTemplateNoTemplates}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBulkTemplateOpen(false)}
+                disabled={bulkTemplate.isPending}
+                className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50"
+              >
+                {c.bulkCancel}
+              </button>
+              <PrimaryButton
+                type="button"
+                onClick={() => void submitBulkTemplate()}
+                disabled={!bulkTemplateId || bulkTemplate.isPending || !automaticCampaigns.length}
+              >
+                {bulkTemplate.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {c.bulkTemplateApply}
               </PrimaryButton>
             </div>
           </div>
