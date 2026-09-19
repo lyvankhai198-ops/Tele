@@ -5349,6 +5349,71 @@ export function useGetAdminGroupJoinStatus<TData = Awaited<ReturnType<typeof get
 
 
 
+export const getUpdateAdminGroupJoinAutomationUrl = () => {
+
+
+
+
+  return `/api/admin/active-groups/join-status`
+}
+
+export const updateAdminGroupJoinAutomation = async (adminGroupJoinAutomationUpdateInput: AdminGroupJoinAutomationUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupJoinStatus> => {
+
+  return customFetch<AdminGroupJoinStatus>(getUpdateAdminGroupJoinAutomationUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminGroupJoinAutomationUpdateInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminGroupJoinAutomationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, TError,{data: BodyType<AdminGroupJoinAutomationUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, TError,{data: BodyType<AdminGroupJoinAutomationUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateAdminGroupJoinAutomation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, {data: BodyType<AdminGroupJoinAutomationUpdateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminGroupJoinAutomation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminGroupJoinAutomationMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>>
+    export type UpdateAdminGroupJoinAutomationMutationBody = BodyType<AdminGroupJoinAutomationUpdateInput>
+    export type UpdateAdminGroupJoinAutomationMutationError = ErrorType<void>
+
+    export const useUpdateAdminGroupJoinAutomation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, TError,{data: BodyType<AdminGroupJoinAutomationUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>,
+        TError,
+        {data: BodyType<AdminGroupJoinAutomationUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminGroupJoinAutomationMutationOptions(options));
+    }
+
 export const getScanAdminJoinedGroupsWithoutCampaignUrl = () => {
 
 
@@ -5412,71 +5477,6 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getScanAdminJoinedGroupsWithoutCampaignMutationOptions(options));
-    }
-
-export const getUpdateAdminGroupJoinAutomationUrl = () => {
-
-
-
-
-  return `/api/admin/active-groups/join-status/scan`
-}
-
-export const updateAdminGroupJoinAutomation = async (adminGroupJoinAutomationUpdateInput: AdminGroupJoinAutomationUpdateInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminGroupJoinStatus> => {
-
-  return customFetch<AdminGroupJoinStatus>(getUpdateAdminGroupJoinAutomationUrl(),
-  {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(adminGroupJoinAutomationUpdateInput)
-  }
-);}
-
-
-
-
-
-export const getUpdateAdminGroupJoinAutomationMutationOptions = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, TError,{data: BodyType<AdminGroupJoinAutomationUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, TError,{data: BodyType<AdminGroupJoinAutomationUpdateInput>}, TContext> => {
-
-const mutationKey = ['updateAdminGroupJoinAutomation'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, {data: BodyType<AdminGroupJoinAutomationUpdateInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  updateAdminGroupJoinAutomation(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type UpdateAdminGroupJoinAutomationMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>>
-    export type UpdateAdminGroupJoinAutomationMutationBody = BodyType<AdminGroupJoinAutomationUpdateInput>
-    export type UpdateAdminGroupJoinAutomationMutationError = ErrorType<void>
-
-    export const useUpdateAdminGroupJoinAutomation = <TError = ErrorType<void>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>, TError,{data: BodyType<AdminGroupJoinAutomationUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof updateAdminGroupJoinAutomation>>,
-        TError,
-        {data: BodyType<AdminGroupJoinAutomationUpdateInput>},
-        TContext
-      > => {
-      return useMutation(getUpdateAdminGroupJoinAutomationMutationOptions(options));
     }
 
 export const getImportAdminGroupLibraryEntryUrl = (telegramId: string,) => {

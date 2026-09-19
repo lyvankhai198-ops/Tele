@@ -2295,13 +2295,6 @@ export const GetAdminGroupJoinStatusResponse = zod.object({
 })
 
 
-export const ScanAdminJoinedGroupsWithoutCampaignResponse = zod.object({
-  "scannedCount": zod.number(),
-  "createdCount": zod.number(),
-  "skippedCount": zod.number()
-})
-
-
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignContentMax = 4096;
 
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMax = 300;
@@ -2373,6 +2366,13 @@ export const UpdateAdminGroupJoinAutomationResponse = zod.object({
   "nextAttemptAt": zod.coerce.date().nullable(),
   "lastError": zod.string().nullable()
 }))
+})
+
+
+export const ScanAdminJoinedGroupsWithoutCampaignResponse = zod.object({
+  "scannedCount": zod.number(),
+  "createdCount": zod.number(),
+  "skippedCount": zod.number()
 })
 
 
