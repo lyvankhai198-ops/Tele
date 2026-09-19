@@ -1886,6 +1886,10 @@ export interface AdminGroupJoinStatus {
 export interface AdminGroupJoinCampaignScanResult {
   scannedCount: number;
   createdCount: number;
+  recreatedCount: number;
+  deletedCount: number;
+  noPermissionCount: number;
+  duplicateCount: number;
   skippedCount: number;
 }
 

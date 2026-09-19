@@ -2372,6 +2372,10 @@ export const UpdateAdminGroupJoinAutomationResponse = zod.object({
 export const ScanAdminJoinedGroupsWithoutCampaignResponse = zod.object({
   "scannedCount": zod.number(),
   "createdCount": zod.number(),
+  "recreatedCount": zod.number(),
+  "deletedCount": zod.number(),
+  "noPermissionCount": zod.number(),
+  "duplicateCount": zod.number(),
   "skippedCount": zod.number()
 })
 

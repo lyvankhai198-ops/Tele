@@ -138,11 +138,19 @@ const text = {
   autoJoinAccountSummary: (name: string, pending: number, joined: number) =>
     `${name}: ${pending} chờ · ${joined} đã tham gia`,
   autoJoinToggleFailed: "Không thể cập nhật chế độ tự động tham gia.",
-  scanExistingGroups: "Quét nhóm đã tham gia",
-  scanningExistingGroups: "Đang quét nhóm đã tham gia...",
-  scanExistingGroupsSuccess: (scanned: number, created: number, skipped: number) =>
-    `Đã quét ${scanned} nhóm đã tham gia, tạo ${created} campaign${created === 1 ? "" : "s"} còn thiếu${skipped > 0 ? `, bỏ qua ${skipped}` : ""}.`,
-  scanExistingGroupsFailed: "Không thể quét các nhóm đã tham gia. Vui lòng thử lại.",
+  scanExistingGroups: "Quét & dọn campaign lỗi",
+  scanningExistingGroups: "Đang quét và dọn campaign lỗi...",
+  scanExistingGroupsSuccess: (
+    scanned: number,
+    created: number,
+    recreated: number,
+    deleted: number,
+    noPermission: number,
+    duplicate: number,
+    skipped: number,
+  ) =>
+    `Đã quét ${scanned} nhóm: tạo ${created} campaign mới, tạo lại ${recreated}, xoá ${deleted} campaign lỗi (không quyền đăng ${noPermission}, trùng campaign đang chạy ${duplicate})${skipped > 0 ? `, bỏ qua ${skipped}` : ""}.`,
+  scanExistingGroupsFailed: "Không thể quét và dọn campaign lỗi. Vui lòng thử lại.",
   postJoinTitle: "Campaign sau khi tham gia",
   postJoinDescription: "Sau khi tài khoản admin tham gia nhóm, hệ thống sẽ tạo campaign theo cấu hình này.",
   postJoinEnabled: "Tạo campaign sau khi tham gia",
@@ -962,6 +970,10 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       setSyncFeedback(text.scanExistingGroupsSuccess(
         result.scannedCount,
         result.createdCount,
+        result.recreatedCount,
+        result.deletedCount,
+        result.noPermissionCount,
+        result.duplicateCount,
         result.skippedCount,
       ));
       setFeedbackIsError(false);

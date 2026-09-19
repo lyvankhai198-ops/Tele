@@ -154,9 +154,45 @@ async function createPostJoinCampaign(input: {
       logger.warn({ accountId: input.accountId, jobId: input.jobId }, "Joined group has no synced destination for automatic campaign");
       return null;
     }
+    if (!destination.canPost) {
+      logger.info({
+        accountId: input.accountId,
+        destinationId: destination.id,
+        jobId: input.jobId,
+        permissionReason: destination.permissionReason,
+      }, "Skipped automatic campaign because the account cannot post to the joined group");
+      return null;
+    }
+
+    const [activeCampaign] = await tx.select({
+      id: campaignsTable.id,
+    }).from(campaignsTable)
+      .innerJoin(campaignTargetsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+      .where(and(
+        eq(campaignsTable.ownerUserId, input.ownerUserId),
+        eq(campaignsTable.telegramAccountId, input.accountId),
+        inArray(campaignsTable.status, ["queued", "running"]),
+        eq(campaignTargetsTable.destinationId, destination.id),
+      )).orderBy(asc(campaignsTable.createdAt)).limit(1);
+    if (activeCampaign) {
+      await tx.update(adminGroupJoinJobsTable).set({
+        autoCampaignId: activeCampaign.id,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(adminGroupJoinJobsTable.id, input.jobId),
+        isNull(adminGroupJoinJobsTable.autoCampaignId),
+      ));
+      logger.info({
+        accountId: input.accountId,
+        campaignId: activeCampaign.id,
+        destinationId: destination.id,
+        jobId: input.jobId,
+      }, "Skipped automatic campaign because an active campaign already targets the joined group");
+      return null;
+    }
 
     const now = new Date();
-    const campaignStatus = config.mode === "send" && destination.canPost ? "queued" : "draft";
+    const campaignStatus = config.mode === "send" ? "queued" : "draft";
     const [campaign] = await tx.insert(campaignsTable).values({
       ownerUserId: input.ownerUserId,
       name: `Tự động sau khi tham gia: ${input.groupTitle}`.slice(0, 160),
@@ -228,9 +264,78 @@ async function createPostJoinCampaign(input: {
   return result.campaign.id;
 }
 
+type AutomaticCampaignRepair = "deleted_no_permission" | "deleted_duplicate" | null;
+
+async function repairAutomaticCampaign(input: {
+  jobId: string;
+  accountId: string;
+  ownerUserId: string;
+  destinationId: string;
+}): Promise<AutomaticCampaignRepair> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`
+      SELECT 1 FROM ${adminGroupJoinJobsTable}
+      WHERE ${adminGroupJoinJobsTable.id} = ${input.jobId}
+      FOR UPDATE
+    `);
+    const [job] = await tx.select({
+      autoCampaignId: adminGroupJoinJobsTable.autoCampaignId,
+    }).from(adminGroupJoinJobsTable).where(eq(adminGroupJoinJobsTable.id, input.jobId)).limit(1);
+    if (!job?.autoCampaignId) return null;
+
+    const [campaign] = await tx.select().from(campaignsTable).where(and(
+      eq(campaignsTable.id, job.autoCampaignId),
+      eq(campaignsTable.ownerUserId, input.ownerUserId),
+      eq(campaignsTable.telegramAccountId, input.accountId),
+    )).limit(1);
+    if (!campaign || campaign.status !== "draft") return null;
+
+    const [destination] = await tx.select().from(destinationsTable).where(and(
+      eq(destinationsTable.id, input.destinationId),
+      eq(destinationsTable.accountId, input.accountId),
+    )).limit(1);
+    if (!destination) return null;
+
+    const [activeCampaign] = await tx.select({
+      id: campaignsTable.id,
+    }).from(campaignsTable)
+      .innerJoin(campaignTargetsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+      .where(and(
+        eq(campaignsTable.ownerUserId, input.ownerUserId),
+        eq(campaignsTable.telegramAccountId, input.accountId),
+        inArray(campaignsTable.status, ["queued", "running"]),
+        eq(campaignTargetsTable.destinationId, destination.id),
+        sql`${campaignsTable.id} <> ${campaign.id}`,
+      )).orderBy(asc(campaignsTable.createdAt)).limit(1);
+    if (activeCampaign) {
+      await tx.delete(campaignsTable).where(eq(campaignsTable.id, campaign.id));
+      await tx.update(adminGroupJoinJobsTable).set({
+        autoCampaignId: activeCampaign.id,
+        updatedAt: new Date(),
+      }).where(eq(adminGroupJoinJobsTable.id, input.jobId));
+      return "deleted_duplicate";
+    }
+
+    if (!destination.canPost) {
+      await tx.delete(campaignsTable).where(eq(campaignsTable.id, campaign.id));
+      await tx.update(adminGroupJoinJobsTable).set({
+        autoCampaignId: null,
+        updatedAt: new Date(),
+      }).where(eq(adminGroupJoinJobsTable.id, input.jobId));
+      return "deleted_no_permission";
+    }
+
+    return null;
+  });
+}
+
 export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
   scannedCount: number;
   createdCount: number;
+  recreatedCount: number;
+  deletedCount: number;
+  noPermissionCount: number;
+  duplicateCount: number;
   skippedCount: number;
 }> {
   await ensureAdminGroupJoinJobs(true);
@@ -240,22 +345,61 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
     ownerUserId: telegramAccountsTable.ownerUserId,
     groupTitle: groupLibraryEntriesTable.title,
     destinationId: destinationsTable.id,
+    autoCampaignId: adminGroupJoinJobsTable.autoCampaignId,
   }).from(adminGroupJoinJobsTable)
     .innerJoin(telegramAccountsTable, eq(adminGroupJoinJobsTable.telegramAccountId, telegramAccountsTable.id))
     .innerJoin(groupLibraryEntriesTable, eq(adminGroupJoinJobsTable.groupLibraryEntryId, groupLibraryEntriesTable.id))
-    .innerJoin(destinationsTable, and(
+    .leftJoin(destinationsTable, and(
       eq(destinationsTable.accountId, telegramAccountsTable.id),
       eq(destinationsTable.telegramId, groupLibraryEntriesTable.telegramId),
       isNull(destinationsTable.topicId),
     ))
     .where(and(
       isNull(telegramAccountsTable.deletedAt),
-      isNull(adminGroupJoinJobsTable.autoCampaignId),
     ));
 
   let scannedCount = 0;
   let createdCount = 0;
+  let recreatedCount = 0;
+  let deletedCount = 0;
+  let noPermissionCount = 0;
+  let duplicateCount = 0;
+  let skippedCount = 0;
   for (const candidate of candidates) {
+    if (!candidate.destinationId) {
+      skippedCount += 1;
+      continue;
+    }
+    scannedCount += 1;
+
+    if (candidate.autoCampaignId) {
+      const repair = await repairAutomaticCampaign({
+        jobId: candidate.jobId,
+        accountId: candidate.accountId,
+        ownerUserId: candidate.ownerUserId,
+        destinationId: candidate.destinationId,
+      });
+      if (repair === "deleted_duplicate") {
+        deletedCount += 1;
+        duplicateCount += 1;
+        continue;
+      }
+      if (repair === "deleted_no_permission") {
+        deletedCount += 1;
+        noPermissionCount += 1;
+        if (await createPostJoinCampaign({
+          jobId: candidate.jobId,
+          accountId: candidate.accountId,
+          ownerUserId: candidate.ownerUserId,
+          groupId: candidate.destinationId,
+          groupTitle: candidate.groupTitle,
+        })) {
+          recreatedCount += 1;
+        }
+      }
+      continue;
+    }
+
     const [marked] = await db.update(adminGroupJoinJobsTable).set({
       status: "joined",
       joinedAt: new Date(),
@@ -267,7 +411,6 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
       isNull(adminGroupJoinJobsTable.autoCampaignId),
     )).returning({ id: adminGroupJoinJobsTable.id });
     if (!marked) continue;
-    scannedCount += 1;
     if (await createPostJoinCampaign({
       jobId: candidate.jobId,
       accountId: candidate.accountId,
@@ -281,7 +424,11 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
   return {
     scannedCount,
     createdCount,
-    skippedCount: Math.max(0, candidates.length - scannedCount),
+    recreatedCount,
+    deletedCount,
+    noPermissionCount,
+    duplicateCount,
+    skippedCount,
   };
 }
 

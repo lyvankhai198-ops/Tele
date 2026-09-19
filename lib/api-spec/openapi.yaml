@@ -1104,7 +1104,7 @@ paths:
       tags: [admin]
       responses:
         "200":
-          description: Existing admin group memberships scanned for missing automatic campaigns
+          description: Existing admin group memberships scanned and invalid automatic campaigns repaired
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminGroupJoinCampaignScanResult" }
@@ -2772,10 +2772,14 @@ components:
           items: { $ref: "#/components/schemas/AdminGroupJoinAccountStatus" }
     AdminGroupJoinCampaignScanResult:
       type: object
-      required: [scannedCount, createdCount, skippedCount]
+      required: [scannedCount, createdCount, recreatedCount, deletedCount, noPermissionCount, duplicateCount, skippedCount]
       properties:
         scannedCount: { type: number }
         createdCount: { type: number }
+        recreatedCount: { type: number }
+        deletedCount: { type: number }
+        noPermissionCount: { type: number }
+        duplicateCount: { type: number }
         skippedCount: { type: number }
     AdminGroupLibraryImportResult:
       type: object
