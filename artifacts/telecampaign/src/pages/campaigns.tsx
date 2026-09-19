@@ -506,7 +506,13 @@ export default function Campaigns() {
       || campaign.status === status
       || (status === "completed" && campaign.status === "completed_with_errors");
     return (!needle || campaign.name.toLowerCase().includes(needle)) && matchesStatus;
-  }), [campaigns.data, search, status]);
+  }).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [campaigns.data, search, status]);
+  const latestCompletedCampaignId = useMemo(() => {
+    const completed = (campaigns.data ?? [])
+      .filter((campaign) => campaign.status === "completed" || campaign.status === "completed_with_errors")
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    return completed[0]?.id ?? null;
+  }, [campaigns.data]);
   const bulkScopeOptions = useMemo(() => {
     const available = new Set<BulkResumeScope>();
     for (const campaign of campaigns.data ?? []) {
@@ -540,12 +546,30 @@ export default function Campaigns() {
   }
 
   useEffect(() => {
-    const editCampaignId = new URLSearchParams(searchParams).get("editCampaignId");
+    const params = new URLSearchParams(searchParams);
+    const requestedStatus = params.get("status");
+    if (requestedStatus === "completed" && status !== "completed") {
+      setStatus("completed");
+      return;
+    }
+    const editCampaignId = params.get("editCampaignId");
     if (!editCampaignId || !campaigns.data) return;
     const campaign = campaigns.data.find((item) => item.id === editCampaignId);
     if (!campaign) return;
     openEdit(campaign);
     setLocation("/dashboard/campaigns", { replace: true });
+  }, [campaigns.data, searchParams, setLocation, status]);
+
+  useEffect(() => {
+    const detailsCampaignId = new URLSearchParams(searchParams).get("detailsCampaignId");
+    if (!detailsCampaignId || !campaigns.data) return;
+    const campaign = campaigns.data.find((item) => item.id === detailsCampaignId);
+    if (!campaign) return;
+    setDetails(campaign);
+    window.requestAnimationFrame(() => {
+      document.querySelector(`[data-testid="campaign-row-${detailsCampaignId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    setLocation("/dashboard/campaigns?status=completed", { replace: true });
   }, [campaigns.data, searchParams, setLocation]);
 
   async function handleFormSaved() {
@@ -801,11 +825,12 @@ export default function Campaigns() {
                   const complete = campaign.targetCount ? Math.round((campaign.completedCount / campaign.targetCount) * 100) : 0;
                   const autoResumes = resumesAfterDailyQuota(campaign);
                    const safetyNote = temporaryRestrictionCampaignNote(campaign, language, c);
-                  return (
-                    <article key={campaign.id} className="p-4 sm:p-5" data-testid={`campaign-row-${campaign.id}`}>
+                   const isLatestCompleted = campaign.id === latestCompletedCampaignId;
+                   return (
+                     <article key={campaign.id} className={`p-4 sm:p-5 ${isLatestCompleted ? "bg-[#f8fbff]" : ""}`} data-testid={`campaign-row-${campaign.id}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <button onClick={() => setDetails(campaign)} className="truncate text-left text-[15px] font-extrabold text-[#1839b5] hover:underline">{campaign.name}</button>
+                           <button onClick={() => setDetails(campaign)} className={`truncate text-left text-[15px] text-[#1839b5] hover:underline ${isLatestCompleted ? "font-black" : "font-extrabold"}`}>{campaign.name}</button>
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] font-semibold text-[#64748b]">
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${isActive(campaign.status) ? "bg-[#eff6ff] text-[#0f172a]" : campaign.status === "paused" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#f1f5f9] text-[#64748b]"}`}>{statusLabel(campaign.status, c)}</span>
                             <span>{campaign.completedCount}/{campaign.targetCount}</span>
