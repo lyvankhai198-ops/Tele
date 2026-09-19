@@ -145,11 +145,11 @@ export async function listUserNotifications(input: {
           level: hasErrors ? "warning" as const : "success" as const,
           title: hasErrors ? `Chiến dịch "${row.campaignName}" đã hoàn tất với lỗi` : `Chiến dịch "${row.campaignName}" đã hoàn tất`,
           body: hasErrors
-            ? `Có ${failedCount} lượt lỗi. Hãy kiểm tra chi tiết lỗi, xem nhóm đang chạy trong chiến dịch có quyền đăng không, sau đó chỉnh sửa để chạy lại chiến dịch.`
+            ? `Có ${failedCount} lượt lỗi. Bấm vào thông báo để mở danh sách chiến dịch Hoàn thành và xử lý lỗi.`
             : "Bấm vào thông báo để xem chi tiết hoặc chạy lại chiến dịch nếu cần.",
           titleEn: hasErrors ? `Campaign "${row.campaignName}" completed with errors` : `Campaign "${row.campaignName}" completed`,
           bodyEn: hasErrors
-            ? `${failedCount} delivery${failedCount === 1 ? "" : "ies"} failed. Check the error details, confirm that the groups in the campaign can post, then edit and run the campaign again.`
+            ? `${failedCount} delivery${failedCount === 1 ? "" : "ies"} failed. Open the notification to see the completed campaigns and fix the issue.`
             : "Open this notification to view details or run the campaign again if needed.",
           href: `/dashboard/campaigns?status=completed&focusCampaignId=${encodeURIComponent(row.campaignId)}`,
           isRead: false,

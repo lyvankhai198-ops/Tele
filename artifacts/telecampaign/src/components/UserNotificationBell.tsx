@@ -206,7 +206,7 @@ export function UserNotificationBell() {
                         {!notification.isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#1d4ed8]" aria-label={text.label} />}
                       </span>
                        <span
-                          className={`mt-1 block max-h-10 overflow-hidden text-[12px] leading-5 ${notification.kind === "campaign" && notification.level === "warning" ? "font-extrabold text-[#b91c1c]" : "font-medium text-[#64748b]"}`}
+                          className="mt-1 block max-h-10 overflow-hidden text-[12px] font-medium leading-5 text-[#64748b]"
                          style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
                        >
                           {body || (

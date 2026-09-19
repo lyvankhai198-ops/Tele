@@ -847,6 +847,11 @@ export default function Campaigns() {
                         <p>{account?.name ?? "—"}</p>
                         <p>{c.scheduledLabel} {formatSchedule(campaign.scheduledAt, language)}</p>
                         <p>{c.detailDelayRound} {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds}s</p>
+                         {isHighlighted && (
+                           <p className="mt-2 rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 font-extrabold leading-relaxed text-[#b91c1c]">
+                             Hãy kiểm tra chi tiết lỗi, xem nhóm đang chạy trong chiến dịch có quyền đăng không, sau đó chỉnh sửa để chạy lại chiến dịch.
+                           </p>
+                         )}
                          {safetyNote && <p className="rounded-lg bg-[#fffbeb] px-2.5 py-2 font-extrabold text-[#92400e]">{safetyNote}</p>}
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2">
