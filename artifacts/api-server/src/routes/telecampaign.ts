@@ -2188,7 +2188,7 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
 
   for (const candidate of candidates) {
     const result = await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} FOR UPDATE`);
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
       const [campaign] = await tx.select().from(campaignsTable).where(and(
         eq(campaignsTable.id, candidate.id),
         eq(campaignsTable.ownerUserId, ownerUserId),
