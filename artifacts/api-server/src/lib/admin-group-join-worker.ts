@@ -4,6 +4,9 @@ import {
   adminGroupJoinJobsTable,
   appUsersTable,
   db,
+  campaignTargetsTable,
+  campaignsTable,
+  destinationsTable,
   groupLibraryEntriesTable,
   telegramAccountsTable,
 } from "@workspace/db";
@@ -15,6 +18,7 @@ import {
   syncAccountDestinations,
 } from "./telegram";
 import { getSystemSettings } from "./system-settings";
+import { recordActivity } from "./activity";
 
 const JOIN_BATCH_SIZE = 5;
 const JOIN_DELAY_MS = 700;
@@ -29,6 +33,7 @@ type JoinJobStatus = "pending" | "joining" | "joined" | "waiting" | "skipped" | 
 
 type AdminAccountRow = {
   id: string;
+  ownerUserId: string;
   name: string;
   username: string | null;
   status: string;
@@ -63,6 +68,7 @@ async function listAdminAccounts(includeDisconnected = false): Promise<AdminAcco
   if (!includeDisconnected) conditions.push(eq(telegramAccountsTable.status, "connected"));
   return db.select({
     id: telegramAccountsTable.id,
+    ownerUserId: telegramAccountsTable.ownerUserId,
     name: telegramAccountsTable.name,
     username: telegramAccountsTable.username,
     status: telegramAccountsTable.status,
@@ -71,9 +77,9 @@ async function listAdminAccounts(includeDisconnected = false): Promise<AdminAcco
     .where(and(...conditions));
 }
 
-export async function ensureAdminGroupJoinJobs(): Promise<number> {
+export async function ensureAdminGroupJoinJobs(includeDisconnected = false): Promise<number> {
   const [accounts, groups] = await Promise.all([
-    listAdminAccounts(),
+    listAdminAccounts(includeDisconnected),
     db.select({
       id: groupLibraryEntriesTable.id,
     }).from(groupLibraryEntriesTable),
@@ -117,18 +123,191 @@ async function updateJob(
     ));
 }
 
-async function processAccount(accountId: string): Promise<void> {
+async function createPostJoinCampaign(input: {
+  jobId: string;
+  accountId: string;
+  ownerUserId: string;
+  groupId: string;
+  groupTitle: string;
+}): Promise<string | null> {
+  const settings = await getSystemSettings();
+  const config = settings.postJoinCampaign;
+  if (!config.enabled || !config.content) return null;
+
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`
+      SELECT 1 FROM ${adminGroupJoinJobsTable}
+      WHERE ${adminGroupJoinJobsTable.id} = ${input.jobId}
+      FOR UPDATE
+    `);
+    const [job] = await tx.select({
+      autoCampaignId: adminGroupJoinJobsTable.autoCampaignId,
+      status: adminGroupJoinJobsTable.status,
+    }).from(adminGroupJoinJobsTable).where(eq(adminGroupJoinJobsTable.id, input.jobId)).limit(1);
+    if (!job || job.status !== "joined" || job.autoCampaignId) return null;
+
+    const [destination] = await tx.select().from(destinationsTable).where(and(
+      eq(destinationsTable.id, input.groupId),
+      eq(destinationsTable.accountId, input.accountId),
+    )).limit(1);
+    if (!destination) {
+      logger.warn({ accountId: input.accountId, jobId: input.jobId }, "Joined group has no synced destination for automatic campaign");
+      return null;
+    }
+
+    const now = new Date();
+    const campaignStatus = config.mode === "send" && destination.canPost ? "queued" : "draft";
+    const [campaign] = await tx.insert(campaignsTable).values({
+      ownerUserId: input.ownerUserId,
+      name: `Tự động sau khi tham gia: ${input.groupTitle}`.slice(0, 160),
+      content: config.content,
+      telegramAccountId: input.accountId,
+      templateId: null,
+      templateMode: "text",
+      templateSourceAccountId: null,
+      templateSourceMessageId: null,
+      destinationIds: [destination.id],
+      mediaUrl: null,
+      status: campaignStatus,
+      pauseReason: campaignStatus === "draft" && config.mode === "send" ? "destination_not_ready" : null,
+      scheduledAt: null,
+      scheduleAnchorAt: now,
+      timezone: settings.defaultTimezone,
+      maxRetries: settings.campaignDefaults.maxRetries,
+      repeatCount: config.repeatCount,
+      delayMinSeconds: 0,
+      delayMaxSeconds: 0,
+      roundDelayMinSeconds: config.roundDelayMinSeconds,
+      roundDelayMaxSeconds: config.roundDelayMaxSeconds,
+    }).returning();
+
+    const targetRows = [];
+    let roundStartAt = now.getTime();
+    for (let round = 0; round < config.repeatCount; round += 1) {
+      targetRows.push({
+        campaignId: campaign.id,
+        destinationId: destination.id,
+        status: "pending",
+        nextAttemptAt: new Date(roundStartAt),
+      });
+      if (round < config.repeatCount - 1) {
+        roundStartAt += (
+          config.roundDelayMinSeconds
+          + Math.floor(Math.random() * (config.roundDelayMaxSeconds - config.roundDelayMinSeconds + 1))
+        ) * 1000;
+      }
+    }
+    await tx.insert(campaignTargetsTable).values(targetRows);
+    const [linkedJob] = await tx.update(adminGroupJoinJobsTable).set({
+      autoCampaignId: campaign.id,
+      updatedAt: now,
+    }).where(and(
+      eq(adminGroupJoinJobsTable.id, input.jobId),
+      isNull(adminGroupJoinJobsTable.autoCampaignId),
+    )).returning({ id: adminGroupJoinJobsTable.id });
+    return linkedJob ? { campaign, targetCount: targetRows.length, campaignStatus } : null;
+  });
+
+  if (!result) return null;
+  await recordActivity({
+    ownerUserId: input.ownerUserId,
+    event: "campaign.auto_created_after_group_join",
+    level: result.campaignStatus === "queued" ? "success" : "info",
+    campaignId: result.campaign.id,
+    accountId: input.accountId,
+    message: result.campaignStatus === "queued"
+      ? `Đã tạo và gửi campaign tự động sau khi tham gia "${input.groupTitle}".`
+      : `Đã tạo campaign nháp sau khi tham gia "${input.groupTitle}", đang chờ duyệt.`,
+    metadata: {
+      source: "admin_group_join",
+      joinJobId: input.jobId,
+      repeatCount: config.repeatCount,
+      targetCount: result.targetCount,
+    },
+  });
+  return result.campaign.id;
+}
+
+export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
+  scannedCount: number;
+  createdCount: number;
+  skippedCount: number;
+}> {
+  await ensureAdminGroupJoinJobs(true);
+  const candidates = await db.select({
+    jobId: adminGroupJoinJobsTable.id,
+    accountId: telegramAccountsTable.id,
+    ownerUserId: telegramAccountsTable.ownerUserId,
+    groupTitle: groupLibraryEntriesTable.title,
+    destinationId: destinationsTable.id,
+  }).from(adminGroupJoinJobsTable)
+    .innerJoin(telegramAccountsTable, eq(adminGroupJoinJobsTable.telegramAccountId, telegramAccountsTable.id))
+    .innerJoin(groupLibraryEntriesTable, eq(adminGroupJoinJobsTable.groupLibraryEntryId, groupLibraryEntriesTable.id))
+    .innerJoin(destinationsTable, and(
+      eq(destinationsTable.accountId, telegramAccountsTable.id),
+      eq(destinationsTable.telegramId, groupLibraryEntriesTable.telegramId),
+      isNull(destinationsTable.topicId),
+    ))
+    .where(and(
+      isNull(telegramAccountsTable.deletedAt),
+      isNull(adminGroupJoinJobsTable.autoCampaignId),
+    ));
+
+  let scannedCount = 0;
+  let createdCount = 0;
+  for (const candidate of candidates) {
+    const [marked] = await db.update(adminGroupJoinJobsTable).set({
+      status: "joined",
+      joinedAt: new Date(),
+      lastError: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(adminGroupJoinJobsTable.id, candidate.jobId),
+      inArray(adminGroupJoinJobsTable.status, ["pending", "waiting", "failed", "skipped", "joined"]),
+      isNull(adminGroupJoinJobsTable.autoCampaignId),
+    )).returning({ id: adminGroupJoinJobsTable.id });
+    if (!marked) continue;
+    scannedCount += 1;
+    if (await createPostJoinCampaign({
+      jobId: candidate.jobId,
+      accountId: candidate.accountId,
+      ownerUserId: candidate.ownerUserId,
+      groupId: candidate.destinationId,
+      groupTitle: candidate.groupTitle,
+    })) {
+      createdCount += 1;
+    }
+  }
+  return {
+    scannedCount,
+    createdCount,
+    skippedCount: Math.max(0, candidates.length - scannedCount),
+  };
+}
+
+async function processAccount(accountId: string, ownerUserId: string): Promise<void> {
   if (activeAccounts.has(accountId)) return;
   activeAccounts.add(accountId);
 
   let client: Awaited<ReturnType<typeof getAccountClient>>["client"] | null = null;
   let shouldSync = false;
+  const successfulJoins: Array<{
+    id: string;
+    groupId: string;
+    groupTitle: string;
+    groupTelegramId: string;
+    username: string | null;
+    telegramLink: string | null;
+    nextAttemptAt: Date;
+    leaseToken: string;
+  }> = [];
   try {
     const now = new Date();
     const jobs = await db.select({
       id: adminGroupJoinJobsTable.id,
       groupId: groupLibraryEntriesTable.id,
       groupTitle: groupLibraryEntriesTable.title,
+      groupTelegramId: groupLibraryEntriesTable.telegramId,
       username: groupLibraryEntriesTable.username,
       telegramLink: sql<string | null>`null`,
       nextAttemptAt: adminGroupJoinJobsTable.nextAttemptAt,
@@ -195,6 +374,7 @@ async function processAccount(accountId: string): Promise<void> {
             lastError: result.reason,
           });
           shouldSync = shouldSync || result.status !== "skipped";
+          if (result.status !== "skipped") successfulJoins.push(job);
         } catch (error) {
           const waitSeconds = floodWaitSeconds(error);
           if (waitSeconds !== null) {
@@ -241,6 +421,24 @@ async function processAccount(accountId: string): Promise<void> {
       if (shouldSync) {
         try {
           await syncAccountDestinations(accountId);
+           for (const job of successfulJoins) {
+             const [destination] = await db.select({ id: destinationsTable.id }).from(destinationsTable).where(and(
+               eq(destinationsTable.accountId, accountId),
+               eq(destinationsTable.telegramId, job.groupTelegramId),
+               isNull(destinationsTable.topicId),
+             )).limit(1);
+             if (!destination) {
+               logger.warn({ accountId, groupId: job.groupId }, "Joined group has no synced destination for automatic campaign");
+               continue;
+             }
+             await createPostJoinCampaign({
+               jobId: job.id,
+               accountId,
+               ownerUserId,
+               groupId: destination.id,
+               groupTitle: job.groupTitle,
+             });
+           }
         } catch (error) {
           logger.warn({ err: error, accountId }, "Admin group join succeeded but destination sync failed");
         }
@@ -298,6 +496,7 @@ export async function getAdminGroupJoinStatus() {
 
   return {
     enabled: settings.groupLibraryAutoJoinEnabled,
+    postJoinCampaign: settings.postJoinCampaign,
     pendingCount: jobs.filter((job) => job.status === "pending" || job.status === "joining").length,
     waitingCount: jobs.filter((job) => job.status === "waiting").length,
     joinedCount: jobs.filter((job) => job.status === "joined").length,
@@ -317,7 +516,7 @@ export async function startAdminGroupJoinWorker(): Promise<() => void> {
       if (!settings.groupLibraryAutoJoinEnabled) return;
       await ensureAdminGroupJoinJobs();
       const accounts = await listAdminAccounts();
-      await Promise.all(accounts.map((account) => processAccount(account.id)));
+      await Promise.all(accounts.map((account) => processAccount(account.id, account.ownerUserId)));
     } catch (error) {
       logger.error({ err: error }, "Admin group join worker tick failed");
     } finally {

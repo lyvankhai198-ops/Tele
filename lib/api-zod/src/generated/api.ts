@@ -1438,6 +1438,19 @@ export const getAdminSystemSettingsResponseSupportLinksTelegramUrlMax = 512;
 
 export const getAdminSystemSettingsResponseSupportLinksZaloUrlMax = 512;
 
+export const getAdminSystemSettingsResponsePostJoinCampaignContentMax = 4096;
+
+export const getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax = 300;
+export const getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
+export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
+export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
+
+export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin = 0;
+export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax = 259200;
+export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf = 1;
+
 export const getAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
 export const getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
@@ -1501,6 +1514,14 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "groupLibraryAutoJoinEnabled": zod.boolean(),
+  "postJoinCampaign": zod.object({
+  "enabled": zod.boolean(),
+  "content": zod.string().max(getAdminSystemSettingsResponsePostJoinCampaignContentMax),
+  "repeatCount": zod.number().min(1).max(getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf),
+  "roundDelayMinSeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
+  "roundDelayMaxSeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
+  "mode": zod.enum(['draft', 'send'])
+}),
   "defaultAccountDailyLimit": zod.number().min(1).max(getAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
@@ -1578,6 +1599,19 @@ export const updateAdminSystemSettingsBodySupportLinksTelegramUrlMax = 512;
 
 export const updateAdminSystemSettingsBodySupportLinksZaloUrlMax = 512;
 
+export const updateAdminSystemSettingsBodyPostJoinCampaignContentMax = 4096;
+
+export const updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMax = 300;
+export const updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMin = 0;
+export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMax = 259200;
+export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
+
+export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMin = 0;
+export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMax = 259200;
+export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf = 1;
+
 export const updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax = 100000;
 
 export const updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin = 0;
@@ -1641,6 +1675,14 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "groupLibraryAutoJoinEnabled": zod.boolean(),
+  "postJoinCampaign": zod.object({
+  "enabled": zod.boolean(),
+  "content": zod.string().max(updateAdminSystemSettingsBodyPostJoinCampaignContentMax),
+  "repeatCount": zod.number().min(1).max(updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMultipleOf),
+  "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf),
+  "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf),
+  "mode": zod.enum(['draft', 'send'])
+}).optional(),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMax),
@@ -1717,6 +1759,19 @@ export const updateAdminSystemSettingsResponseSupportLinksTelegramUrlMax = 512;
 
 export const updateAdminSystemSettingsResponseSupportLinksZaloUrlMax = 512;
 
+export const updateAdminSystemSettingsResponsePostJoinCampaignContentMax = 4096;
+
+export const updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax = 300;
+export const updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
+export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
+export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
+
+export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin = 0;
+export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax = 259200;
+export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf = 1;
+
 export const updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax = 100000;
 
 export const updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin = 0;
@@ -1780,6 +1835,14 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "groupLibraryAutoJoinEnabled": zod.boolean(),
+  "postJoinCampaign": zod.object({
+  "enabled": zod.boolean(),
+  "content": zod.string().max(updateAdminSystemSettingsResponsePostJoinCampaignContentMax),
+  "repeatCount": zod.number().min(1).max(updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf),
+  "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
+  "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
+  "mode": zod.enum(['draft', 'send'])
+}),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
@@ -2185,8 +2248,31 @@ export const BulkJoinAdminGroupLibraryResponse = zod.object({
 })
 
 
+export const getAdminGroupJoinStatusResponsePostJoinCampaignContentMax = 4096;
+
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMax = 300;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
+
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMin = 0;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMax = 259200;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf = 1;
+
+
+
 export const GetAdminGroupJoinStatusResponse = zod.object({
   "enabled": zod.boolean(),
+  "postJoinCampaign": zod.object({
+  "enabled": zod.boolean(),
+  "content": zod.string().max(getAdminGroupJoinStatusResponsePostJoinCampaignContentMax),
+  "repeatCount": zod.number().min(1).max(getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMultipleOf),
+  "roundDelayMinSeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
+  "roundDelayMaxSeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
+  "mode": zod.enum(['draft', 'send'])
+}),
   "pendingCount": zod.number(),
   "waitingCount": zod.number(),
   "joinedCount": zod.number(),
@@ -2209,12 +2295,65 @@ export const GetAdminGroupJoinStatusResponse = zod.object({
 })
 
 
-export const UpdateAdminGroupJoinAutomationBody = zod.object({
-  "enabled": zod.boolean()
+export const ScanAdminJoinedGroupsWithoutCampaignResponse = zod.object({
+  "scannedCount": zod.number(),
+  "createdCount": zod.number(),
+  "skippedCount": zod.number()
 })
+
+
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignContentMax = 4096;
+
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMax = 300;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMin = 0;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMax = 259200;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
+
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMin = 0;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMax = 259200;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf = 1;
+
+
+
+export const UpdateAdminGroupJoinAutomationBody = zod.object({
+  "enabled": zod.boolean(),
+  "postJoinCampaign": zod.object({
+  "enabled": zod.boolean(),
+  "content": zod.string().max(updateAdminGroupJoinAutomationBodyPostJoinCampaignContentMax),
+  "repeatCount": zod.number().min(1).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMultipleOf),
+  "roundDelayMinSeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf),
+  "roundDelayMaxSeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf),
+  "mode": zod.enum(['draft', 'send'])
+}).optional()
+})
+
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignContentMax = 4096;
+
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMax = 300;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
+
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMin = 0;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMax = 259200;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf = 1;
+
+
 
 export const UpdateAdminGroupJoinAutomationResponse = zod.object({
   "enabled": zod.boolean(),
+  "postJoinCampaign": zod.object({
+  "enabled": zod.boolean(),
+  "content": zod.string().max(updateAdminGroupJoinAutomationResponsePostJoinCampaignContentMax),
+  "repeatCount": zod.number().min(1).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMultipleOf),
+  "roundDelayMinSeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
+  "roundDelayMaxSeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
+  "mode": zod.enum(['draft', 'send'])
+}),
   "pendingCount": zod.number(),
   "waitingCount": zod.number(),
   "joinedCount": zod.number(),

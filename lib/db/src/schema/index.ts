@@ -206,6 +206,7 @@ export const adminGroupJoinJobsTable = pgTable("admin_group_join_jobs", {
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
   lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
   joinedAt: timestamp("joined_at", { withTimezone: true }),
+  autoCampaignId: uuid("auto_campaign_id").references(() => campaignsTable.id, { onDelete: "set null" }),
   lastError: text("last_error"),
   leaseToken: text("lease_token"),
   leaseUntil: timestamp("lease_until", { withTimezone: true }),

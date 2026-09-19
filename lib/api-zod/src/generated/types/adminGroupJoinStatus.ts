@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdminGroupJoinAccountStatus } from './adminGroupJoinAccountStatus';
+import type { PostJoinCampaignSettings } from './postJoinCampaignSettings';
 
 export interface AdminGroupJoinStatus {
   enabled: boolean;
+  postJoinCampaign: PostJoinCampaignSettings;
   pendingCount: number;
   waitingCount: number;
   joinedCount: number;

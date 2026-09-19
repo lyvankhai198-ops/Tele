@@ -1289,6 +1289,36 @@ export const AdminSystemSettingsGroupLibraryMinimumJoinPlan = {
   unlimited: 'unlimited',
 } as const;
 
+export type PostJoinCampaignSettingsMode = typeof PostJoinCampaignSettingsMode[keyof typeof PostJoinCampaignSettingsMode];
+
+
+export const PostJoinCampaignSettingsMode = {
+  draft: 'draft',
+  send: 'send',
+} as const;
+
+export interface PostJoinCampaignSettings {
+  enabled: boolean;
+  /** @maxLength 4096 */
+  content: string;
+  /**
+     * @minimum 1
+     * @maximum 300
+     */
+  repeatCount: number;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  roundDelayMinSeconds: number;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  roundDelayMaxSeconds: number;
+  mode: PostJoinCampaignSettingsMode;
+}
+
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
@@ -1296,6 +1326,7 @@ export interface AdminSystemSettings {
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   groupLibraryAutoJoinEnabled: boolean;
+  postJoinCampaign: PostJoinCampaignSettings;
   /**
      * @minimum 1
      * @maximum 100000
@@ -1339,6 +1370,7 @@ export interface AdminSystemSettingsInput {
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
   groupLibraryAutoJoinEnabled: boolean;
+  postJoinCampaign?: PostJoinCampaignSettings;
   /**
      * @minimum 1
      * @maximum 100000
@@ -1809,6 +1841,7 @@ export interface AdminGroupLibraryBulkJoinResult {
 
 export interface AdminGroupJoinAutomationUpdateInput {
   enabled: boolean;
+  postJoinCampaign?: PostJoinCampaignSettings;
 }
 
 export type AdminGroupJoinAccountStatusWorkerStatus = typeof AdminGroupJoinAccountStatusWorkerStatus[keyof typeof AdminGroupJoinAccountStatusWorkerStatus];
@@ -1841,12 +1874,19 @@ export interface AdminGroupJoinAccountStatus {
 
 export interface AdminGroupJoinStatus {
   enabled: boolean;
+  postJoinCampaign: PostJoinCampaignSettings;
   pendingCount: number;
   waitingCount: number;
   joinedCount: number;
   failedCount: number;
   skippedCount: number;
   accounts: AdminGroupJoinAccountStatus[];
+}
+
+export interface AdminGroupJoinCampaignScanResult {
+  scannedCount: number;
+  createdCount: number;
+  skippedCount: number;
 }
 
 export interface AdminGroupLibraryImportResult {

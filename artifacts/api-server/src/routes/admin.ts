@@ -39,6 +39,7 @@ import {
   BulkJoinAdminGroupLibraryResponse,
   UpdateAdminGroupJoinAutomationBody,
   UpdateAdminGroupJoinAutomationResponse,
+  ScanAdminJoinedGroupsWithoutCampaignResponse,
   ImportAdminGroupLibraryEntryParams,
   ImportAdminGroupLibraryEntryResponse,
   RevokeAdminGroupLibraryEntryResponse,
@@ -112,6 +113,7 @@ import {
 import {
   ensureAdminGroupJoinJobs,
   getAdminGroupJoinStatus,
+  scanAdminJoinedGroupsWithoutCampaign,
 } from "../lib/admin-group-join-worker";
 import {
   disconnectQuietly,
@@ -281,9 +283,21 @@ router.patch("/admin/active-groups/join-status", async (req, res): Promise<void>
   await updateSystemSettings({
     ...settings,
     groupLibraryAutoJoinEnabled: parsed.data.enabled,
+    postJoinCampaign: parsed.data.postJoinCampaign
+      ? {
+        ...settings.postJoinCampaign,
+        ...parsed.data.postJoinCampaign,
+        content: parsed.data.postJoinCampaign.content.trim(),
+      }
+      : settings.postJoinCampaign,
   }, req.userId!);
   if (parsed.data.enabled) await ensureAdminGroupJoinJobs();
   res.json(UpdateAdminGroupJoinAutomationResponse.parse(await getAdminGroupJoinStatus()));
+});
+
+router.post("/admin/active-groups/join-status/scan", async (_req, res): Promise<void> => {
+  const result = await scanAdminJoinedGroupsWithoutCampaign();
+  res.json(ScanAdminJoinedGroupsWithoutCampaignResponse.parse(result));
 });
 
 router.post("/admin/active-groups/:telegramId/import", async (req, res): Promise<void> => {
@@ -973,6 +987,7 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const settings = {
     ...parsed.data,
     planContent: parsed.data.planContent ?? previousSettings.planContent,
+    postJoinCampaign: parsed.data.postJoinCampaign ?? previousSettings.postJoinCampaign,
   };
   const supportLinks = {
     telegramUrl: parsed.data.supportLinks.telegramUrl?.trim() || null,
@@ -1016,7 +1031,17 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   } catch {
     return void sendError(res, 400, "Múi giờ mặc định không hợp lệ.");
   }
-  if (!allIntegerLimits || !validDefaults) return void sendError(res, 400, "Cấu hình giới hạn hoặc delay không hợp lệ.");
+  const postJoin = settings.postJoinCampaign;
+  const validPostJoin = Number.isInteger(postJoin.repeatCount)
+    && postJoin.repeatCount >= 1
+    && postJoin.repeatCount <= 300
+    && Number.isInteger(postJoin.roundDelayMinSeconds)
+    && Number.isInteger(postJoin.roundDelayMaxSeconds)
+    && postJoin.roundDelayMinSeconds >= 0
+    && postJoin.roundDelayMaxSeconds <= 259200
+    && postJoin.roundDelayMinSeconds <= postJoin.roundDelayMaxSeconds
+    && postJoin.content.trim().length <= 4096;
+  if (!allIntegerLimits || !validDefaults || !validPostJoin) return void sendError(res, 400, "Cấu hình giới hạn hoặc delay không hợp lệ.");
   if (!validPlanContent) return void sendError(res, 400, "Nội dung gói dịch vụ không hợp lệ.");
   for (const content of Object.values(settings.planContent)) {
     content.tagline = content.tagline.trim();
@@ -1188,12 +1213,20 @@ async function checkCampaignReadiness(
   tx: TransactionalQuery,
   campaign: typeof campaignsTable.$inferSelect,
 ) {
-  if (!campaign.telegramAccountId || !campaign.templateId) {
-    return { ready: false as const, message: "Campaign cần tài khoản Telegram và mẫu tin trước khi chạy." };
+  if (!campaign.telegramAccountId) {
+    return { ready: false as const, message: "Campaign cần tài khoản Telegram trước khi chạy." };
+  }
+  if (campaign.templateMode === "text" && !campaign.content.trim()) {
+    return { ready: false as const, message: "Campaign text cần có nội dung trước khi chạy." };
+  }
+  if (campaign.templateMode === "forward" && !campaign.templateId) {
+    return { ready: false as const, message: "Campaign forward cần một mẫu tin trước khi chạy." };
   }
   await Promise.all([
     tx.execute(sql`SELECT 1 FROM ${telegramAccountsTable} WHERE ${telegramAccountsTable.id} = ${campaign.telegramAccountId} FOR SHARE`),
-    tx.execute(sql`SELECT 1 FROM ${messageTemplatesTable} WHERE ${messageTemplatesTable.id} = ${campaign.templateId} FOR SHARE`),
+    ...(campaign.templateId
+      ? [tx.execute(sql`SELECT 1 FROM ${messageTemplatesTable} WHERE ${messageTemplatesTable.id} = ${campaign.templateId} FOR SHARE`)]
+      : []),
     tx.execute(sql`
       SELECT 1 FROM ${campaignTargetsTable}
       INNER JOIN ${destinationsTable} ON ${campaignTargetsTable.destinationId} = ${destinationsTable.id}
@@ -1201,29 +1234,31 @@ async function checkCampaignReadiness(
       FOR SHARE
     `),
   ]);
-  const [accountRows, templateRows, targetDestinations] = await Promise.all([
+  const [accountRows, targetDestinations] = await Promise.all([
     tx.select().from(telegramAccountsTable).where(and(
       eq(telegramAccountsTable.id, campaign.telegramAccountId),
       eq(telegramAccountsTable.ownerUserId, campaign.ownerUserId),
       isNull(telegramAccountsTable.deletedAt),
     )).limit(1),
-    tx.select().from(messageTemplatesTable).where(and(
-      eq(messageTemplatesTable.id, campaign.templateId),
-      eq(messageTemplatesTable.ownerUserId, campaign.ownerUserId),
-    )).limit(1),
     tx.select({ destination: destinationsTable }).from(campaignTargetsTable)
       .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
       .where(eq(campaignTargetsTable.campaignId, campaign.id)),
   ]);
+  const templateRows = campaign.templateId
+    ? await tx.select().from(messageTemplatesTable).where(and(
+      eq(messageTemplatesTable.id, campaign.templateId),
+      eq(messageTemplatesTable.ownerUserId, campaign.ownerUserId),
+    )).limit(1)
+    : [];
   const account = accountRows[0];
   const template = templateRows[0];
   if (!account || !account.sessionEncrypted || account.status !== "connected") {
     return { ready: false as const, message: "Tài khoản Telegram của campaign cần được kết nối trước khi chạy." };
   }
-  if (!template) {
+  if (campaign.templateMode === "forward" && !template) {
     return { ready: false as const, message: "Mẫu tin của campaign không còn khả dụng." };
   }
-  if (template.mode === "forward" && (
+  if (template?.mode === "forward" && (
     template.sourceAccountId !== campaign.telegramAccountId || !template.sourceMessageId
   )) {
     return { ready: false as const, message: "Campaign forward cần một Tin nhắn đã lưu hợp lệ trước khi chạy." };

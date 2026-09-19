@@ -17,11 +17,14 @@ import {
   useRevokeAdminGroupLibraryEntry,
   useUpdateAdminGroupLibraryEntry,
   useUpdateAdminGroupJoinAutomation,
+  useUpdateAdminCampaignStatus,
+  useScanAdminJoinedGroupsWithoutCampaign,
   useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
   useBulkJoinAdminGroupLibrary,
   type AdminActiveGroup,
   type AdminGroupLibraryBulkJoinResult,
+  type AdminGroupJoinStatus,
   type Campaign,
   type Destination,
   type TelegramAccount,
@@ -34,6 +37,7 @@ import {
   Play,
   RefreshCw,
   Search,
+  Send,
   Undo2,
   Users,
 } from "lucide-react";
@@ -134,6 +138,29 @@ const text = {
   autoJoinAccountSummary: (name: string, pending: number, joined: number) =>
     `${name}: ${pending} chờ · ${joined} đã tham gia`,
   autoJoinToggleFailed: "Không thể cập nhật chế độ tự động tham gia.",
+  scanExistingGroups: "Quét nhóm đã tham gia",
+  scanningExistingGroups: "Đang quét nhóm đã tham gia...",
+  scanExistingGroupsSuccess: (scanned: number, created: number, skipped: number) =>
+    `Đã quét ${scanned} nhóm đã tham gia, tạo ${created} campaign${created === 1 ? "" : "s"} còn thiếu${skipped > 0 ? `, bỏ qua ${skipped}` : ""}.`,
+  scanExistingGroupsFailed: "Không thể quét các nhóm đã tham gia. Vui lòng thử lại.",
+  postJoinTitle: "Campaign sau khi tham gia",
+  postJoinDescription: "Sau khi tài khoản admin tham gia nhóm, hệ thống sẽ tạo campaign theo cấu hình này.",
+  postJoinEnabled: "Tạo campaign sau khi tham gia",
+  postJoinContent: "Nội dung tin nhắn",
+  postJoinContentPlaceholder: "Nhập nội dung sẽ gửi vào nhóm...",
+  postJoinRepeat: "Số vòng",
+  postJoinDelay: "Delay giữa các vòng",
+  postJoinMode: "Cách xử lý",
+  postJoinDraft: "Tạo nháp, chờ duyệt",
+  postJoinSend: "Tạo và gửi ngay",
+  postJoinSave: "Lưu cấu hình campaign",
+  postJoinSaved: "Đã lưu cấu hình campaign sau khi tham gia.",
+  postJoinSaveFailed: "Không thể lưu cấu hình campaign sau khi tham gia.",
+  postJoinDraftHint: "Chế độ nháp không tự gửi. Bạn có thể bấm “Gửi ngay” ở campaign khi đã kiểm tra.",
+  sendNow: "Gửi ngay",
+  sendingNow: "Đang gửi...",
+  sendNowSuccess: "Đã chuyển campaign sang trạng thái gửi ngay.",
+  sendNowFailed: "Không thể gửi campaign ngay lúc này.",
 } as const;
 
 const workspaceText = {
@@ -259,6 +286,8 @@ type GroupCardProps = {
   accountDataLoading: boolean;
   onCreate: (group: AdminActiveGroup, delay?: AdminActiveGroup["roundDelays"][number], preferredAccountId?: string) => void;
   onEdit: (campaign: Campaign) => void;
+  onSendNow: (campaign: Campaign) => void;
+  sendingCampaignId: string | null;
   onImport: (group: AdminActiveGroup) => void;
   onRevoke: (group: AdminActiveGroup) => void;
   onSaveTrial: (group: AdminActiveGroup, trialVisible: boolean, trialTitle: string) => void;
@@ -306,6 +335,8 @@ function GroupCard({
   accountDataLoading,
   onCreate,
   onEdit,
+  onSendNow,
+  sendingCampaignId,
   onImport,
   onRevoke,
   onSaveTrial,
@@ -636,6 +667,20 @@ function GroupCard({
                         {text.editCampaign}
                       </button>
                     )}
+                    {isAdmin && campaign.status === "draft" && (
+                      <button
+                        type="button"
+                        onClick={() => onSendNow(campaign)}
+                        disabled={sendingCampaignId === campaign.id}
+                        className="inline-flex items-center gap-1 rounded-md bg-[#059669] px-2 py-1 text-[10px] font-extrabold text-white hover:bg-[#047857] disabled:cursor-not-allowed disabled:opacity-60"
+                        data-testid={`button-send-campaign-now-${group.id}-${campaign.id}`}
+                      >
+                        {sendingCampaignId === campaign.id
+                          ? <LoaderCircle className="h-3 w-3 animate-spin" />
+                          : <Send className="h-3 w-3" />}
+                        {sendingCampaignId === campaign.id ? text.sendingNow : text.sendNow}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -663,6 +708,16 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const [bulkJoinModalOpen, setBulkJoinModalOpen] = useState(false);
   const [bulkJoinAccountId, setBulkJoinAccountId] = useState("");
   const [bulkJoinResult, setBulkJoinResult] = useState<AdminGroupLibraryBulkJoinResult | null>(null);
+  const [postJoinDraft, setPostJoinDraft] = useState<AdminGroupJoinStatus["postJoinCampaign"]>({
+    enabled: false,
+    content: "",
+    repeatCount: 300,
+    roundDelayMinSeconds: 1,
+    roundDelayMaxSeconds: 3,
+    mode: "draft",
+  });
+  const [postJoinDirty, setPostJoinDirty] = useState(false);
+  const [sendingCampaignId, setSendingCampaignId] = useState<string | null>(null);
   const [campaignForm, setCampaignForm] = useState<{
     editingCampaign: Campaign | null;
     prefill?: CampaignFormPrefill;
@@ -712,6 +767,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const revokeGroup = useRevokeAdminGroupLibraryEntry();
   const updateTrialGroup = useUpdateAdminGroupLibraryEntry();
   const updateJoinAutomation = useUpdateAdminGroupJoinAutomation();
+  const updateCampaignStatus = useUpdateAdminCampaignStatus();
+  const scanExistingGroups = useScanAdminJoinedGroupsWithoutCampaign();
   const bulkJoinGroups = useBulkJoinAdminGroupLibrary();
   const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
@@ -726,6 +783,12 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     () => (accounts.data ?? []).filter((account) => account.status === "connected"),
     [accounts.data],
   );
+
+  useEffect(() => {
+    if (groupJoinStatusQuery.data?.postJoinCampaign && !postJoinDirty) {
+      setPostJoinDraft(groupJoinStatusQuery.data.postJoinCampaign);
+    }
+  }, [groupJoinStatusQuery.data?.postJoinCampaign, postJoinDirty]);
 
   async function handleSync() {
     setSyncFeedback(null);
@@ -841,6 +904,69 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       setFeedbackIsError(false);
     } catch {
       setSyncFeedback(text.autoJoinToggleFailed);
+      setFeedbackIsError(true);
+    }
+  }
+
+  async function handleSavePostJoinCampaign() {
+    const currentEnabled = groupJoinStatusQuery.data?.enabled ?? true;
+    if (!postJoinDraft.content.trim()) {
+      setSyncFeedback(text.postJoinSaveFailed);
+      setFeedbackIsError(true);
+      return;
+    }
+    try {
+      const result = await updateJoinAutomation.mutateAsync({
+        data: {
+          enabled: currentEnabled,
+          postJoinCampaign: {
+            ...postJoinDraft,
+            content: postJoinDraft.content.trim(),
+          },
+        },
+      });
+      setPostJoinDraft(result.postJoinCampaign);
+      setPostJoinDirty(false);
+      await groupJoinStatusQuery.refetch();
+      setSyncFeedback(text.postJoinSaved);
+      setFeedbackIsError(false);
+    } catch {
+      setSyncFeedback(text.postJoinSaveFailed);
+      setFeedbackIsError(true);
+    }
+  }
+
+  async function handleSendCampaignNow(campaign: Campaign) {
+    setSendingCampaignId(campaign.id);
+    try {
+      await updateCampaignStatus.mutateAsync({ campaignId: campaign.id, data: { status: "queued" } });
+      await campaigns.refetch();
+      setSyncFeedback(text.sendNowSuccess);
+      setFeedbackIsError(false);
+    } catch {
+      setSyncFeedback(text.sendNowFailed);
+      setFeedbackIsError(true);
+    } finally {
+      setSendingCampaignId(null);
+    }
+  }
+
+  async function handleScanExistingGroups() {
+    try {
+      const result = await scanExistingGroups.mutateAsync();
+      await Promise.all([
+        groupJoinStatusQuery.refetch(),
+        campaigns.refetch(),
+        destinations.refetch(),
+      ]);
+      setSyncFeedback(text.scanExistingGroupsSuccess(
+        result.scannedCount,
+        result.createdCount,
+        result.skippedCount,
+      ));
+      setFeedbackIsError(false);
+    } catch {
+      setSyncFeedback(text.scanExistingGroupsFailed);
       setFeedbackIsError(true);
     }
   }
@@ -991,25 +1117,155 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                    )}
                  </div>
                </div>
-               <button
-                 type="button"
-                 onClick={() => void handleToggleJoinAutomation()}
-                 disabled={updateJoinAutomation.isPending || groupJoinStatusQuery.isLoading}
-                 className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-[11px] font-extrabold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                   groupJoinStatusQuery.data?.enabled
-                     ? "bg-[#64748b] hover:bg-[#475569]"
-                     : "bg-[#1a2b88] hover:bg-[#152473]"
-                 }`}
-                 data-testid="button-toggle-admin-group-auto-join"
-               >
-                 {updateJoinAutomation.isPending
-                   ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                   : groupJoinStatusQuery.data?.enabled
-                     ? <Pause className="h-3.5 w-3.5" />
-                     : <Play className="h-3.5 w-3.5" />}
-                 {groupJoinStatusQuery.data?.enabled ? text.autoJoinDisable : text.autoJoinEnable}
-               </button>
+               <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                 <button
+                   type="button"
+                   onClick={() => void handleScanExistingGroups()}
+                   disabled={scanExistingGroups.isPending || groupJoinStatusQuery.isLoading}
+                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1a2b88] bg-white px-3.5 py-2.5 text-[11px] font-extrabold text-[#1a2b88] transition hover:bg-[#eef2fa] disabled:cursor-not-allowed disabled:opacity-60"
+                   data-testid="button-scan-admin-joined-groups"
+                 >
+                   {scanExistingGroups.isPending
+                     ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                     : <Search className="h-3.5 w-3.5" />}
+                   {scanExistingGroups.isPending ? text.scanningExistingGroups : text.scanExistingGroups}
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => void handleToggleJoinAutomation()}
+                   disabled={updateJoinAutomation.isPending || groupJoinStatusQuery.isLoading}
+                   className={`inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-[11px] font-extrabold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                     groupJoinStatusQuery.data?.enabled
+                       ? "bg-[#64748b] hover:bg-[#475569]"
+                       : "bg-[#1a2b88] hover:bg-[#152473]"
+                   }`}
+                   data-testid="button-toggle-admin-group-auto-join"
+                 >
+                   {updateJoinAutomation.isPending
+                     ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                     : groupJoinStatusQuery.data?.enabled
+                       ? <Pause className="h-3.5 w-3.5" />
+                       : <Play className="h-3.5 w-3.5" />}
+                   {groupJoinStatusQuery.data?.enabled ? text.autoJoinDisable : text.autoJoinEnable}
+                 </button>
+               </div>
              </div>
+              <div className="mt-4 rounded-xl border border-[#dbeafe] bg-white p-3.5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-extrabold text-[#0f172a]">{text.postJoinTitle}</p>
+                    <p className="mt-1 text-[10px] font-medium leading-relaxed text-[#64748b]">{text.postJoinDescription}</p>
+                  </div>
+                  <label className="inline-flex shrink-0 items-center gap-2 text-[11px] font-extrabold text-[#334155]">
+                    <input
+                      type="checkbox"
+                      checked={postJoinDraft.enabled}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({ ...current, enabled: event.target.checked }));
+                        setPostJoinDirty(true);
+                      }}
+                      className="h-4 w-4 rounded border-[#cbd5e1] accent-[#1a2b88]"
+                      data-testid="checkbox-admin-post-join-campaign"
+                    />
+                    {text.postJoinEnabled}
+                  </label>
+                </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_180px]">
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinContent}</span>
+                    <textarea
+                      value={postJoinDraft.content}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({ ...current, content: event.target.value }));
+                        setPostJoinDirty(true);
+                      }}
+                      maxLength={4096}
+                      rows={3}
+                      placeholder={text.postJoinContentPlaceholder}
+                      className="w-full resize-y rounded-lg border border-[#dbe2ea] px-3 py-2 text-[11px] font-semibold leading-relaxed outline-none transition focus:border-[#1a2b88]"
+                      data-testid="textarea-admin-post-join-content"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinRepeat}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={postJoinDraft.repeatCount}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({ ...current, repeatCount: Number(event.target.value) || 1 }));
+                        setPostJoinDirty(true);
+                      }}
+                      className="h-10 w-full rounded-lg border border-[#dbe2ea] px-3 text-[11px] font-bold outline-none focus:border-[#1a2b88]"
+                      data-testid="input-admin-post-join-repeat"
+                    />
+                    <span className="mt-1 block text-[10px] font-medium text-[#64748b]">300 vòng = 300 lượt qua nhóm đích.</span>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinMode}</span>
+                    <select
+                      value={postJoinDraft.mode}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({ ...current, mode: event.target.value as typeof current.mode }));
+                        setPostJoinDirty(true);
+                      }}
+                      className="h-10 w-full rounded-lg border border-[#dbe2ea] bg-white px-3 text-[11px] font-bold outline-none focus:border-[#1a2b88]"
+                      data-testid="select-admin-post-join-mode"
+                    >
+                      <option value="draft">{text.postJoinDraft}</option>
+                      <option value="send">{text.postJoinSend}</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[180px_180px_1fr]">
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinDelay} · min</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={259200}
+                      value={postJoinDraft.roundDelayMinSeconds}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({ ...current, roundDelayMinSeconds: Number(event.target.value) || 0 }));
+                        setPostJoinDirty(true);
+                      }}
+                      className="h-10 w-full rounded-lg border border-[#dbe2ea] px-3 text-[11px] font-bold outline-none focus:border-[#1a2b88]"
+                      data-testid="input-admin-post-join-delay-min"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinDelay} · max</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={259200}
+                      value={postJoinDraft.roundDelayMaxSeconds}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({ ...current, roundDelayMaxSeconds: Number(event.target.value) || 0 }));
+                        setPostJoinDirty(true);
+                      }}
+                      className="h-10 w-full rounded-lg border border-[#dbe2ea] px-3 text-[11px] font-bold outline-none focus:border-[#1a2b88]"
+                      data-testid="input-admin-post-join-delay-max"
+                    />
+                  </label>
+                  <div className="flex flex-col justify-end gap-2">
+                    {postJoinDraft.mode === "draft" && (
+                      <p className="text-[10px] font-semibold leading-relaxed text-[#64748b]">{text.postJoinDraftHint}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleSavePostJoinCampaign()}
+                      disabled={updateJoinAutomation.isPending || !postJoinDirty}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[#1a2b88] px-3 text-[10px] font-extrabold text-white transition hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-50"
+                      data-testid="button-save-admin-post-join-campaign"
+                    >
+                      {updateJoinAutomation.isPending && <LoaderCircle className="h-3 w-3 animate-spin" />}
+                      {text.postJoinSave}
+                    </button>
+                  </div>
+                </div>
+              </div>
              {groupJoinStatusQuery.data?.accounts.length ? (
                <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                  {groupJoinStatusQuery.data.accounts.map((account) => (
@@ -1090,6 +1346,8 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                 accountDataLoading={accounts.isLoading || destinations.isLoading || campaigns.isLoading}
                 onCreate={openCreateCampaign}
                 onEdit={(campaign) => setCampaignForm({ editingCampaign: campaign })}
+                onSendNow={(campaign) => void handleSendCampaignNow(campaign)}
+                sendingCampaignId={sendingCampaignId}
                 onImport={(selectedGroup) => void handleImport(selectedGroup)}
                 onRevoke={(selectedGroup) => void handleRevoke(selectedGroup)}
                  onSaveTrial={(selectedGroup, trialVisible, trialTitle) => void handleSaveTrial(selectedGroup, trialVisible, trialTitle)}

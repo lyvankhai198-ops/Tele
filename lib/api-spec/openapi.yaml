@@ -1081,6 +1081,18 @@ paths:
               schema: { $ref: "#/components/schemas/AdminGroupJoinStatus" }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
+  /admin/active-groups/join-status/scan:
+    post:
+      operationId: scanAdminJoinedGroupsWithoutCampaign
+      tags: [admin]
+      responses:
+        "200":
+          description: Existing admin group memberships scanned for missing automatic campaigns
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupJoinCampaignScanResult" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
     patch:
       operationId: updateAdminGroupJoinAutomation
       tags: [admin]
@@ -2231,7 +2243,7 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, postJoinCampaign, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -2251,6 +2263,7 @@ components:
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         groupLibraryAutoJoinEnabled: { type: boolean }
+        postJoinCampaign: { $ref: "#/components/schemas/PostJoinCampaignSettings" }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
@@ -2279,6 +2292,7 @@ components:
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         groupLibraryAutoJoinEnabled: { type: boolean }
+        postJoinCampaign: { $ref: "#/components/schemas/PostJoinCampaignSettings" }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
@@ -2715,6 +2729,17 @@ components:
       required: [enabled]
       properties:
         enabled: { type: boolean }
+        postJoinCampaign: { $ref: "#/components/schemas/PostJoinCampaignSettings" }
+    PostJoinCampaignSettings:
+      type: object
+      required: [enabled, content, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, mode]
+      properties:
+        enabled: { type: boolean }
+        content: { type: string, maxLength: 4096 }
+        repeatCount: { type: number, minimum: 1, maximum: 300, multipleOf: 1 }
+        roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200, multipleOf: 1 }
+        roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200, multipleOf: 1 }
+        mode: { type: string, enum: [draft, send] }
     AdminGroupJoinAccountStatus:
       type: object
       required: [accountId, accountName, accountUsername, accountStatus, workerStatus, pendingCount, waitingCount, joinedCount, failedCount, skippedCount, nextAttemptAt, lastError]
@@ -2733,9 +2758,10 @@ components:
         lastError: { type: ["string", "null"] }
     AdminGroupJoinStatus:
       type: object
-      required: [enabled, pendingCount, waitingCount, joinedCount, failedCount, skippedCount, accounts]
+      required: [enabled, postJoinCampaign, pendingCount, waitingCount, joinedCount, failedCount, skippedCount, accounts]
       properties:
         enabled: { type: boolean }
+        postJoinCampaign: { $ref: "#/components/schemas/PostJoinCampaignSettings" }
         pendingCount: { type: number }
         waitingCount: { type: number }
         joinedCount: { type: number }
@@ -2744,6 +2770,13 @@ components:
         accounts:
           type: array
           items: { $ref: "#/components/schemas/AdminGroupJoinAccountStatus" }
+    AdminGroupJoinCampaignScanResult:
+      type: object
+      required: [scannedCount, createdCount, skippedCount]
+      properties:
+        scannedCount: { type: number }
+        createdCount: { type: number }
+        skippedCount: { type: number }
     AdminGroupLibraryImportResult:
       type: object
       required: [imported]

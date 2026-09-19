@@ -24,6 +24,15 @@ export type SupportSettings = {
   zaloUrl: string | null;
 };
 
+export type PostJoinCampaignSettings = {
+  enabled: boolean;
+  content: string;
+  repeatCount: number;
+  roundDelayMinSeconds: number;
+  roundDelayMaxSeconds: number;
+  mode: "draft" | "send";
+};
+
 export type SystemSettings = {
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
   planContent: Record<PlanCode, ConfiguredPlanContent>;
@@ -31,6 +40,7 @@ export type SystemSettings = {
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: "pro" | "unlimited";
   groupLibraryAutoJoinEnabled: boolean;
+  postJoinCampaign: PostJoinCampaignSettings;
   defaultAccountDailyLimit: number;
   campaignDefaults: {
     maxRetries: number;
@@ -50,6 +60,7 @@ type StoredSystemSettings = {
   groupLibraryVisibleToUsers?: unknown;
   groupLibraryMinimumJoinPlan?: unknown;
   groupLibraryAutoJoinEnabled?: unknown;
+  postJoinCampaign?: Partial<PostJoinCampaignSettings>;
   defaultAccountDailyLimit?: unknown;
   campaignDefaults?: Partial<SystemSettings["campaignDefaults"]>;
   registrationEnabled?: unknown;
@@ -133,6 +144,14 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   groupLibraryVisibleToUsers: false,
   groupLibraryMinimumJoinPlan: "pro",
   groupLibraryAutoJoinEnabled: true,
+  postJoinCampaign: {
+    enabled: false,
+    content: "",
+    repeatCount: 300,
+    roundDelayMinSeconds: 1,
+    roundDelayMaxSeconds: 3,
+    mode: "draft",
+  },
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
     maxRetries: 3,
@@ -238,6 +257,29 @@ function normalizedPlanContent(
   };
 }
 
+function normalizedPostJoinCampaign(
+  stored: Partial<PostJoinCampaignSettings> | undefined,
+  fallback: PostJoinCampaignSettings,
+  campaignDefaults: SystemSettings["campaignDefaults"],
+): PostJoinCampaignSettings {
+  const min = isFiniteInteger(stored?.roundDelayMinSeconds, 0, 259200)
+    ? stored.roundDelayMinSeconds
+    : campaignDefaults.roundDelayMinSeconds;
+  const max = isFiniteInteger(stored?.roundDelayMaxSeconds, 0, 259200)
+    ? stored.roundDelayMaxSeconds
+    : campaignDefaults.roundDelayMaxSeconds;
+  return {
+    enabled: typeof stored?.enabled === "boolean" ? stored.enabled : fallback.enabled,
+    content: typeof stored?.content === "string" && stored.content.trim().length <= 4096
+      ? stored.content.trim()
+      : fallback.content,
+    repeatCount: isFiniteInteger(stored?.repeatCount, 1, 300) ? stored.repeatCount : fallback.repeatCount,
+    roundDelayMinSeconds: min <= max ? min : fallback.roundDelayMinSeconds,
+    roundDelayMaxSeconds: min <= max ? max : fallback.roundDelayMaxSeconds,
+    mode: stored?.mode === "send" ? "send" : "draft",
+  };
+}
+
 function parseSettings(value: string | undefined): SystemSettings {
   if (!value) return structuredClone(DEFAULT_SYSTEM_SETTINGS);
   try {
@@ -269,6 +311,21 @@ function parseSettings(value: string | undefined): SystemSettings {
       groupLibraryAutoJoinEnabled: typeof raw.groupLibraryAutoJoinEnabled === "boolean"
         ? raw.groupLibraryAutoJoinEnabled
         : DEFAULT_SYSTEM_SETTINGS.groupLibraryAutoJoinEnabled,
+      postJoinCampaign: normalizedPostJoinCampaign(
+        raw.postJoinCampaign,
+        DEFAULT_SYSTEM_SETTINGS.postJoinCampaign,
+        {
+          maxRetries: isFiniteInteger(campaignDefaults.maxRetries, 0, 20)
+            ? campaignDefaults.maxRetries
+            : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.maxRetries,
+          roundDelayMinSeconds: isFiniteInteger(campaignDefaults.roundDelayMinSeconds, 0, 259200)
+            ? campaignDefaults.roundDelayMinSeconds
+            : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.roundDelayMinSeconds,
+          roundDelayMaxSeconds: isFiniteInteger(campaignDefaults.roundDelayMaxSeconds, 0, 259200)
+            ? campaignDefaults.roundDelayMaxSeconds
+            : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.roundDelayMaxSeconds,
+        },
+      ),
       defaultAccountDailyLimit: isFiniteInteger(raw.defaultAccountDailyLimit, 1, 100000)
         ? raw.defaultAccountDailyLimit
         : DEFAULT_SYSTEM_SETTINGS.defaultAccountDailyLimit,

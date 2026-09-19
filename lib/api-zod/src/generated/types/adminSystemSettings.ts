@@ -9,6 +9,7 @@ import type { AdminSystemSettingsGroupLibraryMinimumJoinPlan } from './adminSyst
 import type { AdminSystemSettingsPlanContent } from './adminSystemSettingsPlanContent';
 import type { AdminSystemSettingsPlanLimits } from './adminSystemSettingsPlanLimits';
 import type { CampaignDefaults } from './campaignDefaults';
+import type { PostJoinCampaignSettings } from './postJoinCampaignSettings';
 import type { SupportSettings } from './supportSettings';
 
 export interface AdminSystemSettings {
@@ -18,6 +19,7 @@ export interface AdminSystemSettings {
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   groupLibraryAutoJoinEnabled: boolean;
+  postJoinCampaign: PostJoinCampaignSettings;
   /**
      * @minimum 1
      * @maximum 100000
