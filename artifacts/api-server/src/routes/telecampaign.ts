@@ -2654,8 +2654,14 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
   if (!nextStatus) return void sendError(res, 400, "No campaign status was provided");
   const isResumingPausedCampaign = nextStatus === "queued" && existing.status === "paused";
   if (nextStatus === "queued") {
-    if (!existing.telegramAccountId || !existing.templateId) {
-      return void sendError(res, 409, "Campaign needs a Telegram account and a message template before it can run.");
+    if (!existing.telegramAccountId) {
+      return void sendError(res, 409, "Campaign needs a Telegram account before it can run.");
+    }
+    if (existing.templateMode === "forward" && !existing.templateId) {
+      return void sendError(res, 409, "Forward campaigns need a message template before they can run.");
+    }
+    if (existing.templateMode === "text" && !existing.content.trim()) {
+      return void sendError(res, 409, "Text campaigns need message content before they can run.");
     }
     const [account] = await db.select().from(telegramAccountsTable).where(and(
       eq(telegramAccountsTable.id, existing.telegramAccountId),
@@ -2665,15 +2671,19 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     if (!account || !account.sessionEncrypted || account.status !== "connected") {
       return void sendError(res, 409, "The campaign Telegram account must be connected before it can run.");
     }
-    const [template] = await db.select().from(messageTemplatesTable).where(and(
-      eq(messageTemplatesTable.id, existing.templateId),
-      eq(messageTemplatesTable.ownerUserId, ownerUserId),
-    ));
-    if (!template) return void sendError(res, 409, "The campaign message template is unavailable.");
-     if (campaignCloneMode(existing) === "admin" && template.mode !== "forward") {
+    const [template] = existing.templateId
+      ? await db.select().from(messageTemplatesTable).where(and(
+        eq(messageTemplatesTable.id, existing.templateId),
+        eq(messageTemplatesTable.ownerUserId, ownerUserId),
+      ))
+      : [];
+    if (existing.templateMode === "forward" && !template) {
+      return void sendError(res, 409, "The campaign message template is unavailable.");
+    }
+    if (template && campaignCloneMode(existing) === "admin" && template.mode !== "forward") {
       return void sendError(res, 409, "A cloned campaign must use a Saved Message forward template.");
     }
-    if (template.mode === "forward" && (
+    if (template?.mode === "forward" && (
       template.sourceAccountId !== existing.telegramAccountId || !template.sourceMessageId
     )) {
       return void sendError(res, 409, "Select a Saved Message from this campaign's Telegram account before running.");
