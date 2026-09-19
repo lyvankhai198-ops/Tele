@@ -26,6 +26,7 @@ const FLOOD_WAIT_BUFFER_MS = 60_000;
 const GENERIC_RETRY_DELAY_MS = 15 * 60_000;
 const JOB_LEASE_MS = 10 * 60_000;
 const WORKER_INTERVAL_MS = 5_000;
+const SCAN_CONCURRENCY = 8;
 
 const activeAccounts = new Set<string>();
 
@@ -129,8 +130,8 @@ async function createPostJoinCampaign(input: {
   ownerUserId: string;
   groupId: string;
   groupTitle: string;
-}): Promise<string | null> {
-  const settings = await getSystemSettings();
+}, settingsOverride?: Awaited<ReturnType<typeof getSystemSettings>>): Promise<string | null> {
+  const settings = settingsOverride ?? await getSystemSettings();
   const config = settings.postJoinCampaign;
   if (!config.enabled || !config.content) return null;
 
@@ -339,6 +340,7 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
   skippedCount: number;
 }> {
   await ensureAdminGroupJoinJobs(true);
+  const settings = await getSystemSettings();
   const candidates = await db.select({
     jobId: adminGroupJoinJobsTable.id,
     accountId: telegramAccountsTable.id,
@@ -365,61 +367,63 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
   let noPermissionCount = 0;
   let duplicateCount = 0;
   let skippedCount = 0;
-  for (const candidate of candidates) {
-    if (!candidate.destinationId) {
-      skippedCount += 1;
-      continue;
-    }
-    scannedCount += 1;
-
-    if (candidate.autoCampaignId) {
-      const repair = await repairAutomaticCampaign({
-        jobId: candidate.jobId,
-        accountId: candidate.accountId,
-        ownerUserId: candidate.ownerUserId,
-        destinationId: candidate.destinationId,
-      });
-      if (repair === "deleted_duplicate") {
-        deletedCount += 1;
-        duplicateCount += 1;
-        continue;
+  for (let offset = 0; offset < candidates.length; offset += SCAN_CONCURRENCY) {
+    await Promise.all(candidates.slice(offset, offset + SCAN_CONCURRENCY).map(async (candidate) => {
+      if (!candidate.destinationId) {
+        skippedCount += 1;
+        return;
       }
-      if (repair === "deleted_no_permission") {
-        deletedCount += 1;
-        noPermissionCount += 1;
-        if (await createPostJoinCampaign({
+      scannedCount += 1;
+
+      if (candidate.autoCampaignId) {
+        const repair = await repairAutomaticCampaign({
           jobId: candidate.jobId,
           accountId: candidate.accountId,
           ownerUserId: candidate.ownerUserId,
-          groupId: candidate.destinationId,
-          groupTitle: candidate.groupTitle,
-        })) {
-          recreatedCount += 1;
+          destinationId: candidate.destinationId,
+        });
+        if (repair === "deleted_duplicate") {
+          deletedCount += 1;
+          duplicateCount += 1;
+          return;
         }
+        if (repair === "deleted_no_permission") {
+          deletedCount += 1;
+          noPermissionCount += 1;
+          if (await createPostJoinCampaign({
+            jobId: candidate.jobId,
+            accountId: candidate.accountId,
+            ownerUserId: candidate.ownerUserId,
+            groupId: candidate.destinationId,
+            groupTitle: candidate.groupTitle,
+          }, settings)) {
+            recreatedCount += 1;
+          }
+        }
+        return;
       }
-      continue;
-    }
 
-    const [marked] = await db.update(adminGroupJoinJobsTable).set({
-      status: "joined",
-      joinedAt: new Date(),
-      lastError: null,
-      updatedAt: new Date(),
-    }).where(and(
-      eq(adminGroupJoinJobsTable.id, candidate.jobId),
-      inArray(adminGroupJoinJobsTable.status, ["pending", "waiting", "failed", "skipped", "joined"]),
-      isNull(adminGroupJoinJobsTable.autoCampaignId),
-    )).returning({ id: adminGroupJoinJobsTable.id });
-    if (!marked) continue;
-    if (await createPostJoinCampaign({
-      jobId: candidate.jobId,
-      accountId: candidate.accountId,
-      ownerUserId: candidate.ownerUserId,
-      groupId: candidate.destinationId,
-      groupTitle: candidate.groupTitle,
-    })) {
-      createdCount += 1;
-    }
+      const [marked] = await db.update(adminGroupJoinJobsTable).set({
+        status: "joined",
+        joinedAt: new Date(),
+        lastError: null,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(adminGroupJoinJobsTable.id, candidate.jobId),
+        inArray(adminGroupJoinJobsTable.status, ["pending", "waiting", "failed", "skipped", "joined"]),
+        isNull(adminGroupJoinJobsTable.autoCampaignId),
+      )).returning({ id: adminGroupJoinJobsTable.id });
+      if (!marked) return;
+      if (await createPostJoinCampaign({
+        jobId: candidate.jobId,
+        accountId: candidate.accountId,
+        ownerUserId: candidate.ownerUserId,
+        groupId: candidate.destinationId,
+        groupTitle: candidate.groupTitle,
+      }, settings)) {
+        createdCount += 1;
+      }
+    }));
   }
   return {
     scannedCount,
