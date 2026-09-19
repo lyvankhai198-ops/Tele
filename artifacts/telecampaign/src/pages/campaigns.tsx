@@ -466,6 +466,7 @@ export default function Campaigns() {
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
+  const [highlightedCampaignId, setHighlightedCampaignId] = useState<string | null>(null);
   const [templatePreview, setTemplatePreview] = useState<MessageTemplate | null>(null);
   const [forwardPreviewSource, setForwardPreviewSource] = useState<{ accountId: string; messageId: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -561,13 +562,13 @@ export default function Campaigns() {
   }, [campaigns.data, searchParams, setLocation, status]);
 
   useEffect(() => {
-    const detailsCampaignId = new URLSearchParams(searchParams).get("detailsCampaignId");
-    if (!detailsCampaignId || !campaigns.data) return;
-    const campaign = campaigns.data.find((item) => item.id === detailsCampaignId);
+    const focusCampaignId = new URLSearchParams(searchParams).get("focusCampaignId");
+    if (!focusCampaignId || !campaigns.data) return;
+    const campaign = campaigns.data.find((item) => item.id === focusCampaignId);
     if (!campaign) return;
-    setDetails(campaign);
+    setHighlightedCampaignId(campaign.id);
     window.requestAnimationFrame(() => {
-      document.querySelector(`[data-testid="campaign-row-${detailsCampaignId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.querySelector(`[data-testid="campaign-row-${focusCampaignId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     setLocation("/dashboard/campaigns?status=completed", { replace: true });
   }, [campaigns.data, searchParams, setLocation]);
@@ -826,11 +827,12 @@ export default function Campaigns() {
                   const autoResumes = resumesAfterDailyQuota(campaign);
                    const safetyNote = temporaryRestrictionCampaignNote(campaign, language, c);
                    const isLatestCompleted = campaign.id === latestCompletedCampaignId;
+                   const isHighlighted = campaign.id === highlightedCampaignId;
                    return (
-                     <article key={campaign.id} className={`p-4 sm:p-5 ${isLatestCompleted ? "bg-[#f8fbff]" : ""}`} data-testid={`campaign-row-${campaign.id}`}>
+                     <article key={campaign.id} className={`p-4 sm:p-5 ${isHighlighted ? "bg-[#fff7f7] ring-2 ring-inset ring-[#fca5a5]" : isLatestCompleted ? "bg-[#f8fbff]" : ""}`} data-testid={`campaign-row-${campaign.id}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                           <button onClick={() => setDetails(campaign)} className={`truncate text-left text-[15px] text-[#1839b5] hover:underline ${isLatestCompleted ? "font-black" : "font-extrabold"}`}>{campaign.name}</button>
+                           <button onClick={() => setDetails(campaign)} className={`truncate text-left text-[15px] hover:underline ${isHighlighted ? "font-black text-[#b91c1c]" : isLatestCompleted ? "font-black text-[#1839b5]" : "font-extrabold text-[#1839b5]"}`}>{campaign.name}</button>
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] font-semibold text-[#64748b]">
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${isActive(campaign.status) ? "bg-[#eff6ff] text-[#0f172a]" : campaign.status === "paused" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#f1f5f9] text-[#64748b]"}`}>{statusLabel(campaign.status, c)}</span>
                             <span>{campaign.completedCount}/{campaign.targetCount}</span>
