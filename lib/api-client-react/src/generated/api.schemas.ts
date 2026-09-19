@@ -1295,6 +1295,7 @@ export interface AdminSystemSettings {
   supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
+  groupLibraryAutoJoinEnabled: boolean;
   /**
      * @minimum 1
      * @maximum 100000
@@ -1337,6 +1338,7 @@ export interface AdminSystemSettingsInput {
   supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
+  groupLibraryAutoJoinEnabled: boolean;
   /**
      * @minimum 1
      * @maximum 100000
@@ -1803,6 +1805,48 @@ export interface AdminGroupLibraryBulkJoinResult {
   skippedCount: number;
   failedCount: number;
   results: AdminGroupLibraryJoinResult[];
+}
+
+export interface AdminGroupJoinAutomationUpdateInput {
+  enabled: boolean;
+}
+
+export type AdminGroupJoinAccountStatusWorkerStatus = typeof AdminGroupJoinAccountStatusWorkerStatus[keyof typeof AdminGroupJoinAccountStatusWorkerStatus];
+
+
+export const AdminGroupJoinAccountStatusWorkerStatus = {
+  running: 'running',
+  waiting: 'waiting',
+  pending: 'pending',
+  idle: 'idle',
+} as const;
+
+export interface AdminGroupJoinAccountStatus {
+  accountId: string;
+  accountName: string;
+  /** @nullable */
+  accountUsername: string | null;
+  accountStatus: string;
+  workerStatus: AdminGroupJoinAccountStatusWorkerStatus;
+  pendingCount: number;
+  waitingCount: number;
+  joinedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  /** @nullable */
+  nextAttemptAt: string | null;
+  /** @nullable */
+  lastError: string | null;
+}
+
+export interface AdminGroupJoinStatus {
+  enabled: boolean;
+  pendingCount: number;
+  waitingCount: number;
+  joinedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  accounts: AdminGroupJoinAccountStatus[];
 }
 
 export interface AdminGroupLibraryImportResult {

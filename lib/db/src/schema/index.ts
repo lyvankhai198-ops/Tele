@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -196,6 +197,26 @@ export const groupLibraryEntriesTable = pgTable("group_library_entries", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const adminGroupJoinJobsTable = pgTable("admin_group_join_jobs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  telegramAccountId: uuid("telegram_account_id").notNull().references(() => telegramAccountsTable.id, { onDelete: "cascade" }),
+  groupLibraryEntryId: uuid("group_library_entry_id").notNull().references(() => groupLibraryEntriesTable.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  joinedAt: timestamp("joined_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("admin_group_join_jobs_account_group_idx").on(table.telegramAccountId, table.groupLibraryEntryId),
+  index("admin_group_join_jobs_due_idx").on(table.status, table.nextAttemptAt),
+  index("admin_group_join_jobs_account_idx").on(table.telegramAccountId, table.status),
+]);
+
 export const activityLogsTable = pgTable("activity_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
   ownerUserId: text("owner_user_id").notNull(),
@@ -274,6 +295,7 @@ export const insertDestinationSchema = createInsertSchema(destinationsTable);
 export const insertCampaignSchema = createInsertSchema(campaignsTable);
 export const insertCampaignTargetSchema = createInsertSchema(campaignTargetsTable);
 export const insertGroupLibraryEntrySchema = createInsertSchema(groupLibraryEntriesTable);
+export const insertAdminGroupJoinJobSchema = createInsertSchema(adminGroupJoinJobsTable);
 export const insertActivityLogSchema = createInsertSchema(activityLogsTable);
 export const insertMessageTemplateSchema = createInsertSchema(messageTemplatesTable);
 export const insertAdminNotificationSchema = createInsertSchema(adminNotificationsTable);
@@ -289,6 +311,7 @@ export type Destination = typeof destinationsTable.$inferSelect;
 export type Campaign = typeof campaignsTable.$inferSelect;
 export type CampaignTarget = typeof campaignTargetsTable.$inferSelect;
 export type GroupLibraryEntry = typeof groupLibraryEntriesTable.$inferSelect;
+export type AdminGroupJoinJob = typeof adminGroupJoinJobsTable.$inferSelect;
 export type ActivityLog = typeof activityLogsTable.$inferSelect;
 export type MessageTemplate = typeof messageTemplatesTable.$inferSelect;
 export type AdminNotification = typeof adminNotificationsTable.$inferSelect;

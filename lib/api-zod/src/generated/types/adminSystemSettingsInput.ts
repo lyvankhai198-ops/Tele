@@ -17,6 +17,7 @@ export interface AdminSystemSettingsInput {
   supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
+  groupLibraryAutoJoinEnabled: boolean;
   /**
      * @minimum 1
      * @maximum 100000

@@ -33,9 +33,12 @@ import {
   UpdateAdminSystemSettingsResponse,
   GetAdminOperationsResponse,
   GetAdminActiveGroupDirectoryResponse,
+  GetAdminGroupJoinStatusResponse,
   SyncAdminGroupLibraryResponse,
   BulkJoinAdminGroupLibraryBody,
   BulkJoinAdminGroupLibraryResponse,
+  UpdateAdminGroupJoinAutomationBody,
+  UpdateAdminGroupJoinAutomationResponse,
   ImportAdminGroupLibraryEntryParams,
   ImportAdminGroupLibraryEntryResponse,
   RevokeAdminGroupLibraryEntryResponse,
@@ -106,6 +109,10 @@ import {
   syncAdminGroupLibrary,
   updateAdminGroupLibraryEntry,
 } from "../lib/admin-active-group-directory";
+import {
+  ensureAdminGroupJoinJobs,
+  getAdminGroupJoinStatus,
+} from "../lib/admin-group-join-worker";
 import {
   disconnectQuietly,
   getAccountClient,
@@ -261,6 +268,22 @@ router.post("/admin/active-groups/join", async (req, res): Promise<void> => {
     failedCount: results.filter((result) => result.status === "failed").length,
     results,
   }));
+});
+
+router.get("/admin/active-groups/join-status", async (_req, res): Promise<void> => {
+  res.json(GetAdminGroupJoinStatusResponse.parse(await getAdminGroupJoinStatus()));
+});
+
+router.patch("/admin/active-groups/join-status", async (req, res): Promise<void> => {
+  const parsed = UpdateAdminGroupJoinAutomationBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, "Cấu hình tự động tham gia nhóm không hợp lệ.");
+  const settings = await getSystemSettings();
+  await updateSystemSettings({
+    ...settings,
+    groupLibraryAutoJoinEnabled: parsed.data.enabled,
+  }, req.userId!);
+  if (parsed.data.enabled) await ensureAdminGroupJoinJobs();
+  res.json(UpdateAdminGroupJoinAutomationResponse.parse(await getAdminGroupJoinStatus()));
 });
 
 router.post("/admin/active-groups/:telegramId/import", async (req, res): Promise<void> => {

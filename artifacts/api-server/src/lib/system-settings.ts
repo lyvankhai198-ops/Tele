@@ -30,6 +30,7 @@ export type SystemSettings = {
   supportLinks: SupportSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: "pro" | "unlimited";
+  groupLibraryAutoJoinEnabled: boolean;
   defaultAccountDailyLimit: number;
   campaignDefaults: {
     maxRetries: number;
@@ -48,6 +49,7 @@ type StoredSystemSettings = {
   supportLinks?: Partial<SupportSettings>;
   groupLibraryVisibleToUsers?: unknown;
   groupLibraryMinimumJoinPlan?: unknown;
+  groupLibraryAutoJoinEnabled?: unknown;
   defaultAccountDailyLimit?: unknown;
   campaignDefaults?: Partial<SystemSettings["campaignDefaults"]>;
   registrationEnabled?: unknown;
@@ -130,6 +132,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   },
   groupLibraryVisibleToUsers: false,
   groupLibraryMinimumJoinPlan: "pro",
+  groupLibraryAutoJoinEnabled: true,
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
     maxRetries: 3,
@@ -263,6 +266,9 @@ function parseSettings(value: string | undefined): SystemSettings {
       groupLibraryMinimumJoinPlan: raw.groupLibraryMinimumJoinPlan === "unlimited"
         ? "unlimited"
         : DEFAULT_SYSTEM_SETTINGS.groupLibraryMinimumJoinPlan,
+      groupLibraryAutoJoinEnabled: typeof raw.groupLibraryAutoJoinEnabled === "boolean"
+        ? raw.groupLibraryAutoJoinEnabled
+        : DEFAULT_SYSTEM_SETTINGS.groupLibraryAutoJoinEnabled,
       defaultAccountDailyLimit: isFiniteInteger(raw.defaultAccountDailyLimit, 1, 100000)
         ? raw.defaultAccountDailyLimit
         : DEFAULT_SYSTEM_SETTINGS.defaultAccountDailyLimit,

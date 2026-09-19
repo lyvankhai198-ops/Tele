@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getGetAdminActiveGroupDirectoryQueryKey,
+  getGetAdminGroupJoinStatusQueryKey,
   getGetGroupLibraryQueryKey,
   getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   getListTelegramAccountsQueryKey,
   useGetAdminActiveGroupDirectory,
+  useGetAdminGroupJoinStatus,
   useGetGroupLibrary,
   useGetGroupLibraryAccess,
   useListCampaigns,
@@ -14,6 +16,7 @@ import {
   useImportAdminGroupLibraryEntry,
   useRevokeAdminGroupLibraryEntry,
   useUpdateAdminGroupLibraryEntry,
+  useUpdateAdminGroupJoinAutomation,
   useSyncTelegramDestinations,
   useSyncAdminGroupLibrary,
   useBulkJoinAdminGroupLibrary,
@@ -26,7 +29,9 @@ import {
 import {
   ExternalLink,
   LoaderCircle,
+  Pause,
   Pencil,
+  Play,
   RefreshCw,
   Search,
   Undo2,
@@ -118,6 +123,17 @@ const text = {
   bulkJoinAlreadyJoined: "Đã tham gia trước đó",
   bulkJoinSkipped: "Đã bỏ qua",
   bulkJoinFailed: "Thất bại",
+  autoJoinTitle: "Tự động tham gia nhóm",
+  autoJoinEnabled: "Đang bật",
+  autoJoinDisabled: "Đang tắt",
+  autoJoinEnable: "Bật tự động",
+  autoJoinDisable: "Tắt tự động",
+  autoJoinDescription: "Các tài khoản Telegram admin đã login sẽ tự động tham gia nhóm mới trong thư viện và tự chờ lại khi Telegram giới hạn.",
+  autoJoinSummary: (pending: number, waiting: number, joined: number, failed: number) =>
+    `${pending} chờ xử lý · ${waiting} đang chờ Telegram · ${joined} đã tham gia · ${failed} lỗi`,
+  autoJoinAccountSummary: (name: string, pending: number, joined: number) =>
+    `${name}: ${pending} chờ · ${joined} đã tham gia`,
+  autoJoinToggleFailed: "Không thể cập nhật chế độ tự động tham gia.",
 } as const;
 
 const workspaceText = {
@@ -659,6 +675,14 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       refetchOnWindowFocus: true,
     },
   });
+  const groupJoinStatusQuery = useGetAdminGroupJoinStatus({
+    query: {
+      queryKey: getGetAdminGroupJoinStatusQueryKey(),
+      enabled: isAdmin,
+      refetchInterval: 10000,
+      refetchOnWindowFocus: true,
+    },
+  });
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const workspaceSearch = search.trim();
   const workspaceQuery = useGetGroupLibrary(
@@ -687,6 +711,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
   const importGroup = useImportAdminGroupLibraryEntry();
   const revokeGroup = useRevokeAdminGroupLibraryEntry();
   const updateTrialGroup = useUpdateAdminGroupLibraryEntry();
+  const updateJoinAutomation = useUpdateAdminGroupJoinAutomation();
   const bulkJoinGroups = useBulkJoinAdminGroupLibrary();
   const autoSyncStarted = useRef(false);
   const groups = (isAdmin ? query.data : workspaceQuery.data)?.groups ?? [];
@@ -807,6 +832,19 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     }
   }
 
+  async function handleToggleJoinAutomation() {
+    const enabled = !(groupJoinStatusQuery.data?.enabled ?? true);
+    try {
+      await updateJoinAutomation.mutateAsync({ data: { enabled } });
+      await groupJoinStatusQuery.refetch();
+      setSyncFeedback(enabled ? text.autoJoinEnabled : text.autoJoinDisabled);
+      setFeedbackIsError(false);
+    } catch {
+      setSyncFeedback(text.autoJoinToggleFailed);
+      setFeedbackIsError(true);
+    }
+  }
+
   function openBulkJoinModal() {
     setBulkJoinResult(null);
     setBulkJoinAccountId((current) => current || connectedAccounts[0]?.id || "");
@@ -922,6 +960,85 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
            </Panel>
          )}
         </div>
+         {isAdmin && (
+           <Panel className="border-[#dbeafe] bg-[#f8fbff] p-4 sm:p-5">
+             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+               <div className="flex min-w-0 gap-3">
+                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#dbeafe] text-[#1d4ed8]">
+                   <Users className="h-5 w-5" />
+                 </span>
+                 <div className="min-w-0">
+                   <div className="flex flex-wrap items-center gap-2">
+                     <p className="text-[13px] font-extrabold text-[#0f172a]">{text.autoJoinTitle}</p>
+                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                       groupJoinStatusQuery.data?.enabled
+                         ? "bg-[#dcfce7] text-[#166534]"
+                         : "bg-[#f1f5f9] text-[#64748b]"
+                     }`}>
+                       {groupJoinStatusQuery.data?.enabled ? text.autoJoinEnabled : text.autoJoinDisabled}
+                     </span>
+                   </div>
+                   <p className="mt-1 text-[11px] font-medium leading-relaxed text-[#64748b]">{text.autoJoinDescription}</p>
+                   {groupJoinStatusQuery.data && (
+                     <p className="mt-2 text-[11px] font-bold text-[#1e40af]">
+                       {text.autoJoinSummary(
+                         groupJoinStatusQuery.data.pendingCount,
+                         groupJoinStatusQuery.data.waitingCount,
+                         groupJoinStatusQuery.data.joinedCount,
+                         groupJoinStatusQuery.data.failedCount,
+                       )}
+                     </p>
+                   )}
+                 </div>
+               </div>
+               <button
+                 type="button"
+                 onClick={() => void handleToggleJoinAutomation()}
+                 disabled={updateJoinAutomation.isPending || groupJoinStatusQuery.isLoading}
+                 className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-3.5 py-2.5 text-[11px] font-extrabold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                   groupJoinStatusQuery.data?.enabled
+                     ? "bg-[#64748b] hover:bg-[#475569]"
+                     : "bg-[#1a2b88] hover:bg-[#152473]"
+                 }`}
+                 data-testid="button-toggle-admin-group-auto-join"
+               >
+                 {updateJoinAutomation.isPending
+                   ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                   : groupJoinStatusQuery.data?.enabled
+                     ? <Pause className="h-3.5 w-3.5" />
+                     : <Play className="h-3.5 w-3.5" />}
+                 {groupJoinStatusQuery.data?.enabled ? text.autoJoinDisable : text.autoJoinEnable}
+               </button>
+             </div>
+             {groupJoinStatusQuery.data?.accounts.length ? (
+               <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                 {groupJoinStatusQuery.data.accounts.map((account) => (
+                   <div key={account.accountId} className="rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5">
+                     <p className="truncate text-[11px] font-extrabold text-[#334155]">
+                       {account.accountName}{account.accountUsername ? ` · @${account.accountUsername.replace(/^@/, "")}` : ""}
+                     </p>
+                     <p className="mt-1 text-[10px] font-semibold text-[#64748b]">
+                       {text.autoJoinAccountSummary(account.accountName, account.pendingCount, account.joinedCount)}
+                     </p>
+                     <p className={`mt-1 text-[10px] font-bold ${
+                       account.workerStatus === "waiting" ? "text-[#b45309]"
+                         : account.workerStatus === "running" ? "text-[#047857]"
+                           : account.accountStatus !== "connected" ? "text-[#be123c]" : "text-[#64748b]"
+                     }`}>
+                       {account.workerStatus === "waiting"
+                         ? "Đang chờ Telegram"
+                         : account.workerStatus === "running"
+                           ? "Đang xử lý"
+                           : account.accountStatus !== "connected"
+                             ? "Cần login lại"
+                             : "Đang rảnh"}
+                     </p>
+                   </div>
+                 ))}
+               </div>
+             ) : null}
+           </Panel>
+         )}
 
         <Panel className="p-4 sm:p-5">
           <label className="relative block">

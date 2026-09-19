@@ -1500,6 +1500,7 @@ export const GetAdminSystemSettingsResponse = zod.object({
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
+  "groupLibraryAutoJoinEnabled": zod.boolean(),
   "defaultAccountDailyLimit": zod.number().min(1).max(getAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(getAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
@@ -1639,6 +1640,7 @@ export const UpdateAdminSystemSettingsBody = zod.object({
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
+  "groupLibraryAutoJoinEnabled": zod.boolean(),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsBodyDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsBodyCampaignDefaultsMaxRetriesMax),
@@ -1777,6 +1779,7 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
+  "groupLibraryAutoJoinEnabled": zod.boolean(),
   "defaultAccountDailyLimit": zod.number().min(1).max(updateAdminSystemSettingsResponseDefaultAccountDailyLimitMax),
   "campaignDefaults": zod.object({
   "maxRetries": zod.number().min(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMin).max(updateAdminSystemSettingsResponseCampaignDefaultsMaxRetriesMax),
@@ -2178,6 +2181,58 @@ export const BulkJoinAdminGroupLibraryResponse = zod.object({
   "title": zod.string(),
   "status": zod.enum(['joined', 'already_joined', 'skipped', 'failed']),
   "reason": zod.string().nullable()
+}))
+})
+
+
+export const GetAdminGroupJoinStatusResponse = zod.object({
+  "enabled": zod.boolean(),
+  "pendingCount": zod.number(),
+  "waitingCount": zod.number(),
+  "joinedCount": zod.number(),
+  "failedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "accounts": zod.array(zod.object({
+  "accountId": zod.string(),
+  "accountName": zod.string(),
+  "accountUsername": zod.string().nullable(),
+  "accountStatus": zod.string(),
+  "workerStatus": zod.enum(['running', 'waiting', 'pending', 'idle']),
+  "pendingCount": zod.number(),
+  "waitingCount": zod.number(),
+  "joinedCount": zod.number(),
+  "failedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable()
+}))
+})
+
+
+export const UpdateAdminGroupJoinAutomationBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateAdminGroupJoinAutomationResponse = zod.object({
+  "enabled": zod.boolean(),
+  "pendingCount": zod.number(),
+  "waitingCount": zod.number(),
+  "joinedCount": zod.number(),
+  "failedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "accounts": zod.array(zod.object({
+  "accountId": zod.string(),
+  "accountName": zod.string(),
+  "accountUsername": zod.string().nullable(),
+  "accountStatus": zod.string(),
+  "workerStatus": zod.enum(['running', 'waiting', 'pending', 'idle']),
+  "pendingCount": zod.number(),
+  "waitingCount": zod.number(),
+  "joinedCount": zod.number(),
+  "failedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "lastError": zod.string().nullable()
 }))
 })
 

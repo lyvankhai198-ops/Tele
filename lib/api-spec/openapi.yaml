@@ -1069,6 +1069,35 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: Telegram account was not found }
         "409": { description: Telegram account is not connected }
+  /admin/active-groups/join-status:
+    get:
+      operationId: getAdminGroupJoinStatus
+      tags: [admin]
+      responses:
+        "200":
+          description: Automatic administrator group join progress
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupJoinStatus" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+    patch:
+      operationId: updateAdminGroupJoinAutomation
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminGroupJoinAutomationUpdateInput" }
+      responses:
+        "200":
+          description: Automatic administrator group join setting
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminGroupJoinStatus" }
+        "400": { description: Invalid automatic join setting }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
   /admin/active-groups/{telegramId}/import:
     post:
       operationId: importAdminGroupLibraryEntry
@@ -2202,7 +2231,7 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -2221,6 +2250,7 @@ components:
         supportLinks: { $ref: "#/components/schemas/SupportSettings" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
+        groupLibraryAutoJoinEnabled: { type: boolean }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
@@ -2229,7 +2259,7 @@ components:
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminSystemSettingsInput:
       type: object
-      required: [planLimits, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [planLimits, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -2248,6 +2278,7 @@ components:
         supportLinks: { $ref: "#/components/schemas/SupportSettings" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
+        groupLibraryAutoJoinEnabled: { type: boolean }
         defaultAccountDailyLimit: { type: number, minimum: 1, maximum: 100000 }
         campaignDefaults: { $ref: "#/components/schemas/CampaignDefaults" }
         registrationEnabled: { type: boolean }
@@ -2679,6 +2710,40 @@ components:
         results:
           type: array
           items: { $ref: "#/components/schemas/AdminGroupLibraryJoinResult" }
+    AdminGroupJoinAutomationUpdateInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+    AdminGroupJoinAccountStatus:
+      type: object
+      required: [accountId, accountName, accountUsername, accountStatus, workerStatus, pendingCount, waitingCount, joinedCount, failedCount, skippedCount, nextAttemptAt, lastError]
+      properties:
+        accountId: { type: string }
+        accountName: { type: string }
+        accountUsername: { type: ["string", "null"] }
+        accountStatus: { type: string }
+        workerStatus: { type: string, enum: [running, waiting, pending, idle] }
+        pendingCount: { type: number }
+        waitingCount: { type: number }
+        joinedCount: { type: number }
+        failedCount: { type: number }
+        skippedCount: { type: number }
+        nextAttemptAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+    AdminGroupJoinStatus:
+      type: object
+      required: [enabled, pendingCount, waitingCount, joinedCount, failedCount, skippedCount, accounts]
+      properties:
+        enabled: { type: boolean }
+        pendingCount: { type: number }
+        waitingCount: { type: number }
+        joinedCount: { type: number }
+        failedCount: { type: number }
+        skippedCount: { type: number }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/AdminGroupJoinAccountStatus" }
     AdminGroupLibraryImportResult:
       type: object
       required: [imported]
