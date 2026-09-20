@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Key, Copy, AlertCircle, Trash2, CheckCircle2, Filter, Bot, ExternalLink, Save } from "lucide-react";
+import { Key, Copy, AlertCircle, Trash2, CheckCircle2, Filter, Bot, ExternalLink, Save, Send } from "lucide-react";
 import { format } from "date-fns";
 import { vi as viLocale, enUS } from "date-fns/locale";
 
@@ -22,9 +22,13 @@ import {
   useRevokeAdminLicenseKey,
   useGetAdminPurchaseSettings,
   useUpdateAdminPurchaseSettings,
+  useGetAdminLicenseReminderSettings,
+  useUpdateAdminLicenseReminderSettings,
   getGetAdminPurchaseSettingsQueryKey,
+  getGetAdminLicenseReminderSettingsQueryKey,
   getListAdminLicenseKeysQueryKey,
   type CreateAdminLicenseKeyInput,
+  type AdminLicenseReminderSettings,
   type LicenseKeyStatus,
   type PlanCode,
 } from "@workspace/api-client-react";
@@ -56,6 +60,22 @@ const copy = {
       hasLink
         ? "Only HTTPS links on t.me or telegram.me are accepted."
         : "No purchase link is configured. Users will be told to contact an administrator.",
+    reminderTitle: "Telegram renewal reminders",
+    reminderDetail: "Use an admin Telegram account to send direct private reminders to linked user accounts. A username is required; users do not need to message the admin first.",
+    reminderEnabled: "Enable automatic reminders",
+    reminderSender: "Admin sender account",
+    reminderSenderPlaceholder: "Select a connected admin Telegram account",
+    reminderDays: "Remind before expiry",
+    reminderDay: (days: number) => `${days} days`,
+    reminderAfterExpiry: "Send one reminder after expiry",
+    reminderMessage: "Message template",
+    reminderMessageHint: "Available placeholders: {days}, {expiresAt}, {username}, {purchaseLink}.",
+    reminderSave: "Save reminders",
+    reminderSaving: "Saving…",
+    reminderSaved: "Telegram renewal reminders saved.",
+    reminderLoadError: "Could not load renewal reminder settings.",
+    reminderDisabledNote: "Reminders are disabled.",
+    reminderDisconnected: "The selected sender account is not connected.",
     filterLabel: "Filters:",
     filterAllStatus: "All statuses",
     filterAvailable: "Available",
@@ -138,6 +158,22 @@ const copy = {
       hasLink
         ? "Chỉ chấp nhận link HTTPS thuộc t.me hoặc telegram.me."
         : "Chưa cấu hình link mua key. Người dùng sẽ được yêu cầu liên hệ quản trị viên.",
+    reminderTitle: "Nhắc mua key qua Telegram",
+    reminderDetail: "Dùng tài khoản Telegram của admin để nhắn riêng trực tiếp đến tài khoản người dùng đã liên kết. Người nhận phải có username và không cần nhắn admin trước.",
+    reminderEnabled: "Bật tự động nhắc mua key",
+    reminderSender: "Tài khoản admin gửi tin",
+    reminderSenderPlaceholder: "Chọn tài khoản Telegram admin đang kết nối",
+    reminderDays: "Nhắc trước khi hết hạn",
+    reminderDay: (days: number) => `${days} ngày`,
+    reminderAfterExpiry: "Gửi thêm một lần sau khi hết hạn",
+    reminderMessage: "Mẫu nội dung tin nhắn",
+    reminderMessageHint: "Placeholder dùng được: {days}, {expiresAt}, {username}, {purchaseLink}.",
+    reminderSave: "Lưu cấu hình nhắc",
+    reminderSaving: "Đang lưu…",
+    reminderSaved: "Đã lưu cấu hình nhắc mua key qua Telegram.",
+    reminderLoadError: "Không thể tải cấu hình nhắc mua key.",
+    reminderDisabledNote: "Tính năng nhắc đang tắt.",
+    reminderDisconnected: "Tài khoản gửi được chọn chưa kết nối.",
     filterLabel: "Bộ lọc:",
     filterAllStatus: "Tất cả trạng thái",
     filterAvailable: "Khả dụng",
@@ -233,6 +269,11 @@ export function AdminLicenseKeysPage() {
     isLoading: isPurchaseSettingsLoading,
     isError: isPurchaseSettingsError,
   } = useGetAdminPurchaseSettings();
+  const {
+    data: reminderData,
+    isLoading: isReminderLoading,
+    isError: isReminderError,
+  } = useGetAdminLicenseReminderSettings();
 
   // Modals & UI State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -252,6 +293,7 @@ export function AdminLicenseKeysPage() {
   const [formQuantity, setFormQuantity] = useState<string>("1");
   const [formLabel, setFormLabel] = useState<string>("");
   const [telegramPurchaseUrl, setTelegramPurchaseUrl] = useState("");
+  const [reminderForm, setReminderForm] = useState<AdminLicenseReminderSettings | null>(null);
 
   useEffect(() => {
     if (purchaseSettings) {
@@ -259,10 +301,15 @@ export function AdminLicenseKeysPage() {
     }
   }, [purchaseSettings]);
 
+  useEffect(() => {
+    if (reminderData && !reminderForm) setReminderForm(reminderData.settings);
+  }, [reminderData, reminderForm]);
+
   // Mutations
   const createMutation = useCreateAdminLicenseKey();
   const revokeMutation = useRevokeAdminLicenseKey();
   const purchaseSettingsMutation = useUpdateAdminPurchaseSettings();
+  const reminderMutation = useUpdateAdminLicenseReminderSettings();
 
   const handleSavePurchaseLink = () => {
     const value = telegramPurchaseUrl.trim();
@@ -285,6 +332,28 @@ export function AdminLicenseKeysPage() {
             apiError ? new Error(apiError) : mutationError,
             language,
             text.saveLinkError,
+          ));
+        },
+      },
+    );
+  };
+
+  const handleSaveReminderSettings = () => {
+    if (!reminderForm) return;
+    reminderMutation.mutate(
+      { data: reminderForm },
+      {
+        onSuccess: (next) => {
+          setReminderForm(next.settings);
+          queryClient.invalidateQueries({ queryKey: getGetAdminLicenseReminderSettingsQueryKey() });
+          setToastMessage(text.reminderSaved);
+        },
+        onError: (mutationError: Error) => {
+          const apiError = (mutationError as { data?: { error?: string } }).data?.error;
+          setToastMessage(localizedErrorMessage(
+            apiError ? new Error(apiError) : mutationError,
+            language,
+            text.reminderLoadError,
           ));
         },
       },
@@ -474,6 +543,129 @@ export function AdminLicenseKeysPage() {
             <p className="text-[12px] font-medium text-[#64748b]">
               {text.purchaseLinkNote(!!purchaseSettings?.telegramPurchaseUrl)}
             </p>
+          )}
+        </div>
+      </Panel>
+
+      <Panel className="mb-6 overflow-hidden border-[#dbeafe]">
+        <div className="flex flex-col gap-5 p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#eef2ff] text-[#1a2b88]">
+              <Send className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-[17px] font-extrabold text-[#0f172a]">{text.reminderTitle}</h2>
+              <p className="mt-1 text-[13px] font-medium leading-relaxed text-[#64748b]">{text.reminderDetail}</p>
+            </div>
+          </div>
+
+          {isReminderError ? (
+            <div className="rounded-xl border border-[#ffe4e6] bg-[#fff1f2] px-4 py-3 text-[13px] font-semibold text-[#be123c]">
+              {text.reminderLoadError}
+            </div>
+          ) : isReminderLoading || !reminderForm ? (
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-[#64748b]">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#dbeafe] border-t-[#1a2b88]" />
+              Loading…
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-4 rounded-2xl border border-[#e7edf4] bg-[#f8fafc] px-4 py-3">
+                <div>
+                  <p className="text-[13px] font-extrabold text-[#0f172a]">{text.reminderEnabled}</p>
+                  {!reminderForm.enabled && <p className="mt-1 text-[12px] font-medium text-[#64748b]">{text.reminderDisabledNote}</p>}
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={reminderForm.enabled}
+                  onClick={() => setReminderForm({ ...reminderForm, enabled: !reminderForm.enabled })}
+                  className={`relative h-6 w-11 rounded-full transition ${reminderForm.enabled ? "bg-[#1a2b88]" : "bg-[#cbd5e1]"}`}
+                  data-testid="toggle-license-reminders"
+                >
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${reminderForm.enabled ? "left-6" : "left-1"}`} />
+                </button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderSender}</span>
+                  <select
+                    value={reminderForm.senderAccountId ?? ""}
+                    onChange={(event) => setReminderForm({ ...reminderForm, senderAccountId: event.target.value || null })}
+                    className="h-12 w-full rounded-2xl border border-[#cbd5e1] bg-white px-4 text-[14px] font-semibold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                    data-testid="select-license-reminder-sender"
+                  >
+                    <option value="">{text.reminderSenderPlaceholder}</option>
+                    {(reminderData?.accounts ?? []).map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.ownerUsername} · {account.name}{account.username ? ` (@${account.username.replace(/^@+/, "")})` : ""} · {account.status}
+                      </option>
+                    ))}
+                  </select>
+                  {reminderForm.senderAccountId && reminderData?.accounts.find((account) => account.id === reminderForm.senderAccountId)?.status !== "connected" && (
+                    <p className="mt-1.5 text-[12px] font-semibold text-[#b45309]">{text.reminderDisconnected}</p>
+                  )}
+                </label>
+
+                <div>
+                  <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderDays}</span>
+                  <div className="flex flex-wrap gap-2">
+                    {[7, 3, 1].map((days) => {
+                      const selected = reminderForm.reminderDays.includes(days);
+                      return (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => setReminderForm({
+                            ...reminderForm,
+                            reminderDays: selected
+                              ? reminderForm.reminderDays.filter((value) => value !== days)
+                              : [...reminderForm.reminderDays, days].sort((left, right) => right - left),
+                          })}
+                          className={`rounded-xl border px-3.5 py-2.5 text-[13px] font-extrabold transition ${selected ? "border-[#1a2b88] bg-[#eef2ff] text-[#1a2b88]" : "border-[#dbe2ea] bg-white text-[#64748b] hover:border-[#a5b4fc]"}`}
+                        >
+                          {text.reminderDay(days)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-3 text-[13px] font-bold text-[#475569]">
+                <input
+                  type="checkbox"
+                  checked={reminderForm.sendAfterExpiry}
+                  onChange={(event) => setReminderForm({ ...reminderForm, sendAfterExpiry: event.target.checked })}
+                  className="h-4 w-4 accent-[#1a2b88]"
+                />
+                {text.reminderAfterExpiry}
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderMessage}</span>
+                <textarea
+                  rows={4}
+                  maxLength={4096}
+                  value={reminderForm.message}
+                  onChange={(event) => setReminderForm({ ...reminderForm, message: event.target.value })}
+                  className="w-full resize-y rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3 text-[14px] font-medium leading-6 text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                  data-testid="textarea-license-reminder-message"
+                />
+                <p className="mt-1.5 text-[12px] font-medium text-[#64748b]">{text.reminderMessageHint}</p>
+              </label>
+
+              <div className="flex justify-end">
+                <PrimaryButton
+                  onClick={handleSaveReminderSettings}
+                  disabled={reminderMutation.isPending || reminderForm.reminderDays.length === 0 || !reminderForm.message.trim()}
+                >
+                  <Save className="h-4 w-4" />
+                  {reminderMutation.isPending ? text.reminderSaving : text.reminderSave}
+                </PrimaryButton>
+              </div>
+            </>
           )}
         </div>
       </Panel>

@@ -58,6 +58,9 @@ import {
   RetryAdminUserSupportCampaignTargetResponse,
   GetAdminLicenseKeySecretParams,
   GetAdminLicenseKeySecretResponse,
+  GetAdminLicenseReminderSettingsResponse,
+  UpdateAdminLicenseReminderSettingsBody,
+  UpdateAdminLicenseReminderSettingsResponse,
   ListAdminNotificationsResponse,
   CreateAdminNotificationBody,
   CreateAdminNotificationResponse,
@@ -988,6 +991,7 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     ...parsed.data,
     planContent: parsed.data.planContent ?? previousSettings.planContent,
     postJoinCampaign: parsed.data.postJoinCampaign ?? previousSettings.postJoinCampaign,
+    subscriptionReminder: previousSettings.subscriptionReminder,
   };
   const supportLinks = {
     telegramUrl: parsed.data.supportLinks.telegramUrl?.trim() || null,
@@ -1498,6 +1502,96 @@ router.get("/admin/license-keys", async (req, res): Promise<void> => {
   if (!parsed.success) return void sendError(res, 400, "Bộ lọc license key không hợp lệ.");
   const licenses = await listAdminLicenseKeys(parsed.data);
   res.json(ListAdminLicenseKeysResponse.parse(licenses));
+});
+
+async function adminLicenseReminderSettingsResponse() {
+  const [settings, accounts] = await Promise.all([
+    getSystemSettings(),
+    db.select({
+      id: telegramAccountsTable.id,
+      ownerUsername: appUsersTable.username,
+      name: telegramAccountsTable.name,
+      username: telegramAccountsTable.username,
+      status: telegramAccountsTable.status,
+    }).from(telegramAccountsTable)
+      .innerJoin(appUsersTable, sql`${telegramAccountsTable.ownerUserId} = ${appUsersTable.id}::text`)
+      .where(and(
+        eq(appUsersTable.role, "admin"),
+        isNull(telegramAccountsTable.deletedAt),
+      ))
+      .orderBy(appUsersTable.username, telegramAccountsTable.name),
+  ]);
+  return {
+    settings: settings.subscriptionReminder,
+    accounts,
+  };
+}
+
+router.get("/admin/license-reminder-settings", async (_req, res): Promise<void> => {
+  res.json(GetAdminLicenseReminderSettingsResponse.parse(await adminLicenseReminderSettingsResponse()));
+});
+
+router.patch("/admin/license-reminder-settings", async (req, res): Promise<void> => {
+  const parsed = UpdateAdminLicenseReminderSettingsBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, "Cấu hình nhắc mua key không hợp lệ.");
+
+  const reminderDays = [...new Set(parsed.data.reminderDays)];
+  if (
+    reminderDays.length < 1
+    || reminderDays.some((day) => !Number.isInteger(day) || ![1, 3, 7].includes(day))
+    || parsed.data.message.trim().length < 1
+    || parsed.data.message.trim().length > 4096
+  ) {
+    return void sendError(res, 400, "Mốc nhắc phải là 1, 3 hoặc 7 ngày và nội dung không được để trống.");
+  }
+
+  let senderAccount: { id: string; status: string } | null = null;
+  if (parsed.data.senderAccountId) {
+    const [account] = await db.select({
+      id: telegramAccountsTable.id,
+      status: telegramAccountsTable.status,
+    }).from(telegramAccountsTable)
+      .innerJoin(appUsersTable, sql`${telegramAccountsTable.ownerUserId} = ${appUsersTable.id}::text`)
+      .where(and(
+        eq(telegramAccountsTable.id, parsed.data.senderAccountId),
+        eq(appUsersTable.role, "admin"),
+        isNull(telegramAccountsTable.deletedAt),
+      ))
+      .limit(1);
+    if (!account) return void sendError(res, 409, "Tài khoản gửi phải thuộc một quản trị viên.");
+    senderAccount = account;
+  }
+  if (parsed.data.enabled && !senderAccount) {
+    return void sendError(res, 400, "Hãy chọn tài khoản Telegram của admin trước khi bật nhắc tự động.");
+  }
+  if (parsed.data.enabled && senderAccount?.status !== "connected") {
+    return void sendError(res, 409, "Tài khoản Telegram gửi nhắc phải đang kết nối.");
+  }
+
+  const previous = await getSystemSettings();
+  await updateSystemSettings({
+    ...previous,
+    subscriptionReminder: {
+      enabled: parsed.data.enabled,
+      senderAccountId: parsed.data.senderAccountId,
+      reminderDays: reminderDays.sort((left, right) => right - left),
+      sendAfterExpiry: parsed.data.sendAfterExpiry,
+      message: parsed.data.message.trim(),
+    },
+  }, req.userId!);
+  await recordActivity({
+    ownerUserId: req.userId!,
+    event: "subscription_reminder.settings_updated",
+    message: "Updated Telegram subscription reminder settings",
+    level: "success",
+    metadata: {
+      enabled: parsed.data.enabled,
+      senderAccountId: parsed.data.senderAccountId,
+      reminderDays,
+      sendAfterExpiry: parsed.data.sendAfterExpiry,
+    },
+  });
+  res.json(UpdateAdminLicenseReminderSettingsResponse.parse(await adminLicenseReminderSettingsResponse()));
 });
 
 router.get("/admin/license-keys/:licenseKeyId/secret", async (req, res): Promise<void> => {

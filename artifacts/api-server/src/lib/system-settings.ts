@@ -34,6 +34,14 @@ export type PostJoinCampaignSettings = {
   mode: "draft" | "send";
 };
 
+export type SubscriptionReminderSettings = {
+  enabled: boolean;
+  senderAccountId: string | null;
+  reminderDays: number[];
+  sendAfterExpiry: boolean;
+  message: string;
+};
+
 export type SystemSettings = {
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
   planContent: Record<PlanCode, ConfiguredPlanContent>;
@@ -42,6 +50,7 @@ export type SystemSettings = {
   groupLibraryMinimumJoinPlan: "pro" | "unlimited";
   groupLibraryAutoJoinEnabled: boolean;
   postJoinCampaign: PostJoinCampaignSettings;
+  subscriptionReminder: SubscriptionReminderSettings;
   defaultAccountDailyLimit: number;
   campaignDefaults: {
     maxRetries: number;
@@ -62,6 +71,7 @@ type StoredSystemSettings = {
   groupLibraryMinimumJoinPlan?: unknown;
   groupLibraryAutoJoinEnabled?: unknown;
   postJoinCampaign?: Partial<PostJoinCampaignSettings>;
+  subscriptionReminder?: Partial<SubscriptionReminderSettings>;
   defaultAccountDailyLimit?: unknown;
   campaignDefaults?: Partial<SystemSettings["campaignDefaults"]>;
   registrationEnabled?: unknown;
@@ -152,6 +162,13 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     roundDelayMinSeconds: 1,
     roundDelayMaxSeconds: 3,
     mode: "draft",
+  },
+  subscriptionReminder: {
+    enabled: false,
+    senderAccountId: null,
+    reminderDays: [7, 3, 1],
+    sendAfterExpiry: false,
+    message: "TeleCampaign: Gói của bạn còn {days} ngày sẽ hết hạn vào {expiresAt}. Hãy mua key mới để không bị gián đoạn.\nMua key: {purchaseLink}",
   },
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
@@ -284,6 +301,28 @@ function normalizedPostJoinCampaign(
   };
 }
 
+function normalizedSubscriptionReminder(
+  stored: Partial<SubscriptionReminderSettings> | undefined,
+  fallback: SubscriptionReminderSettings,
+): SubscriptionReminderSettings {
+  const reminderDays = Array.isArray(stored?.reminderDays)
+    ? [...new Set(stored.reminderDays.filter((value): value is number => isFiniteInteger(value, 1, 30)))]
+      .filter((value) => [1, 3, 7].includes(value))
+      .sort((left, right) => right - left)
+    : fallback.reminderDays;
+  return {
+    enabled: typeof stored?.enabled === "boolean" ? stored.enabled : fallback.enabled,
+    senderAccountId: typeof stored?.senderAccountId === "string" && stored.senderAccountId.trim()
+      ? stored.senderAccountId.trim()
+      : null,
+    reminderDays: reminderDays.length ? reminderDays : fallback.reminderDays,
+    sendAfterExpiry: typeof stored?.sendAfterExpiry === "boolean" ? stored.sendAfterExpiry : fallback.sendAfterExpiry,
+    message: typeof stored?.message === "string" && stored.message.trim().length <= 4096
+      ? stored.message.trim()
+      : fallback.message,
+  };
+}
+
 function parseSettings(value: string | undefined): SystemSettings {
   if (!value) return structuredClone(DEFAULT_SYSTEM_SETTINGS);
   try {
@@ -329,6 +368,10 @@ function parseSettings(value: string | undefined): SystemSettings {
             ? campaignDefaults.roundDelayMaxSeconds
             : DEFAULT_SYSTEM_SETTINGS.campaignDefaults.roundDelayMaxSeconds,
         },
+      ),
+      subscriptionReminder: normalizedSubscriptionReminder(
+        raw.subscriptionReminder,
+        DEFAULT_SYSTEM_SETTINGS.subscriptionReminder,
       ),
       defaultAccountDailyLimit: isFiniteInteger(raw.defaultAccountDailyLimit, 1, 100000)
         ? raw.defaultAccountDailyLimit

@@ -1576,6 +1576,50 @@ export interface AdminLicenseKeySecret {
   licenseKey: string;
 }
 
+export interface AdminLicenseReminderAccount {
+  id: string;
+  ownerUsername: string;
+  name: string;
+  /** @nullable */
+  username: string | null;
+  status: string;
+}
+
+export interface AdminLicenseReminderSettings {
+  enabled: boolean;
+  /** @nullable */
+  senderAccountId: string | null;
+  /**
+     * @items.minimum 1
+     * @items.maximum 30
+     */
+  reminderDays: number[];
+  sendAfterExpiry: boolean;
+  /** @maxLength 4096 */
+  message: string;
+}
+
+export interface AdminLicenseReminderSettingsResponse {
+  settings: AdminLicenseReminderSettings;
+  accounts: AdminLicenseReminderAccount[];
+}
+
+export interface AdminLicenseReminderSettingsInput {
+  enabled: boolean;
+  /** @nullable */
+  senderAccountId: string | null;
+  /**
+     * @minItems 1
+     * @maxItems 3
+     * @items.minimum 1
+     * @items.maximum 30
+     */
+  reminderDays: number[];
+  sendAfterExpiry: boolean;
+  /** @maxLength 4096 */
+  message: string;
+}
+
 export interface CreateAdminLicenseKeyInput {
   plan: PlanCode;
   /**

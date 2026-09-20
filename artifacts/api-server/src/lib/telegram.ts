@@ -806,6 +806,47 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
   }
 }
 
+export async function sendDirectTelegramMessageWithClient(
+  client: TelegramClient,
+  recipientUsername: string,
+  expectedRecipientTelegramUserId: string,
+  content: string,
+) {
+  const username = recipientUsername.trim().replace(/^@+/, "");
+  if (!username) throw new Error("Telegram recipient username is missing");
+  const inputEntity = await client.getInputEntity(username);
+  const entity = await client.getEntity(inputEntity as any) as unknown as TelegramEntity;
+  if (telegramId(entity) !== expectedRecipientTelegramUserId) {
+    throw new Error("Telegram username no longer belongs to the linked account");
+  }
+  const sent = await client.sendMessage(inputEntity, { message: content });
+  return String((sent as any).id ?? "");
+}
+
+export async function sendDirectTelegramMessage(
+  senderAccountId: string,
+  recipientUsername: string,
+  expectedRecipientTelegramUserId: string,
+  content: string,
+) {
+  const { client, account } = await getAccountClient(senderAccountId);
+  try {
+    return await sendDirectTelegramMessageWithClient(
+      client,
+      recipientUsername,
+      expectedRecipientTelegramUserId,
+      content,
+    );
+  } catch (error) {
+    if (isTelegramSessionRevoked(error)) {
+      await invalidateTelegramSession(account.id);
+    }
+    throw error;
+  } finally {
+    await client.disconnect();
+  }
+}
+
 export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
   const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {

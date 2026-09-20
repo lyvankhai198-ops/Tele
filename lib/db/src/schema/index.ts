@@ -78,6 +78,31 @@ export const subscriptionsTable = pgTable("subscriptions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const subscriptionReminderDeliveriesTable = pgTable("subscription_reminder_deliveries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerUserId: text("owner_user_id").notNull(),
+  telegramAccountId: uuid("telegram_account_id").notNull().references(() => telegramAccountsTable.id, { onDelete: "cascade" }),
+  subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }).notNull(),
+  reminderType: text("reminder_type").notNull(),
+  status: text("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastError: text("last_error"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("subscription_reminder_delivery_key_idx").on(
+    table.ownerUserId,
+    table.telegramAccountId,
+    table.subscriptionExpiresAt,
+    table.reminderType,
+  ),
+  index("subscription_reminder_delivery_due_idx").on(table.status, table.nextAttemptAt),
+]);
+
 export const licenseKeysTable = pgTable("license_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
   keyHash: text("key_hash").notNull().unique(),
@@ -290,6 +315,7 @@ export const authChallengesTable = pgTable("auth_challenges", {
 export const insertTelegramAccountSchema = createInsertSchema(telegramAccountsTable);
 export const insertAppUserSchema = createInsertSchema(appUsersTable);
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable);
+export const insertSubscriptionReminderDeliverySchema = createInsertSchema(subscriptionReminderDeliveriesTable);
 export const insertLicenseKeySchema = createInsertSchema(licenseKeysTable);
 export const insertAuthSessionSchema = createInsertSchema(authSessionsTable);
 export const insertDestinationSchema = createInsertSchema(destinationsTable);
@@ -306,6 +332,7 @@ export const insertAuthChallengeSchema = createInsertSchema(authChallengesTable)
 export type TelegramAccount = typeof telegramAccountsTable.$inferSelect;
 export type AppUser = typeof appUsersTable.$inferSelect;
 export type Subscription = typeof subscriptionsTable.$inferSelect;
+export type SubscriptionReminderDelivery = typeof subscriptionReminderDeliveriesTable.$inferSelect;
 export type LicenseKey = typeof licenseKeysTable.$inferSelect;
 export type AuthSession = typeof authSessionsTable.$inferSelect;
 export type Destination = typeof destinationsTable.$inferSelect;

@@ -5,6 +5,7 @@ import { rebaseLegacyPastScheduleCampaigns, startCampaignWorker } from "./lib/ca
 import { startNotificationMediaCleanup } from "./lib/notificationMediaCleanup";
 import { startActivityLogCleanup } from "./lib/activity";
 import { startAdminGroupJoinWorker } from "./lib/admin-group-join-worker";
+import { startSubscriptionReminderWorker } from "./lib/subscription-reminder-worker";
 
 const rawPort = process.env["PORT"];
 
@@ -35,6 +36,9 @@ void getUnmappedLegacyOwnerCount().then(async (unmappedOwners) => {
     startCampaignWorker();
         if (process.env.TELECAMPAIGN_DISABLE_GROUP_JOIN_WORKER !== "true") {
           void startAdminGroupJoinWorker();
+        }
+        if (process.env.TELECAMPAIGN_DISABLE_SUBSCRIPTION_REMINDER_WORKER !== "true") {
+          void startSubscriptionReminderWorker();
         }
   } else if (process.env.TELECAMPAIGN_DISABLE_WORKER === "true") {
     logger.warn("Campaign worker is disabled by TELECAMPAIGN_DISABLE_WORKER");

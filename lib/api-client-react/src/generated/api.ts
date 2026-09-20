@@ -38,6 +38,8 @@ import type {
   AdminGroupLibrarySyncResult,
   AdminLicenseKey,
   AdminLicenseKeySecret,
+  AdminLicenseReminderSettingsInput,
+  AdminLicenseReminderSettingsResponse,
   AdminNotification,
   AdminNotificationInput,
   AdminNotificationPinInput,
@@ -4864,6 +4866,142 @@ export function useGetAdminLicenseKeySecret<TData = Awaited<ReturnType<typeof ge
 
 
 
+
+export const getGetAdminLicenseReminderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/license-reminder-settings`
+}
+
+export const getAdminLicenseReminderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminLicenseReminderSettingsResponse> => {
+
+  return customFetch<AdminLicenseReminderSettingsResponse>(getGetAdminLicenseReminderSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminLicenseReminderSettingsQueryKey = () => {
+    return [
+    `/api/admin/license-reminder-settings`
+    ] as const;
+    }
+
+
+export const getGetAdminLicenseReminderSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminLicenseReminderSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>> = ({ signal }) => getAdminLicenseReminderSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminLicenseReminderSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>>
+export type GetAdminLicenseReminderSettingsQueryError = ErrorType<void>
+
+
+
+export function useGetAdminLicenseReminderSettings<TData = Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminLicenseReminderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminLicenseReminderSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminLicenseReminderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/license-reminder-settings`
+}
+
+export const updateAdminLicenseReminderSettings = async (adminLicenseReminderSettingsInput: AdminLicenseReminderSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminLicenseReminderSettingsResponse> => {
+
+  return customFetch<AdminLicenseReminderSettingsResponse>(getUpdateAdminLicenseReminderSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminLicenseReminderSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminLicenseReminderSettingsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminLicenseReminderSettings>>, TError,{data: BodyType<AdminLicenseReminderSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminLicenseReminderSettings>>, TError,{data: BodyType<AdminLicenseReminderSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateAdminLicenseReminderSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminLicenseReminderSettings>>, {data: BodyType<AdminLicenseReminderSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminLicenseReminderSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminLicenseReminderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminLicenseReminderSettings>>>
+    export type UpdateAdminLicenseReminderSettingsMutationBody = BodyType<AdminLicenseReminderSettingsInput>
+    export type UpdateAdminLicenseReminderSettingsMutationError = ErrorType<void>
+
+    export const useUpdateAdminLicenseReminderSettings = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminLicenseReminderSettings>>, TError,{data: BodyType<AdminLicenseReminderSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminLicenseReminderSettings>>,
+        TError,
+        {data: BodyType<AdminLicenseReminderSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminLicenseReminderSettingsMutationOptions(options));
+    }
 
 export const getGetAdminOverviewUrl = () => {
 
