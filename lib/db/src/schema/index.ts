@@ -110,6 +110,7 @@ export const licenseKeysTable = pgTable("license_keys", {
   keyEncrypted: text("key_encrypted"),
   plan: text("plan").notNull(),
   durationDays: integer("duration_days").notNull(),
+  salePriceVnd: integer("sale_price_vnd"),
   label: text("label"),
   createdBy: text("created_by"),
   claimedAt: timestamp("claimed_at", { withTimezone: true }),

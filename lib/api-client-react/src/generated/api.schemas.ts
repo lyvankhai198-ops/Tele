@@ -1561,6 +1561,11 @@ export interface AdminLicenseKey {
   id: string;
   plan: PlanCode;
   durationDays: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  salePriceVnd: number | null;
   /** @nullable */
   label: string | null;
   status: LicenseKeyStatus;
@@ -1658,6 +1663,11 @@ export interface CreateAdminLicenseKeyInput {
      */
   quantity: number;
   /**
+     * @minimum 0
+     * @maximum 1000000000
+     */
+  salePriceVnd: number;
+  /**
      * @minLength 1
      * @maxLength 120
      */
@@ -1693,6 +1703,50 @@ export interface AdminOverview {
   campaignsTotal: number;
   campaignsQueued: number;
   campaignsFailed: number;
+}
+
+export interface AdminRevenueSummary {
+  totalRevenueVnd: number;
+  inventoryValueVnd: number;
+  totalKeys: number;
+  soldKeys: number;
+  inventoryKeys: number;
+  revokedKeys: number;
+  missingPriceKeys: number;
+  missingInventoryPriceKeys: number;
+  customers: number;
+}
+
+export interface AdminRevenuePlanSummary {
+  plan: PlanCode;
+  revenueVnd: number;
+  inventoryValueVnd: number;
+  soldKeys: number;
+  inventoryKeys: number;
+  missingPriceKeys: number;
+}
+
+export interface AdminRevenueMonthSummary {
+  month: string;
+  revenueVnd: number;
+  soldKeys: number;
+}
+
+export interface AdminLoyalCustomer {
+  userId: string;
+  username: string;
+  totalSpentVnd: number;
+  keysPurchased: number;
+  coveredDays: number;
+  messagesSent: number;
+  missingPriceKeys: number;
+}
+
+export interface AdminRevenueInsights {
+  summary: AdminRevenueSummary;
+  byPlan: AdminRevenuePlanSummary[];
+  byMonth: AdminRevenueMonthSummary[];
+  customers: AdminLoyalCustomer[];
 }
 
 export interface AdminUserUsage {

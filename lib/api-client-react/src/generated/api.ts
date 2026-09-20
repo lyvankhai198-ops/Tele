@@ -51,6 +51,7 @@ import type {
   AdminOperations,
   AdminOverview,
   AdminPasswordResetResult,
+  AdminRevenueInsights,
   AdminSubscriptionUpdateInput,
   AdminSystemEventList,
   AdminSystemEventsReadResult,
@@ -5128,6 +5129,77 @@ export function useGetAdminOverview<TData = Awaited<ReturnType<typeof getAdminOv
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAdminOverviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminRevenueInsightsUrl = () => {
+
+
+
+
+  return `/api/admin/revenue-insights`
+}
+
+export const getAdminRevenueInsights = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminRevenueInsights> => {
+
+  return customFetch<AdminRevenueInsights>(getGetAdminRevenueInsightsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminRevenueInsightsQueryKey = () => {
+    return [
+    `/api/admin/revenue-insights`
+    ] as const;
+    }
+
+
+export const getGetAdminRevenueInsightsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminRevenueInsights>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminRevenueInsights>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminRevenueInsightsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminRevenueInsights>>> = ({ signal }) => getAdminRevenueInsights({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminRevenueInsights>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminRevenueInsightsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminRevenueInsights>>>
+export type GetAdminRevenueInsightsQueryError = ErrorType<void>
+
+
+
+export function useGetAdminRevenueInsights<TData = Awaited<ReturnType<typeof getAdminRevenueInsights>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminRevenueInsights>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminRevenueInsightsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

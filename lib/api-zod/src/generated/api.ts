@@ -2088,10 +2088,15 @@ export const ListAdminLicenseKeysQueryParams = zod.object({
   "plan": zod.enum(['plus', 'pro', 'unlimited']).optional()
 })
 
+export const listAdminLicenseKeysResponseSalePriceVndMin = 0;
+
+
+
 export const ListAdminLicenseKeysResponseItem = zod.object({
   "id": zod.string(),
   "plan": zod.enum(['plus', 'pro', 'unlimited']),
   "durationDays": zod.number(),
+  "salePriceVnd": zod.number().min(listAdminLicenseKeysResponseSalePriceVndMin).nullable(),
   "label": zod.string().nullable(),
   "status": zod.enum(['available', 'claimed', 'revoked']),
   "createdAt": zod.coerce.date(),
@@ -2110,6 +2115,10 @@ export const createAdminLicenseKeyBodyDurationDaysMultipleOf = 1;
 export const createAdminLicenseKeyBodyQuantityMax = 100;
 export const createAdminLicenseKeyBodyQuantityMultipleOf = 1;
 
+export const createAdminLicenseKeyBodySalePriceVndMin = 0;
+export const createAdminLicenseKeyBodySalePriceVndMax = 1000000000;
+export const createAdminLicenseKeyBodySalePriceVndMultipleOf = 1;
+
 export const createAdminLicenseKeyBodyLabelMax = 120;
 
 
@@ -2118,8 +2127,13 @@ export const CreateAdminLicenseKeyBody = zod.object({
   "plan": zod.enum(['plus', 'pro', 'unlimited']),
   "durationDays": zod.number().min(1).max(createAdminLicenseKeyBodyDurationDaysMax).multipleOf(createAdminLicenseKeyBodyDurationDaysMultipleOf),
   "quantity": zod.number().min(1).max(createAdminLicenseKeyBodyQuantityMax).multipleOf(createAdminLicenseKeyBodyQuantityMultipleOf),
+  "salePriceVnd": zod.number().min(createAdminLicenseKeyBodySalePriceVndMin).max(createAdminLicenseKeyBodySalePriceVndMax).multipleOf(createAdminLicenseKeyBodySalePriceVndMultipleOf),
   "label": zod.string().min(1).max(createAdminLicenseKeyBodyLabelMax).optional()
 })
+
+export const createAdminLicenseKeyResponseLicensesItemSalePriceVndMin = 0;
+
+
 
 export const CreateAdminLicenseKeyResponse = zod.object({
   "licenseKeys": zod.array(zod.string()),
@@ -2127,6 +2141,7 @@ export const CreateAdminLicenseKeyResponse = zod.object({
   "id": zod.string(),
   "plan": zod.enum(['plus', 'pro', 'unlimited']),
   "durationDays": zod.number(),
+  "salePriceVnd": zod.number().min(createAdminLicenseKeyResponseLicensesItemSalePriceVndMin).nullable(),
   "label": zod.string().nullable(),
   "status": zod.enum(['available', 'claimed', 'revoked']),
   "createdAt": zod.coerce.date(),
@@ -2256,6 +2271,43 @@ export const GetAdminOverviewResponse = zod.object({
   "campaignsTotal": zod.number(),
   "campaignsQueued": zod.number(),
   "campaignsFailed": zod.number()
+})
+
+
+export const GetAdminRevenueInsightsResponse = zod.object({
+  "summary": zod.object({
+  "totalRevenueVnd": zod.number(),
+  "inventoryValueVnd": zod.number(),
+  "totalKeys": zod.number(),
+  "soldKeys": zod.number(),
+  "inventoryKeys": zod.number(),
+  "revokedKeys": zod.number(),
+  "missingPriceKeys": zod.number(),
+  "missingInventoryPriceKeys": zod.number(),
+  "customers": zod.number()
+}),
+  "byPlan": zod.array(zod.object({
+  "plan": zod.enum(['plus', 'pro', 'unlimited']),
+  "revenueVnd": zod.number(),
+  "inventoryValueVnd": zod.number(),
+  "soldKeys": zod.number(),
+  "inventoryKeys": zod.number(),
+  "missingPriceKeys": zod.number()
+})),
+  "byMonth": zod.array(zod.object({
+  "month": zod.string(),
+  "revenueVnd": zod.number(),
+  "soldKeys": zod.number()
+})),
+  "customers": zod.array(zod.object({
+  "userId": zod.string(),
+  "username": zod.string(),
+  "totalSpentVnd": zod.number(),
+  "keysPurchased": zod.number(),
+  "coveredDays": zod.number(),
+  "messagesSent": zod.number(),
+  "missingPriceKeys": zod.number()
+}))
 })
 
 

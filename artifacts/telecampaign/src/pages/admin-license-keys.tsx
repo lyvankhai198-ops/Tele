@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Key, Copy, AlertCircle, Trash2, CheckCircle2, Filter, Bot, ExternalLink, Save, Send } from "lucide-react";
 import { format } from "date-fns";
@@ -85,6 +85,7 @@ const copy = {
     filterAllPlans: "All plans",
     tableKeyLabel: "Key / Label",
     tablePlanDuration: "Plan / Duration",
+    tableSalePrice: "Sale price",
     tableStatus: "Status",
     tableCreated: "Created",
     tableUsage: "Usage",
@@ -104,6 +105,10 @@ const copy = {
     createModalDetail: "The plan duration starts when the user successfully activates the key.",
     planLabel: "Subscription plan",
     durationLabel: "Duration (Days)",
+    salePriceLabel: "Sale price (VND)",
+    salePricePlaceholder: "E.g. 149000",
+    salePriceHint: "Stored on each key and used for revenue reports. Adjust the reference price when needed.",
+    salePriceValidationError: "Sale price must be an integer from 0 to 1,000,000,000 VND.",
     durationPlaceholder: "E.g. 30",
     quantityLabel: "Quantity",
     quantityPlaceholder: "E.g. 10",
@@ -184,6 +189,7 @@ const copy = {
     filterAllPlans: "Tất cả gói",
     tableKeyLabel: "Mã / Nhãn",
     tablePlanDuration: "Gói / Thời hạn",
+    tableSalePrice: "Giá bán",
     tableStatus: "Trạng thái",
     tableCreated: "Ngày tạo",
     tableUsage: "Sử dụng",
@@ -203,6 +209,10 @@ const copy = {
     createModalDetail: "Thời hạn gói bắt đầu tính từ lúc người dùng kích hoạt mã thành công.",
     planLabel: "Gói đăng ký",
     durationLabel: "Thời hạn (Ngày)",
+    salePriceLabel: "Giá bán (VND)",
+    salePricePlaceholder: "VD: 149000",
+    salePriceHint: "Giá được lưu riêng trên từng key và dùng cho báo cáo doanh thu. Có thể chỉnh theo thời giá.",
+    salePriceValidationError: "Giá bán phải là số nguyên từ 0 đến 1.000.000.000 VND.",
     durationPlaceholder: "VD: 30",
     quantityLabel: "Số lượng mã",
     quantityPlaceholder: "VD: 10",
@@ -246,6 +256,16 @@ function formatKeyDate(dateStr: string, language: string, includeTime = false): 
     return dateStr;
   }
 }
+
+function formatVnd(value: number): string {
+  return `${new Intl.NumberFormat("vi-VN").format(value)} đ`;
+}
+
+const REFERENCE_PRICE_VND: Record<LicenseKeyPlan, number> = {
+  plus: 60_000,
+  pro: 149_000,
+  unlimited: 250_000,
+};
 
 export function AdminLicenseKeysPage() {
   const queryClient = useQueryClient();
@@ -293,7 +313,9 @@ export function AdminLicenseKeysPage() {
   const [formPlan, setFormPlan] = useState<LicenseKeyPlan>("pro");
   const [formDuration, setFormDuration] = useState<string>("30");
   const [formQuantity, setFormQuantity] = useState<string>("1");
+  const [formSalePrice, setFormSalePrice] = useState<string>("149000");
   const [formLabel, setFormLabel] = useState<string>("");
+  const lastAutoSalePrice = useRef<number | null>(149000);
   const [telegramPurchaseUrl, setTelegramPurchaseUrl] = useState("");
   const [reminderForm, setReminderForm] = useState<AdminLicenseReminderSettings | null>(null);
 
@@ -312,6 +334,17 @@ export function AdminLicenseKeysPage() {
   const revokeMutation = useRevokeAdminLicenseKey();
   const purchaseSettingsMutation = useUpdateAdminPurchaseSettings();
   const reminderMutation = useUpdateAdminLicenseReminderSettings();
+
+  useEffect(() => {
+    const durationDays = Number(formDuration);
+    if (!Number.isInteger(durationDays) || durationDays < 1) return;
+    const nextPrice = Math.round(REFERENCE_PRICE_VND[formPlan] * durationDays / 30);
+    const currentPrice = Number(formSalePrice);
+    if (!formSalePrice || currentPrice === lastAutoSalePrice.current) {
+      setFormSalePrice(String(nextPrice));
+      lastAutoSalePrice.current = nextPrice;
+    }
+  }, [formPlan, formDuration]);
 
   const handleSavePurchaseLink = () => {
     const value = telegramPurchaseUrl.trim();
@@ -365,12 +398,17 @@ export function AdminLicenseKeysPage() {
   const handleCreate = () => {
     const durationDays = Number(formDuration);
     const quantity = Number(formQuantity);
+    const salePriceVnd = Number(formSalePrice);
     if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3660) {
       setToastMessage(text.durationValidationError);
       return;
     }
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
       setToastMessage(text.quantityValidationError);
+      return;
+    }
+    if (!Number.isInteger(salePriceVnd) || salePriceVnd < 0 || salePriceVnd > 1_000_000_000) {
+      setToastMessage(text.salePriceValidationError);
       return;
     }
 
@@ -380,6 +418,7 @@ export function AdminLicenseKeysPage() {
           plan: formPlan,
           durationDays,
           quantity,
+          salePriceVnd,
           label: formLabel.trim() || undefined,
         },
       },
@@ -394,6 +433,8 @@ export function AdminLicenseKeysPage() {
           setFormPlan("pro");
           setFormDuration("30");
           setFormQuantity("1");
+           setFormSalePrice("149000");
+           lastAutoSalePrice.current = 149000;
           setFormLabel("");
           setToastMessage(text.createSuccess(result.licenseKeys.length));
         },
@@ -712,7 +753,7 @@ export function AdminLicenseKeysPage() {
         </div>
       </Panel>
 
-      <Panel className="overflow-x-auto">
+       <Panel className="overflow-x-auto">
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#eef2f6] border-t-[#1a2b88]" />
@@ -724,11 +765,12 @@ export function AdminLicenseKeysPage() {
             detail={text.emptyDetail}
           />
         ) : (
-          <table className="w-full min-w-[900px] text-left text-[14px]">
+           <table className="w-full min-w-[1020px] text-left text-[14px]">
             <thead>
               <tr className="border-b border-[#eef2f6] bg-[#f8fafc]">
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableKeyLabel}</th>
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tablePlanDuration}</th>
+                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableSalePrice}</th>
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableStatus}</th>
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableCreated}</th>
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableUsage}</th>
@@ -748,6 +790,13 @@ export function AdminLicenseKeysPage() {
                     </div>
                     <div className="text-[13px] font-medium text-[#475569] mt-1">{text.durationDays(key.durationDays)}</div>
                   </td>
+                   <td className="px-6 py-4">
+                     {key.salePriceVnd === null ? (
+                       <span className="text-[13px] font-semibold text-[#b45309]">Chưa nhập</span>
+                     ) : (
+                       <span className="font-bold text-[#0f172a]">{formatVnd(key.salePriceVnd)}</span>
+                     )}
+                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge
                       status={
@@ -863,6 +912,20 @@ export function AdminLicenseKeysPage() {
                 step={1}
               />
               <p className="mt-1.5 text-[12px] font-medium text-[#64748b]">{text.quantityHint}</p>
+            </div>
+
+            <div>
+              <Input
+                label={text.salePriceLabel}
+                type="number"
+                value={formSalePrice}
+                onChange={setFormSalePrice}
+                placeholder={text.salePricePlaceholder}
+                min={0}
+                max={1_000_000_000}
+                step={1}
+              />
+              <p className="mt-1.5 text-[12px] font-medium text-[#64748b]">{text.salePriceHint}</p>
             </div>
 
             <Input

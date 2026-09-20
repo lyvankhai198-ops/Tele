@@ -9,6 +9,7 @@ import {
   UpdateAdminPurchaseSettingsResponse,
   RevokeAdminLicenseKeyParams,
   GetAdminOverviewResponse,
+  GetAdminRevenueInsightsResponse,
   ListAdminUsersQueryParams,
   ListAdminUsersResponse,
   GetAdminUserParams,
@@ -98,6 +99,7 @@ import {
   listAdminLicenseKeys,
   revokeAdminLicenseKey,
   getAdminOverview,
+  getAdminRevenueInsights,
   listAdminUsers,
   getAdminUser,
   updateSubscriptionByAdmin,
@@ -194,6 +196,10 @@ router.post("/admin/system-events/:eventId/read", async (req, res): Promise<void
 
 router.get("/admin/overview", async (_req, res): Promise<void> => {
   res.json(GetAdminOverviewResponse.parse(await getAdminOverview()));
+});
+
+router.get("/admin/revenue-insights", async (_req, res): Promise<void> => {
+  res.json(GetAdminRevenueInsightsResponse.parse(await getAdminRevenueInsights()));
 });
 
 router.get("/admin/active-groups", async (_req, res): Promise<void> => {
@@ -1613,8 +1619,12 @@ router.get("/admin/license-keys/:licenseKeyId/secret", async (req, res): Promise
 router.post("/admin/license-keys", async (req, res): Promise<void> => {
   const parsed = CreateAdminLicenseKeyBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Thông tin license key không hợp lệ.");
-  if (!Number.isInteger(parsed.data.durationDays) || !Number.isInteger(parsed.data.quantity)) {
-    return void sendError(res, 400, "Thời hạn và số lượng license key phải là số nguyên.");
+   if (
+     !Number.isInteger(parsed.data.durationDays)
+     || !Number.isInteger(parsed.data.quantity)
+     || !Number.isInteger(parsed.data.salePriceVnd)
+   ) {
+     return void sendError(res, 400, "Thời hạn, số lượng và giá license key phải là số nguyên.");
   }
   try {
     const created = await createAdminLicenseKeys({

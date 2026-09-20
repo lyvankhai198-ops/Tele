@@ -44,6 +44,7 @@ export type PageKey =
   | "admin-notifications"
   | "admin-users"
   | "license-keys"
+  | "admin-revenue"
   | "admin-system-settings"
   | "admin-operations"
   | "admin-active-groups"

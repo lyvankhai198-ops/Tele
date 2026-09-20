@@ -12,6 +12,11 @@ export interface AdminLicenseKey {
   id: string;
   plan: PlanCode;
   durationDays: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  salePriceVnd: number | null;
   /** @nullable */
   label: string | null;
   status: LicenseKeyStatus;

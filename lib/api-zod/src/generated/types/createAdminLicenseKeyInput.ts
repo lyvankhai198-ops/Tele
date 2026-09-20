@@ -20,6 +20,11 @@ export interface CreateAdminLicenseKeyInput {
      */
   quantity: number;
   /**
+     * @minimum 0
+     * @maximum 1000000000
+     */
+  salePriceVnd: number;
+  /**
      * @minLength 1
      * @maxLength 120
      */

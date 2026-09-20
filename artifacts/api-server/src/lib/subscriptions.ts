@@ -9,6 +9,7 @@ import {
   subscriptionsTable,
   telegramAccountsTable,
   campaignsTable,
+  campaignTargetsTable,
 } from "@workspace/db";
 import { licenseActivationEventValues } from "./admin-system-events";
 import { DEFAULT_SYSTEM_SETTINGS, getSystemSettings, type PlanCode as SystemPlanCode } from "./system-settings";
@@ -156,6 +157,7 @@ type AdminLicenseRecord = {
   id: string;
   plan: PlanCode;
   durationDays: number;
+  salePriceVnd: number | null;
   label: string | null;
   status: AdminLicenseStatus;
   createdAt: Date;
@@ -189,6 +191,7 @@ function toAdminLicenseRecord(license: typeof licenseKeysTable.$inferSelect, use
     id: license.id,
     plan: isPlanCode(license.plan) ? license.plan : "plus",
     durationDays: license.durationDays,
+    salePriceVnd: license.salePriceVnd,
     label: license.label,
     status: licenseStatus(license),
     createdAt: license.createdAt,
@@ -233,6 +236,7 @@ export async function createAdminLicenseKeys(input: {
   plan: PlanCode;
   durationDays: number;
   quantity: number;
+  salePriceVnd: number;
   label?: string;
   createdBy: string;
   createdByUsername?: string;
@@ -246,6 +250,7 @@ export async function createAdminLicenseKeys(input: {
           keyEncrypted: encryptSecret(licenseKey),
           plan: input.plan,
           durationDays: input.durationDays,
+          salePriceVnd: input.salePriceVnd,
           label: input.label?.trim() || null,
           createdBy: input.createdBy,
         }))).returning();
@@ -258,6 +263,7 @@ export async function createAdminLicenseKeys(input: {
             licenseKeyId: license.id,
             plan: license.plan,
             durationDays: license.durationDays,
+            salePriceVnd: license.salePriceVnd,
             label: license.label,
           },
         })));
@@ -522,6 +528,135 @@ export async function getAdminOverview() {
     campaignsTotal: campaigns.length,
     campaignsQueued: campaigns.filter((campaign) => ["queued", "scheduled", "running"].includes(campaign.status)).length,
     campaignsFailed: campaigns.filter((campaign) => campaign.status === "failed").length,
+  };
+}
+
+export async function getAdminRevenueInsights() {
+  const [licenses, users, sentTargets] = await Promise.all([
+    db.select().from(licenseKeysTable),
+    db.select({ id: appUsersTable.id, username: appUsersTable.username }).from(appUsersTable),
+    db.select({ ownerUserId: campaignsTable.ownerUserId })
+      .from(campaignTargetsTable)
+      .innerJoin(campaignsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
+      .where(isNotNull(campaignTargetsTable.sentAt)),
+  ]);
+
+  type PlanInsight = {
+    revenueVnd: number;
+    inventoryValueVnd: number;
+    soldKeys: number;
+    inventoryKeys: number;
+    missingPriceKeys: number;
+  };
+  const planInsights: Record<PlanCode, PlanInsight> = {
+    plus: { revenueVnd: 0, inventoryValueVnd: 0, soldKeys: 0, inventoryKeys: 0, missingPriceKeys: 0 },
+    pro: { revenueVnd: 0, inventoryValueVnd: 0, soldKeys: 0, inventoryKeys: 0, missingPriceKeys: 0 },
+    unlimited: { revenueVnd: 0, inventoryValueVnd: 0, soldKeys: 0, inventoryKeys: 0, missingPriceKeys: 0 },
+  };
+  const monthInsights = new Map<string, { revenueVnd: number; soldKeys: number }>();
+  const customers = new Map<string, {
+    totalSpentVnd: number;
+    keysPurchased: number;
+    coveredDays: number;
+    messagesSent: number;
+    missingPriceKeys: number;
+  }>();
+  const sentMessagesByUser = new Map<string, number>();
+  for (const target of sentTargets) {
+    sentMessagesByUser.set(target.ownerUserId, (sentMessagesByUser.get(target.ownerUserId) ?? 0) + 1);
+  }
+
+  let totalRevenueVnd = 0;
+  let inventoryValueVnd = 0;
+  let soldKeys = 0;
+  let inventoryKeys = 0;
+  let revokedKeys = 0;
+  let missingPriceKeys = 0;
+  let missingInventoryPriceKeys = 0;
+
+  for (const license of licenses) {
+    const plan = isPlanCode(license.plan) ? license.plan : "plus";
+    const insight = planInsights[plan];
+    if (license.revokedAt) {
+      revokedKeys += 1;
+      continue;
+    }
+    if (license.salePriceVnd === null) {
+      missingPriceKeys += 1;
+      insight.missingPriceKeys += 1;
+    }
+
+    if (license.claimedAt) {
+      soldKeys += 1;
+      insight.soldKeys += 1;
+      const customer = customers.get(license.claimedBy ?? "") ?? {
+        totalSpentVnd: 0,
+        keysPurchased: 0,
+        coveredDays: 0,
+        messagesSent: 0,
+        missingPriceKeys: 0,
+      };
+      customer.keysPurchased += 1;
+      customer.coveredDays += license.durationDays;
+      if (license.salePriceVnd === null) {
+        customer.missingPriceKeys += 1;
+      } else {
+        customer.totalSpentVnd += license.salePriceVnd;
+        totalRevenueVnd += license.salePriceVnd;
+        const month = license.claimedAt.toISOString().slice(0, 7);
+        const monthInsight = monthInsights.get(month) ?? { revenueVnd: 0, soldKeys: 0 };
+        monthInsight.revenueVnd += license.salePriceVnd;
+        monthInsight.soldKeys += 1;
+        monthInsights.set(month, monthInsight);
+        insight.revenueVnd += license.salePriceVnd;
+      }
+      customers.set(license.claimedBy ?? "", customer);
+    } else {
+      inventoryKeys += 1;
+      insight.inventoryKeys += 1;
+      if (license.salePriceVnd === null) {
+        missingInventoryPriceKeys += 1;
+      } else {
+        inventoryValueVnd += license.salePriceVnd;
+        insight.inventoryValueVnd += license.salePriceVnd;
+      }
+    }
+  }
+
+  const usernameById = new Map(users.map((user) => [user.id, user.username]));
+  const customerRows = [...customers.entries()]
+    .filter(([userId]) => Boolean(usernameById.get(userId)))
+    .map(([userId, customer]) => ({
+      userId,
+      username: usernameById.get(userId)!,
+      ...customer,
+      messagesSent: sentMessagesByUser.get(userId) ?? 0,
+    }))
+    .sort((left, right) => (
+      right.totalSpentVnd - left.totalSpentVnd
+      || right.keysPurchased - left.keysPurchased
+      || right.coveredDays - left.coveredDays
+      || right.messagesSent - left.messagesSent
+      || left.username.localeCompare(right.username)
+    ));
+
+  return {
+    summary: {
+      totalRevenueVnd,
+      inventoryValueVnd,
+      totalKeys: licenses.length,
+      soldKeys,
+      inventoryKeys,
+      revokedKeys,
+      missingPriceKeys,
+      missingInventoryPriceKeys,
+      customers: customerRows.length,
+    },
+    byPlan: PLAN_ORDER.map((plan) => ({ plan, ...planInsights[plan] })),
+    byMonth: [...monthInsights.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([month, insight]) => ({ month, ...insight })),
+    customers: customerRows,
   };
 }
 
