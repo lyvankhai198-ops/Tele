@@ -7,6 +7,7 @@ export type AuthUser = {
   id: string;
   username: string;
   role: "user" | "admin";
+  preferredLanguage: Language;
   mustChangePassword: boolean;
   support: SupportSession | null;
 };

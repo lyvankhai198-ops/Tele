@@ -68,8 +68,9 @@ const copy = {
     reminderDays: "Remind before expiry",
     reminderDay: (days: number) => `${days} days`,
     reminderAfterExpiry: "Send one reminder after expiry",
-    reminderMessage: "Message template",
-    reminderMessageHint: "Available placeholders: {days}, {expiresAt}, {username}, {purchaseLink}.",
+     reminderMessageVi: "Vietnamese message template",
+     reminderMessageEn: "English message template",
+     reminderMessageHint: "Available placeholders: {days}, {expiresAt}, {username}, {purchaseLink}. The message is selected from the user's interface language.",
     reminderSave: "Save reminders",
     reminderSaving: "Saving…",
     reminderSaved: "Telegram renewal reminders saved.",
@@ -166,8 +167,9 @@ const copy = {
     reminderDays: "Nhắc trước khi hết hạn",
     reminderDay: (days: number) => `${days} ngày`,
     reminderAfterExpiry: "Gửi thêm một lần sau khi hết hạn",
-    reminderMessage: "Mẫu nội dung tin nhắn",
-    reminderMessageHint: "Placeholder dùng được: {days}, {expiresAt}, {username}, {purchaseLink}.",
+     reminderMessageVi: "Mẫu tin nhắn tiếng Việt",
+     reminderMessageEn: "Mẫu tin nhắn tiếng Anh",
+     reminderMessageHint: "Placeholder dùng được: {days}, {expiresAt}, {username}, {purchaseLink}. Hệ thống chọn mẫu theo ngôn ngữ giao diện của người dùng.",
     reminderSave: "Lưu cấu hình nhắc",
     reminderSaving: "Đang lưu…",
     reminderSaved: "Đã lưu cấu hình nhắc mua key qua Telegram.",
@@ -643,23 +645,34 @@ export function AdminLicenseKeysPage() {
                 {text.reminderAfterExpiry}
               </label>
 
-              <label className="block">
-                <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderMessage}</span>
+               <label className="block">
+                 <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderMessageVi}</span>
                 <textarea
                   rows={4}
                   maxLength={4096}
-                  value={reminderForm.message}
-                  onChange={(event) => setReminderForm({ ...reminderForm, message: event.target.value })}
+                   value={reminderForm.messageVi}
+                   onChange={(event) => setReminderForm({ ...reminderForm, messageVi: event.target.value })}
                   className="w-full resize-y rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3 text-[14px] font-medium leading-6 text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
-                  data-testid="textarea-license-reminder-message"
+                   data-testid="textarea-license-reminder-message-vi"
                 />
-                <p className="mt-1.5 text-[12px] font-medium text-[#64748b]">{text.reminderMessageHint}</p>
+               </label>
+               <label className="block">
+                 <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderMessageEn}</span>
+                 <textarea
+                   rows={4}
+                   maxLength={4096}
+                   value={reminderForm.messageEn}
+                   onChange={(event) => setReminderForm({ ...reminderForm, messageEn: event.target.value })}
+                   className="w-full resize-y rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3 text-[14px] font-medium leading-6 text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                   data-testid="textarea-license-reminder-message-en"
+                 />
+                 <p className="mt-1.5 text-[12px] font-medium text-[#64748b]">{text.reminderMessageHint}</p>
               </label>
 
               <div className="flex justify-end">
                 <PrimaryButton
                   onClick={handleSaveReminderSettings}
-                  disabled={reminderMutation.isPending || reminderForm.reminderDays.length === 0 || !reminderForm.message.trim()}
+                   disabled={reminderMutation.isPending || reminderForm.reminderDays.length === 0 || !reminderForm.messageVi.trim() || !reminderForm.messageEn.trim()}
                 >
                   <Save className="h-4 w-4" />
                   {reminderMutation.isPending ? text.reminderSaving : text.reminderSave}

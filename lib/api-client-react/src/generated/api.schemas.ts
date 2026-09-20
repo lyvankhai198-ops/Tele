@@ -17,6 +17,14 @@ export const AuthUserRole = {
   admin: 'admin',
 } as const;
 
+export type AuthUserPreferredLanguage = typeof AuthUserPreferredLanguage[keyof typeof AuthUserPreferredLanguage];
+
+
+export const AuthUserPreferredLanguage = {
+  vi: 'vi',
+  en: 'en',
+} as const;
+
 export interface SupportSession {
   targetUserId: string;
   targetUsername: string;
@@ -27,6 +35,7 @@ export interface AuthUser {
   id: string;
   username: string;
   role: AuthUserRole;
+  preferredLanguage: AuthUserPreferredLanguage;
   mustChangePassword: boolean;
   /** @nullable */
   support: SupportSession | null;
@@ -1596,7 +1605,9 @@ export interface AdminLicenseReminderSettings {
   reminderDays: number[];
   sendAfterExpiry: boolean;
   /** @maxLength 4096 */
-  message: string;
+  messageVi: string;
+  /** @maxLength 4096 */
+  messageEn: string;
 }
 
 export interface AdminLicenseReminderSettingsResponse {
@@ -1617,7 +1628,21 @@ export interface AdminLicenseReminderSettingsInput {
   reminderDays: number[];
   sendAfterExpiry: boolean;
   /** @maxLength 4096 */
-  message: string;
+  messageVi: string;
+  /** @maxLength 4096 */
+  messageEn: string;
+}
+
+export type AuthLanguageInputPreferredLanguage = typeof AuthLanguageInputPreferredLanguage[keyof typeof AuthLanguageInputPreferredLanguage];
+
+
+export const AuthLanguageInputPreferredLanguage = {
+  vi: 'vi',
+  en: 'en',
+} as const;
+
+export interface AuthLanguageInput {
+  preferredLanguage: AuthLanguageInputPreferredLanguage;
 }
 
 export interface CreateAdminLicenseKeyInput {

@@ -44,6 +44,7 @@ export const RegisterAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
+  "preferredLanguage": zod.enum(['vi', 'en']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
@@ -74,6 +75,7 @@ export const LoginAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
+  "preferredLanguage": zod.enum(['vi', 'en']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
@@ -129,6 +131,25 @@ export const GetAuthUserResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
+  "preferredLanguage": zod.enum(['vi', 'en']),
+  "mustChangePassword": zod.boolean(),
+  "support": zod.object({
+  "targetUserId": zod.string(),
+  "targetUsername": zod.string(),
+  "expiresAt": zod.coerce.date()
+}).nullable()
+})
+
+
+export const UpdateAuthLanguageBody = zod.object({
+  "preferredLanguage": zod.enum(['vi', 'en'])
+})
+
+export const UpdateAuthLanguageResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "role": zod.enum(['user', 'admin']),
+  "preferredLanguage": zod.enum(['vi', 'en']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
@@ -2142,7 +2163,9 @@ export const GetAdminLicenseKeySecretResponse = zod.object({
 export const getAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMax = 30;
 export const getAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMultipleOf = 1;
 
-export const getAdminLicenseReminderSettingsResponseSettingsMessageMax = 4096;
+export const getAdminLicenseReminderSettingsResponseSettingsMessageViMax = 4096;
+
+export const getAdminLicenseReminderSettingsResponseSettingsMessageEnMax = 4096;
 
 
 
@@ -2152,7 +2175,8 @@ export const GetAdminLicenseReminderSettingsResponse = zod.object({
   "senderAccountId": zod.string().nullable(),
   "reminderDays": zod.array(zod.number().min(1).max(getAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMax).multipleOf(getAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMultipleOf)),
   "sendAfterExpiry": zod.boolean(),
-  "message": zod.string().max(getAdminLicenseReminderSettingsResponseSettingsMessageMax)
+  "messageVi": zod.string().max(getAdminLicenseReminderSettingsResponseSettingsMessageViMax),
+  "messageEn": zod.string().max(getAdminLicenseReminderSettingsResponseSettingsMessageEnMax)
 }),
   "accounts": zod.array(zod.object({
   "id": zod.string(),
@@ -2169,7 +2193,9 @@ export const updateAdminLicenseReminderSettingsBodyReminderDaysItemMultipleOf = 
 
 export const updateAdminLicenseReminderSettingsBodyReminderDaysMax = 3;
 
-export const updateAdminLicenseReminderSettingsBodyMessageMax = 4096;
+export const updateAdminLicenseReminderSettingsBodyMessageViMax = 4096;
+
+export const updateAdminLicenseReminderSettingsBodyMessageEnMax = 4096;
 
 
 
@@ -2178,13 +2204,16 @@ export const UpdateAdminLicenseReminderSettingsBody = zod.object({
   "senderAccountId": zod.string().nullable(),
   "reminderDays": zod.array(zod.number().min(1).max(updateAdminLicenseReminderSettingsBodyReminderDaysItemMax).multipleOf(updateAdminLicenseReminderSettingsBodyReminderDaysItemMultipleOf)).min(1).max(updateAdminLicenseReminderSettingsBodyReminderDaysMax),
   "sendAfterExpiry": zod.boolean(),
-  "message": zod.string().max(updateAdminLicenseReminderSettingsBodyMessageMax)
+  "messageVi": zod.string().max(updateAdminLicenseReminderSettingsBodyMessageViMax),
+  "messageEn": zod.string().max(updateAdminLicenseReminderSettingsBodyMessageEnMax)
 })
 
 export const updateAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMax = 30;
 export const updateAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMultipleOf = 1;
 
-export const updateAdminLicenseReminderSettingsResponseSettingsMessageMax = 4096;
+export const updateAdminLicenseReminderSettingsResponseSettingsMessageViMax = 4096;
+
+export const updateAdminLicenseReminderSettingsResponseSettingsMessageEnMax = 4096;
 
 
 
@@ -2194,7 +2223,8 @@ export const UpdateAdminLicenseReminderSettingsResponse = zod.object({
   "senderAccountId": zod.string().nullable(),
   "reminderDays": zod.array(zod.number().min(1).max(updateAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMax).multipleOf(updateAdminLicenseReminderSettingsResponseSettingsReminderDaysItemMultipleOf)),
   "sendAfterExpiry": zod.boolean(),
-  "message": zod.string().max(updateAdminLicenseReminderSettingsResponseSettingsMessageMax)
+  "messageVi": zod.string().max(updateAdminLicenseReminderSettingsResponseSettingsMessageViMax),
+  "messageEn": zod.string().max(updateAdminLicenseReminderSettingsResponseSettingsMessageEnMax)
 }),
   "accounts": zod.array(zod.object({
   "id": zod.string(),

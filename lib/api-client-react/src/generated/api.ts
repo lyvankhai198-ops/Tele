@@ -61,6 +61,7 @@ import type {
   AdminUserSupport,
   AdminUserSupportCampaignTargets,
   AuthCaptcha,
+  AuthLanguageInput,
   AuthUser,
   BulkCampaignControlInput,
   BulkCampaignControlResult,
@@ -701,6 +702,71 @@ export function useGetAuthUser<TData = Awaited<ReturnType<typeof getAuthUser>>, 
 
 
 
+
+export const getUpdateAuthLanguageUrl = () => {
+
+
+
+
+  return `/api/auth/language`
+}
+
+export const updateAuthLanguage = async (authLanguageInput: AuthLanguageInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthUser> => {
+
+  return customFetch<AuthUser>(getUpdateAuthLanguageUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authLanguageInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAuthLanguageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAuthLanguage>>, TError,{data: BodyType<AuthLanguageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAuthLanguage>>, TError,{data: BodyType<AuthLanguageInput>}, TContext> => {
+
+const mutationKey = ['updateAuthLanguage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAuthLanguage>>, {data: BodyType<AuthLanguageInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAuthLanguage(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAuthLanguageMutationResult = NonNullable<Awaited<ReturnType<typeof updateAuthLanguage>>>
+    export type UpdateAuthLanguageMutationBody = BodyType<AuthLanguageInput>
+    export type UpdateAuthLanguageMutationError = ErrorType<void>
+
+    export const useUpdateAuthLanguage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAuthLanguage>>, TError,{data: BodyType<AuthLanguageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAuthLanguage>>,
+        TError,
+        {data: BodyType<AuthLanguageInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAuthLanguageMutationOptions(options));
+    }
 
 export const getExitSupportSessionUrl = () => {
 

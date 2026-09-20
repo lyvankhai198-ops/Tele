@@ -59,6 +59,7 @@ export const appUsersTable = pgTable("app_users", {
   username: text("username").notNull(),
   usernameNormalized: text("username_normalized").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  preferredLanguage: text("preferred_language").notNull().default("vi"),
   mustChangePassword: boolean("must_change_password").notNull().default(false),
   role: text("role").notNull().default("user"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

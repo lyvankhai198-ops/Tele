@@ -606,17 +606,42 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function UserLanguageProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const persistLanguage = useCallback(async (preferredLanguage: "vi" | "en") => {
+    if (!user) return;
+    const response = await fetch("/api/auth/language", {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preferredLanguage }),
+    });
+    if (!response.ok) {
+      throw new Error("Could not save interface language preference");
+    }
+  }, [user]);
+
+  return (
+    <LanguageProvider
+      preferredLanguage={user?.preferredLanguage}
+      onLanguageChange={persistLanguage}
+    >
+      {children}
+    </LanguageProvider>
+  );
+}
+
 function App() {
   return (
     <WouterRouter base={basePath}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <LanguageProvider>
+          <UserLanguageProvider>
             <TooltipProvider>
               <Router />
               <Toaster />
             </TooltipProvider>
-          </LanguageProvider>
+          </UserLanguageProvider>
         </AuthProvider>
       </QueryClientProvider>
     </WouterRouter>

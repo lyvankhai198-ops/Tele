@@ -39,7 +39,8 @@ export type SubscriptionReminderSettings = {
   senderAccountId: string | null;
   reminderDays: number[];
   sendAfterExpiry: boolean;
-  message: string;
+  messageVi: string;
+  messageEn: string;
 };
 
 export type SystemSettings = {
@@ -71,7 +72,8 @@ type StoredSystemSettings = {
   groupLibraryMinimumJoinPlan?: unknown;
   groupLibraryAutoJoinEnabled?: unknown;
   postJoinCampaign?: Partial<PostJoinCampaignSettings>;
-  subscriptionReminder?: Partial<SubscriptionReminderSettings>;
+  // `message` is kept for backwards compatibility with the original single-language setting.
+  subscriptionReminder?: Partial<SubscriptionReminderSettings> & { message?: unknown };
   defaultAccountDailyLimit?: unknown;
   campaignDefaults?: Partial<SystemSettings["campaignDefaults"]>;
   registrationEnabled?: unknown;
@@ -168,7 +170,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     senderAccountId: null,
     reminderDays: [7, 3, 1],
     sendAfterExpiry: false,
-    message: "TeleCampaign: Gói của bạn còn {days} ngày sẽ hết hạn vào {expiresAt}. Hãy mua key mới để không bị gián đoạn.\nMua key: {purchaseLink}",
+    messageVi: "TeleCampaign: Gói của bạn còn {days} ngày sẽ hết hạn vào {expiresAt}. Hãy mua key mới để không bị gián đoạn.\nMua key: {purchaseLink}",
+    messageEn: "TeleCampaign: Your subscription expires in {days} days on {expiresAt}. Buy a new license key to avoid interruption.\nBuy a key: {purchaseLink}",
   },
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
@@ -317,9 +320,15 @@ function normalizedSubscriptionReminder(
       : null,
     reminderDays: reminderDays.length ? reminderDays : fallback.reminderDays,
     sendAfterExpiry: typeof stored?.sendAfterExpiry === "boolean" ? stored.sendAfterExpiry : fallback.sendAfterExpiry,
-    message: typeof stored?.message === "string" && stored.message.trim().length <= 4096
-      ? stored.message.trim()
-      : fallback.message,
+    messageVi: typeof stored?.messageVi === "string" && stored.messageVi.trim().length <= 4096
+      ? stored.messageVi.trim()
+      : typeof (stored as Partial<SubscriptionReminderSettings> & { message?: unknown })?.message === "string"
+        && (stored as Partial<SubscriptionReminderSettings> & { message?: string }).message!.trim().length <= 4096
+        ? (stored as Partial<SubscriptionReminderSettings> & { message?: string }).message!.trim()
+        : fallback.messageVi,
+    messageEn: typeof stored?.messageEn === "string" && stored.messageEn.trim().length <= 4096
+      ? stored.messageEn.trim()
+      : fallback.messageEn,
   };
 }
 

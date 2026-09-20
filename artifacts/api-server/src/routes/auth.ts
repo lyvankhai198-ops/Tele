@@ -11,6 +11,8 @@ import {
   RegisterAuthResponse,
   ChangeAuthPasswordBody,
   RevokeOtherAuthSessionsResponse,
+  UpdateAuthLanguageBody,
+  UpdateAuthLanguageResponse,
 } from "@workspace/api-zod";
 import { appUsersTable, authSessionsTable, db, subscriptionsTable } from "@workspace/db";
 import {
@@ -271,6 +273,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
           username: appUsersTable.username,
           role: appUsersTable.role,
           mustChangePassword: appUsersTable.mustChangePassword,
+           preferredLanguage: appUsersTable.preferredLanguage,
         });
       const trialStartedAt = new Date();
       await tx.insert(subscriptionsTable).values({
@@ -363,6 +366,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     id: user.id,
     username: user.username,
     role: user.role,
+    preferredLanguage: user.preferredLanguage,
     mustChangePassword: user.mustChangePassword,
   });
   await recordActivity({
@@ -576,6 +580,29 @@ router.get("/auth/me", requireSession, (req, res): void => {
       }
       : null,
   }));
+});
+
+router.patch("/auth/language", requireSession, async (req, res): Promise<void> => {
+  const parsed = UpdateAuthLanguageBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Ngôn ngữ giao diện không hợp lệ" });
+    return;
+  }
+  const [updated] = await db.update(appUsersTable)
+    .set({ preferredLanguage: parsed.data.preferredLanguage, updatedAt: new Date() })
+    .where(eq(appUsersTable.id, req.userId!))
+    .returning({
+      id: appUsersTable.id,
+      username: appUsersTable.username,
+      role: appUsersTable.role,
+      mustChangePassword: appUsersTable.mustChangePassword,
+      preferredLanguage: appUsersTable.preferredLanguage,
+    });
+  if (!updated) {
+    res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+  res.json(UpdateAuthLanguageResponse.parse(authUserResponse(await resolveAuthenticatedUser(updated))));
 });
 
 router.post("/auth/legacy-owner-mappings", requireSession, async (req, res): Promise<void> => {

@@ -49,6 +49,7 @@ function reminderTypeForExpiry(
   expiresAt: Date,
   now: Date,
   settings: SubscriptionReminderSettings,
+  options: { allowAfterExpiry?: boolean } = {},
 ): string | null {
   const remainingMs = expiresAt.getTime() - now.getTime();
   const days = [...settings.reminderDays].sort((left, right) => right - left);
@@ -56,8 +57,18 @@ function reminderTypeForExpiry(
     const lowerBoundary = (days[index + 1] ?? 0) * DAY_MS;
     if (remainingMs <= day * DAY_MS && remainingMs > lowerBoundary) return `${day}d`;
   }
-  if (settings.sendAfterExpiry && remainingMs <= 0) return "expired";
+  if (options.allowAfterExpiry !== false && settings.sendAfterExpiry && remainingMs <= 0) return "expired";
   return null;
+}
+
+function isOneDayPlusSubscription(
+  plan: string,
+  startedAt: Date | null,
+  expiresAt: Date | null,
+): boolean {
+  return plan === "plus"
+    && Boolean(startedAt && expiresAt)
+    && expiresAt!.getTime() - startedAt!.getTime() === DAY_MS;
 }
 
 function renderReminderMessage(
@@ -84,6 +95,8 @@ async function createDueJobs(settings: SubscriptionReminderSettings, now: Date):
 
   const recipients = await db.select({
     ownerUserId: subscriptionsTable.ownerUserId,
+    plan: subscriptionsTable.plan,
+    startedAt: subscriptionsTable.startedAt,
     expiresAt: subscriptionsTable.expiresAt,
     accountId: telegramAccountsTable.id,
     username: telegramAccountsTable.username,
@@ -102,7 +115,17 @@ async function createDueJobs(settings: SubscriptionReminderSettings, now: Date):
 
   const values = recipients.flatMap((recipient) => {
     if (!recipient.expiresAt || !recipient.username || !recipient.telegramUserId) return [];
-    const reminderType = reminderTypeForExpiry(recipient.expiresAt, now, settings);
+    const isTestSubscription = isOneDayPlusSubscription(
+      recipient.plan,
+      recipient.startedAt,
+      recipient.expiresAt,
+    );
+    const reminderType = reminderTypeForExpiry(
+      recipient.expiresAt,
+      now,
+      settings,
+      { allowAfterExpiry: !isTestSubscription },
+    );
     if (!reminderType) return [];
     return [{
       ownerUserId: recipient.ownerUserId,
@@ -195,18 +218,23 @@ async function finishJob(
 async function processJob(
   job: typeof subscriptionReminderDeliveriesTable.$inferSelect,
   senderAccountId: string,
-  messageTemplate: string,
+  messageVi: string,
+  messageEn: string,
   purchaseLink: string | null,
   now: Date,
 ): Promise<void> {
   const [recipient] = await db.select({
     ownerUserId: subscriptionsTable.ownerUserId,
+    preferredLanguage: appUsersTable.preferredLanguage,
+    plan: subscriptionsTable.plan,
+    startedAt: subscriptionsTable.startedAt,
     expiresAt: subscriptionsTable.expiresAt,
     accountId: telegramAccountsTable.id,
     username: telegramAccountsTable.username,
     telegramUserId: telegramAccountsTable.telegramUserId,
     status: telegramAccountsTable.status,
-  }).from(telegramAccountsTable)
+  }).from(appUsersTable)
+    .innerJoin(telegramAccountsTable, sql`${telegramAccountsTable.ownerUserId} = ${appUsersTable.id}::text`)
     .innerJoin(subscriptionsTable, eq(telegramAccountsTable.ownerUserId, subscriptionsTable.ownerUserId))
     .where(and(
       eq(telegramAccountsTable.id, job.telegramAccountId),
@@ -230,16 +258,32 @@ async function processJob(
     return;
   }
 
+  const isTestSubscription = isOneDayPlusSubscription(
+    recipient.plan,
+    recipient.startedAt,
+    recipient.expiresAt,
+  );
+  if (isTestSubscription && recipient.expiresAt.getTime() <= now.getTime()) {
+    await finishJob(job.id, job.leaseToken!, {
+      status: "failed",
+      lastError: "Test subscription đã hết hạn trước khi reminder được gửi.",
+    });
+    return;
+  }
+
   let client: Awaited<ReturnType<typeof getAccountClient>>["client"] | null = null;
   try {
     ({ client } = await getAccountClient(senderAccountId));
-    const content = renderReminderMessage(messageTemplate, {
+    const content = renderReminderMessage(
+      recipient.preferredLanguage === "en" ? messageEn : messageVi,
+      {
       expiresAt: recipient.expiresAt,
       now,
       recipientUsername: recipient.username,
       purchaseLink,
       reminderType: job.reminderType,
-    });
+      },
+    );
     await sendDirectTelegramMessageWithClient(client, recipient.username, recipient.telegramUserId, content);
     await finishJob(job.id, job.leaseToken!, { status: "sent", sentAt: new Date(), lastError: null });
   } catch (error) {
@@ -294,7 +338,8 @@ export async function startSubscriptionReminderWorker(): Promise<() => void> {
         await processJob(
           job,
           settings.subscriptionReminder.senderAccountId,
-          settings.subscriptionReminder.message,
+          settings.subscriptionReminder.messageVi,
+          settings.subscriptionReminder.messageEn,
           telegramPurchaseUrl,
           now,
         );

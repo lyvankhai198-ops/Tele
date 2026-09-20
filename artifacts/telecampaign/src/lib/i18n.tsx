@@ -641,26 +641,43 @@ function interpolate(text: string, vars: Record<string, string | number>): strin
   return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(vars[key] ?? `{{${key}}}`));
 }
 
-export function LanguageProvider({ children }: { children: ReactNode }) {
+export function LanguageProvider({
+  children,
+  preferredLanguage,
+  onLanguageChange,
+}: {
+  children: ReactNode;
+  preferredLanguage?: Language;
+  onLanguageChange?: (language: Language) => void | Promise<void>;
+}) {
   const [language, setLanguage] = useState<Language>(() => {
     if (typeof window === "undefined") return "vi";
     return window.localStorage.getItem("telecampaign-language") === "en" ? "en" : "vi";
   });
 
   useEffect(() => {
+    if (preferredLanguage) setLanguage(preferredLanguage);
+  }, [preferredLanguage]);
+
+  useEffect(() => {
     window.localStorage.setItem("telecampaign-language", language);
     document.documentElement.lang = language;
   }, [language]);
 
+  const changeLanguage = (nextLanguage: Language) => {
+    setLanguage(nextLanguage);
+    void onLanguageChange?.(nextLanguage);
+  };
+
   const value = useMemo<LanguageContextValue>(() => ({
     language,
-    setLanguage,
+    setLanguage: changeLanguage,
     t: (value: string) => language === "vi" ? (translations[value] ?? value) : value,
     ti: (value: string, vars: Record<string, string | number>) => {
       const translated = language === "vi" ? (translations[value] ?? value) : value;
       return interpolate(translated, vars);
     },
-  }), [language]);
+  }), [language, onLanguageChange]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

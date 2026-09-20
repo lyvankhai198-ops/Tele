@@ -17,7 +17,7 @@ const SCRYPT_P = 1;
 
 export const SESSION_COOKIE_NAME = "telecampaign_session";
 
-export type SafeAuthUser = Pick<AppUser, "id" | "username" | "role" | "mustChangePassword">;
+export type SafeAuthUser = Pick<AppUser, "id" | "username" | "role" | "mustChangePassword" | "preferredLanguage">;
 export class OwnershipMigrationPendingError extends Error {
   constructor(public readonly unmappedOwners: number) {
     super("Legacy workspace ownership needs a secure migration before TeleCampaign data can be accessed.");
@@ -122,6 +122,7 @@ export async function resolveAuthenticatedUser(user: SafeAuthUser): Promise<Safe
         username: appUsersTable.username,
         role: appUsersTable.role,
         mustChangePassword: appUsersTable.mustChangePassword,
+        preferredLanguage: appUsersTable.preferredLanguage,
       });
     return promoted ?? { ...user, role: "admin" };
   }
@@ -135,6 +136,7 @@ export async function getAuthenticatedUser(token: string): Promise<SafeAuthUser 
       username: appUsersTable.username,
       role: appUsersTable.role,
       mustChangePassword: appUsersTable.mustChangePassword,
+      preferredLanguage: appUsersTable.preferredLanguage,
     })
     .from(authSessionsTable)
     .innerJoin(appUsersTable, eq(authSessionsTable.userId, appUsersTable.id))

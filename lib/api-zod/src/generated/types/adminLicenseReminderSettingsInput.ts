@@ -19,5 +19,7 @@ export interface AdminLicenseReminderSettingsInput {
   reminderDays: number[];
   sendAfterExpiry: boolean;
   /** @maxLength 4096 */
-  message: string;
+  messageVi: string;
+  /** @maxLength 4096 */
+  messageEn: string;
 }

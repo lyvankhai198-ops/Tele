@@ -1539,8 +1539,10 @@ router.patch("/admin/license-reminder-settings", async (req, res): Promise<void>
   if (
     reminderDays.length < 1
     || reminderDays.some((day) => !Number.isInteger(day) || ![1, 3, 7].includes(day))
-    || parsed.data.message.trim().length < 1
-    || parsed.data.message.trim().length > 4096
+    || parsed.data.messageVi.trim().length < 1
+    || parsed.data.messageVi.trim().length > 4096
+    || parsed.data.messageEn.trim().length < 1
+    || parsed.data.messageEn.trim().length > 4096
   ) {
     return void sendError(res, 400, "Mốc nhắc phải là 1, 3 hoặc 7 ngày và nội dung không được để trống.");
   }
@@ -1576,7 +1578,8 @@ router.patch("/admin/license-reminder-settings", async (req, res): Promise<void>
       senderAccountId: parsed.data.senderAccountId,
       reminderDays: reminderDays.sort((left, right) => right - left),
       sendAfterExpiry: parsed.data.sendAfterExpiry,
-      message: parsed.data.message.trim(),
+      messageVi: parsed.data.messageVi.trim(),
+      messageEn: parsed.data.messageEn.trim(),
     },
   }, req.userId!);
   await recordActivity({
