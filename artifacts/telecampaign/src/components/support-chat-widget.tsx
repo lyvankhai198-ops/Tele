@@ -62,16 +62,6 @@ export function SupportChatWidget() {
   }, [chat.refetch, chatEnabled]);
 
   useEffect(() => {
-    if (chat.isLoading || !readMarkerKey || storedReadMessageId || adminMessages.length === 0) return;
-    const unreadCount = Math.min(serverUnread, adminMessages.length);
-    const baselineIndex = Math.max(0, adminMessages.length - unreadCount - 1);
-    const baselineMessage = adminMessages[baselineIndex];
-    if (!baselineMessage) return;
-    window.localStorage.setItem(readMarkerKey, baselineMessage.id);
-    bumpReadMarker((value) => value + 1);
-  }, [adminMessages, chat.isLoading, readMarkerKey, serverUnread, storedReadMessageId]);
-
-  useEffect(() => {
     const justOpened = open && !wasOpen.current;
     wasOpen.current = open;
     if (justOpened && unread > 0) {
