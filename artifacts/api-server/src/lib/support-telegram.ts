@@ -1,7 +1,14 @@
 import { readFile } from "node:fs/promises";
-import { eq } from "drizzle-orm";
-import { appUsersTable, db, supportMessagesTable } from "@workspace/db";
+import { and, count, desc, eq, gt, isNotNull, isNull, lte, ne, or, sql, sum } from "drizzle-orm";
+import {
+  appUsersTable,
+  db,
+  licenseKeysTable,
+  subscriptionsTable,
+  supportMessagesTable,
+} from "@workspace/db";
 import { getSystemSettings } from "./system-settings";
+import { localQuotaDate } from "./user-daily-quota";
 import {
   appendSupportMessage,
   ensureSupportConversation,
@@ -29,6 +36,17 @@ const botToken = () => process.env.TELECAMPAIGN_SUPPORT_BOT_TOKEN ?? process.env
 let polling = false;
 let offset = 0;
 
+const ADMIN_MENU = {
+  keyboard: [
+    [{ text: "📊 Tổng quan" }, { text: "💰 Doanh thu" }],
+    [{ text: "👥 Người dùng" }, { text: "🔑 License keys" }],
+    [{ text: "⏳ Sắp hết hạn" }, { text: "🧾 Key hôm nay" }],
+    [{ text: "🔄 Làm mới" }, { text: "🏠 Menu" }],
+  ],
+  resize_keyboard: true,
+  is_persistent: true,
+};
+
 async function telegramCall<T>(method: string, payload: Record<string, unknown>): Promise<T | null> {
   const token = botToken();
   if (!token) return null;
@@ -54,6 +72,170 @@ async function sendSupportMessage(text: string, replyToMessageId?: number): Prom
     reply_to_message_id: replyToMessageId,
     allow_sending_without_reply: true,
   });
+}
+
+async function sendAdminMenu(text = "Chọn một thao tác:"): Promise<TelegramMessage | null> {
+  const settings = await getSystemSettings();
+  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
+  return telegramCall<TelegramMessage>("sendMessage", {
+    chat_id: settings.supportChat.adminTelegramChatId,
+    text,
+    reply_markup: ADMIN_MENU,
+  });
+}
+
+function localDayCondition(column: typeof licenseKeysTable.claimedAt, timezone: string, date: string) {
+  return sql`(${column} AT TIME ZONE ${timezone})::date = ${date}::date`;
+}
+
+async function getAdminOverview() {
+  const settings = await getSystemSettings();
+  const now = new Date();
+  const today = localQuotaDate(settings.defaultTimezone, now);
+  const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const [
+    [userCount],
+    [activeCount],
+    [expiringCount],
+    [soldToday],
+    [revenueToday],
+    [soldTotal],
+    [inventory],
+  ] = await Promise.all([
+    db.select({ value: count() }).from(appUsersTable).where(ne(appUsersTable.role, "admin")),
+    db.select({ value: count() }).from(subscriptionsTable).where(or(isNull(subscriptionsTable.expiresAt), gt(subscriptionsTable.expiresAt, now))),
+    db.select({ value: count() }).from(subscriptionsTable).where(and(
+      gt(subscriptionsTable.expiresAt, now),
+      lte(subscriptionsTable.expiresAt, sevenDays),
+    )),
+    db.select({ value: count() }).from(licenseKeysTable).where(and(
+      isNull(licenseKeysTable.revokedAt),
+      isNotNull(licenseKeysTable.claimedAt),
+      localDayCondition(licenseKeysTable.claimedAt, settings.defaultTimezone, today),
+    )),
+    db.select({ value: sum(licenseKeysTable.salePriceVnd) }).from(licenseKeysTable).where(and(
+      isNull(licenseKeysTable.revokedAt),
+      isNotNull(licenseKeysTable.claimedAt),
+      localDayCondition(licenseKeysTable.claimedAt, settings.defaultTimezone, today),
+    )),
+    db.select({ value: count() }).from(licenseKeysTable).where(and(
+      isNull(licenseKeysTable.revokedAt),
+      isNotNull(licenseKeysTable.claimedAt),
+    )),
+    db.select({ value: count() }).from(licenseKeysTable).where(and(
+      isNull(licenseKeysTable.revokedAt),
+      isNull(licenseKeysTable.claimedAt),
+    )),
+  ]);
+  return {
+    users: Number(userCount?.value ?? 0),
+    active: Number(activeCount?.value ?? 0),
+    expiring: Number(expiringCount?.value ?? 0),
+    soldToday: Number(soldToday?.value ?? 0),
+    revenueToday: Number(revenueToday?.value ?? 0),
+    soldTotal: Number(soldTotal?.value ?? 0),
+    inventory: Number(inventory?.value ?? 0),
+  };
+}
+
+function money(value: number): string {
+  return `${new Intl.NumberFormat("vi-VN").format(value)}đ`;
+}
+
+async function sendOverview(): Promise<void> {
+  const stats = await getAdminOverview();
+  await sendAdminMenu(
+    `📊 TỔNG QUAN TELECAMPAIGN\n\n` +
+    `👥 Người dùng: ${stats.users}\n` +
+    `🟢 Gói đang hoạt động: ${stats.active}\n` +
+    `⏳ Hết hạn trong 7 ngày: ${stats.expiring}\n\n` +
+    `💰 Doanh thu hôm nay: ${money(stats.revenueToday)}\n` +
+    `🔑 Key kích hoạt hôm nay: ${stats.soldToday}\n` +
+    `📦 Key đã bán: ${stats.soldTotal}\n` +
+    `🗃 Key còn tồn: ${stats.inventory}`,
+  );
+}
+
+async function sendRevenue(): Promise<void> {
+  const stats = await getAdminOverview();
+  await sendAdminMenu(
+    `💰 DOANH THU & LICENSE\n\n` +
+    `Hôm nay: ${money(stats.revenueToday)}\n` +
+    `Key hôm nay: ${stats.soldToday}\n` +
+    `Tổng key đã kích hoạt: ${stats.soldTotal}\n` +
+    `Key còn tồn: ${stats.inventory}\n\n` +
+    `⏳ User sắp hết hạn: ${stats.expiring}`,
+  );
+}
+
+async function sendUsers(): Promise<void> {
+  const stats = await getAdminOverview();
+  await sendAdminMenu(
+    `👥 NGƯỜI DÙNG\n\n` +
+    `Tổng user: ${stats.users}\n` +
+    `Gói đang hoạt động: ${stats.active}\n` +
+    `Sắp hết hạn 7 ngày: ${stats.expiring}\n\n` +
+    `Dùng Dashboard để xem và thao tác từng user.`,
+  );
+}
+
+async function sendLicenseKeys(): Promise<void> {
+  const stats = await getAdminOverview();
+  await sendAdminMenu(
+    `🔑 LICENSE KEYS\n\n` +
+    `✅ Đã kích hoạt tổng: ${stats.soldTotal}\n` +
+    `🧾 Kích hoạt hôm nay: ${stats.soldToday}\n` +
+    `📦 Còn tồn: ${stats.inventory}\n\n` +
+    `Dùng Dashboard để tạo hoặc quản lý key.`,
+  );
+}
+
+async function sendExpiringUsers(): Promise<void> {
+  const now = new Date();
+  const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const rows = await db.select({
+    username: appUsersTable.username,
+    plan: subscriptionsTable.plan,
+    expiresAt: subscriptionsTable.expiresAt,
+  })
+    .from(subscriptionsTable)
+    .innerJoin(appUsersTable, eq(appUsersTable.id, subscriptionsTable.ownerUserId))
+    .where(and(
+      ne(appUsersTable.role, "admin"),
+      gt(subscriptionsTable.expiresAt, now),
+      lte(subscriptionsTable.expiresAt, sevenDays),
+    ))
+    .orderBy(subscriptionsTable.expiresAt)
+    .limit(10);
+  const body = rows.length
+    ? rows.map((row, index) => `${index + 1}. @${row.username} — ${row.plan.toUpperCase()} — ${row.expiresAt?.toLocaleDateString("vi-VN")}`).join("\n")
+    : "Không có user nào hết hạn trong 7 ngày tới.";
+  await sendAdminMenu(`⏳ SẮP HẾT HẠN\n\n${body}`);
+}
+
+async function sendTodayKeys(): Promise<void> {
+  const settings = await getSystemSettings();
+  const today = localQuotaDate(settings.defaultTimezone, new Date());
+  const rows = await db.select({
+    username: appUsersTable.username,
+    plan: licenseKeysTable.plan,
+    durationDays: licenseKeysTable.durationDays,
+    salePriceVnd: licenseKeysTable.salePriceVnd,
+    claimedAt: licenseKeysTable.claimedAt,
+  })
+    .from(licenseKeysTable)
+    .leftJoin(appUsersTable, eq(appUsersTable.id, licenseKeysTable.claimedBy))
+    .where(and(
+      isNotNull(licenseKeysTable.claimedAt),
+      isNull(licenseKeysTable.revokedAt),
+      localDayCondition(licenseKeysTable.claimedAt, settings.defaultTimezone, today),
+    ))
+    .orderBy(desc(licenseKeysTable.claimedAt))
+    .limit(20);
+  const body = rows.length
+    ? rows.map((row, index) => `${index + 1}. @${row.username ?? "unknown"} — ${row.plan.toUpperCase()} ${row.durationDays} ngày — ${money(row.salePriceVnd ?? 0)}`).join("\n")
+    : "Hôm nay chưa có key nào được kích hoạt.";
+  await sendAdminMenu(`🧾 KEY HÔM NAY (${rows.length})\n\n${body}`);
 }
 
 async function sendSupportPhoto(input: {
@@ -155,6 +337,24 @@ export async function notifySupportUserMessage(input: {
   if (sent) await setSupportMessageTelegramId(input.messageId, String(sent.chat.id), sent.message_id);
 }
 
+export async function notifyAdminLicenseActivated(input: {
+  username: string;
+  plan: string;
+  durationDays: number;
+  salePriceVnd: number | null;
+}): Promise<void> {
+  const settings = await getSystemSettings();
+  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
+  await sendAdminMenu(
+    `💰 CÓ KHÁCH KÍCH HOẠT KEY\n\n` +
+    `👤 User: @${input.username}\n` +
+    `📦 Gói: ${input.plan.toUpperCase()}\n` +
+    `📅 Thời hạn: ${input.durationDays} ngày\n` +
+    `💵 Giá key: ${input.salePriceVnd === null ? "Chưa định giá" : money(input.salePriceVnd)}\n\n` +
+    `Đã cập nhật vào doanh thu và số lượng key hôm nay.`,
+  );
+}
+
 export async function notifySupportConversationClosed(input: {
   username: string;
   telegramMessageRefs: SupportTelegramMessageRef[];
@@ -189,11 +389,39 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const hasPhoto = Boolean(message.photo?.length);
   if (!configuredChatId || String(message.chat.id) !== configuredChatId || (!text && !caption && !hasPhoto)) return;
 
-  if (text === "/start" || text === "/chatid") {
+  if (text === "/chatid") {
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
       text: `Chat ID hiện tại: ${message.chat.id}\nHãy nhập ID này trong Admin → Cấu hình hệ thống → Hỗ trợ chat.`,
     });
+    return;
+  }
+  if (text === "/start" || text === "/menu" || text === "🏠 Menu") {
+    await sendAdminMenu("👋 TeleCampaign Admin\n\nChọn thao tác bạn muốn xem:");
+    return;
+  }
+  if (text === "📊 Tổng quan" || text === "🔄 Làm mới") {
+    await sendOverview();
+    return;
+  }
+  if (text === "💰 Doanh thu") {
+    await sendRevenue();
+    return;
+  }
+  if (text === "👥 Người dùng") {
+    await sendUsers();
+    return;
+  }
+  if (text === "🔑 License keys") {
+    await sendLicenseKeys();
+    return;
+  }
+  if (text === "⏳ Sắp hết hạn") {
+    await sendExpiringUsers();
+    return;
+  }
+  if (text === "🧾 Key hôm nay") {
+    await sendTodayKeys();
     return;
   }
   const replyId = message.reply_to_message?.message_id;

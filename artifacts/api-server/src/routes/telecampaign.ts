@@ -146,7 +146,7 @@ import {
   markSupportConversationRead,
 } from "../lib/support-chat";
 import { supportMediaStorage, SupportMediaNotFoundError } from "../lib/supportMediaStorage";
-import { notifySupportConversationClosed, notifySupportUserMessage } from "../lib/support-telegram";
+import { notifyAdminLicenseActivated, notifySupportConversationClosed, notifySupportUserMessage } from "../lib/support-telegram";
 import {
   filterGroupLibraryGroups,
   getAdminActiveGroupDirectory,
@@ -929,6 +929,12 @@ router.post("/upgrade/activate", async (req, res): Promise<void> => {
     message: `Activated ${result.subscription.plan.toUpperCase()} subscription`,
     metadata: { plan: result.subscription.plan, expiresAt: result.subscription.expiresAt?.toISOString() ?? null },
   });
+  void notifyAdminLicenseActivated({
+    username: req.authUser?.username ?? currentUserId(req),
+    plan: result.license.plan,
+    durationDays: result.license.durationDays,
+    salePriceVnd: result.license.salePriceVnd,
+  }).catch((error) => req.log.warn({ err: error }, "Unable to notify admin bot about license activation"));
   res.json(ActivateLicenseResponse.parse({
     message: "Kích hoạt gói dịch vụ thành công",
     subscription: result.subscription,

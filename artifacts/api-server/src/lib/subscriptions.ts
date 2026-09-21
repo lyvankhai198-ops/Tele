@@ -861,6 +861,14 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
       expiresAt: next.expiresAt,
     }));
 
-    return { ok: true as const, subscription: toSubscriptionSummary(next, now, catalog) };
+    return {
+      ok: true as const,
+      subscription: toSubscriptionSummary(next, now, catalog),
+      license: {
+        plan: license.plan,
+        durationDays: license.durationDays,
+        salePriceVnd: license.salePriceVnd,
+      },
+    };
   });
 }
