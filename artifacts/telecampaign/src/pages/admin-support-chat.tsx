@@ -22,8 +22,8 @@ export default function AdminSupportChatPage() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const conversationsQuery = useListAdminSupportConversations({ query: { queryKey: getListAdminSupportConversationsQueryKey(), refetchInterval: 4_000 } });
-  const selectedQuery = useGetAdminSupportConversation(selectedId ?? "", { query: { queryKey: getGetAdminSupportConversationQueryKey(selectedId ?? ""), enabled: Boolean(selectedId), refetchInterval: 4_000 } });
+  const conversationsQuery = useListAdminSupportConversations({ query: { queryKey: getListAdminSupportConversationsQueryKey(), refetchInterval: 2_000 } });
+  const selectedQuery = useGetAdminSupportConversation(selectedId ?? "", { query: { queryKey: getGetAdminSupportConversationQueryKey(selectedId ?? ""), enabled: Boolean(selectedId), refetchInterval: 2_000 } });
   const markRead = useMarkAdminSupportRead();
   const send = useSendAdminSupportMessage();
   const updateStatus = useUpdateAdminSupportConversation();

@@ -21,7 +21,7 @@ export function SupportChatWidget() {
     query: {
       queryKey: getGetSupportChatQueryKey(),
       enabled: Boolean(user && user.role !== "admin" && !user.support),
-      refetchInterval: 4_000,
+      refetchInterval: 2_000,
     },
   });
   const send = useSendSupportChatMessage();
