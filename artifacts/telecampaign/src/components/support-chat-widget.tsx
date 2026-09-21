@@ -6,7 +6,7 @@ import {
   useMarkSupportChatRead,
   useSendSupportChatMessage,
 } from "@workspace/api-client-react";
-import { LifeBuoy, MessageCircle, Minus, Send, X } from "lucide-react";
+import { Headset, Minus, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n";
 
@@ -49,7 +49,7 @@ export function SupportChatWidget() {
           className="fixed bottom-5 right-5 z-40 grid h-12 w-12 place-items-center rounded-full bg-[#075e68] text-white shadow-[0_12px_32px_rgba(7,94,104,.26)] transition hover:-translate-y-0.5"
           aria-label={language === "vi" ? "Mở hỗ trợ" : "Open support"}
         >
-          <LifeBuoy className="h-5 w-5" />
+          <Headset className="h-5 w-5" />
         </button>
       );
     }
@@ -82,10 +82,9 @@ export function SupportChatWidget() {
       {open ? (
         <section className="flex h-[min(620px,calc(100dvh-32px))] w-[min(390px,calc(100vw-32px))] flex-col overflow-hidden rounded-[24px] border border-[#d7e5e5] bg-white shadow-[0_24px_70px_rgba(15,45,55,.2)] sm:h-[620px]">
           <header className="flex items-center gap-3 bg-[#075e68] px-4 py-4 text-white">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/15"><LifeBuoy className="h-5 w-5" /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/15"><Headset className="h-5 w-5" /></span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-extrabold">{title}</p>
-              <p className="mt-0.5 text-[11px] font-medium text-[#b9e5e2]">{language === "vi" ? "Tin nhắn được lưu tự động" : "Messages are saved automatically"}</p>
             </div>
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Minimize"><Minus className="h-4 w-4" /></button>
             <button type="button" onClick={hideWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Hide support chat"><X className="h-4 w-4" /></button>
@@ -102,8 +101,15 @@ export function SupportChatWidget() {
                 <div className={`max-w-[84%] rounded-2xl px-3.5 py-2.5 text-[12px] font-semibold leading-5 ${
                   message.senderType === "user"
                     ? "rounded-br-md bg-[#075e68] text-white"
-                    : "rounded-bl-md border border-[#dcebea] bg-white text-[#34504f]"
+                    : message.senderType === "admin"
+                      ? "rounded-bl-md border-2 border-[#73aaa5] bg-[#e8f5f3] text-[#244b49] shadow-[0_4px_12px_rgba(7,94,104,.1)]"
+                      : "rounded-bl-md border border-[#dcebea] bg-white text-[#34504f]"
                 }`}>
+                  {message.senderType === "admin" && (
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-[0.08em] text-[#075e68]">
+                      {language === "vi" ? "Admin" : "Support"}
+                    </p>
+                  )}
                   <p className="whitespace-pre-wrap break-words">{message.body}</p>
                   <time className={`mt-1 block text-[9px] font-bold ${message.senderType === "user" ? "text-white/65" : "text-[#91a8a7]"}`}>
                     {new Date(message.createdAt).toLocaleTimeString(language === "vi" ? "vi-VN" : "en-US", { hour: "2-digit", minute: "2-digit" })}
@@ -124,9 +130,13 @@ export function SupportChatWidget() {
         </section>
       ) : (
         <button type="button" onClick={() => setOpen(true)} className="group relative flex items-center gap-2.5 rounded-full bg-[#075e68] px-4 py-3 text-white shadow-[0_12px_32px_rgba(7,94,104,.26)] transition hover:-translate-y-0.5 hover:bg-[#064d55]" aria-label={title}>
-          <MessageCircle className="h-5 w-5" />
+          <Headset className="h-5 w-5" />
           <span className="hidden text-[12px] font-extrabold sm:inline">{language === "vi" ? "Cần hỗ trợ?" : "Need help?"}</span>
-          {unread > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#f4b942] px-1 text-[10px] font-extrabold text-[#553b04]">{unread > 9 ? "9+" : unread}</span>}
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-2 grid h-6 min-w-6 place-items-center rounded-full border-2 border-white bg-[#d92d4f] px-1 text-[10px] font-black text-white shadow-[0_3px_10px_rgba(217,45,79,.35)]" aria-label={`${unread} unread message${unread === 1 ? "" : "s"}`}>
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
         </button>
       )}
     </div>
