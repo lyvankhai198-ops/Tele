@@ -151,6 +151,7 @@ import {
 } from "../lib/notificationMediaStorage";
 import { getStorageStatus } from "../lib/storage-status";
 import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
+import { notifySupportConversationClosed } from "../lib/support-telegram";
 import {
   listAdminSystemEvents,
   markAdminSystemEventRead,
@@ -1041,7 +1042,14 @@ router.post("/admin/support-chat/conversations/:conversationId/read", async (req
 router.patch("/admin/support-chat/conversations/:conversationId", async (req, res): Promise<void> => {
   const parsed = UpdateAdminSupportConversationBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Trạng thái hội thoại không hợp lệ.");
-  if (parsed.data.status === "closed") await closeSupportConversation(req.params.conversationId);
+  if (parsed.data.status === "closed") {
+    const existing = await getSupportConversationForAdmin(req.params.conversationId);
+    const telegramMessageRefs = await closeSupportConversation(req.params.conversationId);
+    if (existing) {
+      void notifySupportConversationClosed({ username: existing.username, telegramMessageRefs })
+        .catch((error) => req.log.warn({ err: error }, "Unable to clean up support bot messages after admin close"));
+    }
+  }
   const conversation = await getSupportConversationForAdmin(req.params.conversationId);
   if (!conversation) return void sendError(res, 404, "Không tìm thấy hội thoại hỗ trợ.");
   res.json(UpdateAdminSupportConversationResponse.parse({ conversation }));

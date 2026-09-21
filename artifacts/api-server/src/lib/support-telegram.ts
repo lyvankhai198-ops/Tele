@@ -8,6 +8,7 @@ import {
   findSupportMessageByTelegramReply,
   getSupportConversationForAdmin,
   setSupportMessageTelegramId,
+  type SupportTelegramMessageRef,
 } from "./support-chat";
 import { supportMediaStorage } from "./supportMediaStorage";
 import { logger } from "./logger";
@@ -154,12 +155,30 @@ export async function notifySupportUserMessage(input: {
   if (sent) await setSupportMessageTelegramId(input.messageId, String(sent.chat.id), sent.message_id);
 }
 
-export async function notifySupportConversationClosed(input: { username: string }): Promise<void> {
+export async function notifySupportConversationClosed(input: {
+  username: string;
+  telegramMessageRefs: SupportTelegramMessageRef[];
+}): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled) return;
-  await sendSupportMessage(
-    `Khách hàng ${input.username} đã đóng phiên hỗ trợ trên website.\n\nPhiên hỗ trợ hiện tại đã kết thúc.`,
-  );
+  const chatId = settings.supportChat.adminTelegramChatId;
+  if (!chatId || !botToken()) return;
+  const messageIds = [...new Set(input.telegramMessageRefs
+    .filter((message) => message.chatId === chatId)
+    .map((message) => message.telegramMessageId))];
+  const results = await Promise.allSettled(messageIds.map((messageId) => telegramCall("deleteMessage", {
+    chat_id: chatId,
+    message_id: messageId,
+  })));
+  const failed = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (failed.length > 0) {
+    logger.warn({
+      username: input.username,
+      attempted: messageIds.length,
+      failed: failed.length,
+      err: failed[0]?.reason,
+    }, "Some support Telegram messages could not be deleted after conversation close");
+  }
 }
 
 async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
@@ -199,6 +218,7 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
     mediaPath: media?.objectPath,
     mediaContentType: media?.contentType,
   });
+  await setSupportMessageTelegramId(result.message.id, String(message.chat.id), message.message_id);
   logger.info({ conversationId: conversation.id, messageId: result.message.id }, "Support reply received from Telegram");
 }
 

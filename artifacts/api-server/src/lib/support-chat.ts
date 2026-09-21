@@ -33,6 +33,11 @@ export type SupportConversationDto = {
   messages?: SupportMessageDto[];
 };
 
+export type SupportTelegramMessageRef = {
+  chatId: string;
+  telegramMessageId: number;
+};
+
 function toMessageDto(message: typeof supportMessagesTable.$inferSelect): SupportMessageDto {
   return {
     id: message.id,
@@ -231,8 +236,12 @@ export async function markSupportConversationRead(conversationId: string, reader
     .where(eq(supportConversationsTable.id, conversationId));
 }
 
-export async function closeSupportConversation(conversationId: string): Promise<void> {
-  const mediaPaths = await db.select({ mediaPath: supportMessagesTable.mediaPath })
+export async function closeSupportConversation(conversationId: string): Promise<SupportTelegramMessageRef[]> {
+  const messages = await db.select({
+    mediaPath: supportMessagesTable.mediaPath,
+    telegramChatId: supportMessagesTable.telegramChatId,
+    telegramMessageId: supportMessagesTable.telegramMessageId,
+  })
     .from(supportMessagesTable)
     .where(eq(supportMessagesTable.conversationId, conversationId));
   await db.transaction(async (tx) => {
@@ -248,7 +257,16 @@ export async function closeSupportConversation(conversationId: string): Promise<
       })
       .where(eq(supportConversationsTable.id, conversationId));
   });
-  await Promise.all(mediaPaths
+  await Promise.all(messages
     .map(({ mediaPath }) => mediaPath ? supportMediaStorage.deleteImage(mediaPath) : null)
     .filter((mediaPath): mediaPath is Promise<void> => Boolean(mediaPath)));
+  return messages
+    .filter((message): message is typeof message & {
+      telegramChatId: string;
+      telegramMessageId: number;
+    } => Boolean(message.telegramChatId && message.telegramMessageId))
+    .map((message) => ({
+      chatId: message.telegramChatId,
+      telegramMessageId: message.telegramMessageId,
+    }));
 }

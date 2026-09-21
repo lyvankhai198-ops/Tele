@@ -866,8 +866,8 @@ router.post("/support-chat/read", async (req, res): Promise<void> => {
 router.post("/support-chat/close", async (req, res): Promise<void> => {
   const conversation = await getSupportConversationForUser(req.userId!);
   if (conversation.status !== "closed") {
-    await closeSupportConversation(conversation.id);
-    void notifySupportConversationClosed({ username: conversation.username })
+    const telegramMessageRefs = await closeSupportConversation(conversation.id);
+    void notifySupportConversationClosed({ username: conversation.username, telegramMessageRefs })
       .catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about closed conversation"));
   }
   res.json(CloseSupportChatResponse.parse({
