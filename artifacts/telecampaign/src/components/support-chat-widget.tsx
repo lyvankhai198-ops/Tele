@@ -20,12 +20,11 @@ export function SupportChatWidget() {
   const [, bumpReadMarker] = useState(0);
   const wasOpen = useRef(false);
   const messagesViewport = useRef<HTMLDivElement>(null);
+  const chatEnabled = Boolean(user && user.role !== "admin" && !user.support);
   const chat = useGetSupportChat({
     query: {
       queryKey: getGetSupportChatQueryKey(),
-      enabled: Boolean(user && user.role !== "admin" && !user.support),
-      refetchInterval: 2_000,
-      refetchIntervalInBackground: true,
+      enabled: chatEnabled,
       refetchOnWindowFocus: true,
     },
   });
@@ -47,6 +46,20 @@ export function SupportChatWidget() {
     : 0;
   const serverUnread = conversation?.unreadForUser ?? 0;
   const unread = Math.max(serverUnread, localUnread);
+
+  useEffect(() => {
+    if (!chatEnabled) return;
+    const refresh = () => void chat.refetch();
+    const timer = window.setInterval(refresh, 2_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [chat.refetch, chatEnabled]);
 
   useEffect(() => {
     if (chat.isLoading || !readMarkerKey || storedReadMessageId || adminMessages.length === 0) return;
