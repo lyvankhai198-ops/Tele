@@ -17,25 +17,59 @@ export function SupportChatWidget() {
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(() => window.localStorage.getItem("telecampaign-support-chat-hidden") === "true");
   const [draft, setDraft] = useState("");
+  const [, bumpReadMarker] = useState(0);
   const chat = useGetSupportChat({
     query: {
       queryKey: getGetSupportChatQueryKey(),
       enabled: Boolean(user && user.role !== "admin" && !user.support),
       refetchInterval: 2_000,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
     },
   });
   const send = useSendSupportChatMessage();
   const markRead = useMarkSupportChatRead();
   const conversation = chat.data?.conversation;
   const messages = useMemo(() => conversation?.messages ?? [], [conversation?.messages]);
+  const adminMessages = useMemo(
+    () => messages.filter((message) => message.senderType === "admin"),
+    [messages],
+  );
+  const readMarkerKey = user?.id ? `telecampaign-support-last-read:${user.id}` : null;
+  const storedReadMessageId = readMarkerKey ? window.localStorage.getItem(readMarkerKey) : null;
+  const storedReadIndex = storedReadMessageId
+    ? adminMessages.findIndex((message) => message.id === storedReadMessageId)
+    : -1;
+  const localUnread = storedReadIndex >= 0
+    ? adminMessages.length - storedReadIndex - 1
+    : 0;
+  const serverUnread = conversation?.unreadForUser ?? 0;
+  const unread = Math.max(serverUnread, localUnread);
 
   useEffect(() => {
-    if (open && conversation?.unreadForUser) {
+    if (chat.isLoading || !readMarkerKey || storedReadMessageId || adminMessages.length === 0) return;
+    const unreadCount = Math.min(serverUnread, adminMessages.length);
+    const baselineIndex = Math.max(0, adminMessages.length - unreadCount - 1);
+    const baselineMessage = adminMessages[baselineIndex];
+    if (!baselineMessage) return;
+    window.localStorage.setItem(readMarkerKey, baselineMessage.id);
+    bumpReadMarker((value) => value + 1);
+  }, [adminMessages, chat.isLoading, readMarkerKey, serverUnread, storedReadMessageId]);
+
+  useEffect(() => {
+    if (open && unread > 0) {
       markRead.mutate(undefined, {
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: getGetSupportChatQueryKey() }),
+        onSuccess: () => {
+          const latestAdminMessage = adminMessages.at(-1);
+          if (readMarkerKey && latestAdminMessage) {
+            window.localStorage.setItem(readMarkerKey, latestAdminMessage.id);
+            bumpReadMarker((value) => value + 1);
+          }
+          void queryClient.invalidateQueries({ queryKey: getGetSupportChatQueryKey() });
+        },
       });
     }
-  }, [conversation?.unreadForUser, markRead, open, queryClient]);
+  }, [adminMessages, markRead, open, queryClient, readMarkerKey, unread]);
 
   if (!user || user.role === "admin" || user.support || chat.data?.enabled === false || hidden) {
     if (hidden && user && user.role !== "admin" && !user.support && chat.data?.enabled !== false) {
@@ -56,7 +90,6 @@ export function SupportChatWidget() {
     return null;
   }
 
-  const unread = conversation?.unreadForUser ?? 0;
   const title = language === "vi" ? "Hỗ trợ TeleCampaign" : "TeleCampaign support";
   const placeholder = language === "vi" ? "Nhập câu hỏi của bạn…" : "Type your question…";
 
