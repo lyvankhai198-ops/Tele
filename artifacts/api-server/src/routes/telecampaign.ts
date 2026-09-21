@@ -19,6 +19,7 @@ import {
   SendSupportChatMessageBody,
   SendSupportChatMessageResponse,
   MarkSupportChatReadResponse,
+  CloseSupportChatResponse,
   GetGroupLibraryAccessResponse,
   GetGroupLibraryQueryParams,
   GetGroupLibraryResponse,
@@ -137,10 +138,11 @@ import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddl
 import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
 import {
   appendSupportMessage,
+  closeSupportConversation,
   getSupportConversationForUser,
   markSupportConversationRead,
 } from "../lib/support-chat";
-import { notifySupportUserMessage } from "../lib/support-telegram";
+import { notifySupportConversationClosed, notifySupportUserMessage } from "../lib/support-telegram";
 import {
   filterGroupLibraryGroups,
   getAdminActiveGroupDirectory,
@@ -791,6 +793,18 @@ router.post("/support-chat/read", async (req, res): Promise<void> => {
   const conversation = await getSupportConversationForUser(req.userId!);
   await markSupportConversationRead(conversation.id, "user");
   res.json(MarkSupportChatReadResponse.parse({ ok: true }));
+});
+
+router.post("/support-chat/close", async (req, res): Promise<void> => {
+  const conversation = await getSupportConversationForUser(req.userId!);
+  if (conversation.status !== "closed") {
+    await closeSupportConversation(conversation.id);
+    void notifySupportConversationClosed({ username: conversation.username })
+      .catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about closed conversation"));
+  }
+  res.json(CloseSupportChatResponse.parse({
+    conversation: await getSupportConversationForUser(req.userId!),
+  }));
 });
 
 router.get("/account", async (req, res): Promise<void> => {

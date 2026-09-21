@@ -1401,6 +1401,10 @@ export interface SupportChatReadResponse {
   ok: boolean;
 }
 
+export interface SupportChatCloseResponse {
+  conversation: SupportChatConversation;
+}
+
 export interface AdminSupportConversationList {
   conversations: SupportChatConversation[];
 }

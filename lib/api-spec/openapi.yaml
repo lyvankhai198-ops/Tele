@@ -749,6 +749,17 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SupportChatReadResponse" }
         "401": { description: Authentication is required }
+  /support-chat/close:
+    post:
+      operationId: closeSupportChat
+      tags: [support]
+      responses:
+        "200":
+          description: Support conversation closed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportChatCloseResponse" }
+        "401": { description: Authentication is required }
   /group-library/access:
     get:
       operationId: getGroupLibraryAccess
@@ -2553,6 +2564,11 @@ components:
       required: [ok]
       properties:
         ok: { type: boolean }
+    SupportChatCloseResponse:
+      type: object
+      required: [conversation]
+      properties:
+        conversation: { $ref: "#/components/schemas/SupportChatConversation" }
     AdminSupportConversationList:
       type: object
       required: [conversations]

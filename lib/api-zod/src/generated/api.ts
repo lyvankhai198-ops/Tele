@@ -1353,6 +1353,34 @@ export const MarkSupportChatReadResponse = zod.object({
 })
 
 
+export const closeSupportChatResponseConversationUnreadForUserMin = 0;
+
+export const closeSupportChatResponseConversationUnreadForAdminMin = 0;
+
+
+
+export const CloseSupportChatResponse = zod.object({
+  "conversation": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(closeSupportChatResponseConversationUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(closeSupportChatResponseConversationUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+})
+
+
 export const GetGroupLibraryAccessResponse = zod.object({
   "visible": zod.boolean(),
   "minimumJoinPlan": zod.enum(['pro', 'unlimited']),

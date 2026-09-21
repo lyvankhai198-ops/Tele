@@ -182,6 +182,7 @@ export * from './revokeSessionsResult';
 export * from './subscription';
 export * from './subscriptionStatus';
 export * from './supportAdminMessageResult';
+export * from './supportChatCloseResponse';
 export * from './supportChatConversation';
 export * from './supportChatConversationStatus';
 export * from './supportChatMessage';

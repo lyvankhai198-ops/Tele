@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  useCloseSupportChat,
   getGetSupportChatQueryKey,
   useGetSupportChat,
   useMarkSupportChatRead,
@@ -16,6 +17,7 @@ export function SupportChatWidget() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [hidden, setHidden] = useState(() => window.localStorage.getItem("telecampaign-support-chat-hidden") === "true");
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [, bumpReadMarker] = useState(0);
   const wasOpen = useRef(false);
@@ -30,6 +32,7 @@ export function SupportChatWidget() {
   });
   const send = useSendSupportChatMessage();
   const markRead = useMarkSupportChatRead();
+  const closeChat = useCloseSupportChat();
   const conversation = chat.data?.conversation;
   const messages = useMemo(() => conversation?.messages ?? [], [conversation?.messages]);
   const adminMessages = useMemo(
@@ -99,6 +102,11 @@ export function SupportChatWidget() {
           aria-label={language === "vi" ? "Mở hỗ trợ" : "Open support"}
         >
           <Headset className="h-5 w-5" />
+           {unread > 0 && (
+             <span className="absolute -right-1 -top-2 grid h-6 min-w-6 place-items-center rounded-full border-2 border-white bg-[#d92d4f] px-1 text-[10px] font-black text-white shadow-[0_3px_10px_rgba(217,45,79,.35)]" aria-label={`${unread} unread message${unread === 1 ? "" : "s"}`}>
+               {unread > 9 ? "9+" : unread}
+             </span>
+           )}
         </button>
       );
     }
@@ -121,8 +129,20 @@ export function SupportChatWidget() {
   }
 
   function hideWidget() {
-    window.localStorage.setItem("telecampaign-support-chat-hidden", "true");
-    setHidden(true);
+    setCloseConfirmOpen(true);
+  }
+
+  function confirmCloseWidget() {
+    if (closeChat.isPending) return;
+    closeChat.mutate(undefined, {
+      onSuccess: () => {
+        window.localStorage.setItem("telecampaign-support-chat-hidden", "true");
+        setCloseConfirmOpen(false);
+        setOpen(false);
+        setHidden(true);
+        void queryClient.invalidateQueries({ queryKey: getGetSupportChatQueryKey() });
+      },
+    });
   }
 
   function minimizeWidget() {
@@ -133,14 +153,14 @@ export function SupportChatWidget() {
   return (
     <div className="fixed bottom-4 right-4 z-40 sm:bottom-6 sm:right-6" data-testid="support-chat-widget">
       {open ? (
-        <section className="flex h-[min(620px,calc(100dvh-32px))] w-[min(390px,calc(100vw-32px))] flex-col overflow-hidden rounded-[24px] border border-[#d7e5e5] bg-white shadow-[0_24px_70px_rgba(15,45,55,.2)] sm:h-[620px]">
+        <section className="relative flex h-[min(620px,calc(100dvh-32px))] w-[min(390px,calc(100vw-32px))] flex-col overflow-hidden rounded-[24px] border border-[#d7e5e5] bg-white shadow-[0_24px_70px_rgba(15,45,55,.2)] sm:h-[620px]">
           <header className="flex items-center gap-3 bg-[#075e68] px-4 py-4 text-white">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/15"><Headset className="h-5 w-5" /></span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-extrabold">{title}</p>
             </div>
             <button type="button" onClick={minimizeWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Minimize"><Minus className="h-4 w-4" /></button>
-            <button type="button" onClick={hideWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Hide support chat"><X className="h-4 w-4" /></button>
+             <button type="button" onClick={hideWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Close support chat"><X className="h-4 w-4" /></button>
           </header>
           <div ref={messagesViewport} className="flex-1 space-y-3 overflow-y-auto bg-[#f6faf9] px-4 py-4">
             {chat.isLoading && <p className="py-8 text-center text-xs font-semibold text-[#78908f]">Loading…</p>}
@@ -180,6 +200,35 @@ export function SupportChatWidget() {
             </div>
             <p className="mt-1.5 px-2 text-[9px] font-semibold text-[#9aacab]">{draft.length}/2000</p>
           </form>
+          {closeConfirmOpen && (
+            <div className="absolute inset-0 z-10 grid place-items-center bg-[#123f43]/35 p-4" role="dialog" aria-modal="true" aria-labelledby="support-close-title">
+              <div className="w-full max-w-[330px] rounded-2xl bg-white p-5 shadow-[0_20px_55px_rgba(15,45,55,.24)]">
+                <h2 id="support-close-title" className="text-[15px] font-black text-[#203f3e]">
+                  {language === "vi" ? "Bạn muốn đóng chat?" : "Close this chat?"}
+                </h2>
+                <p className="mt-2 text-[12px] font-semibold leading-5 text-[#587170]">
+                  {language === "vi"
+                    ? "Nếu đóng chat, phiên hỗ trợ hiện tại sẽ kết thúc. Bạn vẫn có thể mở lại và gửi tin nhắn mới bất cứ lúc nào."
+                    : "Closing the chat ends the current support session. You can reopen it and send a new message anytime."}
+                </p>
+                <p className="mt-2 text-[11px] font-semibold leading-4 text-[#78908f]">
+                  {language === "vi"
+                    ? "Bot Telegram cũng sẽ nhận được thông báo phiên đã đóng."
+                    : "The Telegram bot will also be notified that the session was closed."}
+                </p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" onClick={() => setCloseConfirmOpen(false)} disabled={closeChat.isPending} className="rounded-xl border border-[#d7e5e5] px-3.5 py-2 text-[11px] font-extrabold text-[#587170] hover:bg-[#f6faf9] disabled:opacity-50">
+                    {language === "vi" ? "Hủy" : "Cancel"}
+                  </button>
+                  <button type="button" onClick={confirmCloseWidget} disabled={closeChat.isPending} className="rounded-xl bg-[#075e68] px-3.5 py-2 text-[11px] font-extrabold text-white hover:bg-[#064d55] disabled:opacity-50">
+                    {closeChat.isPending
+                      ? (language === "vi" ? "Đang đóng…" : "Closing…")
+                      : (language === "vi" ? "Đóng chat" : "Close chat")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       ) : (
         <button type="button" onPointerDown={() => setOpen(true)} onClick={() => setOpen(true)} className="group relative flex touch-manipulation items-center gap-2.5 rounded-full bg-[#075e68] px-4 py-3 text-white shadow-[0_12px_32px_rgba(7,94,104,.26)] transition hover:-translate-y-0.5 hover:bg-[#064d55]" aria-label={title}>

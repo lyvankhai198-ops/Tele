@@ -109,6 +109,7 @@ import type {
   RevokeSessionsResult,
   Subscription,
   SupportAdminMessageResult,
+  SupportChatCloseResponse,
   SupportChatMessageInput,
   SupportChatMessageResult,
   SupportChatReadResponse,
@@ -3835,6 +3836,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getMarkSupportChatReadMutationOptions(options));
+    }
+
+export const getCloseSupportChatUrl = () => {
+
+
+
+
+  return `/api/support-chat/close`
+}
+
+export const closeSupportChat = async ( options?: Parameters<typeof customFetch>[1]): Promise<SupportChatCloseResponse> => {
+
+  return customFetch<SupportChatCloseResponse>(getCloseSupportChatUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCloseSupportChatMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeSupportChat>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeSupportChat>>, TError,void, TContext> => {
+
+const mutationKey = ['closeSupportChat'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeSupportChat>>, void> = () => {
+
+
+          return  closeSupportChat(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseSupportChatMutationResult = NonNullable<Awaited<ReturnType<typeof closeSupportChat>>>
+
+    export type CloseSupportChatMutationError = ErrorType<void>
+
+    export const useCloseSupportChat = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeSupportChat>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closeSupportChat>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCloseSupportChatMutationOptions(options));
     }
 
 export const getGetGroupLibraryAccessUrl = () => {

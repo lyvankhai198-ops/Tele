@@ -80,6 +80,14 @@ export async function notifySupportUserMessage(input: {
   if (sent) await setSupportMessageTelegramId(input.messageId, String(sent.chat.id), sent.message_id);
 }
 
+export async function notifySupportConversationClosed(input: { username: string }): Promise<void> {
+  const settings = await getSystemSettings();
+  if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled) return;
+  await sendSupportMessage(
+    `Khách hàng ${input.username} đã đóng phiên hỗ trợ trên website.\n\nPhiên hỗ trợ hiện tại đã kết thúc.`,
+  );
+}
+
 async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const settings = await getSystemSettings();
   const configuredChatId = settings.supportChat.adminTelegramChatId;
