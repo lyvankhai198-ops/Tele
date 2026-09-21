@@ -19,6 +19,7 @@ export function SupportChatWidget() {
   const [draft, setDraft] = useState("");
   const [, bumpReadMarker] = useState(0);
   const wasOpen = useRef(false);
+  const messagesViewport = useRef<HTMLDivElement>(null);
   const chat = useGetSupportChat({
     query: {
       queryKey: getGetSupportChatQueryKey(),
@@ -74,6 +75,14 @@ export function SupportChatWidget() {
     }
   }, [adminMessages, markRead, open, queryClient, readMarkerKey, unread]);
 
+  useEffect(() => {
+    if (!open || !messagesViewport.current) return;
+    const viewport = messagesViewport.current;
+    requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+    });
+  }, [messages.length, open]);
+
   if (!user || user.role === "admin" || user.support || chat.data?.enabled === false || hidden) {
     if (hidden && user && user.role !== "admin" && !user.support && chat.data?.enabled !== false) {
       return (
@@ -125,7 +134,7 @@ export function SupportChatWidget() {
             <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Minimize"><Minus className="h-4 w-4" /></button>
             <button type="button" onClick={hideWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Hide support chat"><X className="h-4 w-4" /></button>
           </header>
-          <div className="flex-1 space-y-3 overflow-y-auto bg-[#f6faf9] px-4 py-4">
+          <div ref={messagesViewport} className="flex-1 space-y-3 overflow-y-auto bg-[#f6faf9] px-4 py-4">
             {chat.isLoading && <p className="py-8 text-center text-xs font-semibold text-[#78908f]">Loading…</p>}
             {!chat.isLoading && messages.length === 0 && (
               <div className="rounded-2xl border border-[#dcebea] bg-white p-4 text-[12px] font-semibold leading-5 text-[#587170]">
