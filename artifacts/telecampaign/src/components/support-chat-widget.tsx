@@ -44,9 +44,9 @@ export function SupportChatWidget() {
   const storedReadIndex = storedReadMessageId
     ? adminMessages.findIndex((message) => message.id === storedReadMessageId)
     : -1;
-  const localUnread = storedReadIndex >= 0
+  const localUnread = storedReadMessageId && storedReadIndex >= 0
     ? adminMessages.length - storedReadIndex - 1
-    : 0;
+    : adminMessages.length;
   const serverUnread = conversation?.unreadForUser ?? 0;
   const unread = Math.max(serverUnread, localUnread);
 
@@ -137,6 +137,7 @@ export function SupportChatWidget() {
     closeChat.mutate(undefined, {
       onSuccess: () => {
         window.localStorage.setItem("telecampaign-support-chat-hidden", "true");
+        if (readMarkerKey) window.localStorage.removeItem(readMarkerKey);
         setCloseConfirmOpen(false);
         setOpen(false);
         setHidden(true);
@@ -208,13 +209,8 @@ export function SupportChatWidget() {
                 </h2>
                 <p className="mt-2 text-[12px] font-semibold leading-5 text-[#587170]">
                   {language === "vi"
-                    ? "Nếu đóng chat, phiên hỗ trợ hiện tại sẽ kết thúc. Bạn vẫn có thể mở lại và gửi tin nhắn mới bất cứ lúc nào."
-                    : "Closing the chat ends the current support session. You can reopen it and send a new message anytime."}
-                </p>
-                <p className="mt-2 text-[11px] font-semibold leading-4 text-[#78908f]">
-                  {language === "vi"
-                    ? "Bot Telegram cũng sẽ nhận được thông báo phiên đã đóng."
-                    : "The Telegram bot will also be notified that the session was closed."}
+                    ? "Đóng chat đồng nghĩa xoá các dữ liệu chat. Nếu đóng chat, phiên hỗ trợ hiện tại sẽ kết thúc và dữ liệu tin nhắn sẽ được xoá. Bạn vẫn có thể mở lại và gửi tin nhắn mới bất cứ lúc nào."
+                    : "Closing the chat deletes the chat data. The current support session and its messages will end and be deleted. You can reopen the chat and send a new message anytime."}
                 </p>
                 <div className="mt-5 flex justify-end gap-2">
                   <button type="button" onClick={() => setCloseConfirmOpen(false)} disabled={closeChat.isPending} className="rounded-xl border border-[#d7e5e5] px-3.5 py-2 text-[11px] font-extrabold text-[#587170] hover:bg-[#f6faf9] disabled:opacity-50">

@@ -204,7 +204,17 @@ export async function markSupportConversationRead(conversationId: string, reader
 }
 
 export async function closeSupportConversation(conversationId: string): Promise<void> {
-  await db.update(supportConversationsTable)
-    .set({ status: "closed", updatedAt: new Date() })
-    .where(eq(supportConversationsTable.id, conversationId));
+  await db.transaction(async (tx) => {
+    await tx.delete(supportMessagesTable)
+      .where(eq(supportMessagesTable.conversationId, conversationId));
+    await tx.update(supportConversationsTable)
+      .set({
+        status: "closed",
+        unreadForUser: 0,
+        unreadForAdmin: 0,
+        lastMessageAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(supportConversationsTable.id, conversationId));
+  });
 }
