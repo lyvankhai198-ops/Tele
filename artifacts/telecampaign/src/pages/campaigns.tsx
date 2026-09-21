@@ -19,6 +19,7 @@ import {
   useGetCampaignCloneReadiness,
   useGetTelegramSavedMessage,
   useBulkControlCampaigns,
+  useBulkDeleteCampaigns,
   useBulkUpdateCampaignTemplate,
   useListCampaigns,
   useListMessageTemplates,
@@ -58,6 +59,9 @@ const copy = {
     bulkPauseBtn: "Stop all",
     bulkResumeBtn: "Run all",
     bulkTemplateBtn: "Change automatic templates",
+    bulkDeleteBtn: "Delete all filtered",
+    bulkDeleteConfirm: (count: number) => `Delete ${count} campaign${count === 1 ? "" : "s"} matching the current filters? Active campaigns will be kept.`,
+    bulkDeleteResult: (deleted: number, skipped: number) => `Deleted ${deleted} campaign${deleted === 1 ? "" : "s"}${skipped ? `; ${skipped} active campaign${skipped === 1 ? "" : "s"} kept.` : "."}`,
     bulkPauseConfirm: (count: number) => `Pause ${count} active campaign${count === 1 ? "" : "s"}?`,
     bulkResumeTitle: "Run campaigns",
     bulkResumeDetail: "Choose which filtered campaign status to run. Running campaigns are not changed.",
@@ -203,6 +207,9 @@ const copy = {
     bulkPauseBtn: "Dừng tất cả",
     bulkResumeBtn: "Chạy lại tất cả",
     bulkTemplateBtn: "Đổi mẫu tin tự động",
+    bulkDeleteBtn: "Xóa tất cả theo bộ lọc",
+    bulkDeleteConfirm: (count: number) => `Xóa ${count} chiến dịch theo bộ lọc hiện tại? Các chiến dịch đang chạy sẽ được giữ lại.`,
+    bulkDeleteResult: (deleted: number, skipped: number) => `Đã xóa ${deleted} chiến dịch${skipped ? `; giữ lại ${skipped} chiến dịch đang chạy.` : "."}`,
     bulkPauseConfirm: (count: number) => `Tạm dừng ${count} chiến dịch đang chạy?`,
     bulkResumeTitle: "Chạy lại chiến dịch",
     bulkResumeDetail: "Chọn trạng thái chiến dịch cần chạy theo bộ lọc. Chiến dịch đang chạy sẽ không bị đổi.",
@@ -458,6 +465,7 @@ export default function Campaigns() {
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
   const bulkControl = useBulkControlCampaigns();
+  const bulkDelete = useBulkDeleteCampaigns();
   const bulkTemplate = useBulkUpdateCampaignTemplate();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
@@ -753,6 +761,28 @@ export default function Campaigns() {
     }
   }
 
+  async function removeFilteredCampaigns() {
+    const deletableCount = listedCampaigns.filter((campaign) => !isActive(campaign.status)).length;
+    if (!deletableCount) {
+      setToast(c.bulkNoEligible);
+      return;
+    }
+    if (!window.confirm(c.bulkDeleteConfirm(listedCampaigns.length))) return;
+    try {
+      const result = await bulkDelete.mutateAsync({
+        data: {
+          status: status as "all" | "queued" | "running" | "paused" | "completed" | "draft" | "cancelled",
+          search: search.trim(),
+        },
+      });
+      await campaigns.refetch();
+      if (details && result.deletedCount > 0) setDetails(null);
+      setToast(c.bulkDeleteResult(result.deletedCount, result.skippedCount));
+    } catch (error) {
+      setToast(localizedErrorMessage(error, language, c.genericError));
+    }
+  }
+
   return (
     <AppLayout activePage="campaigns" title={c.pageTitle} hideUpgrade headerAction={
       !isSupportMode && <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
@@ -783,7 +813,7 @@ export default function Campaigns() {
           </select>
         </div>
         {!isSupportMode && (
-          <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => void pauseAllCampaigns()}
@@ -814,6 +844,16 @@ export default function Campaigns() {
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {c.bulkTemplateBtn}
             </button>)}
+            <button
+              type="button"
+              onClick={() => void removeFilteredCampaigns()}
+              disabled={bulkControl.isPending || bulkTemplate.isPending || bulkDelete.isPending}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#dc2626] bg-white px-3 text-[13px] font-extrabold text-[#dc2626] shadow-sm transition hover:bg-[#fff1f2] disabled:cursor-not-allowed disabled:opacity-60"
+              data-testid="campaigns-delete-filtered"
+            >
+              {bulkDelete.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {c.bulkDeleteBtn}
+            </button>
           </div>
         )}
 

@@ -1045,6 +1045,9 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const validPostJoin = Number.isInteger(postJoin.repeatCount)
     && postJoin.repeatCount >= 1
     && postJoin.repeatCount <= 300
+    && Number.isInteger(postJoin.campaignStartDelaySeconds)
+    && postJoin.campaignStartDelaySeconds >= 0
+    && postJoin.campaignStartDelaySeconds <= 259200
     && Number.isInteger(postJoin.roundDelayMinSeconds)
     && Number.isInteger(postJoin.roundDelayMaxSeconds)
     && postJoin.roundDelayMinSeconds >= 0

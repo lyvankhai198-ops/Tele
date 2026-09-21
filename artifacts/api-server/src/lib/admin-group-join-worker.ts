@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, lte, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, isNotNull, lte, lt, or, sql } from "drizzle-orm";
 import {
   adminGroupJoinJobsTable,
   appUsersTable,
@@ -27,7 +27,7 @@ const FLOOD_WAIT_BUFFER_MS = 60_000;
 const GENERIC_RETRY_DELAY_MS = 15 * 60_000;
 const JOB_LEASE_MS = 10 * 60_000;
 const WORKER_INTERVAL_MS = 5_000;
-const SCAN_CONCURRENCY = 8;
+const PERIODIC_GROUP_SYNC_MS = 60 * 60_000;
 
 const activeAccounts = new Set<string>();
 
@@ -67,7 +67,13 @@ async function listAdminAccounts(includeDisconnected = false): Promise<AdminAcco
     eq(appUsersTable.role, "admin"),
     isNull(telegramAccountsTable.deletedAt),
   ];
-  if (!includeDisconnected) conditions.push(eq(telegramAccountsTable.status, "connected"));
+  if (!includeDisconnected) {
+    conditions.push(
+      eq(telegramAccountsTable.status, "connected"),
+      isNotNull(telegramAccountsTable.sessionEncrypted),
+      isNotNull(telegramAccountsTable.telegramUserId),
+    );
+  }
   return db.select({
     id: telegramAccountsTable.id,
     ownerUserId: telegramAccountsTable.ownerUserId,
@@ -131,6 +137,7 @@ async function createPostJoinCampaign(input: {
   ownerUserId: string;
   groupId: string;
   groupTitle: string;
+  initialDelaySeconds?: number;
 }, settingsOverride?: Awaited<ReturnType<typeof getSystemSettings>>): Promise<string | null> {
   const settings = settingsOverride ?? await getSystemSettings();
   const config = settings.postJoinCampaign;
@@ -194,6 +201,9 @@ async function createPostJoinCampaign(input: {
     }
 
     const now = new Date();
+    const scheduledAt = config.mode === "send"
+      ? new Date(now.getTime() + (input.initialDelaySeconds ?? config.campaignStartDelaySeconds) * 1000)
+      : null;
     const campaignStatus = config.mode === "send" ? "queued" : "draft";
     const [template] = config.templateId
       ? await tx.select().from(messageTemplatesTable).where(and(
@@ -214,8 +224,8 @@ async function createPostJoinCampaign(input: {
       mediaUrl: null,
       status: campaignStatus,
       pauseReason: campaignStatus === "draft" && config.mode === "send" ? "destination_not_ready" : null,
-      scheduledAt: null,
-      scheduleAnchorAt: now,
+      scheduledAt,
+      scheduleAnchorAt: scheduledAt ?? now,
       timezone: settings.defaultTimezone,
       maxRetries: settings.campaignDefaults.maxRetries,
       repeatCount: config.repeatCount,
@@ -226,7 +236,7 @@ async function createPostJoinCampaign(input: {
     }).returning();
 
     const targetRows = [];
-    let roundStartAt = now.getTime();
+    let roundStartAt = (scheduledAt ?? now).getTime();
     for (let round = 0; round < config.repeatCount; round += 1) {
       targetRows.push({
         campaignId: campaign.id,
@@ -267,74 +277,10 @@ async function createPostJoinCampaign(input: {
       joinJobId: input.jobId,
       repeatCount: config.repeatCount,
       targetCount: result.targetCount,
+      campaignStartDelaySeconds: config.campaignStartDelaySeconds,
     },
   });
   return result.campaign.id;
-}
-
-type AutomaticCampaignRepair = "deleted_no_permission" | "deleted_duplicate" | null;
-
-async function repairAutomaticCampaign(input: {
-  jobId: string;
-  accountId: string;
-  ownerUserId: string;
-  destinationId: string;
-}): Promise<AutomaticCampaignRepair> {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`
-      SELECT 1 FROM ${adminGroupJoinJobsTable}
-      WHERE ${adminGroupJoinJobsTable.id} = ${input.jobId}
-      FOR UPDATE
-    `);
-    const [job] = await tx.select({
-      autoCampaignId: adminGroupJoinJobsTable.autoCampaignId,
-    }).from(adminGroupJoinJobsTable).where(eq(adminGroupJoinJobsTable.id, input.jobId)).limit(1);
-    if (!job?.autoCampaignId) return null;
-
-    const [campaign] = await tx.select().from(campaignsTable).where(and(
-      eq(campaignsTable.id, job.autoCampaignId),
-      eq(campaignsTable.ownerUserId, input.ownerUserId),
-      eq(campaignsTable.telegramAccountId, input.accountId),
-    )).limit(1);
-    if (!campaign || campaign.status !== "draft") return null;
-
-    const [destination] = await tx.select().from(destinationsTable).where(and(
-      eq(destinationsTable.id, input.destinationId),
-      eq(destinationsTable.accountId, input.accountId),
-    )).limit(1);
-    if (!destination) return null;
-
-    const [activeCampaign] = await tx.select({
-      id: campaignsTable.id,
-    }).from(campaignsTable)
-      .innerJoin(campaignTargetsTable, eq(campaignTargetsTable.campaignId, campaignsTable.id))
-      .where(and(
-        eq(campaignsTable.ownerUserId, input.ownerUserId),
-        eq(campaignsTable.telegramAccountId, input.accountId),
-        inArray(campaignsTable.status, ["queued", "running"]),
-        eq(campaignTargetsTable.destinationId, destination.id),
-        sql`${campaignsTable.id} <> ${campaign.id}`,
-      )).orderBy(asc(campaignsTable.createdAt)).limit(1);
-    if (activeCampaign) {
-      await tx.delete(campaignsTable).where(eq(campaignsTable.id, campaign.id));
-      await tx.update(adminGroupJoinJobsTable).set({
-        autoCampaignId: activeCampaign.id,
-        updatedAt: new Date(),
-      }).where(eq(adminGroupJoinJobsTable.id, input.jobId));
-      return "deleted_duplicate";
-    }
-
-    if (!destination.canPost) {
-      await tx.delete(campaignsTable).where(eq(campaignsTable.id, campaign.id));
-      await tx.update(adminGroupJoinJobsTable).set({
-        autoCampaignId: null,
-        updatedAt: new Date(),
-      }).where(eq(adminGroupJoinJobsTable.id, input.jobId));
-      return "deleted_no_permission";
-    }
-
-    return null;
-  });
 }
 
 export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
@@ -374,63 +320,42 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
   let noPermissionCount = 0;
   let duplicateCount = 0;
   let skippedCount = 0;
-  for (let offset = 0; offset < candidates.length; offset += SCAN_CONCURRENCY) {
-    await Promise.all(candidates.slice(offset, offset + SCAN_CONCURRENCY).map(async (candidate) => {
-      if (!candidate.destinationId) {
-        skippedCount += 1;
-        return;
-      }
-      scannedCount += 1;
+  for (const candidate of candidates) {
+    if (!candidate.destinationId) {
+      skippedCount += 1;
+      continue;
+    }
+    scannedCount += 1;
 
-      if (candidate.autoCampaignId) {
-        const repair = await repairAutomaticCampaign({
-          jobId: candidate.jobId,
-          accountId: candidate.accountId,
-          ownerUserId: candidate.ownerUserId,
-          destinationId: candidate.destinationId,
-        });
-        if (repair === "deleted_duplicate") {
-          deletedCount += 1;
-          duplicateCount += 1;
-          return;
-        }
-        if (repair === "deleted_no_permission") {
-          deletedCount += 1;
-          noPermissionCount += 1;
-          if (await createPostJoinCampaign({
-            jobId: candidate.jobId,
-            accountId: candidate.accountId,
-            ownerUserId: candidate.ownerUserId,
-            groupId: candidate.destinationId,
-            groupTitle: candidate.groupTitle,
-          }, settings)) {
-            recreatedCount += 1;
-          }
-        }
-        return;
-      }
+    // A linked campaign is a permanent record of this automation decision.
+    // Failed, paused, draft, and completed campaigns must not be recreated by
+    // the hourly scanner; an operator can delete it and opt into a new run.
+    if (candidate.autoCampaignId) {
+      skippedCount += 1;
+      continue;
+    }
 
-      const [marked] = await db.update(adminGroupJoinJobsTable).set({
-        status: "joined",
-        joinedAt: new Date(),
-        lastError: null,
-        updatedAt: new Date(),
-      }).where(and(
-        eq(adminGroupJoinJobsTable.id, candidate.jobId),
-        inArray(adminGroupJoinJobsTable.status, ["pending", "waiting", "failed", "skipped", "joined"]),
-        isNull(adminGroupJoinJobsTable.autoCampaignId),
-      )).returning({ id: adminGroupJoinJobsTable.id });
-      if (!marked) return;
-      if (await createPostJoinCampaign({
-        jobId: candidate.jobId,
-        accountId: candidate.accountId,
-        ownerUserId: candidate.ownerUserId,
-        groupId: candidate.destinationId,
-        groupTitle: candidate.groupTitle,
-      }, settings)) {
-        createdCount += 1;
-      }
-    }));
+    const [marked] = await db.update(adminGroupJoinJobsTable).set({
+      status: "joined",
+      joinedAt: new Date(),
+      lastError: null,
+      updatedAt: new Date(),
+    }).where(and(
+      eq(adminGroupJoinJobsTable.id, candidate.jobId),
+      inArray(adminGroupJoinJobsTable.status, ["pending", "waiting", "failed", "skipped", "joined"]),
+      isNull(adminGroupJoinJobsTable.autoCampaignId),
+    )).returning({ id: adminGroupJoinJobsTable.id });
+    if (!marked) continue;
+    if (await createPostJoinCampaign({
+      jobId: candidate.jobId,
+      accountId: candidate.accountId,
+      ownerUserId: candidate.ownerUserId,
+      groupId: candidate.destinationId,
+      groupTitle: candidate.groupTitle,
+      initialDelaySeconds: createdCount * settings.postJoinCampaign.campaignStartDelaySeconds,
+    }, settings)) {
+      createdCount += 1;
+    }
   }
   return {
     scannedCount,
@@ -579,7 +504,8 @@ async function processAccount(accountId: string, ownerUserId: string): Promise<v
       if (shouldSync) {
         try {
           await syncAccountDestinations(accountId);
-           for (const job of successfulJoins) {
+          const postJoinSettings = await getSystemSettings();
+          for (const [index, job] of successfulJoins.entries()) {
              const [destination] = await db.select({ id: destinationsTable.id }).from(destinationsTable).where(and(
                eq(destinationsTable.accountId, accountId),
                eq(destinationsTable.telegramId, job.groupTelegramId),
@@ -595,7 +521,8 @@ async function processAccount(accountId: string, ownerUserId: string): Promise<v
                ownerUserId,
                groupId: destination.id,
                groupTitle: job.groupTitle,
-             });
+               initialDelaySeconds: index * postJoinSettings.postJoinCampaign.campaignStartDelaySeconds,
+             }, postJoinSettings);
            }
         } catch (error) {
           logger.warn({ err: error, accountId }, "Admin group join succeeded but destination sync failed");
@@ -666,15 +593,41 @@ export async function getAdminGroupJoinStatus() {
 
 export async function startAdminGroupJoinWorker(): Promise<() => void> {
   let ticking = false;
+  let lastPeriodicSyncAt = 0;
+  const runPeriodicGroupAutomation = async (settings: Awaited<ReturnType<typeof getSystemSettings>>) => {
+    const now = Date.now();
+    if (now - lastPeriodicSyncAt < PERIODIC_GROUP_SYNC_MS) return;
+    lastPeriodicSyncAt = now;
+    const accounts = await listAdminAccounts();
+    let syncedCount = 0;
+    for (const account of accounts) {
+      try {
+        await syncAccountDestinations(account.id);
+        syncedCount += 1;
+      } catch (error) {
+        logger.warn({ err: error, accountId: account.id }, "Periodic Telegram group sync failed");
+      }
+    }
+    if (settings.postJoinCampaign.enabled) {
+      const result = await scanAdminJoinedGroupsWithoutCampaign();
+      logger.info({ syncedCount, ...result }, "Periodic group sync and automatic campaign scan completed");
+    } else {
+      logger.info({ syncedCount }, "Periodic Telegram group sync completed");
+    }
+  };
   const tick = async () => {
     if (ticking) return;
     ticking = true;
     try {
       const settings = await getSystemSettings();
-      if (!settings.groupLibraryAutoJoinEnabled) return;
-      await ensureAdminGroupJoinJobs();
-      const accounts = await listAdminAccounts();
-      await Promise.all(accounts.map((account) => processAccount(account.id, account.ownerUserId)));
+      if (settings.groupLibraryAutoJoinEnabled) {
+        await ensureAdminGroupJoinJobs();
+        const accounts = await listAdminAccounts();
+        await Promise.all(accounts.map((account) => processAccount(account.id, account.ownerUserId)));
+      }
+      if (settings.groupLibraryAutoJoinEnabled || settings.postJoinCampaign.enabled) {
+        await runPeriodicGroupAutomation(settings);
+      }
     } catch (error) {
       logger.error({ err: error }, "Admin group join worker tick failed");
     } finally {

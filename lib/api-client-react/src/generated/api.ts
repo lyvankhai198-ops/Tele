@@ -68,6 +68,8 @@ import type {
   BulkCampaignControlResult,
   BulkCampaignTemplateInput,
   BulkCampaignTemplateResult,
+  BulkDeleteCampaignsInput,
+  BulkDeleteCampaignsResult,
   CalendarItem,
   Campaign,
   CampaignCloneReadiness,
@@ -2921,6 +2923,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getBulkUpdateCampaignTemplateMutationOptions(options));
+    }
+
+export const getBulkDeleteCampaignsUrl = () => {
+
+
+
+
+  return `/api/campaigns/bulk-delete`
+}
+
+export const bulkDeleteCampaigns = async (bulkDeleteCampaignsInput: BulkDeleteCampaignsInput, options?: Parameters<typeof customFetch>[1]): Promise<BulkDeleteCampaignsResult> => {
+
+  return customFetch<BulkDeleteCampaignsResult>(getBulkDeleteCampaignsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bulkDeleteCampaignsInput)
+  }
+);}
+
+
+
+
+
+export const getBulkDeleteCampaignsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteCampaigns>>, TError,{data: BodyType<BulkDeleteCampaignsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteCampaigns>>, TError,{data: BodyType<BulkDeleteCampaignsInput>}, TContext> => {
+
+const mutationKey = ['bulkDeleteCampaigns'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkDeleteCampaigns>>, {data: BodyType<BulkDeleteCampaignsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkDeleteCampaigns(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkDeleteCampaignsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkDeleteCampaigns>>>
+    export type BulkDeleteCampaignsMutationBody = BodyType<BulkDeleteCampaignsInput>
+    export type BulkDeleteCampaignsMutationError = ErrorType<unknown>
+
+    export const useBulkDeleteCampaigns = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteCampaigns>>, TError,{data: BodyType<BulkDeleteCampaignsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkDeleteCampaigns>>,
+        TError,
+        {data: BodyType<BulkDeleteCampaignsInput>},
+        TContext
+      > => {
+      return useMutation(getBulkDeleteCampaignsMutationOptions(options));
     }
 
 export const getUpdateCampaignStatusUrl = (campaignId: string,) => {

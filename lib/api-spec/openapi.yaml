@@ -575,6 +575,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
+  /campaigns/bulk-delete:
+    post:
+      operationId: bulkDeleteCampaigns
+      tags: [campaigns]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkDeleteCampaignsInput" }
+      responses:
+        "200":
+          description: Bulk campaign deletion result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkDeleteCampaignsResult" }
   /campaigns/{campaignId}:
     patch:
       operationId: updateCampaignStatus
@@ -1966,6 +1981,27 @@ components:
               id: { type: string }
               name: { type: string }
               reason: { type: string }
+    BulkDeleteCampaignsInput:
+      type: object
+      required: [status, search]
+      properties:
+        status: { type: string, enum: [all, queued, running, paused, completed, draft, cancelled] }
+        search: { type: string, maxLength: 160 }
+    BulkDeleteCampaignsResult:
+      type: object
+      required: [deletedCount, skippedCount, skipped]
+      properties:
+        deletedCount: { type: number }
+        skippedCount: { type: number }
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, name, reason]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              reason: { type: string }
     AdminCampaignCloneInput:
       type: object
       required: [telegramAccountId]
@@ -2932,12 +2968,13 @@ components:
         postJoinCampaign: { $ref: "#/components/schemas/PostJoinCampaignSettings" }
     PostJoinCampaignSettings:
       type: object
-      required: [enabled, content, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, mode]
+      required: [enabled, content, repeatCount, campaignStartDelaySeconds, roundDelayMinSeconds, roundDelayMaxSeconds, mode]
       properties:
         enabled: { type: boolean }
         content: { type: string, maxLength: 4096 }
         templateId: { type: ["string", "null"] }
         repeatCount: { type: number, minimum: 1, maximum: 300, multipleOf: 1 }
+        campaignStartDelaySeconds: { type: number, minimum: 0, maximum: 259200, multipleOf: 1 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200, multipleOf: 1 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200, multipleOf: 1 }
         mode: { type: string, enum: [draft, send] }

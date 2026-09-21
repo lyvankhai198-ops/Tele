@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createReadStream } from "node:fs";
-import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
@@ -83,6 +83,8 @@ import {
   BulkControlCampaignsResponse,
   BulkUpdateCampaignTemplateBody,
   BulkUpdateCampaignTemplateResponse,
+  BulkDeleteCampaignsBody,
+  BulkDeleteCampaignsResponse,
 } from "@workspace/api-zod";
 import {
   activityLogsTable,
@@ -2255,6 +2257,62 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
 
   return void res.json(BulkUpdateCampaignTemplateResponse.parse({
     updatedCount: updated.length,
+    skippedCount: skipped.length,
+    skipped,
+  }));
+});
+
+router.post("/campaigns/bulk-delete", async (req, res): Promise<void> => {
+  const parsed = BulkDeleteCampaignsBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, parsed.error.message);
+
+  const ownerUserId = currentUserId(req);
+  const search = parsed.data.search.trim().toLowerCase();
+  const campaigns = await db.select({
+    id: campaignsTable.id,
+    name: campaignsTable.name,
+    status: campaignsTable.status,
+  }).from(campaignsTable).where(eq(campaignsTable.ownerUserId, ownerUserId));
+  const matchesStatus = (status: string) => parsed.data.status === "all"
+    || status === parsed.data.status
+    || (parsed.data.status === "completed" && status === "completed_with_errors");
+  const matching = campaigns.filter((campaign) => (
+    matchesStatus(campaign.status)
+    && (!search || campaign.name.toLowerCase().includes(search))
+  ));
+  const skipped = matching
+    .filter((campaign) => ["queued", "running"].includes(campaign.status))
+    .map((campaign) => ({
+      id: campaign.id,
+      name: campaign.name,
+      reason: "Không xoá campaign đang chạy hoặc đang chờ gửi.",
+    }));
+  const deletableIds = matching
+    .filter((campaign) => !["queued", "running"].includes(campaign.status))
+    .map((campaign) => campaign.id);
+  const deleted = deletableIds.length
+    ? await db.delete(campaignsTable).where(and(
+      eq(campaignsTable.ownerUserId, ownerUserId),
+      inArray(campaignsTable.id, deletableIds),
+      notInArray(campaignsTable.status, ["queued", "running"]),
+    )).returning({ id: campaignsTable.id, name: campaignsTable.name })
+    : [];
+  if (deleted.length) {
+    await recordActivity({
+      ownerUserId,
+      event: "campaign.bulk_deleted",
+      level: "info",
+      message: `Deleted ${deleted.length} campaigns in bulk.`,
+      metadata: {
+        status: parsed.data.status,
+        search: search || null,
+        deletedCount: deleted.length,
+        skippedCount: skipped.length,
+      },
+    });
+  }
+  res.json(BulkDeleteCampaignsResponse.parse({
+    deletedCount: deleted.length,
     skippedCount: skipped.length,
     skipped,
   }));

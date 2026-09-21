@@ -622,6 +622,37 @@ export interface BulkCampaignTemplateResult {
   skipped: BulkCampaignTemplateResultSkippedItem[];
 }
 
+export type BulkDeleteCampaignsInputStatus = typeof BulkDeleteCampaignsInputStatus[keyof typeof BulkDeleteCampaignsInputStatus];
+
+
+export const BulkDeleteCampaignsInputStatus = {
+  all: 'all',
+  queued: 'queued',
+  running: 'running',
+  paused: 'paused',
+  completed: 'completed',
+  draft: 'draft',
+  cancelled: 'cancelled',
+} as const;
+
+export interface BulkDeleteCampaignsInput {
+  status: BulkDeleteCampaignsInputStatus;
+  /** @maxLength 160 */
+  search: string;
+}
+
+export type BulkDeleteCampaignsResultSkippedItem = {
+  id: string;
+  name: string;
+  reason: string;
+};
+
+export interface BulkDeleteCampaignsResult {
+  deletedCount: number;
+  skippedCount: number;
+  skipped: BulkDeleteCampaignsResultSkippedItem[];
+}
+
 export interface AdminCampaignCloneInput {
   telegramAccountId: string;
 }
@@ -1335,6 +1366,11 @@ export interface PostJoinCampaignSettings {
      * @maximum 300
      */
   repeatCount: number;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  campaignStartDelaySeconds: number;
   /**
      * @minimum 0
      * @maximum 259200

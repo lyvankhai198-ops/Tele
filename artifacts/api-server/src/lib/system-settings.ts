@@ -29,6 +29,7 @@ export type PostJoinCampaignSettings = {
   content: string;
   templateId?: string | null;
   repeatCount: number;
+  campaignStartDelaySeconds: number;
   roundDelayMinSeconds: number;
   roundDelayMaxSeconds: number;
   mode: "draft" | "send";
@@ -161,6 +162,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     enabled: false,
     content: "",
     repeatCount: 300,
+    campaignStartDelaySeconds: 600,
     roundDelayMinSeconds: 1,
     roundDelayMaxSeconds: 3,
     mode: "draft",
@@ -298,6 +300,9 @@ function normalizedPostJoinCampaign(
       ? stored.templateId
       : null,
     repeatCount: isFiniteInteger(stored?.repeatCount, 1, 300) ? stored.repeatCount : fallback.repeatCount,
+    campaignStartDelaySeconds: isFiniteInteger(stored?.campaignStartDelaySeconds, 0, 259200)
+      ? stored.campaignStartDelaySeconds
+      : fallback.campaignStartDelaySeconds,
     roundDelayMinSeconds: min <= max ? min : fallback.roundDelayMinSeconds,
     roundDelayMaxSeconds: min <= max ? max : fallback.roundDelayMaxSeconds,
     mode: stored?.mode === "send" ? "send" : "draft",

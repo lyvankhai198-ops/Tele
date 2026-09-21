@@ -138,25 +138,22 @@ const text = {
   autoJoinAccountSummary: (name: string, pending: number, joined: number) =>
     `${name}: ${pending} chờ · ${joined} đã tham gia`,
   autoJoinToggleFailed: "Không thể cập nhật chế độ tự động tham gia.",
-  scanExistingGroups: "Quét & dọn campaign lỗi",
-  scanningExistingGroups: "Đang quét và dọn campaign lỗi...",
+  scanExistingGroups: "Quét nhóm đã tham gia",
+  scanningExistingGroups: "Đang quét nhóm đã tham gia...",
   scanExistingGroupsSuccess: (
     scanned: number,
     created: number,
-    recreated: number,
-    deleted: number,
-    noPermission: number,
-    duplicate: number,
     skipped: number,
   ) =>
-    `Đã quét ${scanned} nhóm: tạo ${created} campaign mới, tạo lại ${recreated}, xoá ${deleted} campaign lỗi (không quyền đăng ${noPermission}, trùng campaign đang chạy ${duplicate})${skipped > 0 ? `, bỏ qua ${skipped}` : ""}.`,
-  scanExistingGroupsFailed: "Không thể quét và dọn campaign lỗi. Vui lòng thử lại.",
+    `Đã quét ${scanned} nhóm: tạo ${created} campaign mới${skipped > 0 ? `, bỏ qua ${skipped} nhóm đã có campaign hoặc chưa sẵn sàng` : ""}. Campaign lỗi đã tồn tại sẽ không bị tạo lại.`,
+  scanExistingGroupsFailed: "Không thể quét nhóm đã tham gia. Vui lòng thử lại.",
   postJoinTitle: "Campaign sau khi tham gia",
   postJoinDescription: "Sau khi tài khoản admin tham gia nhóm, hệ thống sẽ tạo campaign theo cấu hình này.",
   postJoinEnabled: "Tạo campaign sau khi tham gia",
   postJoinContent: "Nội dung tin nhắn",
   postJoinContentPlaceholder: "Nhập nội dung sẽ gửi vào nhóm...",
   postJoinRepeat: "Số vòng",
+  postJoinCampaignGap: "Khoảng cách giữa các nhóm (phút)",
   postJoinDelay: "Delay giữa các vòng",
   postJoinMode: "Cách xử lý",
   postJoinDraft: "Tạo nháp, chờ duyệt",
@@ -720,6 +717,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
     enabled: false,
     content: "",
     repeatCount: 300,
+    campaignStartDelaySeconds: 600,
     roundDelayMinSeconds: 1,
     roundDelayMaxSeconds: 3,
     mode: "draft",
@@ -971,10 +969,6 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
       setSyncFeedback(text.scanExistingGroupsSuccess(
         result.scannedCount,
         result.createdCount,
-        result.recreatedCount,
-        result.deletedCount,
-        result.noPermissionCount,
-        result.duplicateCount,
         result.skippedCount,
       ));
       setFeedbackIsError(false);
@@ -1183,7 +1177,7 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                     {text.postJoinEnabled}
                   </label>
                 </div>
-                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_180px]">
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_170px_180px]">
                   <label className="block">
                     <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinContent}</span>
                     <textarea
@@ -1198,6 +1192,25 @@ export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admi
                       className="w-full resize-y rounded-lg border border-[#dbe2ea] px-3 py-2 text-[11px] font-semibold leading-relaxed outline-none transition focus:border-[#1a2b88]"
                       data-testid="textarea-admin-post-join-content"
                     />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinCampaignGap}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={4320}
+                      value={Math.round(postJoinDraft.campaignStartDelaySeconds / 60)}
+                      onChange={(event) => {
+                        setPostJoinDraft((current) => ({
+                          ...current,
+                          campaignStartDelaySeconds: Math.max(0, Number(event.target.value) || 0) * 60,
+                        }));
+                        setPostJoinDirty(true);
+                      }}
+                      className="h-10 w-full rounded-lg border border-[#dbe2ea] px-3 text-[11px] font-bold outline-none focus:border-[#1a2b88]"
+                      data-testid="input-admin-post-join-campaign-gap"
+                    />
+                    <span className="mt-1 block text-[10px] font-medium text-[#64748b]">Mặc định 10 phút, áp dụng giữa các nhóm mới.</span>
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-[10px] font-extrabold uppercase tracking-wide text-[#64748b]">{text.postJoinRepeat}</span>

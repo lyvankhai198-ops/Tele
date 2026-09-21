@@ -22,6 +22,11 @@ export interface PostJoinCampaignSettings {
      * @minimum 0
      * @maximum 259200
      */
+  campaignStartDelaySeconds: number;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
   roundDelayMinSeconds: number;
   /**
      * @minimum 0

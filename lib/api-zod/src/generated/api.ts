@@ -892,6 +892,26 @@ export const BulkUpdateCampaignTemplateResponse = zod.object({
 })
 
 
+export const bulkDeleteCampaignsBodySearchMax = 160;
+
+
+
+export const BulkDeleteCampaignsBody = zod.object({
+  "status": zod.enum(['all', 'queued', 'running', 'paused', 'completed', 'draft', 'cancelled']),
+  "search": zod.string().max(bulkDeleteCampaignsBodySearchMax)
+})
+
+export const BulkDeleteCampaignsResponse = zod.object({
+  "deletedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
+})
+
+
 export const UpdateCampaignStatusParams = zod.object({
   "campaignId": zod.coerce.string()
 })
@@ -1482,6 +1502,10 @@ export const getAdminSystemSettingsResponsePostJoinCampaignContentMax = 4096;
 export const getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax = 300;
 export const getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf = 1;
 
+export const getAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMin = 0;
+export const getAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMax = 259200;
+export const getAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf = 1;
+
 export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
 export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
 export const getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
@@ -1558,6 +1582,7 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "content": zod.string().max(getAdminSystemSettingsResponsePostJoinCampaignContentMax),
   "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf),
+  "campaignStartDelaySeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf),
   "roundDelayMinSeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(getAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
   "mode": zod.enum(['draft', 'send'])
@@ -1644,6 +1669,10 @@ export const updateAdminSystemSettingsBodyPostJoinCampaignContentMax = 4096;
 export const updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMax = 300;
 export const updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMultipleOf = 1;
 
+export const updateAdminSystemSettingsBodyPostJoinCampaignCampaignStartDelaySecondsMin = 0;
+export const updateAdminSystemSettingsBodyPostJoinCampaignCampaignStartDelaySecondsMax = 259200;
+export const updateAdminSystemSettingsBodyPostJoinCampaignCampaignStartDelaySecondsMultipleOf = 1;
+
 export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMin = 0;
 export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMax = 259200;
 export const updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
@@ -1720,6 +1749,7 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "content": zod.string().max(updateAdminSystemSettingsBodyPostJoinCampaignContentMax),
   "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMultipleOf),
+  "campaignStartDelaySeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignCampaignStartDelaySecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignCampaignStartDelaySecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignCampaignStartDelaySecondsMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminSystemSettingsBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf),
   "mode": zod.enum(['draft', 'send'])
@@ -1805,6 +1835,10 @@ export const updateAdminSystemSettingsResponsePostJoinCampaignContentMax = 4096;
 export const updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax = 300;
 export const updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf = 1;
 
+export const updateAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMin = 0;
+export const updateAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMax = 259200;
+export const updateAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf = 1;
+
 export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
 export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
 export const updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
@@ -1881,6 +1915,7 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "content": zod.string().max(updateAdminSystemSettingsResponsePostJoinCampaignContentMax),
   "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMultipleOf),
+  "campaignStartDelaySeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminSystemSettingsResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
   "mode": zod.enum(['draft', 'send'])
@@ -2423,6 +2458,10 @@ export const getAdminGroupJoinStatusResponsePostJoinCampaignContentMax = 4096;
 export const getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMax = 300;
 export const getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMultipleOf = 1;
 
+export const getAdminGroupJoinStatusResponsePostJoinCampaignCampaignStartDelaySecondsMin = 0;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignCampaignStartDelaySecondsMax = 259200;
+export const getAdminGroupJoinStatusResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf = 1;
+
 export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
 export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
 export const getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
@@ -2440,6 +2479,7 @@ export const GetAdminGroupJoinStatusResponse = zod.object({
   "content": zod.string().max(getAdminGroupJoinStatusResponsePostJoinCampaignContentMax),
   "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRepeatCountMultipleOf),
+  "campaignStartDelaySeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignCampaignStartDelaySecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignCampaignStartDelaySecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf),
   "roundDelayMinSeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(getAdminGroupJoinStatusResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
   "mode": zod.enum(['draft', 'send'])
@@ -2471,6 +2511,10 @@ export const updateAdminGroupJoinAutomationBodyPostJoinCampaignContentMax = 4096
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMax = 300;
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMultipleOf = 1;
 
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignCampaignStartDelaySecondsMin = 0;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignCampaignStartDelaySecondsMax = 259200;
+export const updateAdminGroupJoinAutomationBodyPostJoinCampaignCampaignStartDelaySecondsMultipleOf = 1;
+
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMin = 0;
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMax = 259200;
 export const updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf = 1;
@@ -2488,6 +2532,7 @@ export const UpdateAdminGroupJoinAutomationBody = zod.object({
   "content": zod.string().max(updateAdminGroupJoinAutomationBodyPostJoinCampaignContentMax),
   "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRepeatCountMultipleOf),
+  "campaignStartDelaySeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignCampaignStartDelaySecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignCampaignStartDelaySecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignCampaignStartDelaySecondsMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminGroupJoinAutomationBodyPostJoinCampaignRoundDelayMaxSecondsMultipleOf),
   "mode": zod.enum(['draft', 'send'])
@@ -2498,6 +2543,10 @@ export const updateAdminGroupJoinAutomationResponsePostJoinCampaignContentMax = 
 
 export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMax = 300;
 export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMultipleOf = 1;
+
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignCampaignStartDelaySecondsMin = 0;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignCampaignStartDelaySecondsMax = 259200;
+export const updateAdminGroupJoinAutomationResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf = 1;
 
 export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMin = 0;
 export const updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMax = 259200;
@@ -2516,6 +2565,7 @@ export const UpdateAdminGroupJoinAutomationResponse = zod.object({
   "content": zod.string().max(updateAdminGroupJoinAutomationResponsePostJoinCampaignContentMax),
   "templateId": zod.string().nullish(),
   "repeatCount": zod.number().min(1).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRepeatCountMultipleOf),
+  "campaignStartDelaySeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignCampaignStartDelaySecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignCampaignStartDelaySecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignCampaignStartDelaySecondsMultipleOf),
   "roundDelayMinSeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMinSecondsMultipleOf),
   "roundDelayMaxSeconds": zod.number().min(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMin).max(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMax).multipleOf(updateAdminGroupJoinAutomationResponsePostJoinCampaignRoundDelayMaxSecondsMultipleOf),
   "mode": zod.enum(['draft', 'send'])
