@@ -122,6 +122,11 @@ export function SupportChatWidget() {
     setHidden(true);
   }
 
+  function minimizeWidget() {
+    setOpen(false);
+    void queryClient.refetchQueries({ queryKey: getGetSupportChatQueryKey() });
+  }
+
   return (
     <div className="fixed bottom-4 right-4 z-40 sm:bottom-6 sm:right-6" data-testid="support-chat-widget">
       {open ? (
@@ -131,7 +136,7 @@ export function SupportChatWidget() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[14px] font-extrabold">{title}</p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Minimize"><Minus className="h-4 w-4" /></button>
+            <button type="button" onClick={minimizeWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Minimize"><Minus className="h-4 w-4" /></button>
             <button type="button" onClick={hideWidget} className="rounded-lg p-2 text-white/75 hover:bg-white/10 hover:text-white" aria-label="Hide support chat"><X className="h-4 w-4" /></button>
           </header>
           <div ref={messagesViewport} className="flex-1 space-y-3 overflow-y-auto bg-[#f6faf9] px-4 py-4">
