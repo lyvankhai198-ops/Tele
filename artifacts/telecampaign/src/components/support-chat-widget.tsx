@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetSupportChatQueryKey,
@@ -18,6 +18,7 @@ export function SupportChatWidget() {
   const [hidden, setHidden] = useState(() => window.localStorage.getItem("telecampaign-support-chat-hidden") === "true");
   const [draft, setDraft] = useState("");
   const [, bumpReadMarker] = useState(0);
+  const wasOpen = useRef(false);
   const chat = useGetSupportChat({
     query: {
       queryKey: getGetSupportChatQueryKey(),
@@ -57,7 +58,9 @@ export function SupportChatWidget() {
   }, [adminMessages, chat.isLoading, readMarkerKey, serverUnread, storedReadMessageId]);
 
   useEffect(() => {
-    if (open && unread > 0) {
+    const justOpened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (justOpened && unread > 0) {
       markRead.mutate(undefined, {
         onSuccess: () => {
           const latestAdminMessage = adminMessages.at(-1);
