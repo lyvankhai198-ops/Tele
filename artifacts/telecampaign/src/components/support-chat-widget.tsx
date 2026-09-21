@@ -115,6 +115,9 @@ export function SupportChatWidget() {
 
   const title = language === "vi" ? "Hỗ trợ TeleCampaign" : "TeleCampaign support";
   const placeholder = language === "vi" ? "Nhập câu hỏi của bạn…" : "Type your question…";
+  const welcomeMessage = language === "en"
+    ? "Hello! Feel free to send us a message. Our support team will get back to you as soon as possible."
+    : chat.data?.welcomeMessage;
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -167,7 +170,7 @@ export function SupportChatWidget() {
             {chat.isLoading && <p className="py-8 text-center text-xs font-semibold text-[#78908f]">Loading…</p>}
             {!chat.isLoading && messages.length === 0 && (
               <div className="rounded-2xl border border-[#dcebea] bg-white p-4 text-[12px] font-semibold leading-5 text-[#587170]">
-                {chat.data?.welcomeMessage}
+                {welcomeMessage}
               </div>
             )}
             {messages.map((message) => (
