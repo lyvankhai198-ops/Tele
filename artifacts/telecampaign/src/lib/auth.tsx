@@ -17,7 +17,7 @@ type AuthContextValue = {
   isLoading: boolean;
   refresh: () => Promise<void>;
   getCaptcha: () => Promise<AuthCaptcha>;
-  register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
+  register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string, preferredLanguage: Language) => Promise<void>;
   login: (username: string, password: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
   logout: () => Promise<void>;
   exitSupport: () => Promise<void>;
@@ -82,10 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     confirmPassword: string,
     captchaChallengeId: string,
     captchaCode: string,
+    preferredLanguage: Language,
   ) => {
     const currentUser = await authRequest<AuthUser>("/register", currentLanguage(), {
       method: "POST",
-      body: JSON.stringify({ username, password, confirmPassword, captchaChallengeId, captchaCode }),
+      body: JSON.stringify({ username, password, confirmPassword, captchaChallengeId, captchaCode, preferredLanguage }),
     });
     queryClient.clear();
     setUser(currentUser);

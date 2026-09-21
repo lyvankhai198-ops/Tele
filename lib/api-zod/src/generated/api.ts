@@ -37,7 +37,8 @@ export const RegisterAuthBody = zod.object({
   "password": zod.string().min(registerAuthBodyPasswordMin).max(registerAuthBodyPasswordMax),
   "confirmPassword": zod.string().min(registerAuthBodyConfirmPasswordMin).max(registerAuthBodyConfirmPasswordMax),
   "captchaChallengeId": zod.string().min(1).max(registerAuthBodyCaptchaChallengeIdMax),
-  "captchaCode": zod.string().min(1).max(registerAuthBodyCaptchaCodeMax)
+  "captchaCode": zod.string().min(1).max(registerAuthBodyCaptchaCodeMax),
+  "preferredLanguage": zod.enum(['vi', 'en']).optional()
 })
 
 export const RegisterAuthResponse = zod.object({

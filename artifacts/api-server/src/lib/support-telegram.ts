@@ -51,10 +51,24 @@ async function sendSupportMessage(text: string, replyToMessageId?: number): Prom
   });
 }
 
-export async function notifySupportNewRegistration(input: { userId: string; username: string }): Promise<void> {
+export async function notifySupportNewRegistration(input: {
+  userId: string;
+  username: string;
+  preferredLanguage: "vi" | "en";
+}): Promise<void> {
   const settings = await getSystemSettings();
-  if (!settings.supportChat.enabled || !settings.supportChat.notifyNewRegistrations) return;
+  if (!settings.supportChat.enabled) return;
   const conversation = await ensureSupportConversation(input.userId);
+  await appendSupportMessage({
+    conversationId: conversation.id,
+    senderType: "admin",
+    source: "system",
+    body: input.preferredLanguage === "en"
+      ? "Hello! If you need any assistance, feel free to send us a message. We are happy to help."
+      : "Chào bạn! Nếu cần hỗ trợ, bạn cứ nhắn mình nhé. Đội ngũ hỗ trợ luôn sẵn sàng giúp bạn.",
+    visibleToUser: true,
+  });
+  if (!settings.supportChat.notifyNewRegistrations) return;
   const result = await appendSupportMessage({
     conversationId: conversation.id,
     senderType: "system",

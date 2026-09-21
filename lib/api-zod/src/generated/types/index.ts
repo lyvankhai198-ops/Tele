@@ -178,6 +178,7 @@ export * from './proxyType';
 export * from './purchaseSettings';
 export * from './purchaseSettingsInput';
 export * from './registrationInput';
+export * from './registrationInputPreferredLanguage';
 export * from './revokeSessionsResult';
 export * from './subscription';
 export * from './subscriptionStatus';

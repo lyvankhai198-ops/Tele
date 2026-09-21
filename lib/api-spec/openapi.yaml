@@ -1791,6 +1791,7 @@ components:
         confirmPassword: { type: string, minLength: 10, maxLength: 128 }
         captchaChallengeId: { type: string, minLength: 1, maxLength: 128 }
         captchaCode: { type: string, minLength: 1, maxLength: 32 }
+        preferredLanguage: { type: string, enum: [vi, en] }
     LoginInput:
       type: object
       required: [username, password, captchaChallengeId, captchaCode]

@@ -268,7 +268,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     const [user] = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(appUsersTable)
-        .values({ username, usernameNormalized: username, passwordHash })
+        .values({
+          username,
+          usernameNormalized: username,
+          passwordHash,
+          preferredLanguage: parsed.data.preferredLanguage ?? "vi",
+        })
         .returning({
           id: appUsersTable.id,
           username: appUsersTable.username,
@@ -307,6 +312,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     void notifySupportNewRegistration({
       userId: user.id,
       username: user.username,
+      preferredLanguage: user.preferredLanguage as "vi" | "en",
     }).catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about new registration"));
     res.status(201).json(RegisterAuthResponse.parse(authUserResponse(authenticatedUser)));
   } catch (error) {

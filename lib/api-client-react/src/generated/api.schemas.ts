@@ -41,6 +41,14 @@ export interface AuthUser {
   support: SupportSession | null;
 }
 
+export type RegistrationInputPreferredLanguage = typeof RegistrationInputPreferredLanguage[keyof typeof RegistrationInputPreferredLanguage];
+
+
+export const RegistrationInputPreferredLanguage = {
+  vi: 'vi',
+  en: 'en',
+} as const;
+
 export interface RegistrationInput {
   /**
      * @minLength 3
@@ -67,6 +75,7 @@ export interface RegistrationInput {
      * @maxLength 32
      */
   captchaCode: string;
+  preferredLanguage?: RegistrationInputPreferredLanguage;
 }
 
 export interface LoginInput {

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { RegistrationInputPreferredLanguage } from './registrationInputPreferredLanguage';
 
 export interface RegistrationInput {
   /**
@@ -32,4 +33,5 @@ export interface RegistrationInput {
      * @maxLength 32
      */
   captchaCode: string;
+  preferredLanguage?: RegistrationInputPreferredLanguage;
 }

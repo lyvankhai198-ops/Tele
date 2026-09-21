@@ -384,6 +384,7 @@ function RegisterPage() {
         confirmPassword,
         captcha.challenge.challengeId,
         captcha.code,
+        language,
       );
       setPassword('');
       setConfirmPassword('');
