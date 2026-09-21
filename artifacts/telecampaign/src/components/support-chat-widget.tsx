@@ -182,7 +182,7 @@ export function SupportChatWidget() {
           </form>
         </section>
       ) : (
-        <button type="button" onClick={() => setOpen(true)} className="group relative flex items-center gap-2.5 rounded-full bg-[#075e68] px-4 py-3 text-white shadow-[0_12px_32px_rgba(7,94,104,.26)] transition hover:-translate-y-0.5 hover:bg-[#064d55]" aria-label={title}>
+        <button type="button" onPointerDown={() => setOpen(true)} onClick={() => setOpen(true)} className="group relative flex touch-manipulation items-center gap-2.5 rounded-full bg-[#075e68] px-4 py-3 text-white shadow-[0_12px_32px_rgba(7,94,104,.26)] transition hover:-translate-y-0.5 hover:bg-[#064d55]" aria-label={title}>
           <Headset className="h-5 w-5" />
           <span className="hidden text-[12px] font-extrabold sm:inline">{language === "vi" ? "Cần hỗ trợ?" : "Need help?"}</span>
           {unread > 0 && (
