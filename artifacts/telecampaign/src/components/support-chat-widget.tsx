@@ -209,7 +209,7 @@ export function SupportChatWidget() {
                 </h2>
                 <p className="mt-2 text-[12px] font-semibold leading-5 text-[#587170]">
                   {language === "vi"
-                    ? "Đóng chat đồng nghĩa xoá các dữ liệu chat. Nếu đóng chat, phiên hỗ trợ hiện tại sẽ kết thúc và dữ liệu tin nhắn sẽ được xoá. Bạn vẫn có thể mở lại và gửi tin nhắn mới bất cứ lúc nào."
+                    ? "Nếu đóng chat, phiên hỗ trợ hiện tại sẽ kết thúc và dữ liệu tin nhắn sẽ được xoá. Bạn vẫn có thể mở lại và gửi tin nhắn mới bất cứ lúc nào."
                     : "Closing the chat deletes the chat data. The current support session and its messages will end and be deleted. You can reopen the chat and send a new message anytime."}
                 </p>
                 <div className="mt-5 flex justify-end gap-2">
