@@ -319,6 +319,8 @@ export const supportMessagesTable = pgTable("support_messages", {
   senderUserId: uuid("sender_user_id"),
   source: text("source").notNull().default("web"),
   body: text("body").notNull(),
+  mediaPath: text("media_path"),
+  mediaContentType: text("media_content_type"),
   visibleToUser: boolean("visible_to_user").notNull().default(true),
   telegramChatId: text("telegram_chat_id"),
   telegramMessageId: integer("telegram_message_id"),

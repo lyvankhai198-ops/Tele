@@ -1022,7 +1022,7 @@ router.post("/admin/support-chat/conversations/:conversationId/messages", async 
       senderType: "admin",
       senderUserId: req.userId!,
       source: "web",
-      body: parsed.data.body,
+      body: parsed.data.body ?? "",
     });
     res.status(201).json(SendAdminSupportMessageResponse.parse({
       conversation: result.conversation,

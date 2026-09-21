@@ -1360,6 +1360,8 @@ export interface SupportChatMessage {
   senderType: SupportChatMessageSenderType;
   source: SupportChatMessageSource;
   body: string;
+  /** @nullable */
+  mediaUrl: string | null;
   createdAt: string;
 }
 
@@ -1394,11 +1396,40 @@ export interface SupportChatResponse {
 }
 
 export interface SupportChatMessageInput {
+  /** @maxLength 2000 */
+  body?: string;
   /**
      * @minLength 1
-     * @maxLength 2000
+     * @maxLength 64
      */
-  body: string;
+  mediaUploadId?: string;
+}
+
+export type SupportChatImageUploadInputContentType = typeof SupportChatImageUploadInputContentType[keyof typeof SupportChatImageUploadInputContentType];
+
+
+export const SupportChatImageUploadInputContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+  'image/gif': 'image/gif',
+} as const;
+
+export interface SupportChatImageUploadInput {
+  /** @maxLength 255 */
+  name?: string;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+  contentType: SupportChatImageUploadInputContentType;
+}
+
+export interface SupportChatImageUploadResponse {
+  uploadId: string;
+  uploadURL: string;
+  objectPath: string;
 }
 
 export interface SupportChatMessageResult {

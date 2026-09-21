@@ -95,6 +95,7 @@ export default function AdminSupportChatPage() {
                 {selected.messages.map((message) => (
                   <div key={message.id} className={`flex ${message.senderType === "admin" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-[12px] font-semibold leading-5 ${message.senderType === "admin" ? "rounded-br-md bg-[#075e68] text-white" : message.senderType === "system" ? "border border-dashed border-[#d3e3e2] bg-white text-[#78908f]" : "rounded-bl-md bg-white text-[#34504f] shadow-sm"}`}>
+                      {message.mediaUrl && <img src={message.mediaUrl} alt="Ảnh đính kèm" className="mb-2 max-h-72 max-w-full rounded-xl object-contain" />}
                       <p className="whitespace-pre-wrap break-words">{message.body}</p>
                       <time className={`mt-1 block text-[9px] font-bold ${message.senderType === "admin" ? "text-white/65" : "text-[#9aacab]"}`}>{timeLabel(message.createdAt)}</time>
                     </div>

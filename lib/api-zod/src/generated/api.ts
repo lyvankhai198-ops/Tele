@@ -1300,6 +1300,7 @@ export const GetSupportChatResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -1308,10 +1309,13 @@ export const GetSupportChatResponse = zod.object({
 
 export const sendSupportChatMessageBodyBodyMax = 2000;
 
+export const sendSupportChatMessageBodyMediaUploadIdMax = 64;
+
 
 
 export const SendSupportChatMessageBody = zod.object({
-  "body": zod.string().min(1).max(sendSupportChatMessageBodyBodyMax)
+  "body": zod.string().max(sendSupportChatMessageBodyBodyMax).optional(),
+  "mediaUploadId": zod.string().min(1).max(sendSupportChatMessageBodyMediaUploadIdMax).optional()
 })
 
 export const sendSupportChatMessageResponseConversationUnreadForUserMin = 0;
@@ -1336,6 +1340,7 @@ export const SendSupportChatMessageResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 }),
@@ -1344,9 +1349,43 @@ export const SendSupportChatMessageResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 })
 })
+
+
+export const requestSupportChatImageUploadBodyNameMax = 255;
+
+export const requestSupportChatImageUploadBodySizeMax = 10485760;
+
+
+
+export const RequestSupportChatImageUploadBody = zod.object({
+  "name": zod.string().max(requestSupportChatImageUploadBodyNameMax).optional(),
+  "size": zod.number().min(1).max(requestSupportChatImageUploadBodySizeMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+})
+
+export const RequestSupportChatImageUploadResponse = zod.object({
+  "uploadId": zod.string(),
+  "uploadURL": zod.string(),
+  "objectPath": zod.string()
+})
+
+
+export const UploadSupportChatImageParams = zod.object({
+  "uploadId": zod.coerce.string()
+})
+
+export const UploadSupportChatImageResponse = zod.void()
+
+
+export const GetSupportChatMediaParams = zod.object({
+  "messageId": zod.coerce.string()
+})
+
+export const GetSupportChatMediaResponse = zod.unknown()
 
 
 export const MarkSupportChatReadResponse = zod.object({
@@ -1376,6 +1415,7 @@ export const CloseSupportChatResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -2095,6 +2135,7 @@ export const ListAdminSupportConversationsResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 }))
@@ -2127,6 +2168,7 @@ export const GetAdminSupportConversationResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -2163,6 +2205,7 @@ export const UpdateAdminSupportConversationResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 })
@@ -2175,10 +2218,13 @@ export const SendAdminSupportMessageParams = zod.object({
 
 export const sendAdminSupportMessageBodyBodyMax = 2000;
 
+export const sendAdminSupportMessageBodyMediaUploadIdMax = 64;
+
 
 
 export const SendAdminSupportMessageBody = zod.object({
-  "body": zod.string().min(1).max(sendAdminSupportMessageBodyBodyMax)
+  "body": zod.string().max(sendAdminSupportMessageBodyBodyMax).optional(),
+  "mediaUploadId": zod.string().min(1).max(sendAdminSupportMessageBodyMediaUploadIdMax).optional()
 })
 
 export const sendAdminSupportMessageResponseConversationUnreadForUserMin = 0;
@@ -2203,6 +2249,7 @@ export const SendAdminSupportMessageResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 }))
 }),
@@ -2211,6 +2258,7 @@ export const SendAdminSupportMessageResponse = zod.object({
   "senderType": zod.enum(['user', 'admin', 'system']),
   "source": zod.enum(['web', 'telegram', 'system']),
   "body": zod.string(),
+  "mediaUrl": zod.string().nullable(),
   "createdAt": zod.coerce.date()
 })
 })

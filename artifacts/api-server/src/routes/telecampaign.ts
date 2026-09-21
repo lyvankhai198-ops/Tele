@@ -16,6 +16,8 @@ import {
   GetSystemDefaultsResponse,
   GetSupportSettingsResponse,
   GetSupportChatResponse,
+  RequestSupportChatImageUploadBody,
+  RequestSupportChatImageUploadResponse,
   SendSupportChatMessageBody,
   SendSupportChatMessageResponse,
   MarkSupportChatReadResponse,
@@ -140,8 +142,10 @@ import {
   appendSupportMessage,
   closeSupportConversation,
   getSupportConversationForUser,
+  getSupportMessageMedia,
   markSupportConversationRead,
 } from "../lib/support-chat";
+import { supportMediaStorage, SupportMediaNotFoundError } from "../lib/supportMediaStorage";
 import { notifySupportConversationClosed, notifySupportUserMessage } from "../lib/support-telegram";
 import {
   filterGroupLibraryGroups,
@@ -762,23 +766,87 @@ router.get("/support-chat", async (req, res): Promise<void> => {
   }));
 });
 
+router.post("/support-chat/images/upload-url", async (req, res): Promise<void> => {
+  const parsed = RequestSupportChatImageUploadBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Ảnh không hợp lệ. Chỉ nhận JPEG, PNG, WebP hoặc GIF tối đa 10 MB." });
+    return;
+  }
+  try {
+    const upload = await supportMediaStorage.prepareImageUpload({
+      size: parsed.data.size,
+      contentType: parsed.data.contentType,
+    });
+    res.json(RequestSupportChatImageUploadResponse.parse(upload));
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Không thể chuẩn bị tải ảnh." });
+  }
+});
+
+router.put("/support-chat/images/uploads/:uploadId", async (req, res): Promise<void> => {
+  const contentType = String(req.headers["content-type"] ?? "").split(";")[0].trim();
+  try {
+    await supportMediaStorage.storeImageUpload({
+      uploadId: req.params.uploadId,
+      contentType,
+      request: req,
+    });
+    res.status(204).end();
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Không thể tải ảnh." });
+  }
+});
+
+router.get("/support-chat/media/:messageId", async (req, res): Promise<void> => {
+  const canReadAnyConversation = req.authUser?.role === "admin" && !req.supportSession;
+  const media = await getSupportMessageMedia(
+    req.params.messageId,
+    canReadAnyConversation ? undefined : currentUserId(req),
+  );
+  if (!media) {
+    res.status(404).end();
+    return;
+  }
+  try {
+    const stored = await supportMediaStorage.readImage(media.mediaPath);
+    res.setHeader("Content-Type", stored.contentType);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    createReadStream(stored.filePath).pipe(res);
+  } catch (error) {
+    if (error instanceof SupportMediaNotFoundError) {
+      res.status(404).end();
+      return;
+    }
+    throw error;
+  }
+});
+
 router.post("/support-chat/messages", async (req, res): Promise<void> => {
   const parsed = SendSupportChatMessageBody.safeParse(req.body);
   if (!parsed.success) return void res.status(400).json({ error: "Tin nhắn hỗ trợ không hợp lệ." });
   const conversation = await getSupportConversationForUser(req.userId!);
   try {
+    const mediaUpload = parsed.data.mediaUploadId
+      ? await supportMediaStorage.claimImageUpload(parsed.data.mediaUploadId)
+      : null;
+    if (parsed.data.mediaUploadId && !mediaUpload) {
+      return void res.status(400).json({ error: "Ảnh đã hết hạn hoặc chưa tải lên thành công." });
+    }
     const result = await appendSupportMessage({
       conversationId: conversation.id,
       senderType: "user",
       senderUserId: req.userId!,
       source: "web",
-      body: parsed.data.body,
+      body: parsed.data.body ?? "",
+      mediaPath: mediaUpload?.objectPath,
+      mediaContentType: mediaUpload?.contentType,
     });
     void notifySupportUserMessage({
       conversationId: conversation.id,
       messageId: result.message.id,
       username: conversation.username,
       body: result.message.body,
+      mediaPath: mediaUpload?.objectPath,
     }).catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about user message"));
     res.status(201).json(SendSupportChatMessageResponse.parse({
       conversation: result.conversation,

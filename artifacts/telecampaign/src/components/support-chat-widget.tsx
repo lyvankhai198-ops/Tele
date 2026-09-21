@@ -7,7 +7,7 @@ import {
   useMarkSupportChatRead,
   useSendSupportChatMessage,
 } from "@workspace/api-client-react";
-import { Headset, Minus, Send, X } from "lucide-react";
+import { Headset, ImagePlus, Minus, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n";
 
@@ -19,6 +19,9 @@ export function SupportChatWidget() {
   const [hidden, setHidden] = useState(() => window.localStorage.getItem("telecampaign-support-chat-hidden") === "true");
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [, bumpReadMarker] = useState(0);
   const wasOpen = useRef(false);
   const messagesViewport = useRef<HTMLDivElement>(null);
@@ -119,16 +122,66 @@ export function SupportChatWidget() {
     ? "Hello! Feel free to send us a message. Our support team will get back to you as soon as possible."
     : chat.data?.welcomeMessage;
 
-  function submit(event: FormEvent) {
+  function chooseImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setImageError(language === "vi" ? "Vui lòng chọn ảnh JPEG, PNG, WebP hoặc GIF tối đa 10 MB." : "Choose a JPEG, PNG, WebP, or GIF image up to 10 MB.");
+      return;
+    }
+    setImageError(null);
+    setSelectedImage(file);
+  }
+
+  async function submit(event: FormEvent) {
     event.preventDefault();
     const body = draft.trim();
-    if (!body || send.isPending) return;
-    send.mutate({ data: { body } }, {
-      onSuccess: () => {
-        setDraft("");
-        void queryClient.invalidateQueries({ queryKey: getGetSupportChatQueryKey() });
-      },
-    });
+    if ((!body && !selectedImage) || send.isPending || uploadingImage) return;
+    setImageError(null);
+    setUploadingImage(Boolean(selectedImage));
+    try {
+      let mediaUploadId: string | undefined;
+      if (selectedImage) {
+        const uploadUrlResponse = await fetch("/api/support-chat/images/upload-url", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: selectedImage.name,
+            size: selectedImage.size,
+            contentType: selectedImage.type,
+          }),
+        });
+        const upload = await uploadUrlResponse.json().catch(() => null);
+        if (!uploadUrlResponse.ok || !upload?.uploadId || !upload?.uploadURL) {
+          throw new Error(upload?.error ?? (language === "vi" ? "Không thể chuẩn bị tải ảnh." : "Could not prepare the image upload."));
+        }
+        const uploadResponse = await fetch(upload.uploadURL, {
+          method: "PUT",
+          headers: { "Content-Type": selectedImage.type },
+          body: selectedImage,
+        });
+        if (!uploadResponse.ok) {
+          const uploadError = await uploadResponse.json().catch(() => null);
+          throw new Error(uploadError?.error ?? (language === "vi" ? "Không thể tải ảnh." : "Could not upload the image."));
+        }
+        mediaUploadId = upload.uploadId;
+      }
+      await send.mutateAsync({
+        data: {
+          ...(body ? { body } : {}),
+          ...(mediaUploadId ? { mediaUploadId } : {}),
+        },
+      });
+      setDraft("");
+      setSelectedImage(null);
+      void queryClient.invalidateQueries({ queryKey: getGetSupportChatQueryKey() });
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : (language === "vi" ? "Không thể gửi tin nhắn." : "Could not send the message."));
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   function hideWidget() {
@@ -187,6 +240,9 @@ export function SupportChatWidget() {
                       {language === "vi" ? "Admin" : "Support"}
                     </p>
                   )}
+                  {message.mediaUrl && (
+                    <img src={message.mediaUrl} alt={language === "vi" ? "Ảnh đính kèm" : "Attached image"} className="mb-2 max-h-64 max-w-full rounded-xl object-contain" />
+                  )}
                   <p className="whitespace-pre-wrap break-words">{message.body}</p>
                   <time className={`mt-1 block text-[9px] font-bold ${message.senderType === "user" ? "text-white/65" : "text-[#91a8a7]"}`}>
                     {new Date(message.createdAt).toLocaleTimeString(language === "vi" ? "vi-VN" : "en-US", { hour: "2-digit", minute: "2-digit" })}
@@ -196,9 +252,20 @@ export function SupportChatWidget() {
             ))}
           </div>
           <form onSubmit={submit} className="border-t border-[#e3eeee] bg-white p-3">
+            {selectedImage && (
+              <div className="mb-2 flex items-center justify-between rounded-xl bg-[#eef7f6] px-3 py-2 text-[11px] font-bold text-[#35605e]">
+                <span className="min-w-0 truncate">{selectedImage.name}</span>
+                <button type="button" onClick={() => setSelectedImage(null)} className="ml-2 shrink-0 text-[#075e68]" aria-label={language === "vi" ? "Bỏ ảnh" : "Remove image"}>×</button>
+              </div>
+            )}
+            {imageError && <p className="mb-2 px-2 text-[10px] font-bold text-[#c2415b]">{imageError}</p>}
             <div className="flex items-end gap-2 rounded-2xl border border-[#d7e5e5] bg-[#f9fcfc] p-2 focus-within:border-[#6da9a6]">
               <textarea value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={2} placeholder={placeholder} className="min-h-[44px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[12px] font-semibold leading-5 text-[#203f3e] outline-none placeholder:text-[#99afae]" />
-              <button type="submit" disabled={!draft.trim() || send.isPending} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#075e68] text-white transition hover:bg-[#064d55] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send">
+              <label className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl border border-[#cfe1df] text-[#075e68] transition hover:bg-[#e8f5f3] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-40" aria-label={language === "vi" ? "Đính kèm ảnh" : "Attach image"}>
+                <ImagePlus className="h-4 w-4" />
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" disabled={send.isPending || uploadingImage} onChange={chooseImage} />
+              </label>
+              <button type="submit" disabled={(!draft.trim() && !selectedImage) || send.isPending || uploadingImage} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#075e68] text-white transition hover:bg-[#064d55] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send">
                 <Send className="h-4 w-4" />
               </button>
             </div>

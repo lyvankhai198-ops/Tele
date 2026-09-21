@@ -13,5 +13,7 @@ export interface SupportChatMessage {
   senderType: SupportChatMessageSenderType;
   source: SupportChatMessageSource;
   body: string;
+  /** @nullable */
+  mediaUrl: string | null;
   createdAt: Date;
 }

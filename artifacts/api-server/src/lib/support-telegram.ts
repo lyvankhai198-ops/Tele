@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { appUsersTable, db, supportMessagesTable } from "@workspace/db";
 import { getSystemSettings } from "./system-settings";
@@ -8,12 +9,15 @@ import {
   getSupportConversationForAdmin,
   setSupportMessageTelegramId,
 } from "./support-chat";
+import { supportMediaStorage } from "./supportMediaStorage";
 import { logger } from "./logger";
 
 type TelegramMessage = {
   message_id: number;
   chat: { id: number | string };
   text?: string;
+  caption?: string;
+  photo?: Array<{ file_id: string; width: number; height: number; file_size?: number }>;
   reply_to_message?: { message_id: number };
   from?: { username?: string; first_name?: string; last_name?: string };
 };
@@ -48,6 +52,56 @@ async function sendSupportMessage(text: string, replyToMessageId?: number): Prom
     text,
     reply_to_message_id: replyToMessageId,
     allow_sending_without_reply: true,
+  });
+}
+
+async function sendSupportPhoto(input: {
+  mediaPath: string;
+  caption?: string;
+  replyToMessageId?: number;
+}): Promise<TelegramMessage | null> {
+  const settings = await getSystemSettings();
+  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
+  const token = botToken();
+  if (!token) return null;
+  const stored = await supportMediaStorage.readImage(input.mediaPath);
+  const bytes = await readFile(stored.filePath);
+  const form = new FormData();
+  form.set("chat_id", settings.supportChat.adminTelegramChatId);
+  form.set("allow_sending_without_reply", "true");
+  if (input.replyToMessageId) form.set("reply_to_message_id", String(input.replyToMessageId));
+  if (input.caption?.trim()) form.set("caption", input.caption.trim().slice(0, 1024));
+  form.set("photo", new Blob([bytes], { type: stored.contentType }), "support-image");
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(25_000),
+  });
+  const result = await response.json() as { ok?: boolean; result?: TelegramMessage; description?: string };
+  if (!response.ok || !result.ok) {
+    throw new Error(`Telegram sendPhoto failed: ${result.description ?? response.statusText}`);
+  }
+  return result.result ?? null;
+}
+
+async function downloadTelegramPhoto(message: TelegramMessage): Promise<{
+  objectPath: string;
+  contentType: string;
+} | null> {
+  const largest = message.photo?.at(-1);
+  if (!largest) return null;
+  const file = await telegramCall<{ file_path?: string }>("getFile", { file_id: largest.file_id });
+  if (!file?.file_path) return null;
+  const token = botToken();
+  if (!token) return null;
+  const response = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`, {
+    signal: AbortSignal.timeout(25_000),
+  });
+  if (!response.ok) throw new Error(`Telegram photo download failed: ${response.statusText}`);
+  const responseContentType = response.headers.get("content-type");
+  return supportMediaStorage.storeTelegramImage({
+    bytes: Buffer.from(await response.arrayBuffer()),
+    contentType: responseContentType?.startsWith("image/") ? responseContentType : undefined,
   });
 }
 
@@ -87,10 +141,16 @@ export async function notifySupportUserMessage(input: {
   messageId: string;
   username: string;
   body: string;
+  mediaPath?: string;
 }): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled) return;
-  const sent = await sendSupportMessage(`Tin nhắn hỗ trợ từ ${input.username}\n\n${input.body}`);
+  const sent = input.mediaPath
+    ? await sendSupportPhoto({
+      mediaPath: input.mediaPath,
+      caption: `Tin nhắn hỗ trợ từ ${input.username}${input.body ? `\n\n${input.body}` : ""}`,
+    })
+    : await sendSupportMessage(`Tin nhắn hỗ trợ từ ${input.username}\n\n${input.body}`);
   if (sent) await setSupportMessageTelegramId(input.messageId, String(sent.chat.id), sent.message_id);
 }
 
@@ -105,9 +165,11 @@ export async function notifySupportConversationClosed(input: { username: string 
 async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const settings = await getSystemSettings();
   const configuredChatId = settings.supportChat.adminTelegramChatId;
-  if (!configuredChatId || String(message.chat.id) !== configuredChatId || !message.text?.trim()) return;
+  const text = message.text?.trim() ?? "";
+  const caption = message.caption?.trim() ?? "";
+  const hasPhoto = Boolean(message.photo?.length);
+  if (!configuredChatId || String(message.chat.id) !== configuredChatId || (!text && !caption && !hasPhoto)) return;
 
-  const text = message.text.trim();
   if (text === "/start" || text === "/chatid") {
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
@@ -127,11 +189,15 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   if (!mapped) return;
   const conversation = await getSupportConversationForAdmin(mapped.conversationId);
   if (!conversation) return;
+  const media = hasPhoto ? await downloadTelegramPhoto(message) : null;
+  if (hasPhoto && !media) return;
   const result = await appendSupportMessage({
     conversationId: mapped.conversationId,
     senderType: "admin",
     source: "telegram",
-    body: text,
+    body: caption || text,
+    mediaPath: media?.objectPath,
+    mediaContentType: media?.contentType,
   });
   logger.info({ conversationId: conversation.id, messageId: result.message.id }, "Support reply received from Telegram");
 }

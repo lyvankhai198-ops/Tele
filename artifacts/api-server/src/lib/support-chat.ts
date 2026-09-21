@@ -5,6 +5,7 @@ import {
   supportConversationsTable,
   supportMessagesTable,
 } from "@workspace/db";
+import { supportMediaStorage } from "./supportMediaStorage";
 
 export const SUPPORT_MESSAGE_MAX_LENGTH = 2000;
 export const SUPPORT_CONVERSATION_STATUSES = ["open", "closed"] as const;
@@ -15,6 +16,7 @@ export type SupportMessageDto = {
   senderType: "user" | "admin" | "system";
   source: "web" | "telegram" | "system";
   body: string;
+  mediaUrl: string | null;
   createdAt: Date;
 };
 
@@ -37,6 +39,7 @@ function toMessageDto(message: typeof supportMessagesTable.$inferSelect): Suppor
     senderType: message.senderType as SupportMessageDto["senderType"],
     source: message.source as SupportMessageDto["source"],
     body: message.body,
+    mediaUrl: message.mediaPath ? `/api/support-chat/media/${message.id}` : null,
     createdAt: message.createdAt,
   };
 }
@@ -121,17 +124,40 @@ export async function getSupportConversationForAdmin(conversationId: string): Pr
   return toConversationDto(row.conversation, row.username, messages);
 }
 
+export async function getSupportMessageMedia(messageId: string, userId?: string): Promise<{
+  mediaPath: string;
+  mediaContentType: string | null;
+} | null> {
+  const conditions = [eq(supportMessagesTable.id, messageId)];
+  if (userId) conditions.push(eq(supportConversationsTable.userId, userId));
+  const [row] = await db.select({
+    mediaPath: supportMessagesTable.mediaPath,
+    mediaContentType: supportMessagesTable.mediaContentType,
+  })
+    .from(supportMessagesTable)
+    .innerJoin(supportConversationsTable, eq(supportConversationsTable.id, supportMessagesTable.conversationId))
+    .where(and(...conditions))
+    .limit(1);
+  if (!row?.mediaPath) return null;
+  return {
+    mediaPath: row.mediaPath,
+    mediaContentType: row.mediaContentType,
+  };
+}
+
 export async function appendSupportMessage(input: {
   conversationId: string;
   senderType: "user" | "admin" | "system";
   senderUserId?: string;
   source: "web" | "telegram" | "system";
   body: string;
+  mediaPath?: string;
+  mediaContentType?: string;
   visibleToUser?: boolean;
 }): Promise<{ conversation: SupportConversationDto; message: SupportMessageDto; telegramMessageId?: number | null }> {
   const body = input.body.trim();
-  if (!body || body.length > SUPPORT_MESSAGE_MAX_LENGTH) {
-    throw new Error("Support message must contain 1-2000 characters");
+  if ((!body && !input.mediaPath) || body.length > SUPPORT_MESSAGE_MAX_LENGTH) {
+    throw new Error("Support message must contain text or an image, with up to 2000 characters");
   }
   const result = await db.transaction(async (tx) => {
     const [conversation] = await tx.select().from(supportConversationsTable)
@@ -145,6 +171,8 @@ export async function appendSupportMessage(input: {
       senderUserId: input.senderUserId ?? null,
       source: input.source,
       body,
+      mediaPath: input.mediaPath ?? null,
+      mediaContentType: input.mediaContentType ?? null,
       visibleToUser: input.visibleToUser ?? true,
       createdAt: now,
     }).returning();
@@ -204,6 +232,9 @@ export async function markSupportConversationRead(conversationId: string, reader
 }
 
 export async function closeSupportConversation(conversationId: string): Promise<void> {
+  const mediaPaths = await db.select({ mediaPath: supportMessagesTable.mediaPath })
+    .from(supportMessagesTable)
+    .where(eq(supportMessagesTable.conversationId, conversationId));
   await db.transaction(async (tx) => {
     await tx.delete(supportMessagesTable)
       .where(eq(supportMessagesTable.conversationId, conversationId));
@@ -217,4 +248,7 @@ export async function closeSupportConversation(conversationId: string): Promise<
       })
       .where(eq(supportConversationsTable.id, conversationId));
   });
+  await Promise.all(mediaPaths
+    .map(({ mediaPath }) => mediaPath ? supportMediaStorage.deleteImage(mediaPath) : null)
+    .filter((mediaPath): mediaPath is Promise<void> => Boolean(mediaPath)));
 }

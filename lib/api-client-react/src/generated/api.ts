@@ -110,6 +110,8 @@ import type {
   Subscription,
   SupportAdminMessageResult,
   SupportChatCloseResponse,
+  SupportChatImageUploadInput,
+  SupportChatImageUploadResponse,
   SupportChatMessageInput,
   SupportChatMessageResult,
   SupportChatReadResponse,
@@ -3772,6 +3774,208 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getSendSupportChatMessageMutationOptions(options));
     }
+
+export const getRequestSupportChatImageUploadUrl = () => {
+
+
+
+
+  return `/api/support-chat/images/upload-url`
+}
+
+export const requestSupportChatImageUpload = async (supportChatImageUploadInput: SupportChatImageUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<SupportChatImageUploadResponse> => {
+
+  return customFetch<SupportChatImageUploadResponse>(getRequestSupportChatImageUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(supportChatImageUploadInput)
+  }
+);}
+
+
+
+
+
+export const getRequestSupportChatImageUploadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestSupportChatImageUpload>>, TError,{data: BodyType<SupportChatImageUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestSupportChatImageUpload>>, TError,{data: BodyType<SupportChatImageUploadInput>}, TContext> => {
+
+const mutationKey = ['requestSupportChatImageUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestSupportChatImageUpload>>, {data: BodyType<SupportChatImageUploadInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestSupportChatImageUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestSupportChatImageUploadMutationResult = NonNullable<Awaited<ReturnType<typeof requestSupportChatImageUpload>>>
+    export type RequestSupportChatImageUploadMutationBody = BodyType<SupportChatImageUploadInput>
+    export type RequestSupportChatImageUploadMutationError = ErrorType<void>
+
+    export const useRequestSupportChatImageUpload = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestSupportChatImageUpload>>, TError,{data: BodyType<SupportChatImageUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestSupportChatImageUpload>>,
+        TError,
+        {data: BodyType<SupportChatImageUploadInput>},
+        TContext
+      > => {
+      return useMutation(getRequestSupportChatImageUploadMutationOptions(options));
+    }
+
+export const getUploadSupportChatImageUrl = (uploadId: string,) => {
+
+
+
+
+  return `/api/support-chat/images/uploads/${uploadId}`
+}
+
+export const uploadSupportChatImage = async (uploadId: string,
+    uploadSupportChatImageBody: Blob, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getUploadSupportChatImageUrl(uploadId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/jpeg', ...options?.headers },
+    body: uploadSupportChatImageBody
+  }
+);}
+
+
+
+
+
+export const getUploadSupportChatImageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSupportChatImage>>, TError,{uploadId: string;data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadSupportChatImage>>, TError,{uploadId: string;data: BodyType<Blob>}, TContext> => {
+
+const mutationKey = ['uploadSupportChatImage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadSupportChatImage>>, {uploadId: string;data: BodyType<Blob>}> = (props) => {
+          const {uploadId,data} = props ?? {};
+
+          return  uploadSupportChatImage(uploadId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadSupportChatImageMutationResult = NonNullable<Awaited<ReturnType<typeof uploadSupportChatImage>>>
+    export type UploadSupportChatImageMutationBody = BodyType<Blob>
+    export type UploadSupportChatImageMutationError = ErrorType<void>
+
+    export const useUploadSupportChatImage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSupportChatImage>>, TError,{uploadId: string;data: BodyType<Blob>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadSupportChatImage>>,
+        TError,
+        {uploadId: string;data: BodyType<Blob>},
+        TContext
+      > => {
+      return useMutation(getUploadSupportChatImageMutationOptions(options));
+    }
+
+export const getGetSupportChatMediaUrl = (messageId: string,) => {
+
+
+
+
+  return `/api/support-chat/media/${messageId}`
+}
+
+export const getSupportChatMedia = async (messageId: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetSupportChatMediaUrl(messageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupportChatMediaQueryKey = (messageId: string,) => {
+    return [
+    `/api/support-chat/media/${messageId}`
+    ] as const;
+    }
+
+
+export const getGetSupportChatMediaQueryOptions = <TData = Awaited<ReturnType<typeof getSupportChatMedia>>, TError = ErrorType<void>>(messageId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportChatMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupportChatMediaQueryKey(messageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupportChatMedia>>> = ({ signal }) => getSupportChatMedia(messageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: messageId !== null && messageId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupportChatMedia>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupportChatMediaQueryResult = NonNullable<Awaited<ReturnType<typeof getSupportChatMedia>>>
+export type GetSupportChatMediaQueryError = ErrorType<void>
+
+
+
+export function useGetSupportChatMedia<TData = Awaited<ReturnType<typeof getSupportChatMedia>>, TError = ErrorType<void>>(
+ messageId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupportChatMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupportChatMediaQueryOptions(messageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getMarkSupportChatReadUrl = () => {
 

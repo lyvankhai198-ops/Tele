@@ -7,9 +7,11 @@
  */
 
 export interface SupportChatMessageInput {
+  /** @maxLength 2000 */
+  body?: string;
   /**
      * @minLength 1
-     * @maxLength 2000
+     * @maxLength 64
      */
-  body: string;
+  mediaUploadId?: string;
 }
