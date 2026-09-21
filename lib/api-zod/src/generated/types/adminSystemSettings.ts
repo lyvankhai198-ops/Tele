@@ -10,12 +10,14 @@ import type { AdminSystemSettingsPlanContent } from './adminSystemSettingsPlanCo
 import type { AdminSystemSettingsPlanLimits } from './adminSystemSettingsPlanLimits';
 import type { CampaignDefaults } from './campaignDefaults';
 import type { PostJoinCampaignSettings } from './postJoinCampaignSettings';
+import type { SupportChatSettings } from './supportChatSettings';
 import type { SupportSettings } from './supportSettings';
 
 export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
   supportLinks: SupportSettings;
+  supportChat: SupportChatSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   groupLibraryAutoJoinEnabled: boolean;

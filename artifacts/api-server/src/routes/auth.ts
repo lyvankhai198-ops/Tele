@@ -14,7 +14,7 @@ import {
   UpdateAuthLanguageBody,
   UpdateAuthLanguageResponse,
 } from "@workspace/api-zod";
-import { appUsersTable, authSessionsTable, db, subscriptionsTable } from "@workspace/db";
+import { appUsersTable, authSessionsTable, db, subscriptionsTable, supportConversationsTable } from "@workspace/db";
 import {
   createSessionToken,
   hashPassword,
@@ -44,6 +44,7 @@ import {
   issueCaptcha,
   verifyAndConsumeCaptcha,
 } from "../lib/captcha";
+import { notifySupportNewRegistration } from "../lib/support-telegram";
 
 const router: IRouter = Router();
 const MAX_CREDENTIAL_ATTEMPTS = 5;
@@ -282,6 +283,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
         startedAt: trialStartedAt,
         expiresAt: new Date(trialStartedAt.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000),
       });
+      await tx.insert(supportConversationsTable).values({
+        userId: created.id,
+        lastMessageAt: trialStartedAt,
+      });
       await tx.insert(authSessionsTable).values({
         userId: created.id,
         tokenHash: hashSessionToken(token),
@@ -299,6 +304,10 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     });
     clearSupportCookie(res);
     setSessionCookie(res, token);
+    void notifySupportNewRegistration({
+      userId: user.id,
+      username: user.username,
+    }).catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about new registration"));
     res.status(201).json(RegisterAuthResponse.parse(authUserResponse(authenticatedUser)));
   } catch (error) {
     if (isUniqueViolation(error)) {

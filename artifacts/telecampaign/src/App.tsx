@@ -38,7 +38,9 @@ import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
 import AdminActiveGroupsPage from '@/pages/admin-active-groups';
 import AdminSystemEventsPage from '@/pages/admin-system-events';
+import AdminSupportChatPage from '@/pages/admin-support-chat';
 import SupportPage from '@/pages/support';
+import { SupportChatWidget } from '@/components/support-chat-widget';
 
 const queryClient = new QueryClient();
 
@@ -597,6 +599,7 @@ function Router() {
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />
         <Route path="/admin/active-groups" component={() => <AdminRoute><AdminActiveGroupsPage mode="admin" /></AdminRoute>} />
         <Route path="/admin/system-events" component={() => <AdminRoute><AdminSystemEventsPage /></AdminRoute>} />
+        <Route path="/admin/support-chat" component={() => <AdminRoute><AdminSupportChatPage /></AdminRoute>} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
@@ -641,6 +644,7 @@ function App() {
           <UserLanguageProvider>
             <TooltipProvider>
               <Router />
+              <SupportChatWidget />
               <Toaster />
             </TooltipProvider>
           </UserLanguageProvider>

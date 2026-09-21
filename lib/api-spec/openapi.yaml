@@ -710,6 +710,45 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SupportSettingsResponse" }
         "401": { description: Authentication is required }
+  /support-chat:
+    get:
+      operationId: getSupportChat
+      tags: [support]
+      responses:
+        "200":
+          description: Current user's persisted support conversation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportChatResponse" }
+        "401": { description: Authentication is required }
+  /support-chat/messages:
+    post:
+      operationId: sendSupportChatMessage
+      tags: [support]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupportChatMessageInput" }
+      responses:
+        "201":
+          description: Support message created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportChatMessageResult" }
+        "400": { description: Invalid support message }
+        "401": { description: Authentication is required }
+  /support-chat/read:
+    post:
+      operationId: markSupportChatRead
+      tags: [support]
+      responses:
+        "200":
+          description: Support conversation marked read
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportChatReadResponse" }
+        "401": { description: Authentication is required }
   /group-library/access:
     get:
       operationId: getGroupLibraryAccess
@@ -847,6 +886,99 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AdminSystemSettings" }
         "400": { description: Invalid system settings }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/support-chat/conversations:
+    get:
+      operationId: listAdminSupportConversations
+      tags: [admin]
+      responses:
+        "200":
+          description: Support conversations for administrators
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSupportConversationList" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/support-chat/conversations/{conversationId}:
+    get:
+      operationId: getAdminSupportConversation
+      tags: [admin]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Support conversation details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSupportConversationResponse" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Conversation not found }
+    patch:
+      operationId: updateAdminSupportConversation
+      tags: [admin]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAdminSupportConversationInput" }
+      responses:
+        "200":
+          description: Support conversation updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSupportConversationUpdateResult" }
+        "400": { description: Invalid conversation state }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "404": { description: Conversation not found }
+  /admin/support-chat/conversations/{conversationId}/messages:
+    post:
+      operationId: sendAdminSupportMessage
+      tags: [admin]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupportChatMessageInput" }
+      responses:
+        "201":
+          description: Administrator support message created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportAdminMessageResult" }
+        "400": { description: Invalid support message }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+  /admin/support-chat/conversations/{conversationId}/read:
+    post:
+      operationId: markAdminSupportRead
+      tags: [admin]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Support conversation marked read
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportChatReadResponse" }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
   /admin/operations:
@@ -2364,6 +2496,91 @@ components:
       required: [supportLinks]
       properties:
         supportLinks: { $ref: "#/components/schemas/SupportSettings" }
+    SupportChatSettings:
+      type: object
+      required: [enabled, notifyNewRegistrations, telegramBridgeEnabled, adminTelegramChatId, welcomeMessage]
+      properties:
+        enabled: { type: boolean }
+        notifyNewRegistrations: { type: boolean }
+        telegramBridgeEnabled: { type: boolean }
+        adminTelegramChatId: { type: ["string", "null"], maxLength: 64 }
+        welcomeMessage: { type: string, minLength: 1, maxLength: 500 }
+    SupportChatMessage:
+      type: object
+      required: [id, senderType, source, body, createdAt]
+      properties:
+        id: { type: string }
+        senderType: { type: string, enum: [user, admin, system] }
+        source: { type: string, enum: [web, telegram, system] }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+    SupportChatConversation:
+      type: object
+      required: [id, userId, username, status, unreadForUser, unreadForAdmin, lastMessageAt, createdAt, updatedAt, messages]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        username: { type: string }
+        status: { type: string, enum: [open, closed] }
+        unreadForUser: { type: number, minimum: 0 }
+        unreadForAdmin: { type: number, minimum: 0 }
+        lastMessageAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/SupportChatMessage" }
+    SupportChatResponse:
+      type: object
+      required: [enabled, welcomeMessage, conversation]
+      properties:
+        enabled: { type: boolean }
+        welcomeMessage: { type: string }
+        conversation: { $ref: "#/components/schemas/SupportChatConversation" }
+    SupportChatMessageInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+    SupportChatMessageResult:
+      type: object
+      required: [conversation, message]
+      properties:
+        conversation: { $ref: "#/components/schemas/SupportChatConversation" }
+        message: { $ref: "#/components/schemas/SupportChatMessage" }
+    SupportChatReadResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+    AdminSupportConversationList:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items: { $ref: "#/components/schemas/SupportChatConversation" }
+    AdminSupportConversationResponse:
+      type: object
+      required: [conversation]
+      properties:
+        conversation: { $ref: "#/components/schemas/SupportChatConversation" }
+    SupportAdminMessageResult:
+      type: object
+      required: [conversation, message]
+      properties:
+        conversation: { $ref: "#/components/schemas/SupportChatConversation" }
+        message: { $ref: "#/components/schemas/SupportChatMessage" }
+    UpdateAdminSupportConversationInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [open, closed] }
+    AdminSupportConversationUpdateResult:
+      type: object
+      required: [conversation]
+      properties:
+        conversation: { $ref: "#/components/schemas/SupportChatConversation" }
     GroupLibraryAccess:
       type: object
       required: [visible, minimumJoinPlan, canView, canOpenLinks]
@@ -2374,7 +2591,7 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, planContent, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, postJoinCampaign, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [planLimits, planContent, supportLinks, supportChat, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, postJoinCampaign, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -2391,6 +2608,7 @@ components:
             pro: { $ref: "#/components/schemas/PlanDisplayContent" }
             unlimited: { $ref: "#/components/schemas/PlanDisplayContent" }
         supportLinks: { $ref: "#/components/schemas/SupportSettings" }
+        supportChat: { $ref: "#/components/schemas/SupportChatSettings" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         groupLibraryAutoJoinEnabled: { type: boolean }
@@ -2403,7 +2621,7 @@ components:
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminSystemSettingsInput:
       type: object
-      required: [planLimits, supportLinks, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [planLimits, supportLinks, supportChat, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
         planLimits:
           type: object
@@ -2420,6 +2638,7 @@ components:
             pro: { $ref: "#/components/schemas/PlanDisplayContent" }
             unlimited: { $ref: "#/components/schemas/PlanDisplayContent" }
         supportLinks: { $ref: "#/components/schemas/SupportSettings" }
+        supportChat: { $ref: "#/components/schemas/SupportChatSettings" }
         groupLibraryVisibleToUsers: { type: boolean }
         groupLibraryMinimumJoinPlan: { type: string, enum: [pro, unlimited] }
         groupLibraryAutoJoinEnabled: { type: boolean }

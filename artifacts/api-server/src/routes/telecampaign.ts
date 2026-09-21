@@ -15,6 +15,10 @@ import {
   GetUpgradeSummaryResponse,
   GetSystemDefaultsResponse,
   GetSupportSettingsResponse,
+  GetSupportChatResponse,
+  SendSupportChatMessageBody,
+  SendSupportChatMessageResponse,
+  MarkSupportChatReadResponse,
   GetGroupLibraryAccessResponse,
   GetGroupLibraryQueryParams,
   GetGroupLibraryResponse,
@@ -131,6 +135,12 @@ import {
 } from "../lib/subscriptions";
 import { requireActiveSubscription, requireAuth } from "../middlewares/authMiddleware";
 import { getSystemSettings, updateSystemSettings } from "../lib/system-settings";
+import {
+  appendSupportMessage,
+  getSupportConversationForUser,
+  markSupportConversationRead,
+} from "../lib/support-chat";
+import { notifySupportUserMessage } from "../lib/support-telegram";
 import {
   filterGroupLibraryGroups,
   getAdminActiveGroupDirectory,
@@ -738,6 +748,49 @@ router.get("/system-defaults", async (_req, res): Promise<void> => {
 router.get("/support", async (_req, res): Promise<void> => {
   const settings = await getSystemSettings();
   res.json(GetSupportSettingsResponse.parse({ supportLinks: settings.supportLinks }));
+});
+
+router.get("/support-chat", async (req, res): Promise<void> => {
+  const settings = await getSystemSettings();
+  const conversation = await getSupportConversationForUser(req.userId!);
+  res.json(GetSupportChatResponse.parse({
+    enabled: settings.supportChat.enabled,
+    welcomeMessage: settings.supportChat.welcomeMessage,
+    conversation,
+  }));
+});
+
+router.post("/support-chat/messages", async (req, res): Promise<void> => {
+  const parsed = SendSupportChatMessageBody.safeParse(req.body);
+  if (!parsed.success) return void res.status(400).json({ error: "Tin nhắn hỗ trợ không hợp lệ." });
+  const conversation = await getSupportConversationForUser(req.userId!);
+  try {
+    const result = await appendSupportMessage({
+      conversationId: conversation.id,
+      senderType: "user",
+      senderUserId: req.userId!,
+      source: "web",
+      body: parsed.data.body,
+    });
+    void notifySupportUserMessage({
+      conversationId: conversation.id,
+      messageId: result.message.id,
+      username: conversation.username,
+      body: result.message.body,
+    }).catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about user message"));
+    res.status(201).json(SendSupportChatMessageResponse.parse({
+      conversation: result.conversation,
+      message: result.message,
+    }));
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Không thể gửi tin nhắn hỗ trợ." });
+  }
+});
+
+router.post("/support-chat/read", async (req, res): Promise<void> => {
+  const conversation = await getSupportConversationForUser(req.userId!);
+  await markSupportConversationRead(conversation.id, "user");
+  res.json(MarkSupportChatReadResponse.parse({ ok: true }));
 });
 
 router.get("/account", async (req, res): Promise<void> => {

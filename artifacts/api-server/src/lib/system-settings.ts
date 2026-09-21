@@ -24,6 +24,14 @@ export type SupportSettings = {
   zaloUrl: string | null;
 };
 
+export type SupportChatSettings = {
+  enabled: boolean;
+  notifyNewRegistrations: boolean;
+  telegramBridgeEnabled: boolean;
+  adminTelegramChatId: string | null;
+  welcomeMessage: string;
+};
+
 export type PostJoinCampaignSettings = {
   enabled: boolean;
   content: string;
@@ -48,6 +56,7 @@ export type SystemSettings = {
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
   planContent: Record<PlanCode, ConfiguredPlanContent>;
   supportLinks: SupportSettings;
+  supportChat: SupportChatSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: "pro" | "unlimited";
   groupLibraryAutoJoinEnabled: boolean;
@@ -69,6 +78,7 @@ type StoredSystemSettings = {
   planLimits?: Partial<Record<PlanCode, Partial<ConfiguredPlanLimits>>>;
   planContent?: Partial<Record<PlanCode, Partial<ConfiguredPlanContent>>>;
   supportLinks?: Partial<SupportSettings>;
+  supportChat?: Partial<SupportChatSettings>;
   groupLibraryVisibleToUsers?: unknown;
   groupLibraryMinimumJoinPlan?: unknown;
   groupLibraryAutoJoinEnabled?: unknown;
@@ -154,6 +164,13 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   supportLinks: {
     telegramUrl: null,
     zaloUrl: null,
+  },
+  supportChat: {
+    enabled: true,
+    notifyNewRegistrations: true,
+    telegramBridgeEnabled: true,
+    adminTelegramChatId: null,
+    welcomeMessage: "Xin chào! Hãy gửi câu hỏi, đội ngũ hỗ trợ sẽ phản hồi sớm nhất có thể.",
   },
   groupLibraryVisibleToUsers: false,
   groupLibraryMinimumJoinPlan: "pro",
@@ -358,6 +375,23 @@ function parseSettings(value: string | undefined): SystemSettings {
       supportLinks: {
         telegramUrl: normalizedSupportUrl(raw.supportLinks?.telegramUrl, "telegram"),
         zaloUrl: normalizedSupportUrl(raw.supportLinks?.zaloUrl, "zalo"),
+      },
+      supportChat: {
+        enabled: typeof raw.supportChat?.enabled === "boolean"
+          ? raw.supportChat.enabled
+          : DEFAULT_SYSTEM_SETTINGS.supportChat.enabled,
+        notifyNewRegistrations: typeof raw.supportChat?.notifyNewRegistrations === "boolean"
+          ? raw.supportChat.notifyNewRegistrations
+          : DEFAULT_SYSTEM_SETTINGS.supportChat.notifyNewRegistrations,
+        telegramBridgeEnabled: typeof raw.supportChat?.telegramBridgeEnabled === "boolean"
+          ? raw.supportChat.telegramBridgeEnabled
+          : DEFAULT_SYSTEM_SETTINGS.supportChat.telegramBridgeEnabled,
+        adminTelegramChatId: typeof raw.supportChat?.adminTelegramChatId === "string" && raw.supportChat.adminTelegramChatId.trim()
+          ? raw.supportChat.adminTelegramChatId.trim().slice(0, 64)
+          : null,
+        welcomeMessage: typeof raw.supportChat?.welcomeMessage === "string" && raw.supportChat.welcomeMessage.trim()
+          ? raw.supportChat.welcomeMessage.trim().slice(0, 500)
+          : DEFAULT_SYSTEM_SETTINGS.supportChat.welcomeMessage,
       },
       groupLibraryVisibleToUsers: typeof raw.groupLibraryVisibleToUsers === "boolean"
         ? raw.groupLibraryVisibleToUsers

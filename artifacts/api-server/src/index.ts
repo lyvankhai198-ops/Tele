@@ -6,6 +6,7 @@ import { startNotificationMediaCleanup } from "./lib/notificationMediaCleanup";
 import { startActivityLogCleanup } from "./lib/activity";
 import { startAdminGroupJoinWorker } from "./lib/admin-group-join-worker";
 import { startSubscriptionReminderWorker } from "./lib/subscription-reminder-worker";
+import { startSupportTelegramBridge } from "./lib/support-telegram";
 
 const rawPort = process.env["PORT"];
 
@@ -32,6 +33,7 @@ void getUnmappedLegacyOwnerCount().then(async (unmappedOwners) => {
   logger.info({ port }, "Server listening");
   startNotificationMediaCleanup();
   startActivityLogCleanup();
+  startSupportTelegramBridge();
   if (unmappedOwners === 0 && process.env.TELECAMPAIGN_DISABLE_WORKER !== "true") {
     startCampaignWorker();
         if (process.env.TELECAMPAIGN_DISABLE_GROUP_JOIN_WORKER !== "true") {

@@ -298,6 +298,36 @@ export const systemSettingsTable = pgTable("system_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const supportConversationsTable = pgTable("support_conversations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull(),
+  status: text("status").notNull().default("open"),
+  unreadForUser: integer("unread_for_user").notNull().default(0),
+  unreadForAdmin: integer("unread_for_admin").notNull().default(0),
+  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  userIdUnique: uniqueIndex("support_conversations_user_id_unique").on(table.userId),
+  lastMessageIndex: index("support_conversations_last_message_idx").on(table.lastMessageAt),
+}));
+
+export const supportMessagesTable = pgTable("support_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  conversationId: uuid("conversation_id").notNull(),
+  senderType: text("sender_type").notNull(),
+  senderUserId: uuid("sender_user_id"),
+  source: text("source").notNull().default("web"),
+  body: text("body").notNull(),
+  visibleToUser: boolean("visible_to_user").notNull().default(true),
+  telegramChatId: text("telegram_chat_id"),
+  telegramMessageId: integer("telegram_message_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  conversationCreatedIndex: index("support_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+  telegramReplyIndex: index("support_messages_telegram_reply_idx").on(table.telegramChatId, table.telegramMessageId),
+}));
+
 export const authChallengesTable = pgTable("auth_challenges", {
   id: uuid("id").primaryKey().defaultRandom(),
   accountId: uuid("account_id").notNull().references(() => telegramAccountsTable.id, { onDelete: "cascade" }),

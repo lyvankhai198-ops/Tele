@@ -32,6 +32,13 @@ import {
   GetAdminSystemSettingsResponse,
   UpdateAdminSystemSettingsBody,
   UpdateAdminSystemSettingsResponse,
+  ListAdminSupportConversationsResponse,
+  GetAdminSupportConversationResponse,
+  SendAdminSupportMessageBody,
+  SendAdminSupportMessageResponse,
+  MarkAdminSupportReadResponse,
+  UpdateAdminSupportConversationBody,
+  UpdateAdminSupportConversationResponse,
   GetAdminOperationsResponse,
   GetAdminActiveGroupDirectoryResponse,
   GetAdminGroupJoinStatusResponse,
@@ -149,6 +156,13 @@ import {
   markAdminSystemEventRead,
   markAllAdminSystemEventsRead,
 } from "../lib/admin-system-events";
+import {
+  appendSupportMessage,
+  closeSupportConversation,
+  getSupportConversationForAdmin,
+  listSupportConversations,
+  markSupportConversationRead,
+} from "../lib/support-chat";
 
 const router: IRouter = Router();
 const notificationMediaStorage = new NotificationMediaStorage();
@@ -989,6 +1003,50 @@ router.get("/admin/system-settings", async (_req, res): Promise<void> => {
   res.json(GetAdminSystemSettingsResponse.parse(await getSystemSettings()));
 });
 
+router.get("/admin/support-chat/conversations", async (_req, res): Promise<void> => {
+  res.json(ListAdminSupportConversationsResponse.parse({ conversations: await listSupportConversations() }));
+});
+
+router.get("/admin/support-chat/conversations/:conversationId", async (req, res): Promise<void> => {
+  const conversation = await getSupportConversationForAdmin(req.params.conversationId);
+  if (!conversation) return void sendError(res, 404, "Không tìm thấy hội thoại hỗ trợ.");
+  res.json(GetAdminSupportConversationResponse.parse({ conversation }));
+});
+
+router.post("/admin/support-chat/conversations/:conversationId/messages", async (req, res): Promise<void> => {
+  const parsed = SendAdminSupportMessageBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, "Tin nhắn hỗ trợ không hợp lệ.");
+  try {
+    const result = await appendSupportMessage({
+      conversationId: req.params.conversationId,
+      senderType: "admin",
+      senderUserId: req.userId!,
+      source: "web",
+      body: parsed.data.body,
+    });
+    res.status(201).json(SendAdminSupportMessageResponse.parse({
+      conversation: result.conversation,
+      message: result.message,
+    }));
+  } catch (error) {
+    sendError(res, 400, error instanceof Error ? error.message : "Không thể gửi tin nhắn hỗ trợ.");
+  }
+});
+
+router.post("/admin/support-chat/conversations/:conversationId/read", async (req, res): Promise<void> => {
+  await markSupportConversationRead(req.params.conversationId, "admin");
+  res.json(MarkAdminSupportReadResponse.parse({ ok: true }));
+});
+
+router.patch("/admin/support-chat/conversations/:conversationId", async (req, res): Promise<void> => {
+  const parsed = UpdateAdminSupportConversationBody.safeParse(req.body);
+  if (!parsed.success) return void sendError(res, 400, "Trạng thái hội thoại không hợp lệ.");
+  if (parsed.data.status === "closed") await closeSupportConversation(req.params.conversationId);
+  const conversation = await getSupportConversationForAdmin(req.params.conversationId);
+  if (!conversation) return void sendError(res, 404, "Không tìm thấy hội thoại hỗ trợ.");
+  res.json(UpdateAdminSupportConversationResponse.parse({ conversation }));
+});
+
 router.patch("/admin/system-settings", async (req, res): Promise<void> => {
   const parsed = UpdateAdminSystemSettingsBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Cấu hình hệ thống không hợp lệ.");
@@ -998,6 +1056,7 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     planContent: parsed.data.planContent ?? previousSettings.planContent,
     postJoinCampaign: parsed.data.postJoinCampaign ?? previousSettings.postJoinCampaign,
     subscriptionReminder: previousSettings.subscriptionReminder,
+    supportChat: parsed.data.supportChat ?? previousSettings.supportChat,
   };
   const supportLinks = {
     telegramUrl: parsed.data.supportLinks.telegramUrl?.trim() || null,
@@ -1010,6 +1069,19 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     return void sendError(res, 400, "Link hỗ trợ phải là HTTPS hợp lệ trên t.me, telegram.me hoặc zalo.me.");
   }
   settings.supportLinks = supportLinks;
+  settings.supportChat = {
+    enabled: settings.supportChat.enabled,
+    notifyNewRegistrations: settings.supportChat.notifyNewRegistrations,
+    telegramBridgeEnabled: settings.supportChat.telegramBridgeEnabled,
+    adminTelegramChatId: settings.supportChat.adminTelegramChatId?.trim() || null,
+    welcomeMessage: settings.supportChat.welcomeMessage.trim(),
+  };
+  if (settings.supportChat.welcomeMessage.length < 1 || settings.supportChat.welcomeMessage.length > 500) {
+    return void sendError(res, 400, "Lời chào hỗ trợ phải có từ 1 đến 500 ký tự.");
+  }
+  if (settings.supportChat.adminTelegramChatId && !/^-?\d{1,32}$/.test(settings.supportChat.adminTelegramChatId)) {
+    return void sendError(res, 400, "Chat ID Telegram của admin không hợp lệ.");
+  }
   const allLimits = Object.values(settings.planLimits);
   const allIntegerLimits = allLimits.every((limit) => (
     (Object.entries(PLAN_LIMIT_MAXIMUMS) as Array<[keyof typeof PLAN_LIMIT_MAXIMUMS, number]>)

@@ -1312,6 +1312,124 @@ export interface SupportSettingsResponse {
   supportLinks: SupportSettings;
 }
 
+export interface SupportChatSettings {
+  enabled: boolean;
+  notifyNewRegistrations: boolean;
+  telegramBridgeEnabled: boolean;
+  /**
+     * @maxLength 64
+     * @nullable
+     */
+  adminTelegramChatId: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  welcomeMessage: string;
+}
+
+export type SupportChatMessageSenderType = typeof SupportChatMessageSenderType[keyof typeof SupportChatMessageSenderType];
+
+
+export const SupportChatMessageSenderType = {
+  user: 'user',
+  admin: 'admin',
+  system: 'system',
+} as const;
+
+export type SupportChatMessageSource = typeof SupportChatMessageSource[keyof typeof SupportChatMessageSource];
+
+
+export const SupportChatMessageSource = {
+  web: 'web',
+  telegram: 'telegram',
+  system: 'system',
+} as const;
+
+export interface SupportChatMessage {
+  id: string;
+  senderType: SupportChatMessageSenderType;
+  source: SupportChatMessageSource;
+  body: string;
+  createdAt: string;
+}
+
+export type SupportChatConversationStatus = typeof SupportChatConversationStatus[keyof typeof SupportChatConversationStatus];
+
+
+export const SupportChatConversationStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface SupportChatConversation {
+  id: string;
+  userId: string;
+  username: string;
+  status: SupportChatConversationStatus;
+  /** @minimum 0 */
+  unreadForUser: number;
+  /** @minimum 0 */
+  unreadForAdmin: number;
+  /** @nullable */
+  lastMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  messages: SupportChatMessage[];
+}
+
+export interface SupportChatResponse {
+  enabled: boolean;
+  welcomeMessage: string;
+  conversation: SupportChatConversation;
+}
+
+export interface SupportChatMessageInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+}
+
+export interface SupportChatMessageResult {
+  conversation: SupportChatConversation;
+  message: SupportChatMessage;
+}
+
+export interface SupportChatReadResponse {
+  ok: boolean;
+}
+
+export interface AdminSupportConversationList {
+  conversations: SupportChatConversation[];
+}
+
+export interface AdminSupportConversationResponse {
+  conversation: SupportChatConversation;
+}
+
+export interface SupportAdminMessageResult {
+  conversation: SupportChatConversation;
+  message: SupportChatMessage;
+}
+
+export type UpdateAdminSupportConversationInputStatus = typeof UpdateAdminSupportConversationInputStatus[keyof typeof UpdateAdminSupportConversationInputStatus];
+
+
+export const UpdateAdminSupportConversationInputStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface UpdateAdminSupportConversationInput {
+  status: UpdateAdminSupportConversationInputStatus;
+}
+
+export interface AdminSupportConversationUpdateResult {
+  conversation: SupportChatConversation;
+}
+
 export type GroupLibraryAccessMinimumJoinPlan = typeof GroupLibraryAccessMinimumJoinPlan[keyof typeof GroupLibraryAccessMinimumJoinPlan];
 
 
@@ -1388,6 +1506,7 @@ export interface AdminSystemSettings {
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
   supportLinks: SupportSettings;
+  supportChat: SupportChatSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsGroupLibraryMinimumJoinPlan;
   groupLibraryAutoJoinEnabled: boolean;
@@ -1432,6 +1551,7 @@ export interface AdminSystemSettingsInput {
   planLimits: AdminSystemSettingsInputPlanLimits;
   planContent?: AdminSystemSettingsInputPlanContent;
   supportLinks: SupportSettings;
+  supportChat: SupportChatSettings;
   groupLibraryVisibleToUsers: boolean;
   groupLibraryMinimumJoinPlan: AdminSystemSettingsInputGroupLibraryMinimumJoinPlan;
   groupLibraryAutoJoinEnabled: boolean;

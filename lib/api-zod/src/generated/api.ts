@@ -1275,6 +1275,84 @@ export const GetSupportSettingsResponse = zod.object({
 })
 
 
+export const getSupportChatResponseConversationUnreadForUserMin = 0;
+
+export const getSupportChatResponseConversationUnreadForAdminMin = 0;
+
+
+
+export const GetSupportChatResponse = zod.object({
+  "enabled": zod.boolean(),
+  "welcomeMessage": zod.string(),
+  "conversation": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(getSupportChatResponseConversationUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(getSupportChatResponseConversationUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+})
+
+
+export const sendSupportChatMessageBodyBodyMax = 2000;
+
+
+
+export const SendSupportChatMessageBody = zod.object({
+  "body": zod.string().min(1).max(sendSupportChatMessageBodyBodyMax)
+})
+
+export const sendSupportChatMessageResponseConversationUnreadForUserMin = 0;
+
+export const sendSupportChatMessageResponseConversationUnreadForAdminMin = 0;
+
+
+
+export const SendSupportChatMessageResponse = zod.object({
+  "conversation": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(sendSupportChatMessageResponseConversationUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(sendSupportChatMessageResponseConversationUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+}),
+  "message": zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+})
+
+
+export const MarkSupportChatReadResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
 export const GetGroupLibraryAccessResponse = zod.object({
   "visible": zod.boolean(),
   "minimumJoinPlan": zod.enum(['pro', 'unlimited']),
@@ -1497,6 +1575,10 @@ export const getAdminSystemSettingsResponseSupportLinksTelegramUrlMax = 512;
 
 export const getAdminSystemSettingsResponseSupportLinksZaloUrlMax = 512;
 
+export const getAdminSystemSettingsResponseSupportChatAdminTelegramChatIdMax = 64;
+
+export const getAdminSystemSettingsResponseSupportChatWelcomeMessageMax = 500;
+
 export const getAdminSystemSettingsResponsePostJoinCampaignContentMax = 4096;
 
 export const getAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax = 300;
@@ -1573,6 +1655,13 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "supportLinks": zod.object({
   "telegramUrl": zod.string().max(getAdminSystemSettingsResponseSupportLinksTelegramUrlMax).nullable(),
   "zaloUrl": zod.string().max(getAdminSystemSettingsResponseSupportLinksZaloUrlMax).nullable()
+}),
+  "supportChat": zod.object({
+  "enabled": zod.boolean(),
+  "notifyNewRegistrations": zod.boolean(),
+  "telegramBridgeEnabled": zod.boolean(),
+  "adminTelegramChatId": zod.string().max(getAdminSystemSettingsResponseSupportChatAdminTelegramChatIdMax).nullable(),
+  "welcomeMessage": zod.string().min(1).max(getAdminSystemSettingsResponseSupportChatWelcomeMessageMax)
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
@@ -1664,6 +1753,10 @@ export const updateAdminSystemSettingsBodySupportLinksTelegramUrlMax = 512;
 
 export const updateAdminSystemSettingsBodySupportLinksZaloUrlMax = 512;
 
+export const updateAdminSystemSettingsBodySupportChatAdminTelegramChatIdMax = 64;
+
+export const updateAdminSystemSettingsBodySupportChatWelcomeMessageMax = 500;
+
 export const updateAdminSystemSettingsBodyPostJoinCampaignContentMax = 4096;
 
 export const updateAdminSystemSettingsBodyPostJoinCampaignRepeatCountMax = 300;
@@ -1740,6 +1833,13 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "supportLinks": zod.object({
   "telegramUrl": zod.string().max(updateAdminSystemSettingsBodySupportLinksTelegramUrlMax).nullable(),
   "zaloUrl": zod.string().max(updateAdminSystemSettingsBodySupportLinksZaloUrlMax).nullable()
+}),
+  "supportChat": zod.object({
+  "enabled": zod.boolean(),
+  "notifyNewRegistrations": zod.boolean(),
+  "telegramBridgeEnabled": zod.boolean(),
+  "adminTelegramChatId": zod.string().max(updateAdminSystemSettingsBodySupportChatAdminTelegramChatIdMax).nullable(),
+  "welcomeMessage": zod.string().min(1).max(updateAdminSystemSettingsBodySupportChatWelcomeMessageMax)
 }),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
@@ -1830,6 +1930,10 @@ export const updateAdminSystemSettingsResponseSupportLinksTelegramUrlMax = 512;
 
 export const updateAdminSystemSettingsResponseSupportLinksZaloUrlMax = 512;
 
+export const updateAdminSystemSettingsResponseSupportChatAdminTelegramChatIdMax = 64;
+
+export const updateAdminSystemSettingsResponseSupportChatWelcomeMessageMax = 500;
+
 export const updateAdminSystemSettingsResponsePostJoinCampaignContentMax = 4096;
 
 export const updateAdminSystemSettingsResponsePostJoinCampaignRepeatCountMax = 300;
@@ -1907,6 +2011,13 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "telegramUrl": zod.string().max(updateAdminSystemSettingsResponseSupportLinksTelegramUrlMax).nullable(),
   "zaloUrl": zod.string().max(updateAdminSystemSettingsResponseSupportLinksZaloUrlMax).nullable()
 }),
+  "supportChat": zod.object({
+  "enabled": zod.boolean(),
+  "notifyNewRegistrations": zod.boolean(),
+  "telegramBridgeEnabled": zod.boolean(),
+  "adminTelegramChatId": zod.string().max(updateAdminSystemSettingsResponseSupportChatAdminTelegramChatIdMax).nullable(),
+  "welcomeMessage": zod.string().min(1).max(updateAdminSystemSettingsResponseSupportChatWelcomeMessageMax)
+}),
   "groupLibraryVisibleToUsers": zod.boolean(),
   "groupLibraryMinimumJoinPlan": zod.enum(['pro', 'unlimited']),
   "groupLibraryAutoJoinEnabled": zod.boolean(),
@@ -1930,6 +2041,158 @@ export const UpdateAdminSystemSettingsResponse = zod.object({
   "maintenanceMode": zod.boolean(),
   "nationalDayThemeEnabled": zod.boolean(),
   "defaultTimezone": zod.string().min(1).max(updateAdminSystemSettingsResponseDefaultTimezoneMax)
+})
+
+
+export const listAdminSupportConversationsResponseConversationsItemUnreadForUserMin = 0;
+
+export const listAdminSupportConversationsResponseConversationsItemUnreadForAdminMin = 0;
+
+
+
+export const ListAdminSupportConversationsResponse = zod.object({
+  "conversations": zod.array(zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(listAdminSupportConversationsResponseConversationsItemUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(listAdminSupportConversationsResponseConversationsItemUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+}))
+})
+
+
+export const GetAdminSupportConversationParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const getAdminSupportConversationResponseConversationUnreadForUserMin = 0;
+
+export const getAdminSupportConversationResponseConversationUnreadForAdminMin = 0;
+
+
+
+export const GetAdminSupportConversationResponse = zod.object({
+  "conversation": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(getAdminSupportConversationResponseConversationUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(getAdminSupportConversationResponseConversationUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+})
+
+
+export const UpdateAdminSupportConversationParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const UpdateAdminSupportConversationBody = zod.object({
+  "status": zod.enum(['open', 'closed'])
+})
+
+export const updateAdminSupportConversationResponseConversationUnreadForUserMin = 0;
+
+export const updateAdminSupportConversationResponseConversationUnreadForAdminMin = 0;
+
+
+
+export const UpdateAdminSupportConversationResponse = zod.object({
+  "conversation": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(updateAdminSupportConversationResponseConversationUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(updateAdminSupportConversationResponseConversationUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+})
+
+
+export const SendAdminSupportMessageParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const sendAdminSupportMessageBodyBodyMax = 2000;
+
+
+
+export const SendAdminSupportMessageBody = zod.object({
+  "body": zod.string().min(1).max(sendAdminSupportMessageBodyBodyMax)
+})
+
+export const sendAdminSupportMessageResponseConversationUnreadForUserMin = 0;
+
+export const sendAdminSupportMessageResponseConversationUnreadForAdminMin = 0;
+
+
+
+export const SendAdminSupportMessageResponse = zod.object({
+  "conversation": zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "username": zod.string(),
+  "status": zod.enum(['open', 'closed']),
+  "unreadForUser": zod.number().min(sendAdminSupportMessageResponseConversationUnreadForUserMin),
+  "unreadForAdmin": zod.number().min(sendAdminSupportMessageResponseConversationUnreadForAdminMin),
+  "lastMessageAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "messages": zod.array(zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+}),
+  "message": zod.object({
+  "id": zod.string(),
+  "senderType": zod.enum(['user', 'admin', 'system']),
+  "source": zod.enum(['web', 'telegram', 'system']),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+})
+
+
+export const MarkAdminSupportReadParams = zod.object({
+  "conversationId": zod.coerce.string()
+})
+
+export const MarkAdminSupportReadResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 

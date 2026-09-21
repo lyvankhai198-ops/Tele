@@ -66,6 +66,14 @@ const copy = {
     zaloSupport: "Zalo support link",
     supportHint: "Only HTTPS links on t.me, telegram.me, or zalo.me are accepted.",
     supportInvalid: "Enter valid HTTPS support links, or leave them empty.",
+    supportChatTitle: "Website support chat",
+    supportChatDetail: "Keep customer messages in the database and optionally forward them to an admin Telegram chat.",
+    supportChatEnabled: "Show support chat widget",
+    supportChatNotify: "Notify Telegram when a new user registers",
+    supportChatBridge: "Enable Telegram reply bridge",
+    supportChatId: "Admin Telegram chat ID",
+    supportChatIdHint: "Send /chatid to the support bot to discover the chat ID.",
+    supportWelcome: "Welcome message",
   },
   vi: {
     title: "Cấu hình hệ thống",
@@ -117,6 +125,14 @@ const copy = {
     zaloSupport: "Link hỗ trợ Zalo",
     supportHint: "Chỉ chấp nhận link HTTPS thuộc t.me, telegram.me hoặc zalo.me.",
     supportInvalid: "Hãy nhập link HTTPS hỗ trợ hợp lệ hoặc để trống.",
+    supportChatTitle: "Chat hỗ trợ trên website",
+    supportChatDetail: "Lưu tin nhắn khách hàng trong database và tùy chọn chuyển tiếp đến Telegram của admin.",
+    supportChatEnabled: "Hiển thị widget chat hỗ trợ",
+    supportChatNotify: "Báo Telegram khi có user mới đăng ký",
+    supportChatBridge: "Bật cầu nối trả lời qua Telegram",
+    supportChatId: "Telegram chat ID của admin",
+    supportChatIdHint: "Gửi /chatid cho bot hỗ trợ để lấy chat ID.",
+    supportWelcome: "Lời chào trong widget",
   },
 } as const;
 
@@ -408,6 +424,34 @@ export default function AdminSystemSettingsPage() {
           </label>
         </div>
         <p className="mt-3 text-[11px] font-medium text-[#64748b]">{text.supportHint}</p>
+        <div className="mt-7 border-t border-dashed border-[#dbe5e5] pt-6">
+          <SectionHeader eyebrow="Support chat" title={text.supportChatTitle} detail={text.supportChatDetail} />
+          <div className="space-y-3">
+            <div className="flex items-center gap-4 rounded-2xl border border-[#e7edf4] p-4">
+              <div className="flex-1"><p className="text-[13px] font-extrabold text-[#0f172a]">{text.supportChatEnabled}</p></div>
+              <Toggle checked={form.supportChat.enabled} onChange={() => setForm({ ...form, supportChat: { ...form.supportChat, enabled: !form.supportChat.enabled } })} label={text.supportChatEnabled} />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="flex items-center gap-4 rounded-2xl border border-[#e7edf4] p-4">
+                <div className="flex-1"><p className="text-[12px] font-extrabold text-[#0f172a]">{text.supportChatNotify}</p></div>
+                <Toggle checked={form.supportChat.notifyNewRegistrations} onChange={() => setForm({ ...form, supportChat: { ...form.supportChat, notifyNewRegistrations: !form.supportChat.notifyNewRegistrations } })} label={text.supportChatNotify} />
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl border border-[#e7edf4] p-4">
+                <div className="flex-1"><p className="text-[12px] font-extrabold text-[#0f172a]">{text.supportChatBridge}</p></div>
+                <Toggle checked={form.supportChat.telegramBridgeEnabled} onChange={() => setForm({ ...form, supportChat: { ...form.supportChat, telegramBridgeEnabled: !form.supportChat.telegramBridgeEnabled } })} label={text.supportChatBridge} />
+              </div>
+            </div>
+            <label className="block">
+              <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.supportChatId}</span>
+              <input value={form.supportChat.adminTelegramChatId ?? ""} onChange={(event) => setForm({ ...form, supportChat: { ...form.supportChat, adminTelegramChatId: event.target.value || null } })} placeholder="-1001234567890" className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" />
+              <span className="mt-1.5 block text-[11px] font-medium text-[#64748b]">{text.supportChatIdHint}</span>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.supportWelcome}</span>
+              <textarea rows={3} maxLength={500} value={form.supportChat.welcomeMessage} onChange={(event) => setForm({ ...form, supportChat: { ...form.supportChat, welcomeMessage: event.target.value } })} className="w-full resize-y rounded-xl border border-[#dbe2ea] bg-white px-3 py-2.5 text-[13px] font-semibold leading-5 outline-none focus:border-[#1a2b88]" />
+            </label>
+          </div>
+        </div>
       </Panel>
 
       <div className="flex justify-end"><PrimaryButton onClick={save} disabled={update.isPending}><Save className="h-4 w-4" />{update.isPending ? text.saving : text.save}</PrimaryButton></div>

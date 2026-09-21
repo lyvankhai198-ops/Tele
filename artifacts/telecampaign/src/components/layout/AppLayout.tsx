@@ -49,6 +49,7 @@ export type PageKey =
   | "admin-operations"
   | "admin-active-groups"
   | "admin-system-events"
+  | "admin-support-chat"
   | "support";
 
 const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean; groupLibraryOnly?: boolean }> = [
@@ -64,6 +65,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
   { key: "support", label: "Support", icon: LifeBuoy, path: "/dashboard/support" },
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
+  { key: "admin-support-chat", label: "Hỗ trợ khách hàng", icon: LifeBuoy, path: "/admin/support-chat", adminOnly: true },
 ];
 
 export function AppLayout({
