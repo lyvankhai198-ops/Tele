@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminSupportConversationQueryKey,
@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { CheckCheck, LifeBuoy, LoaderCircle, MessageSquare, Send, X } from "lucide-react";
 import { AppLayout, Panel, PrimaryButton } from "@/components/layout/AppLayout";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 
 function timeLabel(value: string | null) {
   if (!value) return "Chưa có tin nhắn";
@@ -29,6 +30,40 @@ export default function AdminSupportChatPage() {
   const updateStatus = useUpdateAdminSupportConversation();
   const selected = selectedQuery.data?.conversation;
   const conversations = conversationsQuery.data?.conversations ?? [];
+  const previousConversationState = useRef<Record<string, { unreadForAdmin: number; lastMessageAt: string | null }>>({});
+  const hasCheckedInitialConversations = useRef(false);
+
+  useEffect(() => {
+    const unlock = () => unlockNotificationSound();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!conversationsQuery.isSuccess) return;
+    const nextState = Object.fromEntries(
+      conversations.map((conversation) => [
+        conversation.id,
+        { unreadForAdmin: conversation.unreadForAdmin, lastMessageAt: conversation.lastMessageAt },
+      ]),
+    );
+    if (hasCheckedInitialConversations.current) {
+      const receivedNewMessage = conversations.some((conversation) => {
+        const previous = previousConversationState.current[conversation.id];
+        return previous
+          && (conversation.unreadForAdmin > previous.unreadForAdmin
+            || (conversation.unreadForAdmin > 0 && conversation.lastMessageAt !== previous.lastMessageAt));
+      });
+      if (receivedNewMessage) playNotificationSound();
+    } else {
+      hasCheckedInitialConversations.current = true;
+    }
+    previousConversationState.current = nextState;
+  }, [conversations, conversationsQuery.isSuccess]);
 
   useEffect(() => {
     if (!selectedId) return;

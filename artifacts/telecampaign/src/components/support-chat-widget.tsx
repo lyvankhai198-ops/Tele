@@ -10,6 +10,7 @@ import {
 import { Headset, ImagePlus, Minus, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 
 export function SupportChatWidget() {
   const { user } = useAuth();
@@ -52,6 +53,33 @@ export function SupportChatWidget() {
     : adminMessages.length;
   const serverUnread = conversation?.unreadForUser ?? 0;
   const unread = Math.max(serverUnread, localUnread);
+  const previousAdminMessageId = useRef<string | null>(null);
+  const hasCheckedInitialAdminMessages = useRef(false);
+
+  useEffect(() => {
+    const unlock = () => unlockNotificationSound();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chat.isSuccess) return;
+    const latestAdminMessage = adminMessages.at(-1);
+    const latestAdminMessageId = latestAdminMessage?.id ?? null;
+    if (!hasCheckedInitialAdminMessages.current) {
+      hasCheckedInitialAdminMessages.current = true;
+      previousAdminMessageId.current = latestAdminMessageId;
+      return;
+    }
+    if (latestAdminMessageId && latestAdminMessageId !== previousAdminMessageId.current) {
+      playNotificationSound();
+    }
+    previousAdminMessageId.current = latestAdminMessageId;
+  }, [adminMessages, chat.isSuccess]);
 
   useEffect(() => {
     if (!chatEnabled) return;
