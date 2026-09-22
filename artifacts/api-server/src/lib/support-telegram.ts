@@ -19,6 +19,10 @@ import {
 } from "./support-chat";
 import { supportMediaStorage } from "./supportMediaStorage";
 import { logger } from "./logger";
+import {
+  translateAdminReplyForCustomer,
+  translateCustomerMessageForAdmin,
+} from "./support-translation";
 
 type TelegramMessage = {
   message_id: number;
@@ -328,12 +332,19 @@ export async function notifySupportUserMessage(input: {
 }): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled) return;
+  const translation = input.body ? await translateCustomerMessageForAdmin(input.body) : null;
+  const text = translation
+    ? `Tin nhắn hỗ trợ từ ${input.username}\n\n` +
+      `🌐 Ngôn ngữ: ${translation.language.toUpperCase()}\n\n` +
+      `📝 Bản gốc:\n${input.body}\n\n` +
+      `🇻🇳 Dịch cho Admin:\n${translation.translatedText}`
+    : `Tin nhắn hỗ trợ từ ${input.username}\n\n${input.body}`;
   const sent = input.mediaPath
     ? await sendSupportPhoto({
       mediaPath: input.mediaPath,
-      caption: `Tin nhắn hỗ trợ từ ${input.username}${input.body ? `\n\n${input.body}` : ""}`,
+      caption: text,
     })
-    : await sendSupportMessage(`Tin nhắn hỗ trợ từ ${input.username}\n\n${input.body}`);
+    : await sendSupportMessage(text);
   if (sent) await setSupportMessageTelegramId(input.messageId, String(sent.chat.id), sent.message_id);
 }
 
@@ -438,11 +449,19 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   if (!conversation) return;
   const media = hasPhoto ? await downloadTelegramPhoto(message) : null;
   if (hasPhoto && !media) return;
+  const body = caption || text;
+  const customerMessage = conversation.messages
+    ?.filter((item) => item.senderType === "user" && item.body.trim())
+    .at(-1)?.body ?? "";
+  const translation = body && customerMessage
+    ? await translateAdminReplyForCustomer({ reply: body, customerMessage })
+    : null;
   const result = await appendSupportMessage({
     conversationId: mapped.conversationId,
     senderType: "admin",
     source: "telegram",
-    body: caption || text,
+    body,
+    translatedBody: translation?.translatedText,
     mediaPath: media?.objectPath,
     mediaContentType: media?.contentType,
   });

@@ -152,6 +152,7 @@ import {
 import { getStorageStatus } from "../lib/storage-status";
 import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
 import { notifySupportConversationClosed } from "../lib/support-telegram";
+import { translateAdminReplyForCustomer } from "../lib/support-translation";
 import {
   listAdminSystemEvents,
   markAdminSystemEventRead,
@@ -1018,12 +1019,24 @@ router.post("/admin/support-chat/conversations/:conversationId/messages", async 
   const parsed = SendAdminSupportMessageBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, "Tin nhắn hỗ trợ không hợp lệ.");
   try {
+    const existing = await getSupportConversationForAdmin(req.params.conversationId);
+    if (!existing) return void sendError(res, 404, "Không tìm thấy hội thoại hỗ trợ.");
+    const customerMessage = existing.messages
+      ?.filter((message) => message.senderType === "user" && message.body.trim())
+      .at(-1)?.body ?? "";
+    const translation = customerMessage && parsed.data.body
+      ? await translateAdminReplyForCustomer({
+        reply: parsed.data.body,
+        customerMessage,
+      })
+      : null;
     const result = await appendSupportMessage({
       conversationId: req.params.conversationId,
       senderType: "admin",
       senderUserId: req.userId!,
       source: "web",
       body: parsed.data.body ?? "",
+      translatedBody: translation?.translatedText,
     });
     res.status(201).json(SendAdminSupportMessageResponse.parse({
       conversation: result.conversation,

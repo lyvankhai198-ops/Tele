@@ -319,6 +319,7 @@ export const supportMessagesTable = pgTable("support_messages", {
   senderUserId: uuid("sender_user_id"),
   source: text("source").notNull().default("web"),
   body: text("body").notNull(),
+  translatedBody: text("translated_body"),
   mediaPath: text("media_path"),
   mediaContentType: text("media_content_type"),
   visibleToUser: boolean("visible_to_user").notNull().default(true),

@@ -38,12 +38,15 @@ export type SupportTelegramMessageRef = {
   telegramMessageId: number;
 };
 
-function toMessageDto(message: typeof supportMessagesTable.$inferSelect): SupportMessageDto {
+function toMessageDto(
+  message: typeof supportMessagesTable.$inferSelect,
+  viewer: "user" | "admin",
+): SupportMessageDto {
   return {
     id: message.id,
     senderType: message.senderType as SupportMessageDto["senderType"],
     source: message.source as SupportMessageDto["source"],
-    body: message.body,
+    body: viewer === "user" && message.translatedBody ? message.translatedBody : message.body,
     mediaUrl: message.mediaPath ? `/api/support-chat/media/${message.id}` : null,
     createdAt: message.createdAt,
   };
@@ -53,6 +56,7 @@ function toConversationDto(
   conversation: typeof supportConversationsTable.$inferSelect,
   username: string,
   messages?: typeof supportMessagesTable.$inferSelect[],
+  viewer: "user" | "admin" = "admin",
 ): SupportConversationDto {
   return {
     id: conversation.id,
@@ -64,7 +68,8 @@ function toConversationDto(
     lastMessageAt: conversation.lastMessageAt,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
-    messages: (messages?.filter((message) => message.visibleToUser) ?? []).map(toMessageDto),
+    messages: (messages?.filter((message) => viewer === "admin" || message.visibleToUser) ?? [])
+      .map((message) => toMessageDto(message, viewer)),
   };
 }
 
@@ -106,7 +111,7 @@ export async function getSupportConversationForUser(userId: string): Promise<Sup
       eq(supportMessagesTable.visibleToUser, true),
     ))
     .orderBy(asc(supportMessagesTable.createdAt));
-  return toConversationDto(conversation, user?.username ?? "user", messages);
+  return toConversationDto(conversation, user?.username ?? "user", messages, "user");
 }
 
 export async function listSupportConversations(): Promise<SupportConversationDto[]> {
@@ -126,7 +131,7 @@ export async function getSupportConversationForAdmin(conversationId: string): Pr
   const messages = await db.select().from(supportMessagesTable)
     .where(eq(supportMessagesTable.conversationId, conversationId))
     .orderBy(asc(supportMessagesTable.createdAt));
-  return toConversationDto(row.conversation, row.username, messages);
+  return toConversationDto(row.conversation, row.username, messages, "admin");
 }
 
 export async function getSupportMessageMedia(messageId: string, userId?: string): Promise<{
@@ -158,6 +163,7 @@ export async function appendSupportMessage(input: {
   body: string;
   mediaPath?: string;
   mediaContentType?: string;
+  translatedBody?: string;
   visibleToUser?: boolean;
 }): Promise<{ conversation: SupportConversationDto; message: SupportMessageDto; telegramMessageId?: number | null }> {
   const body = input.body.trim();
@@ -176,6 +182,7 @@ export async function appendSupportMessage(input: {
       senderUserId: input.senderUserId ?? null,
       source: input.source,
       body,
+      translatedBody: input.translatedBody?.trim() || null,
       mediaPath: input.mediaPath ?? null,
       mediaContentType: input.mediaContentType ?? null,
       visibleToUser: input.visibleToUser ?? true,
@@ -201,8 +208,13 @@ export async function appendSupportMessage(input: {
   const row = await conversationWithUser(input.conversationId);
   if (!row) throw new Error("Support conversation disappeared");
   return {
-    conversation: toConversationDto(row.conversation, row.username),
-    message: toMessageDto(result.message),
+    conversation: toConversationDto(
+      row.conversation,
+      row.username,
+      undefined,
+      input.senderType === "user" ? "user" : "admin",
+    ),
+    message: toMessageDto(result.message, input.senderType === "user" ? "user" : "admin"),
     telegramMessageId: result.message.telegramMessageId,
   };
 }
