@@ -104,6 +104,7 @@ import {
   destinationsTable,
   messageTemplatesTable,
   proxiesTable,
+  purchaseOrdersTable,
   telegramAccountsTable,
 } from "@workspace/db";
 import { campaignCloneMode, campaignSummary, rebaseCampaignScheduleForResume } from "../lib/campaigns";
@@ -746,6 +747,10 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
       "INVALID_BLOCK_TIME",
     ]);
     if (verification.reason && hardFailureReasons.has(verification.reason)) {
+      await db.update(purchaseOrdersTable).set({
+        rejectionReason: "TX_HASH_NOT_MATCHED",
+        updatedAt: new Date(),
+      }).where(eq(purchaseOrdersTable.id, order.id));
       res.status(422).json({
         error: "TX_HASH_NOT_MATCHED",
         verificationReason: verification.reason,

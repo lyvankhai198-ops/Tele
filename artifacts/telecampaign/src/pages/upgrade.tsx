@@ -18,6 +18,7 @@ const getDerivedStatus = (order: any) => {
   if (order.status === "received") return "received";
   if (order.status === "expired") return "expired";
   if (order.status === "cancelled") return "cancelled";
+  if (order.rejectionReason === "TX_HASH_NOT_MATCHED") return "invalid";
   if (order.txHash) return "verifying";
   if (!order.automated) return "pending";
   const expiresAt = new Date(order.createdAt).getTime() + 10 * 60 * 1000;
@@ -368,7 +369,7 @@ export default function Upgrade() {
       );
     }
 
-    if (derivedStatus === 'received' || derivedStatus === 'verifying') {
+    if (derivedStatus === 'received' || (derivedStatus === 'verifying' && !verificationError)) {
       return (
         <div className="text-center py-10 px-4">
            <Hourglass className="w-16 h-16 text-[#f59e0b] mx-auto mb-4" />
@@ -594,9 +595,11 @@ export default function Upgrade() {
             disabled={isExpired || submitProofMutation.isPending}
             className="w-full border-2 border-[#e2e8f0] bg-[#f8fafc] rounded-xl px-4 py-3.5 text-[15px] font-mono outline-none focus:border-[#1a2b88] focus:bg-white transition-colors disabled:opacity-50"
           />
-           {verificationError && (
+           {(verificationError || currentOrder.rejectionReason === "TX_HASH_NOT_MATCHED") && (
              <p role="alert" className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#be123c]">
-               {verificationError}
+               {verificationError || (language === "vi"
+                 ? "TxHash không khớp với đơn hàng này hoặc giao dịch chưa hợp lệ. Vui lòng kiểm tra lại TxHash và network; nếu vẫn không được, hãy liên hệ admin support."
+                 : "This TxHash does not match the order or the transaction is invalid. Check the TxHash and network; if the issue persists, contact admin support.")}
              </p>
            )}
         </div>
@@ -908,8 +911,8 @@ export default function Upgrade() {
                           <td className="px-6 py-4 font-mono text-[13px] text-[#64748b]">{order.reference}</td>
                           <td className="px-6 py-4">
                             <StatusBadge
-                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" || orderStatus === "cancelled" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
-                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
+                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" || orderStatus === "cancelled" || orderStatus === "invalid" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
+                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled") : orderStatus === "invalid" ? (language === "vi" ? "TxHash không hợp lệ" : "Invalid TxHash") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
                             />
                             {orderStatus === "paid" && (
                               <div className="text-[11px] text-[#64748b] mt-1.5 font-bold">
@@ -918,7 +921,7 @@ export default function Upgrade() {
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            {(orderStatus === "pending" || orderStatus === "received" || orderStatus === "verifying" || orderStatus === "paid") && (
+                            {(orderStatus === "pending" || orderStatus === "received" || orderStatus === "verifying" || orderStatus === "invalid" || orderStatus === "paid") && (
                               <button type="button" onClick={() => {
                                 setCheckoutPlan(order.plan.toLowerCase());
                                 setCheckoutCurrency(order.currency as "VND" | "USDT");

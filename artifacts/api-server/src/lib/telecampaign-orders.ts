@@ -129,7 +129,7 @@ export async function updateOrderProof(id: string, ownerUserId: string, txHash?:
     const [duplicate] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable).where(eq(purchaseOrdersTable.txHash, txHash)).limit(1);
     if (duplicate && duplicate.id !== id) throw new Error("TX_HASH_ALREADY_SUBMITTED");
   }
-  const [order] = await db.update(purchaseOrdersTable).set({ txHash, proofInfo: null, updatedAt: new Date() }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.ownerUserId, ownerUserId), eq(purchaseOrdersTable.status, "pending"))).returning();
+  const [order] = await db.update(purchaseOrdersTable).set({ txHash, proofInfo: null, rejectionReason: null, updatedAt: new Date() }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.ownerUserId, ownerUserId), eq(purchaseOrdersTable.status, "pending"))).returning();
   return order;
 }
 
