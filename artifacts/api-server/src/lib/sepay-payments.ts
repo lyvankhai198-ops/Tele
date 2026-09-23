@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, purchaseOrdersTable } from "@workspace/db";
 import { logger } from "./logger";
 import { notifyPurchaseOrder } from "./support-telegram";
-import { ORDER_LIFETIME_MS, settleVerifiedOrder } from "./telecampaign-orders";
+import { ORDER_LIFETIME_MS, settleVerifiedOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import type { SePayWebhookPayload } from "./verify-sepay";
 
 function transferTime(value: string): number {
@@ -19,7 +19,7 @@ export async function receiveSePayTransfer(payload: SePayWebhookPayload) {
     if (previous.status === "received") {
       const settled = await settleVerifiedOrder(previous.id, paymentEventId);
       if (settled?.status === "paid") {
-        void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+        void notifyPurchaseOrder(verifiedOrderNotification(settled))
           .catch((error) => logger.warn({ err: error, orderId: previous.id }, "could not notify admin about activated key"));
       }
     }
@@ -45,7 +45,7 @@ export async function receiveSePayTransfer(payload: SePayWebhookPayload) {
       || receivedAt > order.createdAt.getTime() + ORDER_LIFETIME_MS) continue;
     const paid = await settleVerifiedOrder(order.id, paymentEventId);
     if (paid?.status === "paid") {
-      void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${paid.reference} · Gói ${paid.plan.toUpperCase()} · ${paid.durationDays} ngày`)
+      void notifyPurchaseOrder(verifiedOrderNotification(paid))
         .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
     }
     return;

@@ -25,12 +25,14 @@ import {
   useUpdateAdminPurchaseSettings,
   useGetAdminLicenseReminderSettings,
   useUpdateAdminLicenseReminderSettings,
+  useResetAdminRenewalTestAccount,
   getGetAdminPurchaseSettingsQueryKey,
   getGetAdminLicenseReminderSettingsQueryKey,
   getListAdminLicenseKeysQueryKey,
   type CreateAdminLicenseKeyInput,
   type AdminLicenseReminderSettings,
   type LicenseKeyStatus,
+  type LicenseKeyPool,
   type PlanCode,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
@@ -277,11 +279,13 @@ export function AdminLicenseKeysPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<LicenseKeyStatus | "all">("all");
   const [planFilter, setPlanFilter] = useState<PlanCode | "all">("all");
+  const [poolFilter, setPoolFilter] = useState<LicenseKeyPool | "all">("all");
 
   // Queries
   const queryParams = {
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
     ...(planFilter !== "all" ? { plan: planFilter } : {}),
+    ...(poolFilter !== "all" ? { pool: poolFilter } : {}),
   };
   const { data: licenseKeys, isLoading, error } = useListAdminLicenseKeys(queryParams, {
     query: {
@@ -317,6 +321,7 @@ export function AdminLicenseKeysPage() {
   const [formQuantity, setFormQuantity] = useState<string>("1");
   const [formSalePrice, setFormSalePrice] = useState<string>("149000");
   const [formLabel, setFormLabel] = useState<string>("");
+  const [formPool, setFormPool] = useState<LicenseKeyPool>("normal");
   const lastAutoSalePrice = useRef<number | null>(149000);
   const [telegramPurchaseUrl, setTelegramPurchaseUrl] = useState("");
   const [reminderForm, setReminderForm] = useState<AdminLicenseReminderSettings | null>(null);
@@ -336,6 +341,20 @@ export function AdminLicenseKeysPage() {
   const revokeMutation = useRevokeAdminLicenseKey();
   const purchaseSettingsMutation = useUpdateAdminPurchaseSettings();
   const reminderMutation = useUpdateAdminLicenseReminderSettings();
+  const resetRenewalTestMutation = useResetAdminRenewalTestAccount();
+
+  const handleResetRenewalTestAccount = () => {
+    if (resetRenewalTestMutation.isPending) return;
+    if (!window.confirm("Reset tài khoản test_renewal về PLUS đã hết hạn? Dữ liệu đơn và license key của riêng tài khoản test sẽ bị xóa.")) return;
+    resetRenewalTestMutation.mutate(undefined, {
+      onSuccess: (result) => {
+        setToastMessage(result.created
+          ? "Đã tạo và reset tài khoản test_renewal. Dùng chức năng reset mật khẩu admin để đăng nhập."
+          : "Đã reset tài khoản test_renewal về PLUS đã hết hạn.");
+      },
+      onError: () => setToastMessage("Không thể reset tài khoản test gia hạn."),
+    });
+  };
 
   useEffect(() => {
     const durationDays = Number(formDuration);
@@ -422,6 +441,7 @@ export function AdminLicenseKeysPage() {
           quantity,
           salePriceVnd,
           label: formLabel.trim() || undefined,
+          pool: formPool,
         },
       },
       {
@@ -438,6 +458,7 @@ export function AdminLicenseKeysPage() {
            setFormSalePrice("149000");
            lastAutoSalePrice.current = 149000;
           setFormLabel("");
+           setFormPool("normal");
           setToastMessage(text.createSuccess(result.licenseKeys.length));
         },
         onError: () => {
@@ -485,9 +506,10 @@ export function AdminLicenseKeysPage() {
     return licenseKeys.filter((key) => {
       if (statusFilter !== "all" && key.status !== statusFilter) return false;
       if (planFilter !== "all" && key.plan !== planFilter) return false;
+      if (poolFilter !== "all" && key.pool !== poolFilter) return false;
       return true;
     });
-  }, [licenseKeys, statusFilter, planFilter]);
+  }, [licenseKeys, statusFilter, planFilter, poolFilter]);
 
   if (error) {
     return (
@@ -513,9 +535,14 @@ export function AdminLicenseKeysPage() {
         title={text.sectionTitle}
         detail={text.sectionDetail}
         action={
-          <PrimaryButton onClick={() => setIsCreateModalOpen(true)}>
-            {text.createButton}
-          </PrimaryButton>
+          <div className="flex flex-wrap justify-end gap-2">
+            <QuietButton onClick={handleResetRenewalTestAccount}>
+              {resetRenewalTestMutation.isPending ? "Đang reset…" : "Reset test gia hạn"}
+            </QuietButton>
+            <PrimaryButton onClick={() => setIsCreateModalOpen(true)}>
+              {text.createButton}
+            </PrimaryButton>
+          </div>
         }
       />
       <button
@@ -761,6 +788,15 @@ export function AdminLicenseKeysPage() {
             <option value="unlimited">Unlimited</option>
             <option value="plus">Plus</option>
           </select>
+          <select
+            value={poolFilter}
+            onChange={(e) => setPoolFilter(e.target.value as LicenseKeyPool | "all")}
+            className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10"
+          >
+            <option value="all">Tất cả kho</option>
+            <option value="normal">Kho website</option>
+            <option value="external">Kho bán ngoài</option>
+          </select>
         </div>
       </Panel>
 
@@ -780,7 +816,8 @@ export function AdminLicenseKeysPage() {
             <thead>
               <tr className="border-b border-[#eef2f6] bg-[#f8fafc]">
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableKeyLabel}</th>
-                <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tablePlanDuration}</th>
+                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tablePlanDuration}</th>
+                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">Kho</th>
                  <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableSalePrice}</th>
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableStatus}</th>
                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableCreated}</th>
@@ -801,6 +838,11 @@ export function AdminLicenseKeysPage() {
                     </div>
                     <div className="text-[13px] font-medium text-[#475569] mt-1">{text.durationDays(key.durationDays)}</div>
                   </td>
+                   <td className="px-6 py-4">
+                     <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${key.pool === "external" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#eff6ff] text-[#1d4ed8]"}`}>
+                       {key.pool === "external" ? "Bán ngoài" : "Website"}
+                     </span>
+                   </td>
                    <td className="px-6 py-4">
                      {key.salePriceVnd === null ? (
                        <span className="text-[13px] font-semibold text-[#b45309]">Chưa nhập</span>
@@ -945,6 +987,21 @@ export function AdminLicenseKeysPage() {
               onChange={setFormLabel}
               placeholder={text.labelFieldPlaceholder}
             />
+
+            <label className="block">
+              <span className="mb-2.5 block text-[13px] font-bold text-[#475569]">Kho license key</span>
+              <select
+                value={formPool}
+                onChange={(e) => setFormPool(e.target.value as LicenseKeyPool)}
+                className="w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10"
+              >
+                <option value="normal">Kho website tự động</option>
+                <option value="external">Kho bán ngoài</option>
+              </select>
+              <span className="mt-1.5 block text-[12px] font-medium text-[#64748b]">
+                Kho bán ngoài không được hệ thống tự động cấp cho đơn mua trên website.
+              </span>
+            </label>
 
             <div className="mt-8 flex justify-end gap-3">
               <QuietButton onClick={() => setIsCreateModalOpen(false)}>{text.cancel}</QuietButton>

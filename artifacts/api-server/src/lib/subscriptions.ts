@@ -159,6 +159,7 @@ type AdminLicenseRecord = {
   durationDays: number;
   salePriceVnd: number | null;
   label: string | null;
+  pool: "normal" | "external";
   status: AdminLicenseStatus;
   createdAt: Date;
   createdByUsername: string | null;
@@ -193,6 +194,7 @@ function toAdminLicenseRecord(license: typeof licenseKeysTable.$inferSelect, use
     durationDays: license.durationDays,
     salePriceVnd: license.salePriceVnd,
     label: license.label,
+    pool: license.pool === "external" ? "external" : "normal",
     status: licenseStatus(license),
     createdAt: license.createdAt,
     createdByUsername: license.createdBy ? usernames.get(license.createdBy) ?? null : null,
@@ -203,11 +205,12 @@ function toAdminLicenseRecord(license: typeof licenseKeysTable.$inferSelect, use
   };
 }
 
-export async function listAdminLicenseKeys(filters: { status?: AdminLicenseStatus; plan?: PlanCode } = {}): Promise<AdminLicenseRecord[]> {
+export async function listAdminLicenseKeys(filters: { status?: AdminLicenseStatus; plan?: PlanCode; pool?: "normal" | "external" } = {}): Promise<AdminLicenseRecord[]> {
   const licenses = await db.select().from(licenseKeysTable).orderBy(desc(licenseKeysTable.createdAt));
   const filtered = licenses.filter((license) => (
     (!filters.status || licenseStatus(license) === filters.status)
     && (!filters.plan || license.plan === filters.plan)
+    && (!filters.pool || license.pool === filters.pool)
   ));
   const usernames = await licenseUsernameMap(filtered);
   return filtered.map((license) => toAdminLicenseRecord(license, usernames));
@@ -238,6 +241,7 @@ export async function createAdminLicenseKeys(input: {
   quantity: number;
   salePriceVnd: number;
   label?: string;
+  pool?: "normal" | "external";
   createdBy: string;
   createdByUsername?: string;
 }): Promise<{ licenseKeys: string[]; licenses: AdminLicenseRecord[] }> {
@@ -252,6 +256,7 @@ export async function createAdminLicenseKeys(input: {
           durationDays: input.durationDays,
           salePriceVnd: input.salePriceVnd,
           label: input.label?.trim() || null,
+          pool: input.pool ?? "normal",
           createdBy: input.createdBy,
         }))).returning();
         await tx.insert(activityLogsTable).values(created.map((license) => ({

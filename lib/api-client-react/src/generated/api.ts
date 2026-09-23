@@ -51,6 +51,7 @@ import type {
   AdminOperations,
   AdminOverview,
   AdminPasswordResetResult,
+  AdminRenewalTestAccountResetResult,
   AdminRevenueInsights,
   AdminSubscriptionUpdateInput,
   AdminSupportConversationList,
@@ -6435,6 +6436,71 @@ export function useGetAdminLicenseKeySecret<TData = Awaited<ReturnType<typeof ge
 
 
 
+
+export const getResetAdminRenewalTestAccountUrl = () => {
+
+
+
+
+  return `/api/admin/test-accounts/renewal/reset`
+}
+
+export const resetAdminRenewalTestAccount = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminRenewalTestAccountResetResult> => {
+
+  return customFetch<AdminRenewalTestAccountResetResult>(getResetAdminRenewalTestAccountUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResetAdminRenewalTestAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminRenewalTestAccount>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetAdminRenewalTestAccount>>, TError,void, TContext> => {
+
+const mutationKey = ['resetAdminRenewalTestAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetAdminRenewalTestAccount>>, void> = () => {
+
+
+          return  resetAdminRenewalTestAccount(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetAdminRenewalTestAccountMutationResult = NonNullable<Awaited<ReturnType<typeof resetAdminRenewalTestAccount>>>
+
+    export type ResetAdminRenewalTestAccountMutationError = ErrorType<void>
+
+    export const useResetAdminRenewalTestAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetAdminRenewalTestAccount>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetAdminRenewalTestAccount>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getResetAdminRenewalTestAccountMutationOptions(options));
+    }
 
 export const getGetAdminLicenseReminderSettingsUrl = () => {
 

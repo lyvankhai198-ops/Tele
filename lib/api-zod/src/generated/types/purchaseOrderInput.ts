@@ -7,10 +7,12 @@
  */
 import type { PurchaseOrderInputCurrency } from './purchaseOrderInputCurrency';
 import type { PurchaseOrderInputNetwork } from './purchaseOrderInputNetwork';
+import type { PurchaseOrderInputOrderType } from './purchaseOrderInputOrderType';
 import type { PurchaseOrderInputPlan } from './purchaseOrderInputPlan';
 
 export interface PurchaseOrderInput {
   plan: PurchaseOrderInputPlan;
   currency: PurchaseOrderInputCurrency;
   network?: PurchaseOrderInputNetwork;
+  orderType?: PurchaseOrderInputOrderType;
 }

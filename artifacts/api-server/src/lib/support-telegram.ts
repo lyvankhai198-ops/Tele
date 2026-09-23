@@ -18,7 +18,7 @@ import {
   type SupportTelegramMessageRef,
 } from "./support-chat";
 import { supportMediaStorage } from "./supportMediaStorage";
-import { reviewOrder } from "./telecampaign-orders";
+import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { logger } from "./logger";
 import {
   translateAdminReplyForCustomer,
@@ -127,7 +127,7 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: order?.status === "paid" ? "Đã duyệt" : "Đã từ chối" });
     if (order) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
     if (order?.status === "paid") {
-      await notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${order.reference} · Gói ${order.plan.toUpperCase()} · ${order.durationDays} ngày`);
+      await notifyPurchaseOrder(verifiedOrderNotification(order));
     }
   } catch (error) {
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không thể xử lý đơn", show_alert: true });

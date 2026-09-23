@@ -1,6 +1,6 @@
 import { and, asc, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import { db, purchaseOrdersTable } from "@workspace/db";
-import { expireUnpaidOrders, settleVerifiedOrder } from "./telecampaign-orders";
+import { expireUnpaidOrders, settleVerifiedOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { verifyUsdtTransfer } from "./verify-usdt";
 import { logger } from "./logger";
 import { notifyPurchaseOrder } from "./support-telegram";
@@ -20,7 +20,7 @@ async function checkPayments() {
       try {
         const settled = await settleVerifiedOrder(order.id, order.paymentEventId);
         if (settled?.status === "paid") {
-          void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+          void notifyPurchaseOrder(verifiedOrderNotification(settled))
             .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
         }
       } catch (error) {
@@ -51,7 +51,7 @@ async function checkPayments() {
         if (result.confirmed) {
           const settled = await settleVerifiedOrder(order.id, `${order.network}:${order.txHash}`);
            if (settled?.status === "paid") {
-             void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+             void notifyPurchaseOrder(verifiedOrderNotification(settled))
                .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
            }
         } else {

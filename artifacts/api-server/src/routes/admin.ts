@@ -153,7 +153,8 @@ import { getStorageStatus } from "../lib/storage-status";
 import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
 import { notifyPurchaseOrder, notifySupportConversationClosed } from "../lib/support-telegram";
 import { translateAdminReplyForCustomer } from "../lib/support-translation";
-import { getOrderSettings, listOrders, reviewOrder, saveOrderSettings } from "../lib/telecampaign-orders";
+import { getOrderSettings, listOrders, reviewOrder, saveOrderSettings, verifiedOrderNotification } from "../lib/telecampaign-orders";
+import { resetRenewalTestAccount } from "../lib/renewal-test-account";
 import {
   listAdminSystemEvents,
   markAdminSystemEventRead,
@@ -224,7 +225,7 @@ router.post("/admin/purchase-orders/:orderId/review", async (req, res): Promise<
   catch (error) { if (error instanceof Error && ["PLAN_DOWNGRADE_NOT_ALLOWED", "ORDER_USER_NOT_FOUND", "AUTOMATIC_PAYMENT_NOT_VERIFIED"].includes(error.message)) { res.status(409).json({ error: error.message }); return; } throw error; }
   if (!order) { res.status(404).json({ error: "Order not found" }); return; }
   if (order.status === "paid") {
-    void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${order.reference} · Gói ${order.plan.toUpperCase()} · ${order.durationDays} ngày`)
+    void notifyPurchaseOrder(verifiedOrderNotification(order))
       .catch((error) => req.log.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
   }
   res.json(order);
@@ -1653,6 +1654,21 @@ router.get("/admin/license-keys", async (req, res): Promise<void> => {
   if (!parsed.success) return void sendError(res, 400, "Bộ lọc license key không hợp lệ.");
   const licenses = await listAdminLicenseKeys(parsed.data);
   res.json(ListAdminLicenseKeysResponse.parse(licenses));
+});
+
+router.post("/admin/test-accounts/renewal/reset", async (req, res): Promise<void> => {
+  const outcome = await resetRenewalTestAccount();
+  if (!outcome.ok) {
+    return void sendError(res, 409, "Username test_renewal đang được dùng bởi tài khoản không phải user.");
+  }
+  await recordActivity({
+    ownerUserId: req.userId!,
+    event: "admin.test_renewal_account_reset",
+    level: "warning",
+    message: "Reset the fixed renewal test account",
+    metadata: { username: outcome.username, created: outcome.created, expiresAt: outcome.expiresAt.toISOString() },
+  });
+  res.json(outcome);
 });
 
 async function adminLicenseReminderSettingsResponse() {

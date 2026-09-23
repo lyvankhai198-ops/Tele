@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PurchaseOrderOrderType } from './purchaseOrderOrderType';
 import type { PurchaseOrderStatus } from './purchaseOrderStatus';
 
 export interface PurchaseOrder {
@@ -23,6 +24,7 @@ export interface PurchaseOrder {
   /** @nullable */
   proofInfo?: string | null;
   automated?: boolean;
+  orderType: PurchaseOrderOrderType;
   status: PurchaseOrderStatus;
   /** @nullable */
   activatedLicenseKeyId?: string | null;

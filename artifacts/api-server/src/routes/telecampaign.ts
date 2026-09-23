@@ -112,7 +112,7 @@ import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
-import { cancelOrder, createOrder, getOrderSettings, listOrders, settleVerifiedOrder, updateOrderProof } from "../lib/telecampaign-orders";
+import { cancelOrder, createOrder, getOrderSettings, listOrders, settleVerifiedOrder, updateOrderProof, verifiedOrderNotification } from "../lib/telecampaign-orders";
 import { verifyUsdtTransfer } from "../lib/verify-usdt";
 import { notifyPurchaseOrder } from "../lib/support-telegram";
 import {
@@ -685,13 +685,14 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
   if (req.supportSession) { res.status(403).json({ error: "Support sessions cannot create purchase orders" }); return; }
   const value = req.body ?? {};
   const valid = ["PLUS", "PRO", "UNLIMITED"].includes(value.plan) && ["VND", "USDT"].includes(value.currency)
+    && (value.orderType === undefined || ["license", "renewal"].includes(value.orderType))
     && (value.currency !== "USDT" || ["BEP20", "TRC20"].includes(value.network));
   if (!valid) { res.status(400).json({ error: "Invalid purchase order" }); return; }
   try {
-    const order = await createOrder({ plan: value.plan, currency: value.currency, network: value.network, ownerUserId: currentUserId(req) });
+    const order = await createOrder({ plan: value.plan, currency: value.currency, network: value.network, orderType: value.orderType, ownerUserId: currentUserId(req) });
     res.status(201).json(order);
   } catch (error) {
-    if (error instanceof Error && ["PLAN_PRICE_NOT_CONFIGURED", "INVALID_PAYMENT_AMOUNT", "PAYMENT_DESTINATION_NOT_CONFIGURED", "INVALID_PLAN_DURATION", "PLAN_DOWNGRADE_NOT_ALLOWED", "LICENSE_STOCK_EMPTY", "PAYMENT_AUTOMATION_NOT_CONFIGURED"].includes(error.message)) { res.status(400).json({ error: error.message }); return; }
+    if (error instanceof Error && ["PLAN_PRICE_NOT_CONFIGURED", "INVALID_PAYMENT_AMOUNT", "PAYMENT_DESTINATION_NOT_CONFIGURED", "INVALID_PLAN_DURATION", "PLAN_DOWNGRADE_NOT_ALLOWED", "LICENSE_STOCK_EMPTY", "PAYMENT_AUTOMATION_NOT_CONFIGURED", "INVALID_ORDER_TYPE"].includes(error.message)) { res.status(400).json({ error: error.message }); return; }
     if (error instanceof Error && error.message === "ACTIVE_PAYMENT_EXISTS") { res.status(409).json({ error: error.message }); return; }
     res.status(400).json({ error: "Invalid payment method" });
   }
@@ -729,7 +730,7 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
     if (verification.confirmed) {
       const settled = await settleVerifiedOrder(order.id, `${order.network}:${order.txHash}`);
       if (settled?.status === "paid") {
-        void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+        void notifyPurchaseOrder(verifiedOrderNotification(settled))
           .catch((error) => req.log.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
       }
       res.json(settled ?? order);

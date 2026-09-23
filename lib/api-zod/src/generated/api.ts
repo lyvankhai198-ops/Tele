@@ -1614,6 +1614,7 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
   "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
@@ -1624,10 +1625,13 @@ export const ListPurchaseOrdersResponseItem = zod.object({
 export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
 
 
+export const createPurchaseOrderBodyOrderTypeDefault = `license`;
+
 export const CreatePurchaseOrderBody = zod.object({
   "plan": zod.enum(['PLUS', 'PRO', 'UNLIMITED']),
   "currency": zod.enum(['VND', 'USDT']),
-  "network": zod.enum(['BEP20', 'TRC20']).optional()
+  "network": zod.enum(['BEP20', 'TRC20']).optional(),
+  "orderType": zod.enum(['license', 'renewal']).default(createPurchaseOrderBodyOrderTypeDefault)
 })
 
 export const CreatePurchaseOrderResponse = zod.object({
@@ -1643,6 +1647,7 @@ export const CreatePurchaseOrderResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
   "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
@@ -1680,6 +1685,7 @@ export const SubmitPurchaseOrderProofResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
   "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
@@ -1706,6 +1712,7 @@ export const CancelPurchaseOrderResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
   "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
@@ -1728,6 +1735,7 @@ export const ListAdminPurchaseOrdersResponseItem = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
   "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
@@ -1822,6 +1830,7 @@ export const ReviewPurchaseOrderResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
   "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
@@ -2711,7 +2720,8 @@ export const ActivateLicenseResponse = zod.object({
 
 export const ListAdminLicenseKeysQueryParams = zod.object({
   "status": zod.enum(['available', 'claimed', 'revoked']).optional(),
-  "plan": zod.enum(['plus', 'pro', 'unlimited']).optional()
+  "plan": zod.enum(['plus', 'pro', 'unlimited']).optional(),
+  "pool": zod.enum(['normal', 'external']).optional()
 })
 
 export const listAdminLicenseKeysResponseSalePriceVndMin = 0;
@@ -2724,6 +2734,7 @@ export const ListAdminLicenseKeysResponseItem = zod.object({
   "durationDays": zod.number(),
   "salePriceVnd": zod.number().min(listAdminLicenseKeysResponseSalePriceVndMin).nullable(),
   "label": zod.string().nullable(),
+  "pool": zod.enum(['normal', 'external']),
   "status": zod.enum(['available', 'claimed', 'revoked']),
   "createdAt": zod.coerce.date(),
   "createdByUsername": zod.string().nullable(),
@@ -2747,14 +2758,15 @@ export const createAdminLicenseKeyBodySalePriceVndMultipleOf = 1;
 
 export const createAdminLicenseKeyBodyLabelMax = 120;
 
-
+export const createAdminLicenseKeyBodyPoolDefault = `normal`;
 
 export const CreateAdminLicenseKeyBody = zod.object({
   "plan": zod.enum(['plus', 'pro', 'unlimited']),
   "durationDays": zod.number().min(1).max(createAdminLicenseKeyBodyDurationDaysMax).multipleOf(createAdminLicenseKeyBodyDurationDaysMultipleOf),
   "quantity": zod.number().min(1).max(createAdminLicenseKeyBodyQuantityMax).multipleOf(createAdminLicenseKeyBodyQuantityMultipleOf),
   "salePriceVnd": zod.number().min(createAdminLicenseKeyBodySalePriceVndMin).max(createAdminLicenseKeyBodySalePriceVndMax).multipleOf(createAdminLicenseKeyBodySalePriceVndMultipleOf),
-  "label": zod.string().min(1).max(createAdminLicenseKeyBodyLabelMax).optional()
+  "label": zod.string().min(1).max(createAdminLicenseKeyBodyLabelMax).optional(),
+  "pool": zod.enum(['normal', 'external']).default(createAdminLicenseKeyBodyPoolDefault)
 })
 
 export const createAdminLicenseKeyResponseLicensesItemSalePriceVndMin = 0;
@@ -2769,6 +2781,7 @@ export const CreateAdminLicenseKeyResponse = zod.object({
   "durationDays": zod.number(),
   "salePriceVnd": zod.number().min(createAdminLicenseKeyResponseLicensesItemSalePriceVndMin).nullable(),
   "label": zod.string().nullable(),
+  "pool": zod.enum(['normal', 'external']),
   "status": zod.enum(['available', 'claimed', 'revoked']),
   "createdAt": zod.coerce.date(),
   "createdByUsername": zod.string().nullable(),
@@ -2798,6 +2811,14 @@ export const getAdminLicenseKeySecretResponseLicenseKeyMax = 128;
 
 export const GetAdminLicenseKeySecretResponse = zod.object({
   "licenseKey": zod.string().min(getAdminLicenseKeySecretResponseLicenseKeyMin).max(getAdminLicenseKeySecretResponseLicenseKeyMax)
+})
+
+
+export const ResetAdminRenewalTestAccountResponse = zod.object({
+  "username": zod.string(),
+  "created": zod.boolean(),
+  "resetAt": zod.coerce.date(),
+  "expiresAt": zod.coerce.date()
 })
 
 

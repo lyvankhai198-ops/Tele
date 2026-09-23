@@ -1265,10 +1265,19 @@ export const PurchaseOrderInputNetwork = {
   TRC20: 'TRC20',
 } as const;
 
+export type PurchaseOrderInputOrderType = typeof PurchaseOrderInputOrderType[keyof typeof PurchaseOrderInputOrderType];
+
+
+export const PurchaseOrderInputOrderType = {
+  license: 'license',
+  renewal: 'renewal',
+} as const;
+
 export interface PurchaseOrderInput {
   plan: PurchaseOrderInputPlan;
   currency: PurchaseOrderInputCurrency;
   network?: PurchaseOrderInputNetwork;
+  orderType?: PurchaseOrderInputOrderType;
 }
 
 export interface PurchaseOrderProofInput {
@@ -1290,6 +1299,14 @@ export interface PurchaseOrderReviewInput {
   decision: PurchaseOrderReviewInputDecision;
   reason?: string;
 }
+
+export type PurchaseOrderOrderType = typeof PurchaseOrderOrderType[keyof typeof PurchaseOrderOrderType];
+
+
+export const PurchaseOrderOrderType = {
+  license: 'license',
+  renewal: 'renewal',
+} as const;
 
 export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof PurchaseOrderStatus];
 
@@ -1319,6 +1336,7 @@ export interface PurchaseOrder {
   /** @nullable */
   proofInfo?: string | null;
   automated?: boolean;
+  orderType: PurchaseOrderOrderType;
   status: PurchaseOrderStatus;
   /** @nullable */
   activatedLicenseKeyId?: string | null;
@@ -1867,6 +1885,14 @@ export const LicenseKeyStatus = {
   revoked: 'revoked',
 } as const;
 
+export type LicenseKeyPool = typeof LicenseKeyPool[keyof typeof LicenseKeyPool];
+
+
+export const LicenseKeyPool = {
+  normal: 'normal',
+  external: 'external',
+} as const;
+
 export interface AdminLicenseKey {
   id: string;
   plan: PlanCode;
@@ -1878,6 +1904,7 @@ export interface AdminLicenseKey {
   salePriceVnd: number | null;
   /** @nullable */
   label: string | null;
+  pool: LicenseKeyPool;
   status: LicenseKeyStatus;
   createdAt: string;
   /** @nullable */
@@ -1898,6 +1925,13 @@ export interface AdminLicenseKeySecret {
      * @maxLength 128
      */
   licenseKey: string;
+}
+
+export interface AdminRenewalTestAccountResetResult {
+  username: string;
+  created: boolean;
+  resetAt: string;
+  expiresAt: string;
 }
 
 export interface AdminLicenseReminderAccount {
@@ -1982,6 +2016,7 @@ export interface CreateAdminLicenseKeyInput {
      * @maxLength 120
      */
   label?: string;
+  pool?: LicenseKeyPool;
 }
 
 export interface CreateAdminLicenseKeyResult {
@@ -2444,6 +2479,7 @@ q?: string;
 export type ListAdminLicenseKeysParams = {
 status?: LicenseKeyStatus;
 plan?: PlanCode;
+pool?: LicenseKeyPool;
 };
 
 export type ListAdminSystemEventsParams = {

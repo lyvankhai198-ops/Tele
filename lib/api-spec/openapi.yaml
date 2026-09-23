@@ -1230,6 +1230,7 @@ paths:
       parameters:
         - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/LicenseKeyStatus" } }
         - { name: plan, in: query, required: false, schema: { $ref: "#/components/schemas/PlanCode" } }
+        - { name: pool, in: query, required: false, schema: { $ref: "#/components/schemas/LicenseKeyPool" } }
       responses:
         "200":
           description: License key inventory
@@ -1285,6 +1286,19 @@ paths:
         "403": { description: Administrator permission is required }
         "404": { description: License key not found }
         "409": { description: Plaintext is unavailable for legacy license keys }
+  /admin/test-accounts/renewal/reset:
+    post:
+      operationId: resetAdminRenewalTestAccount
+      tags: [admin]
+      responses:
+        "200":
+          description: Fixed renewal test account reset to an expired one-day PLUS subscription
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminRenewalTestAccountResetResult" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
+        "409": { description: The reserved test username is used by a non-user account }
   /admin/license-reminder-settings:
     get:
       operationId: getAdminLicenseReminderSettings
@@ -2608,6 +2622,7 @@ components:
         plan: { type: string, enum: [PLUS, PRO, UNLIMITED] }
         currency: { type: string, enum: [VND, USDT] }
         network: { type: string, enum: [BEP20, TRC20] }
+        orderType: { type: string, enum: [license, renewal], default: license }
     PurchaseOrderProofInput:
       type: object
       properties:
@@ -2621,7 +2636,7 @@ components:
         reason: { type: string }
     PurchaseOrder:
       type: object
-      required: [id, ownerUserId, plan, durationDays, currency, amount, reference, status, createdAt]
+      required: [id, ownerUserId, plan, durationDays, currency, amount, reference, status, orderType, createdAt]
       properties:
         id: { type: string }
         ownerUserId: { type: string }
@@ -2635,6 +2650,7 @@ components:
         txHash: { type: ["string", "null"] }
         proofInfo: { type: ["string", "null"] }
         automated: { type: boolean }
+        orderType: { type: string, enum: [license, renewal] }
         status: { type: string, enum: [pending, received, paid, expired, rejected, cancelled] }
         activatedLicenseKeyId: { type: ["string", "null"] }
         reviewedBy: { type: ["string", "null"] }
@@ -3001,15 +3017,19 @@ components:
     LicenseKeyStatus:
       type: string
       enum: [available, claimed, revoked]
+    LicenseKeyPool:
+      type: string
+      enum: [normal, external]
     AdminLicenseKey:
       type: object
-      required: [id, plan, durationDays, salePriceVnd, label, status, createdAt, createdByUsername, claimedAt, claimedByUsername, revokedAt, revokedByUsername]
+      required: [id, plan, durationDays, salePriceVnd, label, pool, status, createdAt, createdByUsername, claimedAt, claimedByUsername, revokedAt, revokedByUsername]
       properties:
         id: { type: string }
         plan: { $ref: "#/components/schemas/PlanCode" }
         durationDays: { type: number }
         salePriceVnd: { type: ["number", "null"], minimum: 0 }
         label: { type: ["string", "null"] }
+        pool: { $ref: "#/components/schemas/LicenseKeyPool" }
         status: { $ref: "#/components/schemas/LicenseKeyStatus" }
         createdAt: { type: string, format: date-time }
         createdByUsername: { type: ["string", "null"] }
@@ -3022,6 +3042,14 @@ components:
       required: [licenseKey]
       properties:
         licenseKey: { type: string, minLength: 8, maxLength: 128 }
+    AdminRenewalTestAccountResetResult:
+      type: object
+      required: [username, created, resetAt, expiresAt]
+      properties:
+        username: { type: string }
+        created: { type: boolean }
+        resetAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
     AdminLicenseReminderAccount:
       type: object
       required: [id, ownerUsername, name, username, status]
@@ -3079,6 +3107,7 @@ components:
         quantity: { type: number, minimum: 1, maximum: 100, multipleOf: 1 }
         salePriceVnd: { type: number, minimum: 0, maximum: 1000000000, multipleOf: 1 }
         label: { type: string, minLength: 1, maxLength: 120 }
+        pool: { $ref: "#/components/schemas/LicenseKeyPool", default: normal }
     CreateAdminLicenseKeyResult:
       type: object
       required: [licenseKeys, licenses]

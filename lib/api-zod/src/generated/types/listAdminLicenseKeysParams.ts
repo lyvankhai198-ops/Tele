@@ -5,10 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { LicenseKeyPool } from './licenseKeyPool';
 import type { LicenseKeyStatus } from './licenseKeyStatus';
 import type { PlanCode } from './planCode';
 
 export type ListAdminLicenseKeysParams = {
 status?: LicenseKeyStatus;
 plan?: PlanCode;
+pool?: LicenseKeyPool;
 };

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { LicenseKeyPool } from './licenseKeyPool';
 import type { LicenseKeyStatus } from './licenseKeyStatus';
 import type { PlanCode } from './planCode';
 
@@ -19,6 +20,7 @@ export interface AdminLicenseKey {
   salePriceVnd: number | null;
   /** @nullable */
   label: string | null;
+  pool: LicenseKeyPool;
   status: LicenseKeyStatus;
   createdAt: Date;
   /** @nullable */

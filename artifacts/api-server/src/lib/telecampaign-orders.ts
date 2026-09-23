@@ -17,6 +17,17 @@ export type OrderSettings = {
   usdtBep20Address: string;
   usdtTrc20Address: string;
 };
+export type PurchaseOrderType = "license" | "renewal";
+export type LicensePool = "normal" | "external";
+export function verifiedOrderNotification(order: {
+  orderType?: string;
+  reference: string;
+  plan: string;
+  durationDays: number;
+}): string {
+  const action = order.orderType === "renewal" ? "Gói đã được gia hạn" : "Key đã được kích hoạt";
+  return `✅ ${action}\nĐơn ${order.reference} · Gói ${order.plan.toUpperCase()} · ${order.durationDays} ngày`;
+}
 const KEY = "telecampaign_order_settings";
 export const ORDER_LIFETIME_MS = 10 * 60_000;
 const defaults: OrderSettings = { pricesVnd: { PLUS: 0, PRO: 0, UNLIMITED: 0 }, pricesUsdt: { PLUS: 0, PRO: 0, UNLIMITED: 0 }, durationsDays: { PLUS: 30, PRO: 30, UNLIMITED: 30 }, vnBankName: "", vnBankCode: "", vnBankAccount: "", vnAccountName: "", vietQrTemplate: "", usdtBep20Address: "", usdtTrc20Address: "" };
@@ -33,7 +44,9 @@ export async function saveOrderSettings(value: OrderSettings, adminUserId: strin
 export async function listOrders(userId?: string) {
   return db.select().from(purchaseOrdersTable).where(userId ? eq(purchaseOrdersTable.ownerUserId, userId) : undefined).orderBy(desc(purchaseOrdersTable.createdAt));
 }
-export async function createOrder(input: { ownerUserId: string; plan: string; currency: string; network?: string }) {
+export async function createOrder(input: { ownerUserId: string; plan: string; currency: string; network?: string; orderType?: PurchaseOrderType }) {
+  const orderType = input.orderType ?? "license";
+  if (orderType !== "license" && orderType !== "renewal") throw new Error("INVALID_ORDER_TYPE");
   if (input.currency === "VND" && !process.env.SEPAY_WEBHOOK_SECRET && !process.env.SEPAY_WEBHOOK_API_KEY) throw new Error("PAYMENT_AUTOMATION_NOT_CONFIGURED");
   const settings = await getOrderSettings();
   const plan = input.plan.toUpperCase() as keyof OrderSettings["pricesVnd"];
@@ -81,17 +94,23 @@ export async function createOrder(input: { ownerUserId: string; plan: string; cu
       await tx.update(licenseKeysTable).set({ reservedOrderId: null, reservedUntil: null })
         .where(inArray(licenseKeysTable.reservedOrderId, expiredIds));
     }
-    const [key] = await tx.select({ id: licenseKeysTable.id }).from(licenseKeysTable).where(and(
-      eq(licenseKeysTable.plan, plan.toLowerCase()),
-      eq(licenseKeysTable.durationDays, durationDays),
-      isNull(licenseKeysTable.claimedAt),
-      isNull(licenseKeysTable.revokedAt),
-      or(isNull(licenseKeysTable.reservedUntil), lte(licenseKeysTable.reservedUntil, now)),
-    )).limit(1).for("update", { skipLocked: true });
-    if (!key) throw new Error("LICENSE_STOCK_EMPTY");
-    const [order] = await tx.insert(purchaseOrdersTable).values({ ownerUserId: input.ownerUserId, plan, durationDays, currency: input.currency, network: input.network ?? null, amount: amount.toFixed(8), paymentDestination: destination, reference, automated: true }).returning();
-    await tx.update(licenseKeysTable).set({ reservedOrderId: order.id, reservedUntil: new Date(now.getTime() + 60 * 60_000) })
-      .where(eq(licenseKeysTable.id, key.id));
+    let key: { id: string } | undefined;
+    if (orderType === "license") {
+      [key] = await tx.select({ id: licenseKeysTable.id }).from(licenseKeysTable).where(and(
+        eq(licenseKeysTable.pool, "normal"),
+        eq(licenseKeysTable.plan, plan.toLowerCase()),
+        eq(licenseKeysTable.durationDays, durationDays),
+        isNull(licenseKeysTable.claimedAt),
+        isNull(licenseKeysTable.revokedAt),
+        or(isNull(licenseKeysTable.reservedUntil), lte(licenseKeysTable.reservedUntil, now)),
+      )).limit(1).for("update", { skipLocked: true });
+      if (!key) throw new Error("LICENSE_STOCK_EMPTY");
+    }
+    const [order] = await tx.insert(purchaseOrdersTable).values({ ownerUserId: input.ownerUserId, plan, durationDays, currency: input.currency, network: input.network ?? null, amount: amount.toFixed(8), paymentDestination: destination, reference, automated: true, orderType }).returning();
+    if (key) {
+      await tx.update(licenseKeysTable).set({ reservedOrderId: order.id, reservedUntil: new Date(now.getTime() + 60 * 60_000) })
+        .where(eq(licenseKeysTable.id, key.id));
+    }
     return order;
   });
 }
@@ -147,7 +166,36 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
       .where(eq(appUsersTable.id, order.ownerUserId)).limit(1);
     if (!owner) throw new Error("ORDER_USER_NOT_FOUND");
     const now = new Date();
+    const [current] = await tx.select().from(subscriptionsTable)
+      .where(eq(subscriptionsTable.ownerUserId, order.ownerUserId)).for("update");
+
+    if (order.orderType === "renewal") {
+      if (current && current.expiresAt && current.expiresAt > now &&
+        PLAN_ORDER.indexOf(order.plan.toLowerCase() as typeof PLAN_ORDER[number]) < PLAN_ORDER.indexOf(current.plan as typeof PLAN_ORDER[number])) {
+        const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "PLAN_DOWNGRADE_NOT_ALLOWED", updatedAt: now })
+          .where(eq(purchaseOrdersTable.id, id)).returning();
+        return received;
+      }
+      const isUpgrade = current && PLAN_ORDER.indexOf(order.plan.toLowerCase() as typeof PLAN_ORDER[number]) > PLAN_ORDER.indexOf(current.plan as typeof PLAN_ORDER[number]);
+      const base = !isUpgrade && current?.expiresAt && current.expiresAt > now ? current.expiresAt.getTime() : now.getTime();
+      const values = {
+        plan: order.plan.toLowerCase(),
+        startedAt: current?.startedAt ?? now,
+        expiresAt: new Date(base + order.durationDays * 86_400_000),
+        updatedAt: now,
+      };
+      if (current) await tx.update(subscriptionsTable).set(values).where(eq(subscriptionsTable.id, current.id));
+      else await tx.insert(subscriptionsTable).values({ ownerUserId: order.ownerUserId, ...values });
+      const [paid] = await tx.update(purchaseOrdersTable).set({
+        status: "paid", paymentEventId, activatedLicenseKeyId: null, rejectionReason: null,
+        reviewedBy, reviewedAt: now, updatedAt: now,
+      }).where(eq(purchaseOrdersTable.id, id)).returning();
+      logger.info({ orderId: id, paymentType: order.currency }, "verified payment renewed subscription");
+      return paid;
+    }
+
     let [key] = await tx.select({ id: licenseKeysTable.id }).from(licenseKeysTable).where(and(
+      eq(licenseKeysTable.pool, "normal"),
       eq(licenseKeysTable.plan, order.plan.toLowerCase()),
       eq(licenseKeysTable.durationDays, order.durationDays),
       isNull(licenseKeysTable.claimedAt),
@@ -158,6 +206,7 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
     )).limit(1).for("update", { skipLocked: true });
     if (!key && order.automated && order.status === "received" && order.rejectionReason === "NO_MATCHING_KEY") {
       [key] = await tx.select({ id: licenseKeysTable.id }).from(licenseKeysTable).where(and(
+        eq(licenseKeysTable.pool, "normal"),
         eq(licenseKeysTable.plan, order.plan.toLowerCase()),
         eq(licenseKeysTable.durationDays, order.durationDays),
         isNull(licenseKeysTable.claimedAt),
@@ -170,8 +219,6 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
         .where(eq(purchaseOrdersTable.id, id)).returning();
       return received;
     }
-    const [current] = await tx.select().from(subscriptionsTable)
-      .where(eq(subscriptionsTable.ownerUserId, order.ownerUserId)).for("update");
     if (current && current.expiresAt && current.expiresAt > now &&
       PLAN_ORDER.indexOf(order.plan.toLowerCase() as typeof PLAN_ORDER[number]) < PLAN_ORDER.indexOf(current.plan as typeof PLAN_ORDER[number])) {
       const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "PLAN_DOWNGRADE_NOT_ALLOWED", updatedAt: now })

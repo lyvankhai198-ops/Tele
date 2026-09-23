@@ -50,13 +50,13 @@ function subscriptionReminder(subscription: Awaited<ReturnType<typeof getSubscri
     kind: "subscription",
     level: "warning",
     title: isExpired ? "Gói dịch vụ đã hết hạn" : `Gói ${plan} sắp hết hạn`,
-    body: isExpired
-      ? "Gói của bạn đã hết hạn. Hãy kích hoạt license key để tiếp tục sử dụng."
-      : `Gói của bạn còn khoảng ${days} ngày. Hãy gia hạn license key để không bị gián đoạn.`,
+     body: isExpired
+       ? "Gói của bạn đã hết hạn. Hãy gia hạn gói để tiếp tục sử dụng."
+       : `Gói của bạn còn khoảng ${days} ngày. Hãy gia hạn gói để không bị gián đoạn.`,
     titleEn: isExpired ? "Your subscription has expired" : `Your ${plan} plan is expiring soon`,
-    bodyEn: isExpired
-      ? "Your subscription has expired. Activate a license key to continue using the service."
-      : `Your plan expires in about ${days} day${days === 1 ? "" : "s"}. Renew your license key to avoid interruption.`,
+     bodyEn: isExpired
+       ? "Your subscription has expired. Renew your plan to continue using the service."
+       : `Your plan expires in about ${days} day${days === 1 ? "" : "s"}. Renew your plan to avoid interruption.`,
     href: "/upgrade",
     isRead: false,
     createdAt: subscription.expiresAt,

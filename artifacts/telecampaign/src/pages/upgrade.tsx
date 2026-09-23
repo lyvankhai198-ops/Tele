@@ -88,6 +88,7 @@ export default function Upgrade() {
 
   const [selectedPlanToConfirm, setSelectedPlanToConfirm] = useState<string | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [checkoutOrderType, setCheckoutOrderType] = useState<"renewal" | "license">("renewal");
   const [checkoutCurrency, setCheckoutCurrency] = useState<"VND" | "USDT">("VND");
   const [checkoutNetwork, setCheckoutNetwork] = useState<"BEP20" | "TRC20">("BEP20");
   const [createdOrder, setCreatedOrder] = useState<any>(null);
@@ -159,6 +160,7 @@ export default function Upgrade() {
         plan: checkoutPlan.toUpperCase() as any,
         currency: checkoutCurrency as any,
         network: checkoutCurrency === "USDT" ? checkoutNetwork as any : undefined,
+        orderType: checkoutOrderType,
       }
     }, {
       onSuccess: (order) => {
@@ -167,7 +169,13 @@ export default function Upgrade() {
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       },
       onError: (err) => {
-        setToastMessage({ title: language === "vi" ? "Không thể tạo đơn. Kiểm tra giá, thông tin nhận tiền và số key còn trống đúng gói." : "Cannot create order. Check pricing, payment details and matching license-key stock.", type: "error" });
+        setToastMessage({ title: language === "vi"
+          ? checkoutOrderType === "renewal"
+            ? "Không thể tạo đơn gia hạn. Kiểm tra giá và thông tin nhận tiền."
+            : "Không thể tạo đơn mua key. Kiểm tra giá, thông tin nhận tiền và kho key."
+          : checkoutOrderType === "renewal"
+            ? "Cannot create renewal order. Check pricing and payment details."
+            : "Cannot create license order. Check pricing, payment details and license stock.", type: "error" });
       }
     });
   };
@@ -358,9 +366,13 @@ export default function Upgrade() {
           <CheckCircle2 className="w-16 h-16 text-[#10b981] mx-auto mb-4" />
           <h3 className="text-[22px] font-extrabold text-[#0f172a] mb-2">{language === "vi" ? "Thanh toán thành công" : "Payment Successful"}</h3>
           <p className="text-[#64748b] text-[15px] mb-8 font-medium">
-            {language === "vi"
-              ? `Chúc mừng! Gói ${currentOrder.plan.toUpperCase()} đã được kích hoạt thành công trong ${currentOrder.durationDays} ngày.`
-              : `Congratulations! Your ${currentOrder.plan.toUpperCase()} plan has been activated for ${currentOrder.durationDays} days.`}
+             {language === "vi"
+               ? currentOrder.orderType === "renewal"
+                 ? `Gói ${currentOrder.plan.toUpperCase()} đã được gia hạn thêm ${currentOrder.durationDays} ngày.`
+                 : `Gói ${currentOrder.plan.toUpperCase()} đã được kích hoạt trong ${currentOrder.durationDays} ngày.`
+               : currentOrder.orderType === "renewal"
+                 ? `Your ${currentOrder.plan.toUpperCase()} plan was renewed for ${currentOrder.durationDays} days.`
+                 : `Your ${currentOrder.plan.toUpperCase()} plan has been activated for ${currentOrder.durationDays} days.`}
           </p>
           <button onClick={() => { setCheckoutPlan(null); setCreatedOrder(null); setTxHash(""); }} className="w-full py-4 rounded-xl border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] transition-colors bg-white">
             {t("Close")}
@@ -377,7 +389,9 @@ export default function Upgrade() {
              {derivedStatus === "received"
                ? (currentOrder.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
                  ? (language === "vi" ? "Đã nhận tiền, cần xử lý gói" : "Payment received, plan needs review")
-                 : (language === "vi" ? "Đã nhận tiền, chờ key" : "Payment received, awaiting key"))
+                  : (language === "vi"
+                    ? currentOrder.orderType === "renewal" ? "Đã nhận tiền, chờ gia hạn" : "Đã nhận tiền, chờ key"
+                    : currentOrder.orderType === "renewal" ? "Payment received, awaiting renewal" : "Payment received, awaiting key"))
                : !isAutomated
                  ? (language === "vi" ? "Chờ quản trị kiểm tra" : "Awaiting admin review")
                  : (language === "vi" ? "Đang xác minh USDT" : "Verifying USDT")}
@@ -386,7 +400,13 @@ export default function Upgrade() {
              {derivedStatus === "received"
                ? (currentOrder.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
                  ? (language === "vi" ? "Đã nhận tiền nhưng gói này thấp hơn gói đang hoạt động. Chưa kích hoạt; quản trị cần xử lý hoặc hoàn tiền." : "Payment received, but this plan is lower than your active plan. An admin must resolve or refund it.")
-                 : (language === "vi" ? "Giao dịch đã được xác minh, nhưng hiện chưa có key phù hợp. Gói chưa kích hoạt; quản trị sẽ được thông báo." : "Payment is verified but no matching key is available yet. Your plan is not active."))
+                  : (language === "vi"
+                    ? currentOrder.orderType === "renewal"
+                      ? "Giao dịch đã được xác minh. Hệ thống sẽ hoàn tất gia hạn subscription."
+                      : "Giao dịch đã được xác minh, nhưng hiện chưa có key phù hợp. Gói chưa kích hoạt; quản trị sẽ được thông báo."
+                    : currentOrder.orderType === "renewal"
+                      ? "Payment is verified. The subscription renewal will be completed."
+                      : "Payment is verified but no matching key is available yet. Your plan is not active."))
                : !isAutomated
                  ? (language === "vi" ? "Đơn cũ đang chờ quản trị kiểm tra tiền thực nhận. TxHash không tự kích hoạt gói." : "This older order awaits manual review. A TxHash alone will not activate the plan.")
                  : (language === "vi" ? "TxHash không phải bằng chứng thanh toán. Hệ thống đang kiểm tra ví nhận, token, số tiền và xác nhận trên blockchain." : "A TxHash alone is not proof of payment. The system is verifying recipient, token, amount and chain confirmations.")}
@@ -644,9 +664,9 @@ export default function Upgrade() {
           <h1 className="text-[32px] sm:text-[40px] font-extrabold text-[#0f172a] tracking-tight mb-4 leading-tight">{t("Upgrade plan")}</h1>
           <p className="text-[16px] font-medium text-[#475569] leading-relaxed">
             {subscriptionExpired
-              ? (language === "vi"
-                ? "Thời hạn đã kết thúc. Mua và kích hoạt key PLUS, PRO hoặc UNLIMITED để tiếp tục sử dụng."
-                : "Your access has ended. Buy and activate a PLUS, PRO, or UNLIMITED key to continue.")
+                ? (language === "vi"
+                ? "Thời hạn đã kết thúc. Chọn gói và thanh toán để gia hạn trực tiếp, không cần mua key mới."
+                : "Your access has ended. Choose a plan and pay to renew directly without buying a new key.")
               : t("Expand account limits and unlock advanced campaign management features. Optimise workflow efficiency with priority systems.")}
           </p>
         </div>
@@ -678,7 +698,7 @@ export default function Upgrade() {
             </div>
             {subscriptionExpired && (
               <p className="mt-4 text-sm font-semibold text-[#c2410c]">
-                {language === "vi" ? "Kích hoạt key để mở lại toàn bộ chức năng workspace." : "Activate a key to restore all workspace features."}
+                {language === "vi" ? "Gia hạn gói để mở lại toàn bộ chức năng workspace." : "Renew your plan to restore all workspace features."}
               </p>
             )}
           </div>
@@ -688,7 +708,7 @@ export default function Upgrade() {
               onClick={() => document.getElementById("activation-section")?.scrollIntoView({ behavior: "smooth" })}
               className="w-full md:w-auto bg-white border-2 border-[#e2e8f0] text-[#0f172a] px-6 py-3.5 rounded-xl font-extrabold text-[14px] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all active:scale-95"
             >
-              {t("Activate key / Change plan")}
+              {language === "vi" ? "Gia hạn / Kích hoạt key" : "Renew / Activate key"}
             </button>
           </div>
 
@@ -696,11 +716,40 @@ export default function Upgrade() {
         </div>
 
         {/* Plans Grid */}
+        <div className="mb-8 flex flex-col gap-3 rounded-2xl border border-[#dbe4f5] bg-[#f8faff] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[13px] font-extrabold uppercase tracking-wider text-[#1a2b88]">
+              {language === "vi" ? "Bạn muốn thực hiện thao tác nào?" : "What would you like to do?"}
+            </p>
+            <p className="mt-1 text-[13px] font-medium text-[#64748b]">
+              {checkoutOrderType === "renewal"
+                ? (language === "vi" ? "Gia hạn trực tiếp vào subscription, không cần license key." : "Renew directly on the subscription without a license key.")
+                : (language === "vi" ? "Mua license key để kích hoạt sau hoặc dùng cho người khác." : "Buy a license key to activate later or give to someone else.")}
+            </p>
+          </div>
+          <div className="flex rounded-xl border border-[#cbd5e1] bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setCheckoutOrderType("renewal")}
+              className={`rounded-lg px-4 py-2.5 text-[13px] font-extrabold transition-colors ${checkoutOrderType === "renewal" ? "bg-[#1a2b88] text-white" : "text-[#475569] hover:bg-[#f1f5f9]"}`}
+            >
+              {language === "vi" ? "Gia hạn gói" : "Renew plan"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCheckoutOrderType("license")}
+              className={`rounded-lg px-4 py-2.5 text-[13px] font-extrabold transition-colors ${checkoutOrderType === "license" ? "bg-[#1a2b88] text-white" : "text-[#475569] hover:bg-[#f1f5f9]"}`}
+            >
+              {language === "vi" ? "Mua license key" : "Buy license key"}
+            </button>
+          </div>
+        </div>
         <div id="purchase-plans" className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-16">
           {sortedPlans.map((plan) => {
             const thisLevel = planOrder[plan.code] || 0;
             const isCurrent = !subscriptionExpired && subscription.plan === plan.code;
             const isLower = !subscriptionExpired && thisLevel < currentPlanLevel;
+            const planBlocked = checkoutOrderType === "license" ? (isCurrent || isLower) : isLower;
 
             const isPro = plan.code === "pro";
             const isUnlimited = plan.code === "unlimited";
@@ -784,7 +833,7 @@ export default function Upgrade() {
                 </ul>
 
                  <button
-                   disabled={isCurrent || isLower || !canPurchase || Boolean(activeAutomatedOrder)}
+                   disabled={planBlocked || !canPurchase || Boolean(activeAutomatedOrder)}
                   onClick={() => {
                     if (canPurchase) {
                       setCheckoutPlan(plan.code);
@@ -795,13 +844,13 @@ export default function Upgrade() {
                   }}
                   data-testid={`button-select-plan-${plan.code}`}
                   className={`w-full py-4 rounded-xl font-extrabold transition-all active:scale-[0.98] ${
-                     isCurrent || isLower || !canPurchase || activeAutomatedOrder ? btnDisabledClass : btnActiveClass
+                      planBlocked || !canPurchase || activeAutomatedOrder ? btnDisabledClass : btnActiveClass
                   }`}
                 >
-                  {isCurrent ? t("Current plan") : isLower ? t("Already included") : hasPrice && !canPurchase
+                  {checkoutOrderType === "renewal" && isCurrent ? (language === "vi" ? "Gia hạn gói này" : "Renew this plan") : isLower ? t("Already included") : hasPrice && !canPurchase
                     ? language === "vi" ? "Chưa có thông tin thanh toán" : "Payment details pending"
                     : activeAutomatedOrder ? (language === "vi" ? "Đang có đơn thanh toán chờ xử lý" : "Pending payment order")
-                    : t("Select this plan")}
+                    : checkoutOrderType === "renewal" ? (language === "vi" ? "Chọn gói để gia hạn" : "Select plan to renew") : t("Select this plan")}
                 </button>
               </div>
             );
@@ -936,6 +985,7 @@ export default function Upgrade() {
                             {(orderStatus === "pending" || orderStatus === "received" || orderStatus === "verifying" || orderStatus === "invalid" || orderStatus === "paid") && (
                               <button type="button" onClick={() => {
                                 setCheckoutPlan(order.plan.toLowerCase());
+                                 setCheckoutOrderType(order.orderType === "license" ? "license" : "renewal");
                                 setCheckoutCurrency(order.currency as "VND" | "USDT");
                                 setCheckoutNetwork((order.network || "BEP20") as "BEP20" | "TRC20");
                                 setCreatedOrder(order);

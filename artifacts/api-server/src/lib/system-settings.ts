@@ -189,8 +189,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     senderAccountId: null,
     reminderDays: [7, 3, 1],
     sendAfterExpiry: false,
-    messageVi: "TeleCampaign: Gói của bạn còn {days} ngày sẽ hết hạn vào {expiresAt}. Hãy mua key mới để không bị gián đoạn.\nMua key: {purchaseLink}",
-    messageEn: "TeleCampaign: Your subscription expires in {days} days on {expiresAt}. Buy a new license key to avoid interruption.\nBuy a key: {purchaseLink}",
+    messageVi: "TeleCampaign: Gói của bạn còn {days} ngày sẽ hết hạn vào {expiresAt}. Hãy gia hạn gói để không bị gián đoạn.\nGia hạn gói hoặc xem hướng dẫn: {purchaseLink}",
+    messageEn: "TeleCampaign: Your subscription expires in {days} days on {expiresAt}. Renew your plan to avoid interruption.\nRenew your plan or view instructions: {purchaseLink}",
   },
   defaultAccountDailyLimit: 200,
   campaignDefaults: {

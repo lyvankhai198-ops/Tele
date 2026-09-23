@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { LicenseKeyPool } from './licenseKeyPool';
 import type { PlanCode } from './planCode';
 
 export interface CreateAdminLicenseKeyInput {
@@ -29,4 +30,5 @@ export interface CreateAdminLicenseKeyInput {
      * @maxLength 120
      */
   label?: string;
+  pool?: LicenseKeyPool;
 }
