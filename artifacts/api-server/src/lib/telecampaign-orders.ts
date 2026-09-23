@@ -34,7 +34,7 @@ export async function listOrders(userId?: string) {
   return db.select().from(purchaseOrdersTable).where(userId ? eq(purchaseOrdersTable.ownerUserId, userId) : undefined).orderBy(desc(purchaseOrdersTable.createdAt));
 }
 export async function createOrder(input: { ownerUserId: string; plan: string; currency: string; network?: string }) {
-  if (input.currency === "VND" && !process.env.SEPAY_WEBHOOK_SECRET) throw new Error("PAYMENT_AUTOMATION_NOT_CONFIGURED");
+  if (input.currency === "VND" && !process.env.SEPAY_WEBHOOK_SECRET && !process.env.SEPAY_WEBHOOK_API_KEY) throw new Error("PAYMENT_AUTOMATION_NOT_CONFIGURED");
   const settings = await getOrderSettings();
   const plan = input.plan.toUpperCase() as keyof OrderSettings["pricesVnd"];
   const [current] = await db.select({ plan: subscriptionsTable.plan, expiresAt: subscriptionsTable.expiresAt }).from(subscriptionsTable).where(eq(subscriptionsTable.ownerUserId, input.ownerUserId)).limit(1);

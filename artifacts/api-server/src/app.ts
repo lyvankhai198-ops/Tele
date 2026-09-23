@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
-import { verifySePayWebhook } from "./lib/verify-sepay";
+import { verifySePayApiKey, verifySePayWebhook } from "./lib/verify-sepay";
 import { receiveSePayTransfer } from "./lib/sepay-payments";
 
 const app: Express = express();
@@ -40,11 +40,13 @@ app.use(
   }),
 );
 app.use(cookieParser());
-// This route must precede express.json() so HMAC checks the original bytes.
+// This route must precede express.json() so API Key/HMAC checks receive the original bytes.
 app.post("/api/payments/sepay/webhook", express.raw({ type: "application/json", limit: "64kb" }), async (req, res): Promise<void> => {
-  const secret = process.env.SEPAY_WEBHOOK_SECRET;
-  if (!secret) { res.status(503).json({ success: false }); return; }
-  const payload = verifySePayWebhook(req.body, req.headers, secret);
+  const apiKey = process.env.SEPAY_WEBHOOK_API_KEY;
+  const hmacSecret = process.env.SEPAY_WEBHOOK_SECRET;
+  if (!apiKey && !hmacSecret) { res.status(503).json({ success: false }); return; }
+  const payload = (apiKey ? verifySePayApiKey(req.body, req.headers, apiKey) : null)
+    ?? (hmacSecret ? verifySePayWebhook(req.body, req.headers, hmacSecret) : null);
   if (!payload) { res.status(401).json({ success: false }); return; }
   try {
     await receiveSePayTransfer(payload);

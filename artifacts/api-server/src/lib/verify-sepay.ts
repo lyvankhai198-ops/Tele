@@ -76,6 +76,32 @@ export function verifySePayWebhook(
   const received = Buffer.from(match[1], "hex");
   if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null;
 
+  return parseSePayWebhookPayload(rawBody);
+}
+
+function constantTimeStringEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left, "utf8");
+  const rightBytes = Buffer.from(right, "utf8");
+  return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
+}
+
+/**
+ * Verifies SePay's API Key authorization format:
+ * Authorization: Apikey <api-key>
+ */
+export function verifySePayApiKey(
+  rawBody: Buffer,
+  headers: Record<string, string | string[] | undefined>,
+  apiKey: string,
+): SePayWebhookPayload | null {
+  if (!Buffer.isBuffer(rawBody) || rawBody.length > MAX_BODY_BYTES) return null;
+  const authorization = getHeader(headers, "authorization");
+  const match = /^Apikey ([^\s]+)$/i.exec(authorization ?? "");
+  if (!match || !constantTimeStringEqual(match[1], apiKey)) return null;
+  return parseSePayWebhookPayload(rawBody);
+}
+
+function parseSePayWebhookPayload(rawBody: Buffer): SePayWebhookPayload | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawBody.toString("utf8"));
