@@ -959,6 +959,7 @@ paths:
       responses:
         "200": { description: Updated order, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
         "404": { description: Not found }
+        "422": { description: Transaction hash does not match a payment for this order }
   /purchase-orders/{orderId}/cancel:
     post:
       operationId: cancelPurchaseOrder

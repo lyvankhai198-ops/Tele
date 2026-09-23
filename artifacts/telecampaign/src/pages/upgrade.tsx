@@ -96,6 +96,7 @@ export default function Upgrade() {
   const [toastMessage, setToastMessage] = useState<{ title: string; type: "success" | "error" } | null>(null);
   const [activateError, setActivateError] = useState<Error | null>(null);
   const [activateSuccess, setActivateSuccess] = useState(false);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
   const licenseInputRef = useRef<HTMLInputElement>(null);
@@ -131,7 +132,10 @@ export default function Upgrade() {
 
   const currentOrder = useMemo(() => {
     if (!createdOrder) return null;
-    return purchaseOrders?.find(o => o.id === createdOrder.id) || createdOrder;
+    const refreshedOrder = purchaseOrders?.find(o => o.id === createdOrder.id);
+    return createdOrder.status === "paid" || createdOrder.status === "received"
+      ? createdOrder
+      : refreshedOrder || createdOrder;
   }, [createdOrder, purchaseOrders]);
 
   const handleCreateOrder = () => {
@@ -169,23 +173,31 @@ export default function Upgrade() {
 
   const handleSubmitProof = () => {
     if (!currentOrder || currentOrder.currency !== "USDT") return;
+    setVerificationError(null);
     submitProofMutation.mutate({
       orderId: currentOrder.id,
       data: {
         txHash: currentOrder.currency === "USDT" ? txHash.trim() : undefined,
       }
     }, {
-      onSuccess: () => {
-        setToastMessage({ title: currentOrder.automated
-          ? currentOrder.currency === "VND"
-            ? (language === "vi" ? "Đã ghi nhận xác nhận chuyển khoản. Hệ thống đang tự kiểm tra giao dịch." : "Transfer confirmation recorded. The system is checking the payment automatically.")
-            : (language === "vi" ? "Đã ghi nhận TxHash, đang xác minh trên blockchain." : "TxHash recorded. Verifying on-chain.")
-          : (language === "vi" ? "Đã báo quản trị kiểm tra đơn cũ." : "An admin will review this older order."), type: "success" });
+      onSuccess: (order) => {
+        setCreatedOrder(order);
+        setToastMessage({ title: order.status === "paid"
+          ? (language === "vi" ? "Thanh toán thành công, gói đã được kích hoạt." : "Payment confirmed and your plan is now active.")
+          : (language === "vi" ? "TxHash hợp lệ. Đang chờ đủ xác nhận blockchain để hoàn tất." : "TxHash found. Waiting for enough blockchain confirmations to complete verification."), type: "success" });
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
         void refetchPurchaseOrders();
       },
       onError: (err) => {
-        setToastMessage({ title: t("Could not submit proof"), type: "error" });
+        const payload = (err as any)?.data ?? (err as any)?.response?.data;
+        if (payload?.error === "TX_HASH_NOT_MATCHED") {
+          setVerificationError(language === "vi"
+            ? "TxHash không khớp với đơn hàng này hoặc giao dịch chưa hợp lệ. Vui lòng kiểm tra lại TxHash và network; nếu vẫn không được, hãy liên hệ admin support."
+            : "This TxHash does not match the order or the transaction is invalid. Check the TxHash and network; if the issue persists, contact admin support.");
+          setToastMessage({ title: language === "vi" ? "Không xác minh được TxHash." : "TxHash could not be verified.", type: "error" });
+          return;
+        }
+        setToastMessage({ title: localizedErrorMessage(err, language, t("Could not submit proof")), type: "error" });
       }
     });
   };
@@ -578,10 +590,15 @@ export default function Upgrade() {
             type="text"
             placeholder="0xabc123..."
             value={txHash}
-            onChange={(e) => setTxHash(e.target.value)}
+             onChange={(e) => { setTxHash(e.target.value); setVerificationError(null); }}
             disabled={isExpired || submitProofMutation.isPending}
             className="w-full border-2 border-[#e2e8f0] bg-[#f8fafc] rounded-xl px-4 py-3.5 text-[15px] font-mono outline-none focus:border-[#1a2b88] focus:bg-white transition-colors disabled:opacity-50"
           />
+           {verificationError && (
+             <p role="alert" className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#be123c]">
+               {verificationError}
+             </p>
+           )}
         </div>
 
         <div className="flex gap-3 mt-2">

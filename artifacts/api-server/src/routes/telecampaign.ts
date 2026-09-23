@@ -111,7 +111,9 @@ import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
-import { cancelOrder, createOrder, getOrderSettings, listOrders, updateOrderProof } from "../lib/telecampaign-orders";
+import { cancelOrder, createOrder, getOrderSettings, listOrders, settleVerifiedOrder, updateOrderProof } from "../lib/telecampaign-orders";
+import { verifyUsdtTransfer } from "../lib/verify-usdt";
+import { notifyPurchaseOrder } from "../lib/support-telegram";
 import {
   confirmTelegramPhoneCode,
   confirmTelegramTwoFactorPassword,
@@ -715,6 +717,42 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
   try { order = await updateOrderProof(req.params.orderId, currentUserId(req), value.txHash, value.proofInfo); }
   catch (error) { if (error instanceof Error && error.message === "TX_HASH_ALREADY_SUBMITTED") { res.status(409).json({ error: "Transaction hash already submitted" }); return; } throw error; }
   if (!order) { res.status(409).json({ error: "Order is expired or cannot accept a transaction hash" }); return; }
+  if (order.automated && order.currency === "USDT" && order.network && order.txHash) {
+    const verification = await verifyUsdtTransfer({
+      network: order.network as "BEP20" | "TRC20",
+      txHash: order.txHash,
+      destination: order.paymentDestination,
+      amount: order.amount,
+      createdAt: order.createdAt,
+    });
+    if (verification.confirmed) {
+      const settled = await settleVerifiedOrder(order.id, `${order.network}:${order.txHash}`);
+      if (settled?.status === "paid") {
+        void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+          .catch((error) => req.log.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
+      }
+      res.json(settled ?? order);
+      return;
+    }
+    const hardFailureReasons = new Set([
+      "INVALID_IDENTIFIER",
+      "NOT_FOUND",
+      "HASH_MISMATCH",
+      "TRANSACTION_FAILED",
+      "TRANSFER_NOT_MATCHED",
+      "INVALID_RECEIPT_LOGS",
+      "BEFORE_ORDER",
+      "AFTER_ORDER",
+      "INVALID_BLOCK_TIME",
+    ]);
+    if (verification.reason && hardFailureReasons.has(verification.reason)) {
+      res.status(422).json({
+        error: "TX_HASH_NOT_MATCHED",
+        verificationReason: verification.reason,
+      });
+      return;
+    }
+  }
   res.json(order);
 });
 router.use((req, res, next): void => {
