@@ -33,6 +33,7 @@ import AdminNotificationsPage from '@/pages/admin-notifications';
 import AdminUsersPage from '@/pages/admin-users';
 import AdminUserSupportPage from '@/pages/admin-user-support';
 import AdminLicenseKeysPage from '@/pages/admin-license-keys';
+import AdminPurchaseOrdersPage from '@/pages/admin-purchase-orders';
 import AdminRevenuePage from '@/pages/admin-revenue';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
@@ -595,6 +596,7 @@ function Router() {
           {(params) => <AdminRoute><AdminUserSupportPage userId={params.id} /></AdminRoute>}
         </Route>
         <Route path="/admin/license-keys" component={() => <AdminRoute><AdminLicenseKeysPage /></AdminRoute>} />
+        <Route path="/admin/purchase-orders" component={() => <AdminRoute><AdminPurchaseOrdersPage /></AdminRoute>} />
         <Route path="/admin/revenue" component={() => <AdminRoute><AdminRevenuePage /></AdminRoute>} />
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />

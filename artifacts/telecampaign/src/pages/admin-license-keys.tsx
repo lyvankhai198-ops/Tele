@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
+import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Key, Copy, AlertCircle, Trash2, CheckCircle2, Filter, Bot, ExternalLink, Save, Send } from "lucide-react";
 import { format } from "date-fns";
@@ -16,7 +17,6 @@ import {
   EmptyState,
   Toast,
 } from "@/components/layout/AppLayout";
-import { AdminPurchaseOrders } from "@/components/admin/AdminPurchaseOrders";
 import {
   useListAdminLicenseKeys,
   useCreateAdminLicenseKey,
@@ -269,6 +269,7 @@ const REFERENCE_PRICE_VND: Record<LicenseKeyPlan, number> = {
 };
 
 export function AdminLicenseKeysPage() {
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { language } = useLanguage();
   const text = copy[language];
@@ -517,6 +518,15 @@ export function AdminLicenseKeysPage() {
           </PrimaryButton>
         }
       />
+      <button
+        type="button"
+        onClick={() => navigate("/admin/purchase-orders")}
+        className="mb-6 flex w-full flex-col gap-1 rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] p-5 text-left transition-colors hover:bg-[#dbeafe]"
+        data-testid="link-admin-purchase-orders"
+      >
+        <span className="font-extrabold text-[#1a2b88]">{language === "vi" ? "Thanh toán & đơn mua gói →" : "Payments & plan orders →"}</span>
+        <span className="text-sm text-[#475569]">{language === "vi" ? "Đặt giá hiện trên trang Nâng cấp, nhập tài khoản nhận tiền và duyệt đơn ở đây." : "Set prices shown on Upgrade, payment destinations, and review orders here."}</span>
+      </button>
 
       <Panel className="mb-6 overflow-hidden border-[#dbeafe]">
         <div className="flex flex-col gap-5 p-5 sm:p-6">
@@ -1031,8 +1041,6 @@ export function AdminLicenseKeysPage() {
           </div>
         </Modal>
       )}
-
-      <AdminPurchaseOrders />
 
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
