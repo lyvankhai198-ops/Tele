@@ -12,6 +12,7 @@ import {
   disconnectQuietly,
   getAccountClient,
   isTelegramSessionRevoked,
+  refreshTelegramAccountIdentity,
   sendDirectTelegramMessageWithClient,
 } from "./telegram";
 import { getSystemSettings, type SubscriptionReminderSettings } from "./system-settings";
@@ -226,6 +227,29 @@ async function processJob(
   purchaseLink: string | null,
   now: Date,
 ): Promise<void> {
+  try {
+    await refreshTelegramAccountIdentity(job.telegramAccountId, job.ownerUserId);
+  } catch (error) {
+    const details = limitedErrorText(error);
+    const floodWait = floodWaitSeconds(error);
+    const permanent = isTelegramSessionRevoked(error);
+    const nextAttemptAt = floodWait
+      ? new Date(Date.now() + (floodWait + 60) * 1000)
+      : new Date(Date.now() + RETRY_DELAY_MS);
+    await finishJob(job.id, job.leaseToken!, {
+      status: permanent || job.attemptCount >= MAX_ATTEMPTS ? "failed" : "pending",
+      nextAttemptAt,
+      lastError: details,
+    });
+    logger.warn({
+      err: error,
+      jobId: job.id,
+      accountId: job.telegramAccountId,
+      attemptCount: job.attemptCount,
+    }, "Could not refresh Telegram recipient identity before subscription reminder");
+    return;
+  }
+
   const [recipient] = await db.select({
     ownerUserId: subscriptionsTable.ownerUserId,
     preferredLanguage: appUsersTable.preferredLanguage,

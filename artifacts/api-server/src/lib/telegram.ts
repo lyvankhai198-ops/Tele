@@ -468,6 +468,16 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     if (currentUser.id !== account.telegramUserId) {
       throw new Error("Telegram session identity does not match the saved account");
     }
+    if (currentUser.username !== account.username) {
+      const [updatedAccount] = await db.update(telegramAccountsTable).set({
+        username: currentUser.username,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(telegramAccountsTable.id, account.id),
+        isNull(telegramAccountsTable.deletedAt),
+      )).returning();
+      return { client, account: updatedAccount ?? { ...account, username: currentUser.username } };
+    }
     return { client, account };
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
@@ -476,6 +486,12 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     await disconnectQuietly(client);
     throw error;
   }
+}
+
+export async function refreshTelegramAccountIdentity(accountId: string, ownerUserId?: string) {
+  const { client, account } = await getAccountClient(accountId, ownerUserId);
+  await disconnectQuietly(client);
+  return account;
 }
 
 export type TelegramGroupJoinStatus = "joined" | "already_joined" | "skipped";
