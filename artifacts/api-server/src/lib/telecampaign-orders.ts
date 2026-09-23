@@ -42,7 +42,14 @@ export async function createOrder(input: { ownerUserId: string; plan: string; cu
   const destination = input.currency === "VND"
     ? `${settings.vnBankCode}|${settings.vnBankName}|${settings.vnBankAccount}|${settings.vnAccountName}|${settings.vietQrTemplate}`
     : (input.network === "BEP20" ? settings.usdtBep20Address : settings.usdtTrc20Address);
-  if (!destination || destination.includes("||") || (input.currency === "USDT" && destination.length < 10)) throw new Error("PAYMENT_DESTINATION_NOT_CONFIGURED");
+  if (input.currency === "VND"
+    ? !/^[A-Z0-9]{2,20}$/.test(settings.vnBankCode)
+      || !settings.vnBankName.trim()
+      || !/^[0-9]{4,30}$/.test(settings.vnBankAccount.replace(/\s/g, ""))
+      || !settings.vnAccountName.trim()
+    : !(input.network === "BEP20" ? /^0x[0-9a-fA-F]{40}$/ : /^T[1-9A-HJ-NP-Za-km-z]{33}$/).test(destination)) {
+    throw new Error("PAYMENT_DESTINATION_NOT_CONFIGURED");
+  }
   const durationDays = settings.durationsDays[plan];
   if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3660) throw new Error("INVALID_PLAN_DURATION");
   const reference = `TC-${randomUUID().replaceAll("-", "").slice(0, 20).toUpperCase()}`;

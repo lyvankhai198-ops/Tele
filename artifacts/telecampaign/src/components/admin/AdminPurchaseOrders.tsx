@@ -21,6 +21,9 @@ import {
 import { useLanguage, localizedErrorMessage } from "@/lib/i18n";
 import { format } from "date-fns";
 
+const planCodes = ["PLUS", "PRO", "UNLIMITED"] as const;
+type PlanCode = typeof planCodes[number];
+
 export function AdminPurchaseOrders() {
   const { language, t } = useLanguage();
   const queryClient = useQueryClient();
@@ -32,6 +35,7 @@ export function AdminPurchaseOrders() {
   const reviewMutation = useReviewPurchaseOrder();
 
   const [form, setForm] = useState<PurchaseOrderSettings | null>(null);
+  const [priceInputs, setPriceInputs] = useState<Record<string, string> | null>(null);
   const [toast, setToast] = useState<{title: string, type: "success"|"error"} | null>(null);
   const [reviewOrder, setReviewOrder] = useState<PurchaseOrder | null>(null);
   const [reviewDecision, setReviewDecision] = useState<"paid" | "rejected" | null>(null);
@@ -39,12 +43,35 @@ export function AdminPurchaseOrders() {
   useEffect(() => {
     if (settings && !form) {
       setForm(settings);
+      setPriceInputs(Object.fromEntries(planCodes.flatMap(plan => [
+        [`VND-${plan}`, String(settings.pricesVnd[plan] ?? 0)],
+        [`USDT-${plan}`, String(settings.pricesUsdt[plan] ?? 0)],
+      ])));
     }
   }, [settings, form]);
 
   const handleSaveSettings = () => {
-    if (!form) return;
-    updateSettingsMutation.mutate({ data: form }, {
+    if (!form || !priceInputs) return;
+    const pricesVnd = {} as Record<PlanCode, number>;
+    const pricesUsdt = {} as Record<PlanCode, number>;
+    for (const plan of planCodes) {
+      const vnd = priceInputs[`VND-${plan}`].trim();
+      const usdt = priceInputs[`USDT-${plan}`].trim();
+      const normalizedVnd = /^\d{1,3}(?:\.\d{3})+$/.test(vnd) ? vnd.replaceAll(".", "") : vnd;
+      if (!/^\d+$/.test(normalizedVnd) || !/^\d+(?:\.\d{1,8})?$/.test(usdt)
+        || Number(normalizedVnd) > 10_000_000_000 || Number(usdt) > 1_000_000) {
+        setToast({
+          title: language === "vi"
+            ? `${plan}: VND cần là số nguyên, USDT tối đa 8 chữ số sau dấu chấm (0 = chưa mở bán).`
+            : `${plan}: VND must be a whole number; USDT allows up to 8 decimal places (0 = not for sale).`,
+          type: "error",
+        });
+        return;
+      }
+      pricesVnd[plan] = Number(normalizedVnd);
+      pricesUsdt[plan] = Number(usdt);
+    }
+    updateSettingsMutation.mutate({ data: { ...form, pricesVnd, pricesUsdt } }, {
       onSuccess: (newSettings) => {
         setForm(newSettings);
         setToast({ title: t("Settings saved"), type: "success" });
@@ -83,7 +110,7 @@ export function AdminPurchaseOrders() {
     );
   }
 
-  if (settingsLoading || !form) {
+  if (settingsLoading || !form || !priceInputs) {
     return <div className="p-8 flex justify-center"><LoaderCircle className="h-8 w-8 animate-spin text-[#1a2b88]" /></div>;
   }
 
@@ -107,18 +134,19 @@ export function AdminPurchaseOrders() {
           {/* Prices & Durations */}
           <div className="flex flex-col gap-6">
             <h3 className="text-[15px] font-extrabold text-[#0f172a] border-b border-[#e2e8f0] pb-2 uppercase tracking-wider">{t("Plan Pricing & Durations")}</h3>
+            <p className="text-[13px] text-[#64748b]">{language === "vi" ? "Nhập 2.32 cho USDT. Giá 0 = chưa mở bán; có thể lưu giá trước và thêm thông tin nhận tiền sau." : "Enter 2.32 for USDT. A price of 0 means not for sale; you can save prices before adding payment destinations."}</p>
 
-            {(["PLUS", "PRO", "UNLIMITED"] as const).map((plan) => (
+            {planCodes.map((plan) => (
               <div key={plan} className="flex flex-col gap-3 bg-[#f8fafc] p-4 rounded-2xl border border-[#e2e8f0]">
                 <h4 className="font-extrabold text-[#1a2b88] uppercase tracking-wider text-[14px]">{plan}</h4>
                 <div className="grid grid-cols-3 gap-3">
                   <label className="flex flex-col gap-1.5">
                     <span className="text-[12px] font-bold text-[#64748b]">VND</span>
-                    <input type="number" value={form.pricesVnd?.[plan] || 0} onChange={e => setForm({...form, pricesVnd: {...(form.pricesVnd || {}), [plan]: Number(e.target.value)}})} className="border border-[#cbd5e1] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#1a2b88]" />
+                    <input type="text" inputMode="numeric" value={priceInputs[`VND-${plan}`]} onFocus={e => e.currentTarget.select()} onChange={e => setPriceInputs({...priceInputs, [`VND-${plan}`]: e.target.value})} className="w-full min-w-0 border border-[#cbd5e1] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#1a2b88]" data-testid={`price-vnd-${plan.toLowerCase()}`} />
                   </label>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-[12px] font-bold text-[#64748b]">USDT</span>
-                    <input type="number" value={form.pricesUsdt?.[plan] || 0} onChange={e => setForm({...form, pricesUsdt: {...(form.pricesUsdt || {}), [plan]: Number(e.target.value)}})} className="border border-[#cbd5e1] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#1a2b88]" />
+                    <input type="text" inputMode="decimal" value={priceInputs[`USDT-${plan}`]} onFocus={e => e.currentTarget.select()} onChange={e => setPriceInputs({...priceInputs, [`USDT-${plan}`]: e.target.value.replace(",", ".")})} className="w-full min-w-0 border border-[#cbd5e1] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#1a2b88]" data-testid={`price-usdt-${plan.toLowerCase()}`} />
                   </label>
                   <label className="flex flex-col gap-1.5">
                     <span className="text-[12px] font-bold text-[#64748b]">{t("Duration")}</span>

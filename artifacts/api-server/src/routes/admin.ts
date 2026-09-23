@@ -189,11 +189,11 @@ router.patch("/admin/purchase-orders/settings", async (req, res): Promise<void> 
   const value = req.body;
   if (!value?.pricesVnd || !value?.pricesUsdt) { res.status(400).json({ error: "Prices are required" }); return; }
   const plans = ["PLUS", "PRO", "UNLIMITED"];
-  if (![...plans].every((p) => Number.isInteger(value.pricesVnd[p]) && value.pricesVnd[p] > 0 && value.pricesVnd[p] <= 10_000_000_000
-    && Number.isFinite(value.pricesUsdt[p]) && value.pricesUsdt[p] > 0 && value.pricesUsdt[p] <= 1_000_000
+  if (!plans.every((p) => Number.isInteger(value.pricesVnd[p]) && value.pricesVnd[p] >= 0 && value.pricesVnd[p] <= 10_000_000_000
+    && Number.isFinite(value.pricesUsdt[p]) && value.pricesUsdt[p] >= 0 && value.pricesUsdt[p] <= 1_000_000
     && /^\d+(\.\d{1,8})?$/.test(String(value.pricesUsdt[p]))
     && Number.isInteger(value.durationsDays?.[p]) && value.durationsDays[p] >= 1 && value.durationsDays[p] <= 3660)) {
-    res.status(400).json({ error: "All plan prices must be greater than zero" }); return;
+    res.status(400).json({ error: "Prices must be nonnegative (VND whole numbers, USDT up to 8 decimal places) and durations must be 1–3660 days" }); return;
   }
   let validVietQr = value.vietQrTemplate === "";
   if (typeof value.vietQrTemplate === "string" && value.vietQrTemplate.length <= 512 && value.vietQrTemplate) {
@@ -203,13 +203,13 @@ router.patch("/admin/purchase-orders/settings", async (req, res): Promise<void> 
         && value.vietQrTemplate.includes("{amount}") && value.vietQrTemplate.includes("{reference}");
     } catch { validVietQr = false; }
   }
-  if (typeof value.vnBankCode !== "string" || !/^[A-Z0-9]{2,20}$/.test(value.vnBankCode)
-    || typeof value.vnBankName !== "string" || !value.vnBankName.trim()
-    || typeof value.vnBankAccount !== "string" || !/^[0-9]{4,30}$/.test(value.vnBankAccount.replace(/\s/g, ""))
-    || typeof value.vnAccountName !== "string" || !/^[\p{L}\p{M}0-9 .'-]{2,120}$/u.test(value.vnAccountName.trim())
+  if (typeof value.vnBankCode !== "string" || (value.vnBankCode !== "" && !/^[A-Z0-9]{2,20}$/.test(value.vnBankCode))
+    || typeof value.vnBankName !== "string" || (value.vnBankName !== "" && !value.vnBankName.trim())
+    || typeof value.vnBankAccount !== "string" || (value.vnBankAccount !== "" && !/^[0-9]{4,30}$/.test(value.vnBankAccount.replace(/\s/g, "")))
+    || typeof value.vnAccountName !== "string" || (value.vnAccountName !== "" && !/^[\p{L}\p{M}0-9 .'-]{2,120}$/u.test(value.vnAccountName.trim()))
     || !validVietQr
-    || typeof value.usdtBep20Address !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(value.usdtBep20Address)
-    || typeof value.usdtTrc20Address !== "string" || !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(value.usdtTrc20Address)) {
+    || typeof value.usdtBep20Address !== "string" || (value.usdtBep20Address !== "" && !/^0x[0-9a-fA-F]{40}$/.test(value.usdtBep20Address))
+    || typeof value.usdtTrc20Address !== "string" || (value.usdtTrc20Address !== "" && !/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(value.usdtTrc20Address))) {
     res.status(400).json({ error: "Invalid payment destination" }); return;
   }
   res.json(await saveOrderSettings(value, req.userId!));

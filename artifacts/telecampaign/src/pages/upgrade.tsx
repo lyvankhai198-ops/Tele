@@ -279,13 +279,12 @@ export default function Upgrade() {
 
             const features = language === "vi" ? plan.features : plan.featuresEn;
 
-            const hasVndDest = Boolean(purchaseSettings?.vnBankCode && purchaseSettings?.vnBankName && purchaseSettings?.vnBankAccount);
+            const hasVndDest = Boolean(purchaseSettings?.vnBankCode && purchaseSettings?.vnBankName && purchaseSettings?.vnBankAccount && purchaseSettings?.vnAccountName);
             const hasUsdtDest = Boolean(purchaseSettings?.usdtBep20Address || purchaseSettings?.usdtTrc20Address);
             const priceVnd = purchaseSettings?.pricesVnd?.[plan.code.toUpperCase()] || 0;
             const priceUsdt = purchaseSettings?.pricesUsdt?.[plan.code.toUpperCase()] || 0;
-            const hasPriceVnd = priceVnd > 0 && hasVndDest;
-            const hasPriceUsdt = priceUsdt > 0 && hasUsdtDest;
-            const hasPrice = language === "vi" ? hasPriceVnd : hasPriceUsdt;
+            const hasPrice = language === "vi" ? priceVnd > 0 : priceUsdt > 0;
+            const canPurchase = hasPrice && (language === "vi" ? hasVndDest : hasUsdtDest);
 
             return (
               <div
@@ -337,22 +336,23 @@ export default function Upgrade() {
                 </ul>
 
                 <button
-                  disabled={isCurrent || isLower || !hasPrice}
+                  disabled={isCurrent || isLower || !canPurchase}
                   onClick={() => {
-                    if (hasPrice) {
+                    if (canPurchase) {
                       setCheckoutPlan(plan.code);
                       setCheckoutCurrency(language === "vi" ? "VND" : "USDT");
+                      setCheckoutNetwork(purchaseSettings?.usdtBep20Address ? "BEP20" : "TRC20");
                       setCreatedOrder(null);
-                    } else {
-                      setSelectedPlanToConfirm(plan.code);
                     }
                   }}
                   data-testid={`button-select-plan-${plan.code}`}
                   className={`w-full py-4 rounded-xl font-extrabold transition-all active:scale-[0.98] ${
-                    isCurrent || isLower || !hasPrice ? btnDisabledClass : btnActiveClass
+                    isCurrent || isLower || !canPurchase ? btnDisabledClass : btnActiveClass
                   }`}
                 >
-                  {isCurrent ? t("Current plan") : isLower ? t("Already included") : t("Select this plan")}
+                  {isCurrent ? t("Current plan") : isLower ? t("Already included") : hasPrice && !canPurchase
+                    ? language === "vi" ? "Chưa có thông tin thanh toán" : "Payment details pending"
+                    : t("Select this plan")}
                 </button>
               </div>
             );
@@ -576,12 +576,12 @@ export default function Upgrade() {
                   <div className="flex flex-col gap-2">
                     <label className="text-[13px] font-extrabold text-[#475569] uppercase tracking-wider">{t("Select network")}</label>
                     <div className="flex gap-3">
-                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-colors ${checkoutNetwork === "BEP20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
-                        <input type="radio" name="network" value="BEP20" checked={checkoutNetwork === "BEP20"} onChange={() => setCheckoutNetwork("BEP20")} className="hidden" />
+                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 transition-colors ${purchaseSettings.usdtBep20Address ? "cursor-pointer" : "cursor-not-allowed opacity-40"} ${checkoutNetwork === "BEP20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
+                        <input type="radio" name="network" value="BEP20" disabled={!purchaseSettings.usdtBep20Address} checked={checkoutNetwork === "BEP20"} onChange={() => setCheckoutNetwork("BEP20")} className="hidden" />
                         <span className="font-bold">BSC (BEP20)</span>
                       </label>
-                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-colors ${checkoutNetwork === "TRC20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
-                        <input type="radio" name="network" value="TRC20" checked={checkoutNetwork === "TRC20"} onChange={() => setCheckoutNetwork("TRC20")} className="hidden" />
+                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 transition-colors ${purchaseSettings.usdtTrc20Address ? "cursor-pointer" : "cursor-not-allowed opacity-40"} ${checkoutNetwork === "TRC20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
+                        <input type="radio" name="network" value="TRC20" disabled={!purchaseSettings.usdtTrc20Address} checked={checkoutNetwork === "TRC20"} onChange={() => setCheckoutNetwork("TRC20")} className="hidden" />
                         <span className="font-bold">Tron (TRC20)</span>
                       </label>
                     </div>
