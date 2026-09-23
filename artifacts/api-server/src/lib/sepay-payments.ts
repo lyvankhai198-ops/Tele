@@ -16,7 +16,13 @@ export async function receiveSePayTransfer(payload: SePayWebhookPayload) {
   const [previous] = await db.select().from(purchaseOrdersTable)
     .where(eq(purchaseOrdersTable.paymentEventId, paymentEventId)).limit(1);
   if (previous) {
-    if (previous.status === "received") await settleVerifiedOrder(previous.id, paymentEventId);
+    if (previous.status === "received") {
+      const settled = await settleVerifiedOrder(previous.id, paymentEventId);
+      if (settled?.status === "paid") {
+        void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+          .catch((error) => logger.warn({ err: error, orderId: previous.id }, "could not notify admin about activated key"));
+      }
+    }
     return;
   }
   const receivedAt = transferTime(payload.transactionDate);
@@ -38,10 +44,9 @@ export async function receiveSePayTransfer(payload: SePayWebhookPayload) {
       || receivedAt < order.createdAt.getTime() - 120_000
       || receivedAt > order.createdAt.getTime() + ORDER_LIFETIME_MS) continue;
     const paid = await settleVerifiedOrder(order.id, paymentEventId);
-    if (paid?.status === "received") {
-      logger.warn({ orderId: order.id }, "SePay payment received but activation needs manual attention");
-      void notifyPurchaseOrder(`SePay đã xác minh tiền vào cho đơn ${order.reference}, nhưng chưa kích hoạt được (${paid.rejectionReason ?? "cần xử lý"}). Kiểm tra kho key/gói và giao dịch thực nhận.`)
-        .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about unfulfilled payment"));
+    if (paid?.status === "paid") {
+      void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${paid.reference} · Gói ${paid.plan.toUpperCase()} · ${paid.durationDays} ngày`)
+        .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
     }
     return;
   }

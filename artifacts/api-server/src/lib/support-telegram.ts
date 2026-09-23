@@ -126,6 +126,9 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
     const order = await reviewOrder(parts[2], String(query.from!.id), parts[1] as "paid" | "rejected");
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: order?.status === "paid" ? "Đã duyệt" : "Đã từ chối" });
     if (order) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
+    if (order?.status === "paid") {
+      await notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${order.reference} · Gói ${order.plan.toUpperCase()} · ${order.durationDays} ngày`);
+    }
   } catch (error) {
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không thể xử lý đơn", show_alert: true });
     logger.warn({ err: error, callbackId: query.id }, "Purchase callback review failed");

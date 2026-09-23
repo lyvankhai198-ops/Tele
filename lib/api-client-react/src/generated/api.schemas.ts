@@ -1300,6 +1300,7 @@ export const PurchaseOrderStatus = {
   paid: 'paid',
   expired: 'expired',
   rejected: 'rejected',
+  cancelled: 'cancelled',
 } as const;
 
 export interface PurchaseOrder {

@@ -18,7 +18,11 @@ async function checkPayments() {
     for (const order of outstanding) {
       if (!order.paymentEventId) continue;
       try {
-        await settleVerifiedOrder(order.id, order.paymentEventId);
+        const settled = await settleVerifiedOrder(order.id, order.paymentEventId);
+        if (settled?.status === "paid") {
+          void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+            .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
+        }
       } catch (error) {
         logger.error({ err: error, orderId: order.id }, "could not fulfill previously verified payment");
         await db.update(purchaseOrdersTable).set({ updatedAt: new Date() })
@@ -46,10 +50,10 @@ async function checkPayments() {
         });
         if (result.confirmed) {
           const settled = await settleVerifiedOrder(order.id, `${order.network}:${order.txHash}`);
-          if (settled?.status === "received") {
-            void notifyPurchaseOrder(`USDT đã xác minh trên chuỗi cho đơn ${order.reference}, nhưng chưa kích hoạt được (${settled.rejectionReason ?? "cần xử lý"}). Kiểm tra kho key/gói hoặc hoàn tiền.`)
-              .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about unfulfilled USDT payment"));
-          }
+           if (settled?.status === "paid") {
+             void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${settled.reference} · Gói ${settled.plan.toUpperCase()} · ${settled.durationDays} ngày`)
+               .catch((error) => logger.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
+           }
         } else {
           await db.update(purchaseOrdersTable).set({ updatedAt: new Date() })
             .where(and(eq(purchaseOrdersTable.id, order.id), eq(purchaseOrdersTable.txHash, order.txHash)));

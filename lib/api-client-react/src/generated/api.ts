@@ -4942,6 +4942,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getSubmitPurchaseOrderProofMutationOptions(options));
     }
 
+export const getCancelPurchaseOrderUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/purchase-orders/${orderId}/cancel`
+}
+
+export const cancelPurchaseOrder = async (orderId: string, options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getCancelPurchaseOrderUrl(orderId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelPurchaseOrderMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPurchaseOrder>>, TError,{orderId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelPurchaseOrder>>, TError,{orderId: string}, TContext> => {
+
+const mutationKey = ['cancelPurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelPurchaseOrder>>, {orderId: string}> = (props) => {
+          const {orderId} = props ?? {};
+
+          return  cancelPurchaseOrder(orderId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelPurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof cancelPurchaseOrder>>>
+
+    export type CancelPurchaseOrderMutationError = ErrorType<void>
+
+    export const useCancelPurchaseOrder = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPurchaseOrder>>, TError,{orderId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelPurchaseOrder>>,
+        TError,
+        {orderId: string},
+        TContext
+      > => {
+      return useMutation(getCancelPurchaseOrderMutationOptions(options));
+    }
+
 export const getListAdminPurchaseOrdersUrl = () => {
 
 

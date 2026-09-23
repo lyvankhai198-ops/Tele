@@ -111,8 +111,7 @@ import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
-import { createOrder, getOrderSettings, listOrders, updateOrderProof } from "../lib/telecampaign-orders";
-import { notifyPurchaseOrder } from "../lib/support-telegram";
+import { cancelOrder, createOrder, getOrderSettings, listOrders, updateOrderProof } from "../lib/telecampaign-orders";
 import {
   confirmTelegramPhoneCode,
   confirmTelegramTwoFactorPassword,
@@ -690,7 +689,22 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
     res.status(201).json(order);
   } catch (error) {
     if (error instanceof Error && ["PLAN_PRICE_NOT_CONFIGURED", "INVALID_PAYMENT_AMOUNT", "PAYMENT_DESTINATION_NOT_CONFIGURED", "INVALID_PLAN_DURATION", "PLAN_DOWNGRADE_NOT_ALLOWED", "LICENSE_STOCK_EMPTY", "PAYMENT_AUTOMATION_NOT_CONFIGURED"].includes(error.message)) { res.status(400).json({ error: error.message }); return; }
+    if (error instanceof Error && error.message === "ACTIVE_PAYMENT_EXISTS") { res.status(409).json({ error: error.message }); return; }
     res.status(400).json({ error: "Invalid payment method" });
+  }
+});
+router.post("/purchase-orders/:orderId/cancel", async (req, res): Promise<void> => {
+  if (req.supportSession) { res.status(403).json({ error: "Support sessions cannot cancel purchase orders" }); return; }
+  try {
+    const order = await cancelOrder(req.params.orderId, currentUserId(req));
+    if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+    res.json(order);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ORDER_CANNOT_BE_CANCELLED") {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+    throw error;
   }
 });
 router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> => {
@@ -701,11 +715,6 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
   try { order = await updateOrderProof(req.params.orderId, currentUserId(req), value.txHash, value.proofInfo); }
   catch (error) { if (error instanceof Error && error.message === "TX_HASH_ALREADY_SUBMITTED") { res.status(409).json({ error: "Transaction hash already submitted" }); return; } throw error; }
   if (!order) { res.status(409).json({ error: "Order is expired or cannot accept a transaction hash" }); return; }
-  await notifyPurchaseOrder(order.automated && order.currency === "VND"
-    ? `🏦 Khách xác nhận đã chuyển khoản user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} VND. Hệ thống đang tự đối soát; không cần duyệt thủ công.`
-    : order.automated
-      ? `🔎 Đang xác minh giao dịch USDT trên chuỗi user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network}. Chưa kích hoạt khi chỉ có TxHash.`
-      : `🏦 Khách báo giao dịch đơn cũ user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency}. Cần đối chiếu thủ công trước khi duyệt.`, order.automated ? undefined : order.id);
   res.json(order);
 });
 router.use((req, res, next): void => {

@@ -292,12 +292,13 @@ export function AdminPurchaseOrders() {
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge
-                      status={order.status === "paid" ? "success" : order.status === "rejected" || order.status === "expired" ? "failed" : "warning"}
+                       status={order.status === "paid" ? "success" : order.status === "rejected" || order.status === "expired" || order.status === "cancelled" ? "failed" : "warning"}
                       label={order.status === "paid" ? (language === "vi" ? "Đã kích hoạt" : "Activated")
                         : order.status === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
                           ? (language === "vi" ? "Đã nhận tiền, cần xử lý gói" : "Paid, plan conflict")
                           : (language === "vi" ? "Đã nhận tiền, chờ key" : "Paid, awaiting key"))
-                        : order.status === "expired" ? (language === "vi" ? "Hết hạn" : "Expired")
+                         : order.status === "expired" ? (language === "vi" ? "Hết hạn" : "Expired")
+                         : order.status === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled")
                         : order.status === "rejected" ? (language === "vi" ? "Từ chối" : "Rejected")
                         : (language === "vi" ? "Chờ xác minh" : "Verifying")}
                     />
@@ -310,7 +311,7 @@ export function AdminPurchaseOrders() {
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    {order.status === "pending" && !order.automated && (
+                     {(order.status === "received" || (order.status === "pending" && !order.automated)) && (
                       <button
                         onClick={() => { setReviewOrder(order); setReviewDecision("paid"); }}
                         className="bg-white border border-[#cbd5e1] text-[#0f172a] px-3 py-1.5 rounded-lg text-[13px] font-bold hover:bg-[#f8fafc]"

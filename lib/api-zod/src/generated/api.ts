@@ -1614,7 +1614,7 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1643,7 +1643,7 @@ export const CreatePurchaseOrderResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1680,7 +1680,33 @@ export const SubmitPurchaseOrderProofResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "activatedLicenseKeyId": zod.string().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const CancelPurchaseOrderParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const CancelPurchaseOrderResponse = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "automated": zod.boolean().optional(),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1702,7 +1728,7 @@ export const ListAdminPurchaseOrdersResponseItem = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1796,7 +1822,7 @@ export const ReviewPurchaseOrderResponse = zod.object({
   "txHash": zod.string().nullish(),
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),

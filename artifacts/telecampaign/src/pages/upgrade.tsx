@@ -6,7 +6,7 @@ import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, Copy, Hourglass } from "lucide-react";
 import {
   useGetUpgradeSummary, getGetUpgradeSummaryQueryKey, useActivateLicense,
-  useGetPurchaseOrderSettings, useListPurchaseOrders, useCreatePurchaseOrder, useSubmitPurchaseOrderProof, getListPurchaseOrdersQueryKey
+  useGetPurchaseOrderSettings, useListPurchaseOrders, useCreatePurchaseOrder, useSubmitPurchaseOrderProof, useCancelPurchaseOrder, getListPurchaseOrdersQueryKey
 } from "@workspace/api-client-react";
 import QRCode from "qrcode";
 
@@ -17,6 +17,7 @@ const getDerivedStatus = (order: any) => {
   if (order.status === "paid") return "paid";
   if (order.status === "received") return "received";
   if (order.status === "expired") return "expired";
+  if (order.status === "cancelled") return "cancelled";
   if (order.txHash) return "verifying";
   if (!order.automated) return "pending";
   const expiresAt = new Date(order.createdAt).getTime() + 10 * 60 * 1000;
@@ -82,6 +83,7 @@ export default function Upgrade() {
   const activateMutation = useActivateLicense();
   const createOrderMutation = useCreatePurchaseOrder();
   const submitProofMutation = useSubmitPurchaseOrderProof();
+  const cancelOrderMutation = useCancelPurchaseOrder();
 
   const [selectedPlanToConfirm, setSelectedPlanToConfirm] = useState<string | null>(null);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
@@ -134,6 +136,19 @@ export default function Upgrade() {
 
   const handleCreateOrder = () => {
     if (!checkoutPlan) return;
+    const activeOrder = purchaseOrders?.find((order) =>
+      order.automated && order.status === "pending"
+      && new Date(order.createdAt).getTime() + 10 * 60 * 1000 > Date.now()
+    );
+    if (activeOrder) {
+      setToastMessage({
+        title: language === "vi"
+          ? "Bạn đang có một đơn thanh toán đang chờ. Hãy hoàn tất, hủy đơn hoặc chờ hết thời gian trước khi tạo đơn mới."
+          : "You already have a pending payment. Complete it, cancel it, or wait for it to expire before creating a new order.",
+        type: "error",
+      });
+      return;
+    }
     createOrderMutation.mutate({
       data: {
         plan: checkoutPlan.toUpperCase() as any,
@@ -153,7 +168,7 @@ export default function Upgrade() {
   };
 
   const handleSubmitProof = () => {
-    if (!currentOrder) return;
+    if (!currentOrder || currentOrder.currency !== "USDT") return;
     submitProofMutation.mutate({
       orderId: currentOrder.id,
       data: {
@@ -172,6 +187,22 @@ export default function Upgrade() {
       onError: (err) => {
         setToastMessage({ title: t("Could not submit proof"), type: "error" });
       }
+    });
+  };
+
+  const handleCancelOrder = () => {
+    if (!currentOrder) return;
+    cancelOrderMutation.mutate({ orderId: currentOrder.id }, {
+      onSuccess: () => {
+        setToastMessage({ title: language === "vi" ? "Đã hủy đơn thanh toán." : "Payment order cancelled.", type: "success" });
+        queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+        setCheckoutPlan(null);
+        setCreatedOrder(null);
+        setTxHash("");
+      },
+      onError: () => {
+        setToastMessage({ title: language === "vi" ? "Không thể hủy đơn này." : "This order cannot be cancelled.", type: "error" });
+      },
     });
   };
 
@@ -233,6 +264,10 @@ export default function Upgrade() {
 
   const { plans, subscription } = summary;
   const sortedPlans = [...plans].sort((a, b) => (planOrder[a.code] || 0) - (planOrder[b.code] || 0));
+  const activeAutomatedOrder = purchaseOrders?.find((order) =>
+    order.automated && order.status === "pending"
+    && new Date(order.createdAt).getTime() + 10 * 60 * 1000 > Date.now()
+  );
   const subscriptionExpired = subscription.status === "expired";
   const currentPlanLevel = subscriptionExpired ? 0 : planOrder[subscription.plan] || 0;
   const isForever = !subscription.expiresAt;
@@ -426,15 +461,9 @@ export default function Upgrade() {
               <p className="text-[#1e3a8a] text-[13px] font-medium">
                 {language === "vi" ? "Đơn cũ được quản trị kiểm tra thủ công; mã chuyển khoản của đơn này vẫn giữ nguyên." : "This older order is reviewed manually; its transfer reference remains unchanged."}
               </p>
-              {!currentOrder.proofInfo && (
-                <button type="button" onClick={handleSubmitProof} disabled={submitProofMutation.isPending}
-                  className="bg-[#1a2b88] text-white font-bold px-4 py-3 rounded-xl disabled:opacity-50">
-                  {language === "vi" ? "Tôi đã chuyển khoản" : "I have transferred"}
-                </button>
-              )}
             </div>
           ) : !isExpired ? (
-            <div className="flex flex-col gap-2 items-center bg-[#eff6ff] p-4 rounded-2xl border border-[#bfdbfe]">
+            <div className="flex flex-col gap-3 items-center bg-[#eff6ff] p-4 rounded-2xl border border-[#bfdbfe]">
               <div className="flex items-center gap-2 text-[#1a2b88] font-extrabold text-[15px]">
                 <Hourglass className="w-5 h-5 animate-pulse" />
                 <span>
@@ -442,24 +471,14 @@ export default function Upgrade() {
                 </span>
               </div>
               <p className="text-[#1e3a8a] text-[13px] font-medium text-center">
-                {language === "vi" ? "Hệ thống đang chờ xác nhận giao dịch. Bạn có thể đóng cửa sổ này và xem lại trạng thái trong lịch sử đơn." : "The system is waiting for payment confirmation. You may close this window and check the order history later."}
+                {language === "vi"
+                  ? "Hệ thống tự động kích hoạt gói khi thanh toán thành công. Hết thời gian chờ mà gói vẫn chưa kích hoạt, vui lòng liên hệ admin support."
+                  : "The system activates your plan automatically after successful payment. If it is not activated after the waiting period, please contact admin support."}
               </p>
-              {!currentOrder.proofInfo && (
-                <button
-                  type="button"
-                  onClick={handleSubmitProof}
-                  disabled={submitProofMutation.isPending}
-                  className="mt-2 bg-[#1a2b88] text-white font-bold px-5 py-3 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {submitProofMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {language === "vi" ? "Tôi đã chuyển khoản" : "I have transferred"}
-                </button>
-              )}
-              {currentOrder.proofInfo && (
-                <p className="text-[#1e3a8a] text-[12px] font-bold text-center">
-                  {language === "vi" ? "Đã gửi xác nhận. Đang chờ hệ thống đối soát tự động." : "Confirmation sent. Waiting for automatic payment matching."}
-                </p>
-              )}
+              <button type="button" onClick={handleCancelOrder} disabled={cancelOrderMutation.isPending}
+                className="rounded-xl border border-[#be123c] px-4 py-2 text-[13px] font-extrabold text-[#be123c] disabled:opacity-50">
+                {cancelOrderMutation.isPending ? (language === "vi" ? "Đang hủy…" : "Cancelling…") : (language === "vi" ? "Hủy đơn thanh toán" : "Cancel payment order")}
+              </button>
             </div>
           ) : (
              <div className="flex flex-col gap-1 items-center bg-[#fff1f2] p-4 rounded-2xl border border-[#fecdd3]">
@@ -520,7 +539,7 @@ export default function Upgrade() {
             {language === "vi" ? "Đơn cũ: gửi TxHash để quản trị đối chiếu thủ công. Không có thời hạn 10 phút." : "Older order: submit the TxHash for manual review. No 10-minute deadline applies."}
           </div>
         ) : !isExpired ? (
-          <div className="flex flex-col gap-1 items-center">
+          <div className="flex flex-col gap-3 items-center">
             <div className="flex items-center gap-2 text-[#b45309] font-extrabold text-[16px]">
               <Hourglass className="w-5 h-5" />
               <span>
@@ -530,6 +549,15 @@ export default function Upgrade() {
             <div className="text-[#64748b] text-[13px] font-medium">
               {language === "vi" ? "Hết hạn lúc:" : "Expires at:"} {new Date(expiresAt).toLocaleTimeString()} {new Date(expiresAt).toLocaleDateString()}
             </div>
+            <p className="max-w-md text-center text-[13px] font-medium text-[#475569]">
+              {language === "vi"
+                ? "Hệ thống tự động kích hoạt gói khi thanh toán thành công. Hết thời gian chờ mà gói vẫn chưa kích hoạt, vui lòng liên hệ admin support."
+                : "The system activates your plan automatically after successful payment. If it is not activated after the waiting period, please contact admin support."}
+            </p>
+            <button type="button" onClick={handleCancelOrder} disabled={cancelOrderMutation.isPending}
+              className="rounded-xl border border-[#be123c] px-4 py-2 text-[13px] font-extrabold text-[#be123c] disabled:opacity-50">
+              {cancelOrderMutation.isPending ? (language === "vi" ? "Đang hủy…" : "Cancelling…") : (language === "vi" ? "Hủy đơn thanh toán" : "Cancel payment order")}
+            </button>
           </div>
         ) : (
           <div className="flex flex-col gap-1 items-center bg-[#fff1f2] p-3 rounded-xl border border-[#fecdd3]">
@@ -539,7 +567,7 @@ export default function Upgrade() {
           </div>
         )}
 
-        <div className="flex flex-col gap-2 mt-2">
+         <div className="flex flex-col gap-2 mt-2">
           <label className="text-[12px] font-extrabold uppercase text-[#0f172a]">Transaction Hash (TxID)</label>
           <input
             type="text"
@@ -718,8 +746,8 @@ export default function Upgrade() {
                   ))}
                 </ul>
 
-                <button
-                  disabled={isCurrent || isLower || !canPurchase}
+                 <button
+                   disabled={isCurrent || isLower || !canPurchase || Boolean(activeAutomatedOrder)}
                   onClick={() => {
                     if (canPurchase) {
                       setCheckoutPlan(plan.code);
@@ -730,11 +758,12 @@ export default function Upgrade() {
                   }}
                   data-testid={`button-select-plan-${plan.code}`}
                   className={`w-full py-4 rounded-xl font-extrabold transition-all active:scale-[0.98] ${
-                    isCurrent || isLower || !canPurchase ? btnDisabledClass : btnActiveClass
+                     isCurrent || isLower || !canPurchase || activeAutomatedOrder ? btnDisabledClass : btnActiveClass
                   }`}
                 >
                   {isCurrent ? t("Current plan") : isLower ? t("Already included") : hasPrice && !canPurchase
                     ? language === "vi" ? "Chưa có thông tin thanh toán" : "Payment details pending"
+                    : activeAutomatedOrder ? (language === "vi" ? "Đang có đơn thanh toán chờ xử lý" : "Pending payment order")
                     : t("Select this plan")}
                 </button>
               </div>
@@ -824,22 +853,6 @@ export default function Upgrade() {
                   {activateMutation.isPending ? t("Processing…") : t("Activate key")}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => document.getElementById("purchase-plans")?.scrollIntoView({ behavior: "smooth" })}
-                  disabled={!purchaseSettings || !sortedPlans.some(plan =>
-                    language === "vi"
-                      ? Number(purchaseSettings.pricesVnd?.[plan.code.toUpperCase()]) > 0 && !!purchaseSettings.vnBankCode && !!purchaseSettings.vnBankAccount
-                      : Number(purchaseSettings.pricesUsdt?.[plan.code.toUpperCase()]) > 0 && (!!purchaseSettings.usdtBep20Address || !!purchaseSettings.usdtTrc20Address)
-                  )}
-                  className="flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-[#1a2b88] bg-[#1a2b88] px-8 py-4 text-[15px] font-extrabold text-white hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                  data-testid="button-buy-on-web"
-                >
-                  <CreditCard className="h-5 w-5" />
-                  {language === "vi"
-                    ? purchaseSettings?.pricesVnd && sortedPlans.some(plan => Number(purchaseSettings.pricesVnd[plan.code.toUpperCase()]) > 0 && !!purchaseSettings.vnBankCode && !!purchaseSettings.vnBankAccount) ? "Chọn gói để mua trên web" : "Thanh toán chưa được cấu hình"
-                    : purchaseSettings?.pricesUsdt && sortedPlans.some(plan => Number(purchaseSettings.pricesUsdt[plan.code.toUpperCase()]) > 0 && (!!purchaseSettings.usdtBep20Address || !!purchaseSettings.usdtTrc20Address)) ? "Choose a plan to buy online" : "Payments are not configured"}
-                </button>
               </div>
             </form>
           </div>
@@ -873,8 +886,8 @@ export default function Upgrade() {
                           <td className="px-6 py-4 font-mono text-[13px] text-[#64748b]">{order.reference}</td>
                           <td className="px-6 py-4">
                             <StatusBadge
-                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
-                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
+                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" || orderStatus === "cancelled" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
+                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
                             />
                             {orderStatus === "paid" && (
                               <div className="text-[11px] text-[#64748b] mt-1.5 font-bold">

@@ -151,7 +151,7 @@ import {
 } from "../lib/notificationMediaStorage";
 import { getStorageStatus } from "../lib/storage-status";
 import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
-import { notifySupportConversationClosed } from "../lib/support-telegram";
+import { notifyPurchaseOrder, notifySupportConversationClosed } from "../lib/support-telegram";
 import { translateAdminReplyForCustomer } from "../lib/support-translation";
 import { getOrderSettings, listOrders, reviewOrder, saveOrderSettings } from "../lib/telecampaign-orders";
 import {
@@ -223,6 +223,10 @@ router.post("/admin/purchase-orders/:orderId/review", async (req, res): Promise<
   try { order = await reviewOrder(req.params.orderId, req.userId!, req.body.decision, req.body.reason); }
   catch (error) { if (error instanceof Error && ["PLAN_DOWNGRADE_NOT_ALLOWED", "ORDER_USER_NOT_FOUND", "AUTOMATIC_PAYMENT_NOT_VERIFIED"].includes(error.message)) { res.status(409).json({ error: error.message }); return; } throw error; }
   if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  if (order.status === "paid") {
+    void notifyPurchaseOrder(`✅ Key đã được kích hoạt\nĐơn ${order.reference} · Gói ${order.plan.toUpperCase()} · ${order.durationDays} ngày`)
+      .catch((error) => req.log.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
+  }
   res.json(order);
 });
 

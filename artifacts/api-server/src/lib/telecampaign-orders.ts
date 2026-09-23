@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { appUsersTable, db, licenseKeysTable, purchaseOrdersTable, subscriptionsTable, systemSettingsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { PLAN_ORDER } from "./subscriptions";
@@ -62,6 +62,25 @@ export async function createOrder(input: { ownerUserId: string; plan: string; cu
   const reference = `TC${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
   return db.transaction(async (tx) => {
     const now = new Date();
+    const cutoff = new Date(now.getTime() - ORDER_LIFETIME_MS);
+    const [activeOrder] = await tx.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable).where(and(
+      eq(purchaseOrdersTable.ownerUserId, input.ownerUserId),
+      eq(purchaseOrdersTable.status, "pending"),
+      gte(purchaseOrdersTable.createdAt, cutoff),
+    )).limit(1);
+    if (activeOrder) throw new Error("ACTIVE_PAYMENT_EXISTS");
+    const expiredOrders = await tx.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable).where(and(
+      eq(purchaseOrdersTable.ownerUserId, input.ownerUserId),
+      eq(purchaseOrdersTable.status, "pending"),
+      lt(purchaseOrdersTable.createdAt, cutoff),
+    ));
+    if (expiredOrders.length) {
+      const expiredIds = expiredOrders.map((order) => order.id);
+      await tx.update(purchaseOrdersTable).set({ status: "expired", updatedAt: now })
+        .where(inArray(purchaseOrdersTable.id, expiredIds));
+      await tx.update(licenseKeysTable).set({ reservedOrderId: null, reservedUntil: null })
+        .where(inArray(licenseKeysTable.reservedOrderId, expiredIds));
+    }
     const [key] = await tx.select({ id: licenseKeysTable.id }).from(licenseKeysTable).where(and(
       eq(licenseKeysTable.plan, plan.toLowerCase()),
       eq(licenseKeysTable.durationDays, durationDays),
@@ -76,9 +95,29 @@ export async function createOrder(input: { ownerUserId: string; plan: string; cu
     return order;
   });
 }
+
+export async function cancelOrder(id: string, ownerUserId: string) {
+  return db.transaction(async (tx) => {
+    const [order] = await tx.select().from(purchaseOrdersTable).where(and(
+      eq(purchaseOrdersTable.id, id),
+      eq(purchaseOrdersTable.ownerUserId, ownerUserId),
+    )).for("update");
+    if (!order) return null;
+    if (order.status !== "pending") throw new Error("ORDER_CANNOT_BE_CANCELLED");
+    const [cancelled] = await tx.update(purchaseOrdersTable).set({
+      status: "cancelled",
+      updatedAt: new Date(),
+    }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.status, "pending"))).returning();
+    if (!cancelled) throw new Error("ORDER_CANNOT_BE_CANCELLED");
+    await tx.update(licenseKeysTable).set({ reservedOrderId: null, reservedUntil: null })
+      .where(eq(licenseKeysTable.reservedOrderId, id));
+    return cancelled;
+  });
+}
 export async function updateOrderProof(id: string, ownerUserId: string, txHash?: string, proofInfo?: string) {
   const [existing] = await db.select().from(purchaseOrdersTable).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.ownerUserId, ownerUserId))).limit(1);
-  if (existing && !existing.automated && existing.currency === "VND" && !txHash) {
+  if (existing && existing.currency === "VND" && !txHash) {
+    if (existing.status !== "pending" || existing.proofInfo) return null;
     const [order] = await db.update(purchaseOrdersTable).set({ proofInfo: "Customer reported a bank transfer", updatedAt: new Date() })
       .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.ownerUserId, ownerUserId), eq(purchaseOrdersTable.status, "pending"))).returning();
     return order;
@@ -163,17 +202,15 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
 
 export async function expireUnpaidOrders() {
   const now = new Date();
-  await db.update(purchaseOrdersTable).set({ status: "expired", updatedAt: now }).where(and(
+  const expired = await db.update(purchaseOrdersTable).set({ status: "expired", updatedAt: now }).where(and(
     eq(purchaseOrdersTable.status, "pending"),
     eq(purchaseOrdersTable.automated, true),
     lt(purchaseOrdersTable.createdAt, new Date(now.getTime() - ORDER_LIFETIME_MS)),
-    isNull(purchaseOrdersTable.txHash),
-  ));
-  await db.update(purchaseOrdersTable).set({ status: "expired", updatedAt: now }).where(and(
-    eq(purchaseOrdersTable.status, "pending"),
-    eq(purchaseOrdersTable.automated, true),
-    lt(purchaseOrdersTable.createdAt, new Date(now.getTime() - 40 * 60_000)),
-  ));
+  )).returning({ id: purchaseOrdersTable.id });
+  if (expired.length) {
+    await db.update(licenseKeysTable).set({ reservedOrderId: null, reservedUntil: null })
+      .where(inArray(licenseKeysTable.reservedOrderId, expired.map((order) => order.id)));
+  }
 }
 export async function reviewOrder(id: string, adminUserId: string, decision: "paid" | "rejected", reason?: string) {
   if (decision === "paid") {
