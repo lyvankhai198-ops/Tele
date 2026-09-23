@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import {
   adminSystemEventsTable,
   appUsersTable,
@@ -801,7 +801,7 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
     const now = new Date();
     const [license] = await tx.select().from(licenseKeysTable)
       .where(eq(licenseKeysTable.keyHash, licenseKeyHash(cleanedKey))).limit(1);
-    if (!license || license.claimedAt || license.revokedAt || !isPlanCode(license.plan) || license.durationDays < 1 || license.durationDays > 3660) {
+    if (!license || license.claimedAt || license.revokedAt || (license.reservedUntil && license.reservedUntil > now) || !isPlanCode(license.plan) || license.durationDays < 1 || license.durationDays > 3660) {
       return { ok: false as const, reason: "invalid_or_used" as const };
     }
 
@@ -827,7 +827,10 @@ export async function activateLicenseForUser(ownerUserId: string, rawLicenseKey:
     const [claimed] = await tx.update(licenseKeysTable).set({
       claimedAt: now,
       claimedBy: ownerUserId,
-    }).where(and(eq(licenseKeysTable.id, license.id), isNull(licenseKeysTable.claimedAt), isNull(licenseKeysTable.revokedAt))).returning();
+      reservedOrderId: null,
+      reservedUntil: null,
+    }).where(and(eq(licenseKeysTable.id, license.id), isNull(licenseKeysTable.claimedAt), isNull(licenseKeysTable.revokedAt),
+      or(isNull(licenseKeysTable.reservedUntil), lte(licenseKeysTable.reservedUntil, now)))).returning();
     if (!claimed) return { ok: false as const, reason: "invalid_or_used" as const };
 
     const nextExpiresAt = calculateLicenseActivationExpiry({

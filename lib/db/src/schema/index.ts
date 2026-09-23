@@ -92,6 +92,9 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   reference: text("reference").notNull(),
   txHash: text("tx_hash"),
   proofInfo: text("proof_info"),
+  automated: boolean("automated").notNull().default(false),
+  paymentEventId: text("payment_event_id"),
+  activatedLicenseKeyId: uuid("activated_license_key_id").references(() => licenseKeysTable.id),
   status: text("status").notNull().default("pending"),
   reviewedBy: text("reviewed_by"),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
@@ -102,6 +105,7 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   referenceUnique: uniqueIndex("purchase_orders_reference_unique").on(table.reference),
   ownerStatusIndex: index("purchase_orders_owner_status_idx").on(table.ownerUserId, table.status),
   txHashUnique: uniqueIndex("purchase_orders_tx_hash_unique").on(table.txHash),
+  paymentEventUnique: uniqueIndex("purchase_orders_payment_event_unique").on(table.paymentEventId),
 }));
 
 export const subscriptionReminderDeliveriesTable = pgTable("subscription_reminder_deliveries", {
@@ -140,10 +144,14 @@ export const licenseKeysTable = pgTable("license_keys", {
   createdBy: text("created_by"),
   claimedAt: timestamp("claimed_at", { withTimezone: true }),
   claimedBy: text("claimed_by"),
+  reservedOrderId: uuid("reserved_order_id"),
+  reservedUntil: timestamp("reserved_until", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   revokedBy: text("revoked_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  reservedOrderUnique: uniqueIndex("license_keys_reserved_order_unique").on(table.reservedOrderId),
+}));
 
 export const authSessionsTable = pgTable("auth_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),

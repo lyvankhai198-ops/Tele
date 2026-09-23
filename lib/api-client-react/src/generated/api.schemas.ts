@@ -1296,7 +1296,9 @@ export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof Purcha
 
 export const PurchaseOrderStatus = {
   pending: 'pending',
+  received: 'received',
   paid: 'paid',
+  expired: 'expired',
   rejected: 'rejected',
 } as const;
 
@@ -1315,7 +1317,10 @@ export interface PurchaseOrder {
   txHash?: string | null;
   /** @nullable */
   proofInfo?: string | null;
+  automated?: boolean;
   status: PurchaseOrderStatus;
+  /** @nullable */
+  activatedLicenseKeyId?: string | null;
   /** @nullable */
   reviewedBy?: string | null;
   /** @nullable */

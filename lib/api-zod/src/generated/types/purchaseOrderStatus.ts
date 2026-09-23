@@ -11,6 +11,8 @@ export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof Purcha
 
 export const PurchaseOrderStatus = {
   pending: 'pending',
+  received: 'received',
   paid: 'paid',
+  expired: 'expired',
   rejected: 'rejected',
 } as const;

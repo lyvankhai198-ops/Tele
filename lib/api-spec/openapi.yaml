@@ -2624,7 +2624,9 @@ components:
         reference: { type: string }
         txHash: { type: ["string", "null"] }
         proofInfo: { type: ["string", "null"] }
-        status: { type: string, enum: [pending, paid, rejected] }
+        automated: { type: boolean }
+        status: { type: string, enum: [pending, received, paid, expired, rejected] }
+        activatedLicenseKeyId: { type: ["string", "null"] }
         reviewedBy: { type: ["string", "null"] }
         reviewedAt: { type: ["string", "null"], format: date-time }
         rejectionReason: { type: ["string", "null"] }

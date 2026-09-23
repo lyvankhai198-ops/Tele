@@ -22,7 +22,10 @@ export interface PurchaseOrder {
   txHash?: string | null;
   /** @nullable */
   proofInfo?: string | null;
+  automated?: boolean;
   status: PurchaseOrderStatus;
+  /** @nullable */
+  activatedLicenseKeyId?: string | null;
   /** @nullable */
   reviewedBy?: string | null;
   /** @nullable */

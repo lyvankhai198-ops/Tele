@@ -292,12 +292,25 @@ export function AdminPurchaseOrders() {
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge
-                      status={order.status === "paid" ? "success" : order.status === "rejected" ? "failed" : order.status === "pending" ? "warning" : "draft"}
-                      label={order.status === "paid" ? "Paid" : order.status === "rejected" ? "Rejected" : order.status === "pending" ? "Pending" : order.status}
+                      status={order.status === "paid" ? "success" : order.status === "rejected" || order.status === "expired" ? "failed" : "warning"}
+                      label={order.status === "paid" ? (language === "vi" ? "Đã kích hoạt" : "Activated")
+                        : order.status === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
+                          ? (language === "vi" ? "Đã nhận tiền, cần xử lý gói" : "Paid, plan conflict")
+                          : (language === "vi" ? "Đã nhận tiền, chờ key" : "Paid, awaiting key"))
+                        : order.status === "expired" ? (language === "vi" ? "Hết hạn" : "Expired")
+                        : order.status === "rejected" ? (language === "vi" ? "Từ chối" : "Rejected")
+                        : (language === "vi" ? "Chờ xác minh" : "Verifying")}
                     />
+                    {order.status === "received" && (
+                      <div className="mt-1 text-xs text-amber-800 max-w-56">
+                        {order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
+                          ? (language === "vi" ? "Gói thấp hơn gói đang dùng; liên hệ khách để xử lý hoặc hoàn tiền." : "Plan downgrade conflict. Contact the customer or refund.")
+                          : (language === "vi" ? "Thêm key đúng gói và thời hạn để tự kích hoạt, hoặc xử lý hoàn tiền." : "Add a matching key for automatic activation, or arrange a refund.")}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
-                    {order.status === "pending" && (
+                    {order.status === "pending" && !order.automated && (
                       <button
                         onClick={() => { setReviewOrder(order); setReviewDecision("paid"); }}
                         className="bg-white border border-[#cbd5e1] text-[#0f172a] px-3 py-1.5 rounded-lg text-[13px] font-bold hover:bg-[#f8fafc]"

@@ -221,7 +221,7 @@ router.post("/admin/purchase-orders/:orderId/review", async (req, res): Promise<
   if (!["paid", "rejected"].includes(req.body?.decision)) { res.status(400).json({ error: "Invalid decision" }); return; }
   let order;
   try { order = await reviewOrder(req.params.orderId, req.userId!, req.body.decision, req.body.reason); }
-  catch (error) { if (error instanceof Error && ["PLAN_DOWNGRADE_NOT_ALLOWED", "ORDER_USER_NOT_FOUND"].includes(error.message)) { res.status(409).json({ error: error.message }); return; } throw error; }
+  catch (error) { if (error instanceof Error && ["PLAN_DOWNGRADE_NOT_ALLOWED", "ORDER_USER_NOT_FOUND", "AUTOMATIC_PAYMENT_NOT_VERIFIED"].includes(error.message)) { res.status(409).json({ error: error.message }); return; } throw error; }
   if (!order) { res.status(404).json({ error: "Order not found" }); return; }
   res.json(order);
 });

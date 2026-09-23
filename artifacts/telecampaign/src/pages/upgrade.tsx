@@ -3,13 +3,67 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppLayout, Modal, Toast, StatusBadge } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
-import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, Copy } from "lucide-react";
+import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, Copy, Hourglass } from "lucide-react";
 import {
   useGetUpgradeSummary, getGetUpgradeSummaryQueryKey, useActivateLicense,
   useGetPurchaseOrderSettings, useListPurchaseOrders, useCreatePurchaseOrder, useSubmitPurchaseOrderProof, getListPurchaseOrdersQueryKey
 } from "@workspace/api-client-react";
+import QRCode from "qrcode";
 
 const planOrder: Record<string, number> = { plus: 1, pro: 2, unlimited: 3 };
+
+const getDerivedStatus = (order: any) => {
+  if (order.status === "rejected") return "rejected";
+  if (order.status === "paid") return "paid";
+  if (order.status === "received") return "received";
+  if (order.status === "expired") return "expired";
+  if (order.txHash) return "verifying";
+  if (!order.automated) return "pending";
+  const expiresAt = new Date(order.createdAt).getTime() + 10 * 60 * 1000;
+  if (Date.now() > expiresAt) return "expired";
+  return "pending";
+};
+
+const QRCodeDisplay = ({ value }: { value: string }) => {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    if (value) {
+      QRCode.toDataURL(value, { width: 300, margin: 1, color: { dark: "#0f172a", light: "#ffffff" } })
+        .then(setSrc)
+        .catch(() => setSrc(""));
+    }
+  }, [value]);
+
+  if (!src) return <div className="w-[180px] h-[180px] bg-[#f1f5f9] animate-pulse rounded-xl mx-auto" />;
+  return <img src={src} alt="QR Code" className="w-[180px] h-auto mx-auto rounded-xl" />;
+};
+
+const OrderCountdown = ({ createdAt, onExpire }: { createdAt: string, onExpire?: () => void }) => {
+  const expiresAt = useMemo(() => new Date(createdAt).getTime() + 10 * 60 * 1000, [createdAt]);
+  const [timeLeft, setTimeLeft] = useState(() => Math.max(0, expiresAt - Date.now()));
+
+  useEffect(() => {
+    let expiredFired = false;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, expiresAt - Date.now());
+      setTimeLeft(remaining);
+      if (remaining <= 0 && !expiredFired) {
+        expiredFired = true;
+        onExpire?.();
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, onExpire]);
+
+  const m = Math.floor(timeLeft / 60000);
+  const s = Math.floor((timeLeft % 60000) / 1000);
+  return (
+    <span className="font-mono tabular-nums">
+      {String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
+    </span>
+  );
+};
 
 export default function Upgrade() {
   const { language, t } = useLanguage();
@@ -33,9 +87,9 @@ export default function Upgrade() {
   const [toastMessage, setToastMessage] = useState<{ title: string; type: "success" | "error" } | null>(null);
   const [activateError, setActivateError] = useState<Error | null>(null);
   const [activateSuccess, setActivateSuccess] = useState(false);
+  const [, setTick] = useState(0);
 
   const licenseInputRef = useRef<HTMLInputElement>(null);
-
   const lastPaidIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -61,6 +115,11 @@ export default function Upgrade() {
     setToastMessage({ title: t("Copied!"), type: "success" });
   };
 
+  const currentOrder = useMemo(() => {
+    if (!createdOrder) return null;
+    return purchaseOrders?.find(o => o.id === createdOrder.id) || createdOrder;
+  }, [createdOrder, purchaseOrders]);
+
   const handleCreateOrder = () => {
     if (!checkoutPlan) return;
     createOrderMutation.mutate({
@@ -76,26 +135,23 @@ export default function Upgrade() {
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       },
       onError: (err) => {
-        setToastMessage({ title: t("Could not create order"), type: "error" });
+        setToastMessage({ title: language === "vi" ? "Không thể tạo đơn. Kiểm tra giá, thông tin nhận tiền và số key còn trống đúng gói." : "Cannot create order. Check pricing, payment details and matching license-key stock.", type: "error" });
       }
     });
   };
 
   const handleSubmitProof = () => {
-    if (!createdOrder) return;
+    if (!currentOrder) return;
     submitProofMutation.mutate({
-      orderId: createdOrder.id,
+      orderId: currentOrder.id,
       data: {
-        txHash: createdOrder.currency === "USDT" ? txHash.trim() : undefined,
+        txHash: currentOrder.currency === "USDT" ? txHash.trim() : undefined,
       }
     }, {
       onSuccess: () => {
-        setToastMessage({ title: createdOrder.currency === "VND"
-          ? (language === "vi" ? "Đã báo chuyển khoản. Quản trị sẽ kiểm tra tiền thực nhận." : "Transfer reported. An admin will verify the received payment.")
-          : t("Proof submitted successfully"), type: "success" });
-        setCheckoutPlan(null);
-        setCreatedOrder(null);
-        setTxHash("");
+        setToastMessage({ title: currentOrder.automated
+          ? (language === "vi" ? "Đã ghi nhận TxHash, đang xác minh trên blockchain." : "TxHash recorded. Verifying on-chain.")
+          : (language === "vi" ? "Đã báo quản trị kiểm tra đơn cũ." : "An admin will review this older order."), type: "success" });
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       },
       onError: (err) => {
@@ -107,17 +163,7 @@ export default function Upgrade() {
   const formatVnd = (val: number | string) => new Intl.NumberFormat("vi-VN").format(Number(val)) + " đ";
   const formatUsdt = (val: number | string) => new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(Number(val)) + " USDT";
 
-  let destBank = "", destBankCode = "", destAccount = "", destName = "";
-  if (createdOrder && createdOrder.currency === "VND") {
-    const parts = (createdOrder.paymentDestination || "").split("|");
-    destBankCode = parts[0] || "";
-    destBank = parts[1] || "";
-    destAccount = parts[2] || "";
-    destName = parts[3] || "";
-  }
-
   const renderVietQr = (bank: string, acc: string, name: string, amount: string, reference: string) => {
-    // Some saved bank settings contain the SWIFT code rather than the VietQR bank code.
     const vietQrBank = bank.trim().toUpperCase() === "MSCBVNVX" ? "MB" : bank.trim().toUpperCase();
     const encodedName = encodeURIComponent(name);
     const encodedRef = encodeURIComponent(reference);
@@ -126,7 +172,6 @@ export default function Upgrade() {
 
   const handleActivate = () => {
     if (licenseKey.length < 8) return;
-
     setActivateError(null);
     setActivateSuccess(false);
 
@@ -190,6 +235,308 @@ export default function Upgrade() {
     if (error?.status === 409) return t("Invalid or already used activation code.");
     return localizedErrorMessage(activateError, language, t("Invalid or already used activation code."));
   })();
+
+  const renderCheckoutModalContent = () => {
+    if (!currentOrder) {
+      return (
+        <div className="py-2 flex flex-col gap-6" data-testid="modal-create-order">
+          <div className="bg-[#f8fafc] rounded-2xl p-5 border border-[#e2e8f0]">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[#64748b] text-[14px] font-bold">{t("Plan")}</span>
+              <span className="text-[#0f172a] text-[16px] font-extrabold uppercase tracking-tight">{checkoutPlan}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[#64748b] text-[14px] font-bold">{t("Price")}</span>
+              <span className="text-[#1a2b88] text-[18px] font-extrabold">
+                {checkoutCurrency === "VND"
+                  ? formatVnd(purchaseSettings?.pricesVnd[checkoutPlan?.toUpperCase() || ""] || 0)
+                  : formatUsdt(purchaseSettings?.pricesUsdt[checkoutPlan?.toUpperCase() || ""] || 0)}
+              </span>
+            </div>
+          </div>
+
+          {checkoutCurrency === "USDT" && purchaseSettings && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[13px] font-extrabold text-[#475569] uppercase tracking-wider">{t("Select network")}</label>
+              <div className="flex gap-3">
+                <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 transition-colors ${purchaseSettings.usdtBep20Address ? "cursor-pointer" : "cursor-not-allowed opacity-40"} ${checkoutNetwork === "BEP20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
+                  <input type="radio" name="network" value="BEP20" disabled={!purchaseSettings.usdtBep20Address} checked={checkoutNetwork === "BEP20"} onChange={() => setCheckoutNetwork("BEP20")} className="hidden" />
+                  <span className="font-bold">BSC (BEP20)</span>
+                </label>
+                <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 transition-colors ${purchaseSettings.usdtTrc20Address ? "cursor-pointer" : "cursor-not-allowed opacity-40"} ${checkoutNetwork === "TRC20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
+                  <input type="radio" name="network" value="TRC20" disabled={!purchaseSettings.usdtTrc20Address} checked={checkoutNetwork === "TRC20"} onChange={() => setCheckoutNetwork("TRC20")} className="hidden" />
+                  <span className="font-bold">Tron (TRC20)</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handleCreateOrder}
+            disabled={createOrderMutation.isPending}
+            data-testid="button-create-order"
+            className="w-full bg-[#1a2b88] text-white py-4 rounded-xl font-extrabold text-[15px] hover:bg-[#152473] transition-colors shadow-sm flex items-center justify-center gap-2 mt-2"
+          >
+            {createOrderMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
+            {t("Create Order")}
+          </button>
+        </div>
+      );
+    }
+
+    const derivedStatus = getDerivedStatus(currentOrder);
+    const isAutomated = currentOrder.automated === true;
+    const expiresAt = new Date(currentOrder.createdAt).getTime() + 10 * 60 * 1000;
+    const isExpired = isAutomated && Date.now() > expiresAt;
+
+    if (derivedStatus === 'paid') {
+      return (
+        <div className="text-center py-10 px-4">
+          <CheckCircle2 className="w-16 h-16 text-[#10b981] mx-auto mb-4" />
+          <h3 className="text-[22px] font-extrabold text-[#0f172a] mb-2">{language === "vi" ? "Thanh toán thành công" : "Payment Successful"}</h3>
+          <p className="text-[#64748b] text-[15px] mb-8 font-medium">
+            {language === "vi" ? "Gói của bạn đã được kích hoạt thành công." : "Your plan has been activated successfully."}
+          </p>
+          <button onClick={() => { setCheckoutPlan(null); setCreatedOrder(null); setTxHash(""); }} className="w-full py-4 rounded-xl border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] transition-colors bg-white">
+            {t("Close")}
+          </button>
+        </div>
+      );
+    }
+
+    if (derivedStatus === 'received' || derivedStatus === 'verifying') {
+      return (
+        <div className="text-center py-10 px-4">
+           <Hourglass className="w-16 h-16 text-[#f59e0b] mx-auto mb-4" />
+           <h3 className="text-[20px] font-extrabold text-[#0f172a] mb-2">
+             {derivedStatus === "received"
+               ? (currentOrder.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
+                 ? (language === "vi" ? "Đã nhận tiền, cần xử lý gói" : "Payment received, plan needs review")
+                 : (language === "vi" ? "Đã nhận tiền, chờ key" : "Payment received, awaiting key"))
+               : !isAutomated
+                 ? (language === "vi" ? "Chờ quản trị kiểm tra" : "Awaiting admin review")
+                 : (language === "vi" ? "Đang xác minh USDT" : "Verifying USDT")}
+           </h3>
+           <p className="text-[#475569] text-[14px] leading-relaxed mb-8">
+             {derivedStatus === "received"
+               ? (currentOrder.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
+                 ? (language === "vi" ? "Đã nhận tiền nhưng gói này thấp hơn gói đang hoạt động. Chưa kích hoạt; quản trị cần xử lý hoặc hoàn tiền." : "Payment received, but this plan is lower than your active plan. An admin must resolve or refund it.")
+                 : (language === "vi" ? "Giao dịch đã được xác minh, nhưng hiện chưa có key phù hợp. Gói chưa kích hoạt; quản trị sẽ được thông báo." : "Payment is verified but no matching key is available yet. Your plan is not active."))
+               : !isAutomated
+                 ? (language === "vi" ? "Đơn cũ đang chờ quản trị kiểm tra tiền thực nhận. TxHash không tự kích hoạt gói." : "This older order awaits manual review. A TxHash alone will not activate the plan.")
+                 : (language === "vi" ? "TxHash không phải bằng chứng thanh toán. Hệ thống đang kiểm tra ví nhận, token, số tiền và xác nhận trên blockchain." : "A TxHash alone is not proof of payment. The system is verifying recipient, token, amount and chain confirmations.")}
+           </p>
+           <button
+             onClick={() => {
+               setCheckoutPlan(null);
+               setCreatedOrder(null);
+               setTxHash("");
+             }}
+             className="w-full py-4 rounded-xl border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] transition-colors bg-white"
+           >
+             {t("Close")}
+           </button>
+        </div>
+      );
+    }
+
+    if (currentOrder.currency === 'VND') {
+      let destBankCode = "", destBank = "", destAccount = "", destName = "";
+      if (currentOrder.paymentDestination) {
+        const parts = currentOrder.paymentDestination.split("|");
+        destBankCode = parts[0] || "";
+        destBank = parts[1] || "";
+        destAccount = parts[2] || "";
+        destName = parts[3] || "";
+      }
+
+      return (
+        <div className="flex flex-col gap-5 py-2">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center bg-[#eff6ff] text-[#1a2b88] p-4 rounded-full mb-3">
+              <CreditCard className="h-7 w-7" strokeWidth={2} />
+            </div>
+            <h3 className="text-[18px] font-extrabold text-[#0f172a] mb-1">{t("Transfer Info")}</h3>
+            <p className="text-[#64748b] text-[13px] font-medium">
+              {language === "vi" ? "Vui lòng chuyển khoản đúng số tiền và nội dung." : "Please transfer exactly with the reference below."}
+            </p>
+          </div>
+
+          <div className="bg-[#f8fafc] rounded-2xl p-5 border border-[#e2e8f0] flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Amount")}</span>
+              <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-xl px-4 py-3">
+                <span className="text-[#1a2b88] text-[18px] font-extrabold">
+                  {formatVnd(currentOrder.amount)}
+                </span>
+                <button onClick={() => handleCopy(String(Number(currentOrder.amount)))} className="text-[#64748b] hover:text-[#1a2b88] bg-[#f1f5f9] p-2 rounded-lg"><Copy className="h-4 w-4" /></button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Transfer Reference")}</span>
+              <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-xl px-4 py-3">
+                <span className="text-[#1a2b88] text-[18px] font-extrabold tracking-wider">{currentOrder.reference}</span>
+                <button onClick={() => handleCopy(currentOrder.reference)} className="text-[#64748b] hover:text-[#1a2b88] bg-[#f1f5f9] p-2 rounded-lg"><Copy className="h-4 w-4" /></button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Bank Account")}</span>
+              <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-xl px-4 py-3">
+                <div>
+                  <div className="text-[#0f172a] text-[15px] font-bold">{destAccount}</div>
+                  <div className="text-[#64748b] text-[12px] font-medium">{destBank} • {destName}</div>
+                </div>
+                <button onClick={() => handleCopy(destAccount)} className="text-[#64748b] hover:text-[#1a2b88] bg-[#f1f5f9] p-2 rounded-lg"><Copy className="h-4 w-4" /></button>
+              </div>
+            </div>
+
+            {destBankCode && destAccount && !qrFailed && (
+              <div className="mt-2 flex justify-center bg-white p-2 rounded-2xl border-2 border-[#e2e8f0]">
+                <img
+                  src={renderVietQr(destBankCode, destAccount, destName, String(Number(currentOrder.amount)), currentOrder.reference)}
+                  alt="VietQR"
+                  onError={() => setQrFailed(true)}
+                  className="w-[200px] h-auto rounded-lg"
+                />
+              </div>
+            )}
+          </div>
+
+          {!isAutomated ? (
+            <div className="flex flex-col gap-3 bg-[#eff6ff] p-4 rounded-2xl border border-[#bfdbfe] text-center">
+              <p className="text-[#1e3a8a] text-[13px] font-medium">
+                {language === "vi" ? "Đơn cũ được quản trị kiểm tra thủ công; mã chuyển khoản của đơn này vẫn giữ nguyên." : "This older order is reviewed manually; its transfer reference remains unchanged."}
+              </p>
+              {!currentOrder.proofInfo && (
+                <button type="button" onClick={handleSubmitProof} disabled={submitProofMutation.isPending}
+                  className="bg-[#1a2b88] text-white font-bold px-4 py-3 rounded-xl disabled:opacity-50">
+                  {language === "vi" ? "Tôi đã chuyển khoản" : "I have transferred"}
+                </button>
+              )}
+            </div>
+          ) : !isExpired ? (
+            <div className="flex flex-col gap-2 items-center bg-[#eff6ff] p-4 rounded-2xl border border-[#bfdbfe]">
+              <div className="flex items-center gap-2 text-[#1a2b88] font-extrabold text-[15px]">
+                <Hourglass className="w-5 h-5 animate-pulse" />
+                <span>
+                  <OrderCountdown createdAt={currentOrder.createdAt} onExpire={() => setTick(t => t+1)} />
+                </span>
+              </div>
+              <p className="text-[#1e3a8a] text-[13px] font-medium text-center">
+                {language === "vi" ? "SePay đang chờ giao dịch đến. Bạn có thể đóng cửa sổ này và xem lại trạng thái trong lịch sử đơn." : "SePay is waiting for the transfer. You may close this window and check order history later."}
+              </p>
+            </div>
+          ) : (
+             <div className="flex flex-col gap-1 items-center bg-[#fff1f2] p-4 rounded-2xl border border-[#fecdd3]">
+               <span className="text-[#e11d48] font-extrabold text-[15px]">
+                 {language === "vi" ? "Đơn hàng đã hết hạn" : "Order has expired"}
+               </span>
+            </div>
+          )}
+
+          <button
+            onClick={() => { setCheckoutPlan(null); setCreatedOrder(null); setTxHash(""); }}
+            className="w-full py-4 rounded-xl border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] transition-colors bg-white mt-2"
+          >
+            {t("Close")}
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col gap-5 py-2">
+        <p className="text-[#1a2b88] text-[14px] font-bold text-center px-4">
+          {language === "vi"
+            ? `Chỉ gửi đúng ${formatUsdt(currentOrder.amount)} trên mạng ${currentOrder.network} đến ví dưới đây. Sau đó nhập TxHash để hệ thống xác minh.`
+            : `Send exactly ${formatUsdt(currentOrder.amount)} on ${currentOrder.network} to the wallet below, then submit the TxHash for verification.`}
+        </p>
+
+        <div className="bg-[#f8fafc] rounded-2xl p-4 border border-[#e2e8f0] flex flex-col items-center gap-4">
+          <div className="w-full bg-white rounded-xl border border-[#e2e8f0] p-4">
+            <div className="flex justify-between items-center mb-3 pb-3 border-b border-[#f1f5f9]">
+              <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Network")}</span>
+              <span className="text-[#0f172a] text-[14px] font-extrabold">{currentOrder.network} · {formatUsdt(currentOrder.amount)}</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("USDT Address")}</span>
+              <div className="flex items-center gap-2">
+                 <span className="text-[#0f172a] text-[13px] font-bold font-mono break-all bg-[#f8fafc] p-3 rounded-lg border border-[#e2e8f0] flex-1 leading-tight">
+                   {currentOrder.paymentDestination}
+                 </span>
+                 <button onClick={() => handleCopy(currentOrder.paymentDestination)} className="text-[#64748b] hover:text-[#1a2b88] bg-[#f1f5f9] p-3 rounded-lg shrink-0"><Copy className="h-5 w-5" /></button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-2 rounded-2xl border-2 border-[#e2e8f0]">
+            <QRCodeDisplay key={`${currentOrder.network}:${currentOrder.paymentDestination}`} value={currentOrder.paymentDestination} />
+          </div>
+
+          <p className="text-[#c2410c] text-[13px] font-bold text-center px-4">
+            {language === "vi"
+              ? "Sau khi chuyển, vui lòng nhập Transaction Hash (TxID) để xác nhận."
+              : "After transferring, please enter the Transaction Hash (TxID) to confirm."}
+          </p>
+        </div>
+
+        {!isAutomated ? (
+          <div className="text-[#475569] text-[13px] text-center bg-[#f8fafc] p-3 rounded-xl">
+            {language === "vi" ? "Đơn cũ: gửi TxHash để quản trị đối chiếu thủ công. Không có thời hạn 10 phút." : "Older order: submit the TxHash for manual review. No 10-minute deadline applies."}
+          </div>
+        ) : !isExpired ? (
+          <div className="flex flex-col gap-1 items-center">
+            <div className="flex items-center gap-2 text-[#b45309] font-extrabold text-[16px]">
+              <Hourglass className="w-5 h-5" />
+              <span>
+                {language === "vi" ? "Hạn chuyển tiền:" : "Transfer deadline:"} <OrderCountdown createdAt={currentOrder.createdAt} onExpire={() => setTick(t => t+1)} />
+              </span>
+            </div>
+            <div className="text-[#64748b] text-[13px] font-medium">
+              {language === "vi" ? "Hết hạn lúc:" : "Expires at:"} {new Date(expiresAt).toLocaleTimeString()} {new Date(expiresAt).toLocaleDateString()}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1 items-center bg-[#fff1f2] p-3 rounded-xl border border-[#fecdd3]">
+             <span className="text-[#e11d48] font-extrabold text-[15px]">
+               {language === "vi" ? "Đơn hàng đã hết hạn" : "Order has expired"}
+             </span>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 mt-2">
+          <label className="text-[12px] font-extrabold uppercase text-[#0f172a]">Transaction Hash (TxID)</label>
+          <input
+            type="text"
+            placeholder="0xabc123..."
+            value={txHash}
+            onChange={(e) => setTxHash(e.target.value)}
+            disabled={isExpired || submitProofMutation.isPending}
+            className="w-full border-2 border-[#e2e8f0] bg-[#f8fafc] rounded-xl px-4 py-3.5 text-[15px] font-mono outline-none focus:border-[#1a2b88] focus:bg-white transition-colors disabled:opacity-50"
+          />
+        </div>
+
+        <div className="flex gap-3 mt-2">
+          <button
+            onClick={() => { setCheckoutPlan(null); setCreatedOrder(null); setTxHash(""); }}
+            className="flex-[1] py-4 rounded-xl border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] transition-colors bg-white"
+          >
+            {language === "vi" ? "Đóng" : "Close"}
+          </button>
+          <button
+            onClick={handleSubmitProof}
+            disabled={submitProofMutation.isPending || isExpired || !txHash.trim()}
+            className="flex-[2] py-4 rounded-xl bg-[#1a2b88] text-white font-extrabold hover:bg-[#152473] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+          >
+            {submitProofMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
+            {language === "vi" ? "Gửi TxHash để xác minh" : "Submit TxHash for verification"}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <AppLayout activePage="upgrade" title={t("Upgrade plan")}>
@@ -464,6 +811,7 @@ export default function Upgrade() {
             </form>
           </div>
         </div>
+
         {/* Purchase Orders History */}
         {purchaseOrders && purchaseOrders.length > 0 && (
           <div className="mb-12">
@@ -477,38 +825,46 @@ export default function Upgrade() {
                       <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Amount")}</th>
                       <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Transfer Reference")}</th>
                       <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Status")}</th>
-                        <th className="px-6 py-4" />
+                      <th className="px-6 py-4" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#f1f5f9]">
-                    {purchaseOrders.map((order) => (
-                      <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
-                        <td className="px-6 py-4 font-extrabold text-[#0f172a] uppercase">{order.plan}</td>
-                        <td className="px-6 py-4 font-bold text-[#475569]">
-                          {order.currency === "VND" ? formatVnd(order.amount) : formatUsdt(order.amount)}
-                        </td>
-                        <td className="px-6 py-4 font-mono text-[13px] text-[#64748b]">{order.reference}</td>
-                        <td className="px-6 py-4">
-                          <StatusBadge
-                            status={order.status === "paid" ? "success" : order.status === "rejected" ? "failed" : order.status === "pending" ? "warning" : "draft"}
-                            label={order.status === "paid" ? t("Approved") : order.status === "rejected" ? t("Rejected") : t("Pending")}
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          {order.status === "pending" && (
-                            <button type="button" onClick={() => {
-                              setCheckoutPlan(order.plan.toLowerCase());
-                              setCheckoutCurrency(order.currency as "VND" | "USDT");
-                              setCheckoutNetwork((order.network || "BEP20") as "BEP20" | "TRC20");
-                              setCreatedOrder(order);
-                              setQrFailed(false);
-                            }} className="text-[#1a2b88] font-bold whitespace-nowrap underline" data-testid={`button-view-order-${order.id}`}>
-                              {language === "vi" ? "Xem chuyển khoản" : "View payment"}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {purchaseOrders.map((order) => {
+                      const orderStatus = getDerivedStatus(order);
+                      return (
+                        <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
+                          <td className="px-6 py-4 font-extrabold text-[#0f172a] uppercase">{order.plan}</td>
+                          <td className="px-6 py-4 font-bold text-[#475569]">
+                            {order.currency === "VND" ? formatVnd(order.amount) : formatUsdt(order.amount)}
+                          </td>
+                          <td className="px-6 py-4 font-mono text-[13px] text-[#64748b]">{order.reference}</td>
+                          <td className="px-6 py-4">
+                            <StatusBadge
+                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
+                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
+                            />
+                            {orderStatus === "paid" && (
+                              <div className="text-[11px] text-[#64748b] mt-1.5 font-bold">
+                                {language === "vi" ? "Đã kích hoạt" : "Activated"}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            {(orderStatus === "pending" || orderStatus === "received" || orderStatus === "verifying" || orderStatus === "paid") && (
+                              <button type="button" onClick={() => {
+                                setCheckoutPlan(order.plan.toLowerCase());
+                                setCheckoutCurrency(order.currency as "VND" | "USDT");
+                                setCheckoutNetwork((order.network || "BEP20") as "BEP20" | "TRC20");
+                                setCreatedOrder(order);
+                                setQrFailed(false);
+                              }} className="text-[#1a2b88] font-bold whitespace-nowrap underline" data-testid={`button-view-order-${order.id}`}>
+                                {language === "vi" ? "Xem đơn hàng" : "View order"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -570,176 +926,7 @@ export default function Upgrade() {
             setTxHash("");
           }}
         >
-          <div className="py-2 flex flex-col gap-6" data-testid="modal-checkout-plan">
-            {!createdOrder ? (
-              <>
-                <div className="bg-[#f8fafc] rounded-2xl p-5 border border-[#e2e8f0]">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[#64748b] text-[14px] font-bold">{t("Plan")}</span>
-                    <span className="text-[#0f172a] text-[16px] font-extrabold uppercase tracking-tight">{checkoutPlan}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[#64748b] text-[14px] font-bold">{t("Price")}</span>
-                    <span className="text-[#1a2b88] text-[18px] font-extrabold">
-                      {checkoutCurrency === "VND"
-                        ? formatVnd(purchaseSettings.pricesVnd[checkoutPlan.toUpperCase()] || 0)
-                        : formatUsdt(purchaseSettings.pricesUsdt[checkoutPlan.toUpperCase()] || 0)}
-                    </span>
-                  </div>
-                </div>
-
-                {checkoutCurrency === "USDT" && (
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[13px] font-extrabold text-[#475569] uppercase tracking-wider">{t("Select network")}</label>
-                    <div className="flex gap-3">
-                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 transition-colors ${purchaseSettings.usdtBep20Address ? "cursor-pointer" : "cursor-not-allowed opacity-40"} ${checkoutNetwork === "BEP20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
-                        <input type="radio" name="network" value="BEP20" disabled={!purchaseSettings.usdtBep20Address} checked={checkoutNetwork === "BEP20"} onChange={() => setCheckoutNetwork("BEP20")} className="hidden" />
-                        <span className="font-bold">BSC (BEP20)</span>
-                      </label>
-                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 transition-colors ${purchaseSettings.usdtTrc20Address ? "cursor-pointer" : "cursor-not-allowed opacity-40"} ${checkoutNetwork === "TRC20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
-                        <input type="radio" name="network" value="TRC20" disabled={!purchaseSettings.usdtTrc20Address} checked={checkoutNetwork === "TRC20"} onChange={() => setCheckoutNetwork("TRC20")} className="hidden" />
-                        <span className="font-bold">Tron (TRC20)</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleCreateOrder}
-                  disabled={createOrderMutation.isPending}
-                  data-testid="button-create-order"
-                  className="w-full bg-[#1a2b88] text-white py-4 rounded-xl font-extrabold text-[15px] hover:bg-[#152473] transition-colors shadow-sm flex items-center justify-center gap-2"
-                >
-                  {createOrderMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
-                  {t("Create Order")}
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="text-center mb-2">
-                  <div className="inline-flex items-center justify-center bg-[#eff6ff] text-[#1a2b88] p-4 rounded-full mb-4">
-                    <CreditCard className="h-8 w-8" strokeWidth={2} />
-                  </div>
-                  <h3 className="text-[20px] font-extrabold text-[#0f172a]">{t("Transfer Info")}</h3>
-                  <p className="text-[#64748b] text-[14px] font-medium mt-1">
-                    {language === "vi" ? t("Please transfer the exact amount with the reference code below.") : t("Please transfer exactly to the address below.")}
-                  </p>
-                </div>
-
-                <div className="bg-[#f8fafc] rounded-2xl p-5 border border-[#e2e8f0] flex flex-col gap-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Amount")}</span>
-                    <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                      <span className="text-[#0f172a] text-[16px] font-bold">
-                        {createdOrder.currency === "VND" ? formatVnd(createdOrder.amount) : formatUsdt(createdOrder.amount)}
-                      </span>
-                      <button onClick={() => handleCopy(createdOrder.currency === "VND" ? String(Number(createdOrder.amount)) : String(createdOrder.amount))} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
-                    </div>
-                  </div>
-
-                  {createdOrder.currency === "VND" ? (
-                    <>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Bank Code/Name")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#0f172a] text-[15px] font-bold">{destBank}</span>
-                          <button onClick={() => handleCopy(destBank)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Bank Account")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#0f172a] text-[15px] font-bold">{destAccount}</span>
-                          <button onClick={() => handleCopy(destAccount)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Account Name")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#0f172a] text-[15px] font-bold uppercase">{destName}</span>
-                          <button onClick={() => handleCopy(destName)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Transfer Reference")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#1a2b88] text-[16px] font-extrabold tracking-wider">{createdOrder.reference}</span>
-                          <button onClick={() => handleCopy(createdOrder.reference)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                      {destBankCode && destAccount && !qrFailed && (
-                        <div className="mt-2 flex flex-col items-center gap-2">
-                          <img
-                            src={renderVietQr(destBankCode, destAccount, destName, String(Number(createdOrder.amount)), createdOrder.reference)}
-                            alt="VietQR"
-                            onError={() => setQrFailed(true)}
-                            className="w-[200px] h-auto rounded-xl border-2 border-[#e2e8f0]"
-                          />
-                        </div>
-                      )}
-                      {qrFailed && <p role="alert" className="text-[13px] text-[#be123c] text-center">
-                        {language === "vi" ? "Không tải được VietQR. Hãy chuyển khoản thủ công theo số tài khoản, số tiền và nội dung phía trên." : "VietQR unavailable. Transfer manually using the account, amount and reference above."}
-                      </p>}
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Network")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#0f172a] text-[15px] font-bold">{createdOrder.network}</span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Address")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#0f172a] text-[13px] font-bold font-mono break-all pr-4">
-                            {createdOrder.paymentDestination}
-                          </span>
-                          <button onClick={() => handleCopy(createdOrder.paymentDestination)} className="text-[#64748b] hover:text-[#1a2b88] shrink-0"><Copy className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Transfer Reference")}</span>
-                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
-                          <span className="text-[#1a2b88] text-[16px] font-extrabold tracking-wider">{createdOrder.reference}</span>
-                          <button onClick={() => handleCopy(createdOrder.reference)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-4 mt-2">
-                  <p className="text-[13px] text-[#475569] font-medium text-center">
-                    {createdOrder.currency === "VND"
-                      ? (language === "vi" ? "Sau khi chuyển khoản, bấm xác nhận. Quản trị đối chiếu số tiền và nội dung CK với giao dịch thực nhận; không cần gửi ảnh hay lời nhắn." : "After transferring, confirm below. An admin checks the received amount and reference; no screenshot or message is needed.")
-                      : t("Please enter your transaction hash after transferring.")}
-                  </p>
-
-                  {createdOrder.currency === "USDT" && (
-                    <input
-                      type="text"
-                      placeholder={t("Transaction Hash")}
-                      value={txHash}
-                      onChange={(e) => setTxHash(e.target.value)}
-                      data-testid="input-txhash"
-                      className="w-full border-2 border-[#cbd5e1] rounded-xl px-4 py-3 text-[15px] font-mono outline-none focus:border-[#1a2b88]"
-                    />
-                  )}
-
-                  <button
-                    onClick={handleSubmitProof}
-                    disabled={submitProofMutation.isPending || (createdOrder.currency === "USDT" && !txHash.trim())}
-                    data-testid="button-submit-proof"
-                    className="w-full bg-[#1a2b88] text-white py-4 rounded-xl font-extrabold text-[15px] hover:bg-[#152473] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                  >
-                    {submitProofMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
-                    {createdOrder.currency === "VND" ? (language === "vi" ? "Tôi đã chuyển khoản" : "I have transferred") : t("Submit proof")}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+          {renderCheckoutModalContent()}
         </Modal>
       )}
 
