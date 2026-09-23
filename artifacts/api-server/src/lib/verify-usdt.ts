@@ -67,6 +67,20 @@ function validDate(date: Date): boolean {
   return date instanceof Date && Number.isFinite(date.getTime());
 }
 
+/**
+ * Binance can leave a small withdrawal/rounding difference in the amount that
+ * reaches the destination wallet. Accept only a shortfall of up to 0.03 USDT;
+ * never accept an amount above the order price.
+ */
+function amountWithinTolerance(value: string, expectedAmount: bigint, decimals: number): boolean {
+  const raw = value.startsWith("0x") ? value.slice(2) : value;
+  if (!/^[0-9a-f]{64}$/i.test(raw)) return false;
+  const actualAmount = BigInt(`0x${raw}`);
+  const tolerance = parseAmount("0.03", decimals);
+  const minimumAccepted = expectedAmount > tolerance ? expectedAmount - tolerance : 1n;
+  return actualAmount >= minimumAccepted && actualAmount <= expectedAmount;
+}
+
 async function verifyBsc(input: VerificationInput, expectedAmount: bigint): Promise<Result> {
   if (!/^0x[0-9a-f]{64}$/i.test(input.txHash) || !/^0x[0-9a-f]{40}$/i.test(input.destination)) {
     return fail("INVALID_IDENTIFIER");
@@ -101,7 +115,6 @@ async function verifyBsc(input: VerificationInput, expectedAmount: bigint): Prom
   if (timestamp > input.createdAt.getTime() + ORDER_LIFETIME_MS || timestamp > now + MAX_CLOCK_SKEW_MS) return fail("AFTER_ORDER");
   if (!Array.isArray(receiptObject.logs)) return fail("INVALID_RECEIPT");
   const wanted = input.destination.toLowerCase().slice(2).padStart(64, "0");
-  const amountHex = `0x${expectedAmount.toString(16).padStart(64, "0")}`;
   const matched = receiptObject.logs.some((log) => {
     if (!log || typeof log !== "object") return false;
     const item = log as Record<string, unknown>;
@@ -109,7 +122,7 @@ async function verifyBsc(input: VerificationInput, expectedAmount: bigint): Prom
       && Array.isArray(item.topics) && item.topics.length >= 3
       && typeof item.topics[0] === "string" && item.topics[0].toLowerCase() === TRANSFER_TOPIC
       && typeof item.topics[2] === "string" && item.topics[2].toLowerCase() === `0x${wanted}`
-      && typeof item.data === "string" && item.data.toLowerCase() === amountHex;
+      && typeof item.data === "string" && amountWithinTolerance(item.data, expectedAmount, 18);
   });
   return matched ? { confirmed: true } : fail("TRANSFER_NOT_MATCHED");
 }
@@ -164,7 +177,6 @@ async function verifyTron(input: VerificationInput, expectedAmount: bigint): Pro
   // transactions can legitimately have a different transaction destination.
   if (!Array.isArray(info.log)) return fail("INVALID_RECEIPT_LOGS");
   const wantedTail = destination.slice(2);
-  const amountData = expectedAmount.toString(16).padStart(64, "0");
   const matched = info.log.some((log) => {
     if (!log || typeof log !== "object") return false;
     const item = log as Record<string, unknown>;
@@ -176,7 +188,7 @@ async function verifyTron(input: VerificationInput, expectedAmount: bigint): Pro
       || typeof item.topics[0] !== "string" || item.topics[0].toLowerCase() !== TRANSFER_TOPIC.slice(2)
       || typeof item.topics[2] !== "string" || item.topics[2].toLowerCase() !== wantedTail.padStart(64, "0")
       || typeof item.data !== "string" || !/^[0-9a-f]{64}$/i.test(item.data)) return false;
-    return item.data.toLowerCase() === amountData;
+    return amountWithinTolerance(item.data, expectedAmount, 6);
   });
   if (!matched) return fail("TRANSFER_NOT_MATCHED");
   const blockNumber = info.blockNumber;

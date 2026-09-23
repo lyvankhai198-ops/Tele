@@ -532,6 +532,11 @@ export default function Upgrade() {
               ? "Sau khi chuyển, vui lòng nhập Transaction Hash (TxID) để xác nhận."
               : "After transferring, please enter the Transaction Hash (TxID) to confirm."}
           </p>
+          <p className="text-[#64748b] text-[12px] text-center px-4">
+            {language === "vi"
+              ? "Vui lòng chuyển đúng số lượng USDT theo giá gói. Hệ thống có thể chấp nhận số tiền thực nhận thấp hơn tối đa 0,03 USDT do phí hoặc làm tròn khi chuyển khoản; số tiền cao hơn giá gói sẽ không được tự động xác nhận."
+              : "Please transfer the exact USDT amount shown for your plan. The system may accept an amount received up to 0.03 USDT lower due to transfer fees or rounding; amounts higher than the plan price will not be automatically confirmed."}
+          </p>
         </div>
 
         {!isAutomated ? (
