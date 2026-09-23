@@ -38,7 +38,26 @@ export async function getOrderSettings(): Promise<OrderSettings> {
   try { return { ...defaults, ...JSON.parse(row.value) } as OrderSettings; } catch { return defaults; }
 }
 export async function saveOrderSettings(value: OrderSettings, adminUserId: string): Promise<OrderSettings> {
-  await db.insert(systemSettingsTable).values({ key: KEY, value: JSON.stringify(value), updatedBy: adminUserId, updatedAt: new Date() }).onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: JSON.stringify(value), updatedBy: adminUserId, updatedAt: new Date() } });
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    await tx.insert(systemSettingsTable).values({ key: KEY, value: JSON.stringify(value), updatedBy: adminUserId, updatedAt: now }).onConflictDoUpdate({
+      target: systemSettingsTable.key,
+      set: { value: JSON.stringify(value), updatedBy: adminUserId, updatedAt: now },
+    });
+
+    for (const plan of ["PLUS", "PRO", "UNLIMITED"] as const) {
+      await tx.update(licenseKeysTable).set({
+        salePriceVnd: value.pricesVnd[plan],
+      }).where(and(
+        eq(licenseKeysTable.pool, "normal"),
+        eq(licenseKeysTable.plan, plan.toLowerCase()),
+        eq(licenseKeysTable.durationDays, value.durationsDays[plan]),
+        isNull(licenseKeysTable.claimedAt),
+        isNull(licenseKeysTable.revokedAt),
+        isNull(licenseKeysTable.reservedOrderId),
+      ));
+    }
+  });
   return value;
 }
 export async function listOrders(userId?: string) {
@@ -225,7 +244,14 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
         .where(eq(purchaseOrdersTable.id, id)).returning();
       return received;
     }
-    const [claimed] = await tx.update(licenseKeysTable).set({ claimedAt: now, claimedBy: order.ownerUserId, reservedOrderId: null, reservedUntil: null })
+    const claimValues = {
+      claimedAt: now,
+      claimedBy: order.ownerUserId,
+      reservedOrderId: null,
+      reservedUntil: null,
+      ...(order.currency === "VND" ? { salePriceVnd: Number(order.amount) } : {}),
+    };
+    const [claimed] = await tx.update(licenseKeysTable).set(claimValues)
       .where(and(eq(licenseKeysTable.id, key.id), isNull(licenseKeysTable.claimedAt), isNull(licenseKeysTable.revokedAt))).returning();
     if (!claimed) throw new Error("LICENSE_CLAIM_FAILED");
     const [priorPaidOrder] = await tx.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
