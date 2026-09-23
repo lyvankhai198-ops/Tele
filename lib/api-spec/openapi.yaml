@@ -926,6 +926,69 @@ paths:
         "400": { description: Invalid Telegram purchase link }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
+  /purchase-orders/settings:
+    get:
+      operationId: getPurchaseOrderSettings
+      tags: [purchase-orders]
+      responses:
+        "200": { description: Payment settings, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderSettings" } } } }
+        "401": { description: Authentication is required }
+  /purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [purchase-orders]
+      responses:
+        "200": { description: Own purchase orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PurchaseOrder" } } } } }
+    post:
+      operationId: createPurchaseOrder
+      tags: [purchase-orders]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderInput" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+        "400": { description: Invalid or unconfigured price }
+  /purchase-orders/{orderId}/proof:
+    patch:
+      operationId: submitPurchaseOrderProof
+      tags: [purchase-orders]
+      parameters: [{ name: orderId, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderProofInput" } } }
+      responses:
+        "200": { description: Updated order, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+        "404": { description: Not found }
+  /admin/purchase-orders:
+    get:
+      operationId: listAdminPurchaseOrders
+      tags: [admin]
+      responses:
+        "200": { description: All orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PurchaseOrder" } } } } }
+  /admin/purchase-orders/settings:
+    get:
+      operationId: getAdminPurchaseOrderSettings
+      tags: [admin]
+      responses:
+        "200": { description: Payment settings, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderSettings" } } } }
+    patch:
+      operationId: updateAdminPurchaseOrderSettings
+      tags: [admin]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderSettings" } } }
+      responses:
+        "200": { description: Updated settings, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderSettings" } } } }
+  /admin/purchase-orders/{orderId}/review:
+    post:
+      operationId: reviewPurchaseOrder
+      tags: [admin]
+      parameters: [{ name: orderId, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderReviewInput" } } }
+      responses:
+        "200": { description: Reviewed order, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
   /admin/system-settings:
     get:
       operationId: getAdminSystemSettings
@@ -2514,6 +2577,58 @@ components:
       required: [telegramPurchaseUrl]
       properties:
         telegramPurchaseUrl: { type: string, minLength: 1, maxLength: 512 }
+    PurchaseOrderSettings:
+      type: object
+      required: [pricesVnd, pricesUsdt, vnBankName, vnBankCode, vnBankAccount, vnAccountName, vietQrTemplate, usdtBep20Address, usdtTrc20Address]
+      properties:
+        pricesVnd: { type: object, additionalProperties: { type: number, minimum: 0 } }
+        pricesUsdt: { type: object, additionalProperties: { type: number, minimum: 0 } }
+        durationsDays: { type: object, additionalProperties: { type: number, minimum: 1 } }
+        vnBankName: { type: string }
+        vnBankCode: { type: string }
+        vnBankAccount: { type: string }
+        vnAccountName: { type: string }
+        vietQrTemplate: { type: string }
+        usdtBep20Address: { type: string }
+        usdtTrc20Address: { type: string }
+    PurchaseOrderInput:
+      type: object
+      required: [plan, currency]
+      properties:
+        plan: { type: string, enum: [PLUS, PRO, UNLIMITED] }
+        currency: { type: string, enum: [VND, USDT] }
+        network: { type: string, enum: [BEP20, TRC20] }
+    PurchaseOrderProofInput:
+      type: object
+      properties:
+        txHash: { type: string, maxLength: 256 }
+        proofInfo: { type: string, maxLength: 4000 }
+    PurchaseOrderReviewInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [paid, rejected] }
+        reason: { type: string }
+    PurchaseOrder:
+      type: object
+      required: [id, ownerUserId, plan, durationDays, currency, amount, reference, status, createdAt]
+      properties:
+        id: { type: string }
+        ownerUserId: { type: string }
+        plan: { type: string }
+        durationDays: { type: number }
+        currency: { type: string }
+        amount: { type: string }
+        paymentDestination: { type: string }
+        network: { type: ["string", "null"] }
+        reference: { type: string }
+        txHash: { type: ["string", "null"] }
+        proofInfo: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, paid, rejected] }
+        reviewedBy: { type: ["string", "null"] }
+        reviewedAt: { type: ["string", "null"], format: date-time }
+        rejectionReason: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
     PlanLimitSettings:
       type: object
       required: [accountLimit, campaignLimit, messageDailyLimit, userMessageDailyLimit]

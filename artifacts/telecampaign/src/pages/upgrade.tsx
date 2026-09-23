@@ -1,10 +1,13 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppLayout, Modal, Toast, StatusBadge } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
-import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
-import { useGetUpgradeSummary, getGetUpgradeSummaryQueryKey, useActivateLicense } from "@workspace/api-client-react";
+import { Check, Key, Shield, Zap, CreditCard, LoaderCircle, CheckCircle2, AlertCircle, Copy } from "lucide-react";
+import {
+  useGetUpgradeSummary, getGetUpgradeSummaryQueryKey, useActivateLicense,
+  useGetPurchaseOrderSettings, useListPurchaseOrders, useCreatePurchaseOrder, useSubmitPurchaseOrderProof, getListPurchaseOrdersQueryKey
+} from "@workspace/api-client-react";
 
 const planOrder: Record<string, number> = { plus: 1, pro: 2, unlimited: 3 };
 
@@ -13,15 +16,110 @@ export default function Upgrade() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { data: summary, isLoading, isError } = useGetUpgradeSummary();
+  const { data: purchaseSettings } = useGetPurchaseOrderSettings();
+  const { data: purchaseOrders } = useListPurchaseOrders({ query: { queryKey: getListPurchaseOrdersQueryKey(), refetchInterval: 5000 } });
   const activateMutation = useActivateLicense();
+  const createOrderMutation = useCreatePurchaseOrder();
+  const submitProofMutation = useSubmitPurchaseOrderProof();
 
   const [selectedPlanToConfirm, setSelectedPlanToConfirm] = useState<string | null>(null);
+  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [checkoutCurrency, setCheckoutCurrency] = useState<"VND" | "USDT">("VND");
+  const [checkoutNetwork, setCheckoutNetwork] = useState<"BEP20" | "TRC20">("BEP20");
+  const [createdOrder, setCreatedOrder] = useState<any>(null);
+  const [txHash, setTxHash] = useState("");
+  const [proofInfo, setProofInfo] = useState("");
   const [licenseKey, setLicenseKey] = useState("");
   const [toastMessage, setToastMessage] = useState<{ title: string; type: "success" | "error" } | null>(null);
   const [activateError, setActivateError] = useState<Error | null>(null);
   const [activateSuccess, setActivateSuccess] = useState(false);
 
   const licenseInputRef = useRef<HTMLInputElement>(null);
+
+  const lastPaidIds = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (purchaseOrders) {
+      const paidOrders = purchaseOrders.filter(o => o.status === "paid").map(o => o.id);
+      const newPaidIds = new Set(paidOrders);
+      let hasNew = false;
+      for (const id of newPaidIds) {
+        if (!lastPaidIds.current.has(id)) {
+          hasNew = true;
+          break;
+        }
+      }
+      if (hasNew) {
+        queryClient.invalidateQueries({ queryKey: getGetUpgradeSummaryQueryKey() });
+      }
+      lastPaidIds.current = newPaidIds;
+    }
+  }, [purchaseOrders, queryClient]);
+
+  const handleCopy = (textToCopy: string) => {
+    navigator.clipboard.writeText(textToCopy);
+    setToastMessage({ title: t("Copied!"), type: "success" });
+  };
+
+  const handleCreateOrder = () => {
+    if (!checkoutPlan) return;
+    createOrderMutation.mutate({
+      data: {
+        plan: checkoutPlan.toUpperCase() as any,
+        currency: checkoutCurrency as any,
+        network: checkoutCurrency === "USDT" ? checkoutNetwork as any : undefined,
+      }
+    }, {
+      onSuccess: (order) => {
+        setCreatedOrder(order);
+        queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+      },
+      onError: (err) => {
+        setToastMessage({ title: t("Could not create order"), type: "error" });
+      }
+    });
+  };
+
+  const handleSubmitProof = () => {
+    if (!createdOrder) return;
+    submitProofMutation.mutate({
+      orderId: createdOrder.id,
+      data: {
+        txHash: txHash.trim() || undefined,
+        proofInfo: proofInfo.trim() || undefined,
+      }
+    }, {
+      onSuccess: () => {
+        setToastMessage({ title: t("Proof submitted successfully"), type: "success" });
+        setCheckoutPlan(null);
+        setCreatedOrder(null);
+        setTxHash("");
+        setProofInfo("");
+        queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+      },
+      onError: (err) => {
+        setToastMessage({ title: t("Could not submit proof"), type: "error" });
+      }
+    });
+  };
+
+  const formatVnd = (val: number | string) => new Intl.NumberFormat("vi-VN").format(Number(val)) + " đ";
+  const formatUsdt = (val: number | string) => new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(Number(val)) + " USDT";
+
+  let destBank = "", destBankCode = "", destAccount = "", destName = "";
+  if (createdOrder && createdOrder.currency === "VND") {
+    const parts = (createdOrder.paymentDestination || "").split("|");
+    destBankCode = parts[0] || "";
+    destBank = parts[1] || "";
+    destAccount = parts[2] || "";
+    destName = parts[3] || "";
+  }
+
+  const renderVietQr = (bank: string, acc: string, name: string, amount: string, reference: string) => {
+    const encodedName = encodeURIComponent(name);
+    const encodedRef = encodeURIComponent(reference);
+    return `https://img.vietqr.io/image/${encodeURIComponent(bank)}-${encodeURIComponent(acc)}-compact2.png?amount=${encodeURIComponent(amount)}&addInfo=${encodedRef}&accountName=${encodedName}`;
+  };
 
   const handleActivate = () => {
     if (licenseKey.length < 8) return;
@@ -70,7 +168,7 @@ export default function Upgrade() {
     );
   }
 
-  const { plans, subscription, telegramPurchaseUrl } = summary;
+  const { plans, subscription } = summary;
   const sortedPlans = [...plans].sort((a, b) => (planOrder[a.code] || 0) - (planOrder[b.code] || 0));
   const subscriptionExpired = subscription.status === "expired";
   const currentPlanLevel = subscriptionExpired ? 0 : planOrder[subscription.plan] || 0;
@@ -150,7 +248,7 @@ export default function Upgrade() {
         </div>
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-16">
+        <div id="purchase-plans" className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-16">
           {sortedPlans.map((plan) => {
             const thisLevel = planOrder[plan.code] || 0;
             const isCurrent = !subscriptionExpired && subscription.plan === plan.code;
@@ -181,6 +279,14 @@ export default function Upgrade() {
 
             const features = language === "vi" ? plan.features : plan.featuresEn;
 
+            const hasVndDest = Boolean(purchaseSettings?.vnBankCode && purchaseSettings?.vnBankName && purchaseSettings?.vnBankAccount);
+            const hasUsdtDest = Boolean(purchaseSettings?.usdtBep20Address || purchaseSettings?.usdtTrc20Address);
+            const priceVnd = purchaseSettings?.pricesVnd?.[plan.code.toUpperCase()] || 0;
+            const priceUsdt = purchaseSettings?.pricesUsdt?.[plan.code.toUpperCase()] || 0;
+            const hasPriceVnd = priceVnd > 0 && hasVndDest;
+            const hasPriceUsdt = priceUsdt > 0 && hasUsdtDest;
+            const hasPrice = language === "vi" ? hasPriceVnd : hasPriceUsdt;
+
             return (
               <div
                 key={plan.code}
@@ -205,8 +311,17 @@ export default function Upgrade() {
                       <span className={`text-[16px] font-bold ml-1 ${subtitleColor}`}>{t("accounts (abbrev)")}</span>
                     )}
                   </div>
-                  <div className={`text-[13px] font-bold mt-2 uppercase tracking-wider ${subtitleColor}`}>
-                    {t("Valid for {n} days").replace("{n}", String(plan.durationDays))}
+                  <div className={`text-[13px] font-bold mt-2 uppercase tracking-wider ${subtitleColor} flex items-center justify-between`}>
+                    <span>{t("Valid for {n} days").replace("{n}", String(purchaseSettings?.durationsDays?.[plan.code.toUpperCase()] || plan.durationDays))}</span>
+                    {hasPrice ? (
+                      <span className={`text-[15px] ${titleColor}`}>
+                        {language === "vi" ? formatVnd(priceVnd) : formatUsdt(priceUsdt)}
+                      </span>
+                    ) : (
+                      <span className={`text-[12px] opacity-70 ${titleColor}`}>
+                        {t("Price unavailable")}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -222,11 +337,19 @@ export default function Upgrade() {
                 </ul>
 
                 <button
-                  disabled={isCurrent || isLower}
-                  onClick={() => setSelectedPlanToConfirm(plan.code)}
+                  disabled={isCurrent || isLower || !hasPrice}
+                  onClick={() => {
+                    if (hasPrice) {
+                      setCheckoutPlan(plan.code);
+                      setCheckoutCurrency(language === "vi" ? "VND" : "USDT");
+                      setCreatedOrder(null);
+                    } else {
+                      setSelectedPlanToConfirm(plan.code);
+                    }
+                  }}
                   data-testid={`button-select-plan-${plan.code}`}
                   className={`w-full py-4 rounded-xl font-extrabold transition-all active:scale-[0.98] ${
-                    isCurrent || isLower ? btnDisabledClass : btnActiveClass
+                    isCurrent || isLower || !hasPrice ? btnDisabledClass : btnActiveClass
                   }`}
                 >
                   {isCurrent ? t("Current plan") : isLower ? t("Already included") : t("Select this plan")}
@@ -318,43 +441,64 @@ export default function Upgrade() {
                   {activateMutation.isPending ? t("Processing…") : t("Activate key")}
                 </button>
 
-                {telegramPurchaseUrl ? (
-                  <a
-                    href={telegramPurchaseUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-[#1a2b88] bg-[#1a2b88] px-8 py-4 text-[15px] font-extrabold text-white shadow-[0_10px_22px_rgba(26,43,136,.22)] transition-all hover:border-[#152473] hover:bg-[#152473] active:scale-[0.98] sm:w-auto"
-                    data-testid="button-buy-key"
-                  >
-                    <CreditCard className="h-5 w-5 text-white/90" />
-                    {t("Buy key")}
-                    <ExternalLink className="h-4 w-4 text-white/80" />
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="sm:w-auto w-full px-8 py-4 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8] font-extrabold cursor-not-allowed flex items-center justify-center gap-2.5 text-[15px]"
-                    data-testid="button-buy-key"
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    {t("Buy key")}
-                  </button>
-                )}
-              </div>
-
-              {!telegramPurchaseUrl && (
-                <div
-                  className="flex items-start gap-2.5 rounded-xl border border-[#fef3c7] bg-[#fffbeb] px-4 py-3 text-[13px] font-semibold leading-relaxed text-[#92400e]"
-                  data-testid="purchase-link-unavailable"
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("purchase-plans")?.scrollIntoView({ behavior: "smooth" })}
+                  disabled={!purchaseSettings || !sortedPlans.some(plan =>
+                    language === "vi"
+                      ? Number(purchaseSettings.pricesVnd?.[plan.code.toUpperCase()]) > 0 && !!purchaseSettings.vnBankCode && !!purchaseSettings.vnBankAccount
+                      : Number(purchaseSettings.pricesUsdt?.[plan.code.toUpperCase()]) > 0 && (!!purchaseSettings.usdtBep20Address || !!purchaseSettings.usdtTrc20Address)
+                  )}
+                  className="flex w-full items-center justify-center gap-2.5 rounded-xl border-2 border-[#1a2b88] bg-[#1a2b88] px-8 py-4 text-[15px] font-extrabold text-white hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  data-testid="button-buy-on-web"
                 >
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  {t("Purchasing is not configured yet. Please contact an administrator to get a license key.")}
-                </div>
-              )}
+                  <CreditCard className="h-5 w-5" />
+                  {language === "vi"
+                    ? purchaseSettings?.pricesVnd && sortedPlans.some(plan => Number(purchaseSettings.pricesVnd[plan.code.toUpperCase()]) > 0 && !!purchaseSettings.vnBankCode && !!purchaseSettings.vnBankAccount) ? "Chọn gói để mua trên web" : "Thanh toán chưa được cấu hình"
+                    : purchaseSettings?.pricesUsdt && sortedPlans.some(plan => Number(purchaseSettings.pricesUsdt[plan.code.toUpperCase()]) > 0 && (!!purchaseSettings.usdtBep20Address || !!purchaseSettings.usdtTrc20Address)) ? "Choose a plan to buy online" : "Payments are not configured"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
+        {/* Purchase Orders History */}
+        {purchaseOrders && purchaseOrders.length > 0 && (
+          <div className="mb-12">
+            <h2 className="mb-6 text-[22px] font-extrabold tracking-tight text-[#0f172a]">{t("Order History")}</h2>
+            <div className="bg-white border-2 border-[#eef2f6] rounded-[24px] overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[14px]">
+                  <thead>
+                    <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[#475569]">
+                      <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Plan")}</th>
+                      <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Amount")}</th>
+                      <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Transfer Reference")}</th>
+                      <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Status")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f1f5f9]">
+                    {purchaseOrders.map((order) => (
+                      <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
+                        <td className="px-6 py-4 font-extrabold text-[#0f172a] uppercase">{order.plan}</td>
+                        <td className="px-6 py-4 font-bold text-[#475569]">
+                          {order.currency === "VND" ? formatVnd(order.amount) : formatUsdt(order.amount)}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-[13px] text-[#64748b]">{order.reference}</td>
+                        <td className="px-6 py-4">
+                          <StatusBadge
+                            status={order.status === "paid" ? "success" : order.status === "rejected" ? "failed" : order.status === "pending" ? "warning" : "draft"}
+                            label={order.status === "paid" ? t("Approved") : order.status === "rejected" ? t("Rejected") : t("Pending")}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* Confirmation Modal */}
@@ -395,6 +539,193 @@ export default function Upgrade() {
                 {t("Proceed")}
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Checkout Modal */}
+      {checkoutPlan && purchaseSettings && (
+        <Modal
+          title={t("Order checkout")}
+          onClose={() => {
+            if (!createdOrder || createdOrder.status !== "pending") {
+              setCheckoutPlan(null);
+              setCreatedOrder(null);
+            }
+          }}
+        >
+          <div className="py-2 flex flex-col gap-6" data-testid="modal-checkout-plan">
+            {!createdOrder ? (
+              <>
+                <div className="bg-[#f8fafc] rounded-2xl p-5 border border-[#e2e8f0]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[#64748b] text-[14px] font-bold">{t("Plan")}</span>
+                    <span className="text-[#0f172a] text-[16px] font-extrabold uppercase tracking-tight">{checkoutPlan}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#64748b] text-[14px] font-bold">{t("Price")}</span>
+                    <span className="text-[#1a2b88] text-[18px] font-extrabold">
+                      {checkoutCurrency === "VND"
+                        ? formatVnd(purchaseSettings.pricesVnd[checkoutPlan.toUpperCase()] || 0)
+                        : formatUsdt(purchaseSettings.pricesUsdt[checkoutPlan.toUpperCase()] || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {checkoutCurrency === "USDT" && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[13px] font-extrabold text-[#475569] uppercase tracking-wider">{t("Select network")}</label>
+                    <div className="flex gap-3">
+                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-colors ${checkoutNetwork === "BEP20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
+                        <input type="radio" name="network" value="BEP20" checked={checkoutNetwork === "BEP20"} onChange={() => setCheckoutNetwork("BEP20")} className="hidden" />
+                        <span className="font-bold">BSC (BEP20)</span>
+                      </label>
+                      <label className={`flex-1 flex items-center justify-center gap-2 border-2 rounded-xl py-3 cursor-pointer transition-colors ${checkoutNetwork === "TRC20" ? "border-[#1a2b88] bg-[#eff6ff] text-[#1a2b88]" : "border-[#cbd5e1] hover:bg-[#f8fafc]"}`}>
+                        <input type="radio" name="network" value="TRC20" checked={checkoutNetwork === "TRC20"} onChange={() => setCheckoutNetwork("TRC20")} className="hidden" />
+                        <span className="font-bold">Tron (TRC20)</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCreateOrder}
+                  disabled={createOrderMutation.isPending}
+                  data-testid="button-create-order"
+                  className="w-full bg-[#1a2b88] text-white py-4 rounded-xl font-extrabold text-[15px] hover:bg-[#152473] transition-colors shadow-sm flex items-center justify-center gap-2"
+                >
+                  {createOrderMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
+                  {t("Create Order")}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-center mb-2">
+                  <div className="inline-flex items-center justify-center bg-[#eff6ff] text-[#1a2b88] p-4 rounded-full mb-4">
+                    <CreditCard className="h-8 w-8" strokeWidth={2} />
+                  </div>
+                  <h3 className="text-[20px] font-extrabold text-[#0f172a]">{t("Transfer Info")}</h3>
+                  <p className="text-[#64748b] text-[14px] font-medium mt-1">
+                    {language === "vi" ? t("Please transfer the exact amount with the reference code below.") : t("Please transfer exactly to the address below.")}
+                  </p>
+                </div>
+
+                <div className="bg-[#f8fafc] rounded-2xl p-5 border border-[#e2e8f0] flex flex-col gap-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Amount")}</span>
+                    <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                      <span className="text-[#0f172a] text-[16px] font-bold">
+                        {createdOrder.currency === "VND" ? formatVnd(createdOrder.amount) : formatUsdt(createdOrder.amount)}
+                      </span>
+                      <button onClick={() => handleCopy(createdOrder.currency === "VND" ? String(Number(createdOrder.amount)) : String(createdOrder.amount))} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
+                    </div>
+                  </div>
+
+                  {createdOrder.currency === "VND" ? (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Bank Code/Name")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#0f172a] text-[15px] font-bold">{destBank}</span>
+                          <button onClick={() => handleCopy(destBank)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Bank Account")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#0f172a] text-[15px] font-bold">{destAccount}</span>
+                          <button onClick={() => handleCopy(destAccount)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Account Name")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#0f172a] text-[15px] font-bold uppercase">{destName}</span>
+                          <button onClick={() => handleCopy(destName)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Transfer Reference")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#1a2b88] text-[16px] font-extrabold tracking-wider">{createdOrder.reference}</span>
+                          <button onClick={() => handleCopy(createdOrder.reference)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      {destBank && destAccount && (
+                        <div className="mt-2 flex justify-center">
+                          <img
+                            src={renderVietQr(destBankCode, destAccount, destName, String(Number(createdOrder.amount)), createdOrder.reference)}
+                            alt="VietQR"
+                            className="max-w-[200px] h-auto rounded-xl border-2 border-[#e2e8f0]"
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Network")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#0f172a] text-[15px] font-bold">{createdOrder.network}</span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Address")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#0f172a] text-[13px] font-bold font-mono break-all pr-4">
+                            {createdOrder.paymentDestination}
+                          </span>
+                          <button onClick={() => handleCopy(createdOrder.paymentDestination)} className="text-[#64748b] hover:text-[#1a2b88] shrink-0"><Copy className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[#64748b] text-[12px] font-extrabold uppercase">{t("Transfer Reference")}</span>
+                        <div className="flex items-center justify-between bg-white border border-[#e2e8f0] rounded-lg px-4 py-3">
+                          <span className="text-[#1a2b88] text-[16px] font-extrabold tracking-wider">{createdOrder.reference}</span>
+                          <button onClick={() => handleCopy(createdOrder.reference)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-4 mt-2">
+                  <p className="text-[13px] text-[#475569] font-medium text-center">
+                    {language === "en" ? t("Please enter your transaction hash after transferring.") : t("Please enter payment proof info.")}
+                  </p>
+
+                  {checkoutCurrency === "USDT" ? (
+                    <input
+                      type="text"
+                      placeholder={t("Transaction Hash")}
+                      value={txHash}
+                      onChange={(e) => setTxHash(e.target.value)}
+                      data-testid="input-txhash"
+                      className="w-full border-2 border-[#cbd5e1] rounded-xl px-4 py-3 text-[15px] font-mono outline-none focus:border-[#1a2b88]"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder={t("Message/Proof (Optional)")}
+                      value={proofInfo}
+                      onChange={(e) => setProofInfo(e.target.value)}
+                      data-testid="input-proofinfo"
+                      className="w-full border-2 border-[#cbd5e1] rounded-xl px-4 py-3 text-[15px] outline-none focus:border-[#1a2b88]"
+                    />
+                  )}
+
+                  <button
+                    onClick={handleSubmitProof}
+                    disabled={submitProofMutation.isPending || (checkoutCurrency === "USDT" && !txHash.trim())}
+                    data-testid="button-submit-proof"
+                    className="w-full bg-[#1a2b88] text-white py-4 rounded-xl font-extrabold text-[15px] hover:bg-[#152473] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                  >
+                    {submitProofMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
+                    {t("Submit proof")}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </Modal>
       )}

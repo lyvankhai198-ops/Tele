@@ -1580,6 +1580,221 @@ export const UpdateAdminPurchaseSettingsResponse = zod.object({
 })
 
 
+export const getPurchaseOrderSettingsResponsePricesVndMinOne = 0;
+
+export const getPurchaseOrderSettingsResponsePricesUsdtMinOne = 0;
+
+
+
+
+export const GetPurchaseOrderSettingsResponse = zod.object({
+  "pricesVnd": zod.record(zod.string(), zod.number().min(getPurchaseOrderSettingsResponsePricesVndMinOne)),
+  "pricesUsdt": zod.record(zod.string(), zod.number().min(getPurchaseOrderSettingsResponsePricesUsdtMinOne)),
+  "durationsDays": zod.record(zod.string(), zod.number().min(1)).optional(),
+  "vnBankName": zod.string(),
+  "vnBankCode": zod.string(),
+  "vnBankAccount": zod.string(),
+  "vnAccountName": zod.string(),
+  "vietQrTemplate": zod.string(),
+  "usdtBep20Address": zod.string(),
+  "usdtTrc20Address": zod.string()
+})
+
+
+export const ListPurchaseOrdersResponseItem = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "status": zod.enum(['pending', 'paid', 'rejected']),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
+
+
+export const CreatePurchaseOrderBody = zod.object({
+  "plan": zod.enum(['PLUS', 'PRO', 'UNLIMITED']),
+  "currency": zod.enum(['VND', 'USDT']),
+  "network": zod.enum(['BEP20', 'TRC20']).optional()
+})
+
+export const CreatePurchaseOrderResponse = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "status": zod.enum(['pending', 'paid', 'rejected']),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const SubmitPurchaseOrderProofParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const submitPurchaseOrderProofBodyTxHashMax = 256;
+
+export const submitPurchaseOrderProofBodyProofInfoMax = 4000;
+
+
+
+export const SubmitPurchaseOrderProofBody = zod.object({
+  "txHash": zod.string().max(submitPurchaseOrderProofBodyTxHashMax).optional(),
+  "proofInfo": zod.string().max(submitPurchaseOrderProofBodyProofInfoMax).optional()
+})
+
+export const SubmitPurchaseOrderProofResponse = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "status": zod.enum(['pending', 'paid', 'rejected']),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListAdminPurchaseOrdersResponseItem = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "status": zod.enum(['pending', 'paid', 'rejected']),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminPurchaseOrdersResponse = zod.array(ListAdminPurchaseOrdersResponseItem)
+
+
+export const getAdminPurchaseOrderSettingsResponsePricesVndMinOne = 0;
+
+export const getAdminPurchaseOrderSettingsResponsePricesUsdtMinOne = 0;
+
+
+
+
+export const GetAdminPurchaseOrderSettingsResponse = zod.object({
+  "pricesVnd": zod.record(zod.string(), zod.number().min(getAdminPurchaseOrderSettingsResponsePricesVndMinOne)),
+  "pricesUsdt": zod.record(zod.string(), zod.number().min(getAdminPurchaseOrderSettingsResponsePricesUsdtMinOne)),
+  "durationsDays": zod.record(zod.string(), zod.number().min(1)).optional(),
+  "vnBankName": zod.string(),
+  "vnBankCode": zod.string(),
+  "vnBankAccount": zod.string(),
+  "vnAccountName": zod.string(),
+  "vietQrTemplate": zod.string(),
+  "usdtBep20Address": zod.string(),
+  "usdtTrc20Address": zod.string()
+})
+
+
+export const updateAdminPurchaseOrderSettingsBodyPricesVndMinOne = 0;
+
+export const updateAdminPurchaseOrderSettingsBodyPricesUsdtMinOne = 0;
+
+
+
+
+export const UpdateAdminPurchaseOrderSettingsBody = zod.object({
+  "pricesVnd": zod.record(zod.string(), zod.number().min(updateAdminPurchaseOrderSettingsBodyPricesVndMinOne)),
+  "pricesUsdt": zod.record(zod.string(), zod.number().min(updateAdminPurchaseOrderSettingsBodyPricesUsdtMinOne)),
+  "durationsDays": zod.record(zod.string(), zod.number().min(1)).optional(),
+  "vnBankName": zod.string(),
+  "vnBankCode": zod.string(),
+  "vnBankAccount": zod.string(),
+  "vnAccountName": zod.string(),
+  "vietQrTemplate": zod.string(),
+  "usdtBep20Address": zod.string(),
+  "usdtTrc20Address": zod.string()
+})
+
+export const updateAdminPurchaseOrderSettingsResponsePricesVndMinOne = 0;
+
+export const updateAdminPurchaseOrderSettingsResponsePricesUsdtMinOne = 0;
+
+
+
+
+export const UpdateAdminPurchaseOrderSettingsResponse = zod.object({
+  "pricesVnd": zod.record(zod.string(), zod.number().min(updateAdminPurchaseOrderSettingsResponsePricesVndMinOne)),
+  "pricesUsdt": zod.record(zod.string(), zod.number().min(updateAdminPurchaseOrderSettingsResponsePricesUsdtMinOne)),
+  "durationsDays": zod.record(zod.string(), zod.number().min(1)).optional(),
+  "vnBankName": zod.string(),
+  "vnBankCode": zod.string(),
+  "vnBankAccount": zod.string(),
+  "vnAccountName": zod.string(),
+  "vietQrTemplate": zod.string(),
+  "usdtBep20Address": zod.string(),
+  "usdtTrc20Address": zod.string()
+})
+
+
+export const ReviewPurchaseOrderParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const ReviewPurchaseOrderBody = zod.object({
+  "decision": zod.enum(['paid', 'rejected']),
+  "reason": zod.string().optional()
+})
+
+export const ReviewPurchaseOrderResponse = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "status": zod.enum(['pending', 'paid', 'rejected']),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const getAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsPlusCampaignLimitMin = 0;

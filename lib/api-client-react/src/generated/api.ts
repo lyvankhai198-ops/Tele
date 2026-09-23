@@ -103,6 +103,11 @@ import type {
   PasswordChangeInput,
   Proxy,
   ProxyTestResponse,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderProofInput,
+  PurchaseOrderReviewInput,
+  PurchaseOrderSettings,
   PurchaseSettings,
   PurchaseSettingsInput,
   RegistrationInput,
@@ -4662,6 +4667,552 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateAdminPurchaseSettingsMutationOptions(options));
+    }
+
+export const getGetPurchaseOrderSettingsUrl = () => {
+
+
+
+
+  return `/api/purchase-orders/settings`
+}
+
+export const getPurchaseOrderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrderSettings> => {
+
+  return customFetch<PurchaseOrderSettings>(getGetPurchaseOrderSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPurchaseOrderSettingsQueryKey = () => {
+    return [
+    `/api/purchase-orders/settings`
+    ] as const;
+    }
+
+
+export const getGetPurchaseOrderSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getPurchaseOrderSettings>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPurchaseOrderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPurchaseOrderSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPurchaseOrderSettings>>> = ({ signal }) => getPurchaseOrderSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPurchaseOrderSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPurchaseOrderSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getPurchaseOrderSettings>>>
+export type GetPurchaseOrderSettingsQueryError = ErrorType<void>
+
+
+
+export function useGetPurchaseOrderSettings<TData = Awaited<ReturnType<typeof getPurchaseOrderSettings>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPurchaseOrderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPurchaseOrderSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListPurchaseOrdersUrl = () => {
+
+
+
+
+  return `/api/purchase-orders`
+}
+
+export const listPurchaseOrders = async ( options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder[]> => {
+
+  return customFetch<PurchaseOrder[]>(getListPurchaseOrdersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPurchaseOrdersQueryKey = () => {
+    return [
+    `/api/purchase-orders`
+    ] as const;
+    }
+
+
+export const getListPurchaseOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listPurchaseOrders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPurchaseOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPurchaseOrdersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPurchaseOrders>>> = ({ signal }) => listPurchaseOrders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPurchaseOrders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPurchaseOrdersQueryResult = NonNullable<Awaited<ReturnType<typeof listPurchaseOrders>>>
+export type ListPurchaseOrdersQueryError = ErrorType<unknown>
+
+
+
+export function useListPurchaseOrders<TData = Awaited<ReturnType<typeof listPurchaseOrders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPurchaseOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPurchaseOrdersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePurchaseOrderUrl = () => {
+
+
+
+
+  return `/api/purchase-orders`
+}
+
+export const createPurchaseOrder = async (purchaseOrderInput: PurchaseOrderInput, options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getCreatePurchaseOrderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePurchaseOrderMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPurchaseOrder>>, TError,{data: BodyType<PurchaseOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPurchaseOrder>>, TError,{data: BodyType<PurchaseOrderInput>}, TContext> => {
+
+const mutationKey = ['createPurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPurchaseOrder>>, {data: BodyType<PurchaseOrderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPurchaseOrder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createPurchaseOrder>>>
+    export type CreatePurchaseOrderMutationBody = BodyType<PurchaseOrderInput>
+    export type CreatePurchaseOrderMutationError = ErrorType<void>
+
+    export const useCreatePurchaseOrder = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPurchaseOrder>>, TError,{data: BodyType<PurchaseOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPurchaseOrder>>,
+        TError,
+        {data: BodyType<PurchaseOrderInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePurchaseOrderMutationOptions(options));
+    }
+
+export const getSubmitPurchaseOrderProofUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/purchase-orders/${orderId}/proof`
+}
+
+export const submitPurchaseOrderProof = async (orderId: string,
+    purchaseOrderProofInput: PurchaseOrderProofInput, options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getSubmitPurchaseOrderProofUrl(orderId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderProofInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitPurchaseOrderProofMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPurchaseOrderProof>>, TError,{orderId: string;data: BodyType<PurchaseOrderProofInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPurchaseOrderProof>>, TError,{orderId: string;data: BodyType<PurchaseOrderProofInput>}, TContext> => {
+
+const mutationKey = ['submitPurchaseOrderProof'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPurchaseOrderProof>>, {orderId: string;data: BodyType<PurchaseOrderProofInput>}> = (props) => {
+          const {orderId,data} = props ?? {};
+
+          return  submitPurchaseOrderProof(orderId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPurchaseOrderProofMutationResult = NonNullable<Awaited<ReturnType<typeof submitPurchaseOrderProof>>>
+    export type SubmitPurchaseOrderProofMutationBody = BodyType<PurchaseOrderProofInput>
+    export type SubmitPurchaseOrderProofMutationError = ErrorType<void>
+
+    export const useSubmitPurchaseOrderProof = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPurchaseOrderProof>>, TError,{orderId: string;data: BodyType<PurchaseOrderProofInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitPurchaseOrderProof>>,
+        TError,
+        {orderId: string;data: BodyType<PurchaseOrderProofInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitPurchaseOrderProofMutationOptions(options));
+    }
+
+export const getListAdminPurchaseOrdersUrl = () => {
+
+
+
+
+  return `/api/admin/purchase-orders`
+}
+
+export const listAdminPurchaseOrders = async ( options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder[]> => {
+
+  return customFetch<PurchaseOrder[]>(getListAdminPurchaseOrdersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminPurchaseOrdersQueryKey = () => {
+    return [
+    `/api/admin/purchase-orders`
+    ] as const;
+    }
+
+
+export const getListAdminPurchaseOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listAdminPurchaseOrders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPurchaseOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminPurchaseOrdersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminPurchaseOrders>>> = ({ signal }) => listAdminPurchaseOrders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminPurchaseOrders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminPurchaseOrdersQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminPurchaseOrders>>>
+export type ListAdminPurchaseOrdersQueryError = ErrorType<unknown>
+
+
+
+export function useListAdminPurchaseOrders<TData = Awaited<ReturnType<typeof listAdminPurchaseOrders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPurchaseOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminPurchaseOrdersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminPurchaseOrderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/purchase-orders/settings`
+}
+
+export const getAdminPurchaseOrderSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrderSettings> => {
+
+  return customFetch<PurchaseOrderSettings>(getGetAdminPurchaseOrderSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminPurchaseOrderSettingsQueryKey = () => {
+    return [
+    `/api/admin/purchase-orders/settings`
+    ] as const;
+    }
+
+
+export const getGetAdminPurchaseOrderSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminPurchaseOrderSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>> = ({ signal }) => getAdminPurchaseOrderSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminPurchaseOrderSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>>
+export type GetAdminPurchaseOrderSettingsQueryError = ErrorType<unknown>
+
+
+
+export function useGetAdminPurchaseOrderSettings<TData = Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminPurchaseOrderSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminPurchaseOrderSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAdminPurchaseOrderSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/purchase-orders/settings`
+}
+
+export const updateAdminPurchaseOrderSettings = async (purchaseOrderSettings: PurchaseOrderSettings, options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrderSettings> => {
+
+  return customFetch<PurchaseOrderSettings>(getUpdateAdminPurchaseOrderSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderSettings)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminPurchaseOrderSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminPurchaseOrderSettings>>, TError,{data: BodyType<PurchaseOrderSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminPurchaseOrderSettings>>, TError,{data: BodyType<PurchaseOrderSettings>}, TContext> => {
+
+const mutationKey = ['updateAdminPurchaseOrderSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminPurchaseOrderSettings>>, {data: BodyType<PurchaseOrderSettings>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAdminPurchaseOrderSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminPurchaseOrderSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminPurchaseOrderSettings>>>
+    export type UpdateAdminPurchaseOrderSettingsMutationBody = BodyType<PurchaseOrderSettings>
+    export type UpdateAdminPurchaseOrderSettingsMutationError = ErrorType<unknown>
+
+    export const useUpdateAdminPurchaseOrderSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminPurchaseOrderSettings>>, TError,{data: BodyType<PurchaseOrderSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminPurchaseOrderSettings>>,
+        TError,
+        {data: BodyType<PurchaseOrderSettings>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminPurchaseOrderSettingsMutationOptions(options));
+    }
+
+export const getReviewPurchaseOrderUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/admin/purchase-orders/${orderId}/review`
+}
+
+export const reviewPurchaseOrder = async (orderId: string,
+    purchaseOrderReviewInput: PurchaseOrderReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getReviewPurchaseOrderUrl(orderId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewPurchaseOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewPurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewPurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderReviewInput>}, TContext> => {
+
+const mutationKey = ['reviewPurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewPurchaseOrder>>, {orderId: string;data: BodyType<PurchaseOrderReviewInput>}> = (props) => {
+          const {orderId,data} = props ?? {};
+
+          return  reviewPurchaseOrder(orderId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewPurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof reviewPurchaseOrder>>>
+    export type ReviewPurchaseOrderMutationBody = BodyType<PurchaseOrderReviewInput>
+    export type ReviewPurchaseOrderMutationError = ErrorType<unknown>
+
+    export const useReviewPurchaseOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewPurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewPurchaseOrder>>,
+        TError,
+        {orderId: string;data: BodyType<PurchaseOrderReviewInput>},
+        TContext
+      > => {
+      return useMutation(getReviewPurchaseOrderMutationOptions(options));
     }
 
 export const getGetAdminSystemSettingsUrl = () => {

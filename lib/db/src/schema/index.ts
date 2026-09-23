@@ -3,6 +3,7 @@ import {
   date,
   index,
   integer,
+  numeric,
   jsonb,
   pgTable,
   text,
@@ -78,6 +79,30 @@ export const subscriptionsTable = pgTable("subscriptions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const purchaseOrdersTable = pgTable("purchase_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ownerUserId: text("owner_user_id").notNull(),
+  plan: text("plan").notNull(),
+  durationDays: integer("duration_days").notNull(),
+  currency: text("currency").notNull(),
+  amount: numeric("amount", { precision: 20, scale: 8 }).notNull(),
+  paymentDestination: text("payment_destination").notNull(),
+  network: text("network"),
+  reference: text("reference").notNull(),
+  txHash: text("tx_hash"),
+  proofInfo: text("proof_info"),
+  status: text("status").notNull().default("pending"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  referenceUnique: uniqueIndex("purchase_orders_reference_unique").on(table.reference),
+  ownerStatusIndex: index("purchase_orders_owner_status_idx").on(table.ownerUserId, table.status),
+  txHashUnique: uniqueIndex("purchase_orders_tx_hash_unique").on(table.txHash),
+}));
 
 export const subscriptionReminderDeliveriesTable = pgTable("subscription_reminder_deliveries", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -350,6 +375,7 @@ export const authChallengesTable = pgTable("auth_challenges", {
 export const insertTelegramAccountSchema = createInsertSchema(telegramAccountsTable);
 export const insertAppUserSchema = createInsertSchema(appUsersTable);
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable);
+export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrdersTable);
 export const insertSubscriptionReminderDeliverySchema = createInsertSchema(subscriptionReminderDeliveriesTable);
 export const insertLicenseKeySchema = createInsertSchema(licenseKeysTable);
 export const insertAuthSessionSchema = createInsertSchema(authSessionsTable);
@@ -367,6 +393,7 @@ export const insertAuthChallengeSchema = createInsertSchema(authChallengesTable)
 export type TelegramAccount = typeof telegramAccountsTable.$inferSelect;
 export type AppUser = typeof appUsersTable.$inferSelect;
 export type Subscription = typeof subscriptionsTable.$inferSelect;
+export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
 export type SubscriptionReminderDelivery = typeof subscriptionReminderDeliveriesTable.$inferSelect;
 export type LicenseKey = typeof licenseKeysTable.$inferSelect;
 export type AuthSession = typeof authSessionsTable.$inferSelect;

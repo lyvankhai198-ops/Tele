@@ -111,6 +111,8 @@ import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
+import { createOrder, getOrderSettings, listOrders, updateOrderProof } from "../lib/telecampaign-orders";
+import { notifyPurchaseOrder } from "../lib/support-telegram";
 import {
   confirmTelegramPhoneCode,
   confirmTelegramTwoFactorPassword,
@@ -671,6 +673,38 @@ async function completeDevelopmentDemoLogin(input: {
 }
 
 router.use(requireAuth);
+router.get("/purchase-orders/settings", async (_req, res): Promise<void> => {
+  res.json(await getOrderSettings());
+});
+router.get("/purchase-orders", async (req, res): Promise<void> => {
+  res.json(await listOrders(currentUserId(req)));
+});
+router.post("/purchase-orders", async (req, res): Promise<void> => {
+  if (req.supportSession) { res.status(403).json({ error: "Support sessions cannot create purchase orders" }); return; }
+  const value = req.body ?? {};
+  const valid = ["PLUS", "PRO", "UNLIMITED"].includes(value.plan) && ["VND", "USDT"].includes(value.currency)
+    && (value.currency !== "USDT" || ["BEP20", "TRC20"].includes(value.network));
+  if (!valid) { res.status(400).json({ error: "Invalid purchase order" }); return; }
+  try {
+    const order = await createOrder({ plan: value.plan, currency: value.currency, network: value.network, ownerUserId: currentUserId(req) });
+    await notifyPurchaseOrder(`🧾 Đơn mới user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network ?? "VN-bank"}. Hãy kiểm tra tiền thực nhận trước khi duyệt.`, order.id);
+    res.status(201).json(order);
+  } catch (error) {
+    if (error instanceof Error && ["PLAN_PRICE_NOT_CONFIGURED", "PAYMENT_DESTINATION_NOT_CONFIGURED", "INVALID_PLAN_DURATION", "PLAN_DOWNGRADE_NOT_ALLOWED"].includes(error.message)) { res.status(400).json({ error: error.message }); return; }
+    res.status(400).json({ error: "Invalid payment method" });
+  }
+});
+router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> => {
+  if (req.supportSession) { res.status(403).json({ error: "Support sessions cannot submit payment proof" }); return; }
+  const value = req.body ?? {};
+  if ((value.txHash !== undefined && (typeof value.txHash !== "string" || value.txHash.length > 256)) || (value.proofInfo !== undefined && (typeof value.proofInfo !== "string" || value.proofInfo.length > 4000))) { res.status(400).json({ error: "Invalid proof" }); return; }
+  let order;
+  try { order = await updateOrderProof(req.params.orderId, currentUserId(req), value.txHash, value.proofInfo); }
+  catch (error) { if (error instanceof Error && error.message === "TX_HASH_ALREADY_SUBMITTED") { res.status(409).json({ error: "Transaction hash already submitted" }); return; } throw error; }
+  if (!order) { res.status(404).json({ error: "Order not found or already reviewed" }); return; }
+  await notifyPurchaseOrder(`🔎 Bằng chứng mới user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network ?? "VN-bank"}. Hãy kiểm tra tiền thực nhận trước khi duyệt.`, order.id);
+  res.json(order);
+});
 router.use((req, res, next): void => {
   const isCampaignDetailsEdit = req.method === "PATCH"
     && /^\/campaigns\/[^/]+$/.test(req.path)

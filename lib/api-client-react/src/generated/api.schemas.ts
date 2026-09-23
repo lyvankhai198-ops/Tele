@@ -1221,6 +1221,110 @@ export interface PurchaseSettingsInput {
   telegramPurchaseUrl: string;
 }
 
+export type PurchaseOrderSettingsPricesVnd = {[key: string]: number};
+
+export type PurchaseOrderSettingsPricesUsdt = {[key: string]: number};
+
+export type PurchaseOrderSettingsDurationsDays = {[key: string]: number};
+
+export interface PurchaseOrderSettings {
+  pricesVnd: PurchaseOrderSettingsPricesVnd;
+  pricesUsdt: PurchaseOrderSettingsPricesUsdt;
+  durationsDays?: PurchaseOrderSettingsDurationsDays;
+  vnBankName: string;
+  vnBankCode: string;
+  vnBankAccount: string;
+  vnAccountName: string;
+  vietQrTemplate: string;
+  usdtBep20Address: string;
+  usdtTrc20Address: string;
+}
+
+export type PurchaseOrderInputPlan = typeof PurchaseOrderInputPlan[keyof typeof PurchaseOrderInputPlan];
+
+
+export const PurchaseOrderInputPlan = {
+  PLUS: 'PLUS',
+  PRO: 'PRO',
+  UNLIMITED: 'UNLIMITED',
+} as const;
+
+export type PurchaseOrderInputCurrency = typeof PurchaseOrderInputCurrency[keyof typeof PurchaseOrderInputCurrency];
+
+
+export const PurchaseOrderInputCurrency = {
+  VND: 'VND',
+  USDT: 'USDT',
+} as const;
+
+export type PurchaseOrderInputNetwork = typeof PurchaseOrderInputNetwork[keyof typeof PurchaseOrderInputNetwork];
+
+
+export const PurchaseOrderInputNetwork = {
+  BEP20: 'BEP20',
+  TRC20: 'TRC20',
+} as const;
+
+export interface PurchaseOrderInput {
+  plan: PurchaseOrderInputPlan;
+  currency: PurchaseOrderInputCurrency;
+  network?: PurchaseOrderInputNetwork;
+}
+
+export interface PurchaseOrderProofInput {
+  /** @maxLength 256 */
+  txHash?: string;
+  /** @maxLength 4000 */
+  proofInfo?: string;
+}
+
+export type PurchaseOrderReviewInputDecision = typeof PurchaseOrderReviewInputDecision[keyof typeof PurchaseOrderReviewInputDecision];
+
+
+export const PurchaseOrderReviewInputDecision = {
+  paid: 'paid',
+  rejected: 'rejected',
+} as const;
+
+export interface PurchaseOrderReviewInput {
+  decision: PurchaseOrderReviewInputDecision;
+  reason?: string;
+}
+
+export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof PurchaseOrderStatus];
+
+
+export const PurchaseOrderStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  rejected: 'rejected',
+} as const;
+
+export interface PurchaseOrder {
+  id: string;
+  ownerUserId: string;
+  plan: string;
+  durationDays: number;
+  currency: string;
+  amount: string;
+  paymentDestination?: string;
+  /** @nullable */
+  network?: string | null;
+  reference: string;
+  /** @nullable */
+  txHash?: string | null;
+  /** @nullable */
+  proofInfo?: string | null;
+  status: PurchaseOrderStatus;
+  /** @nullable */
+  reviewedBy?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  /** @nullable */
+  rejectionReason?: string | null;
+  createdAt: string;
+}
+
 export interface PlanLimitSettings {
   /**
      * @minimum 0

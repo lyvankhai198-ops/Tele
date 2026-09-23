@@ -18,6 +18,7 @@ import {
   type SupportTelegramMessageRef,
 } from "./support-chat";
 import { supportMediaStorage } from "./supportMediaStorage";
+import { reviewOrder } from "./telecampaign-orders";
 import { logger } from "./logger";
 import {
   translateAdminReplyForCustomer,
@@ -26,7 +27,7 @@ import {
 
 type TelegramMessage = {
   message_id: number;
-  chat: { id: number | string };
+  chat: { id: number | string; type?: string };
   text?: string;
   caption?: string;
   photo?: Array<{ file_id: string; width: number; height: number; file_size?: number }>;
@@ -34,7 +35,7 @@ type TelegramMessage = {
   from?: { username?: string; first_name?: string; last_name?: string };
 };
 
-type TelegramUpdate = { update_id: number; message?: TelegramMessage };
+type TelegramUpdate = { update_id: number; message?: TelegramMessage; callback_query?: { id: string; data?: string; from?: { id: number }; message?: TelegramMessage } };
 
 const botToken = () => process.env.TELECAMPAIGN_SUPPORT_BOT_TOKEN ?? process.env.TELECAMPAIGN_KGPT_BOT_TOKEN;
 let polling = false;
@@ -86,6 +87,49 @@ async function sendAdminMenu(text = "Chọn một thao tác:"): Promise<Telegram
     text,
     reply_markup: ADMIN_MENU,
   });
+}
+
+export async function notifyPurchaseOrder(text: string, orderId?: string): Promise<void> {
+  try {
+  const settings = await getSystemSettings();
+  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
+  const chat = await telegramCall<{ type?: string }>("getChat", { chat_id: settings.supportChat.adminTelegramChatId });
+  await telegramCall("sendMessage", {
+    chat_id: settings.supportChat.adminTelegramChatId,
+    text,
+    reply_markup: orderId && chat?.type === "private" ? {
+      inline_keyboard: [[
+        { text: "✅ Duyệt", callback_data: `purchase:paid:${orderId}` },
+        { text: "❌ Từ chối", callback_data: `purchase:rejected:${orderId}` },
+      ]],
+    } : undefined,
+  });
+  } catch (error) {
+    logger.warn({ err: error }, "Purchase order Telegram notification failed");
+  }
+}
+
+async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+  const settings = await getSystemSettings();
+  const configured = settings.supportChat.adminTelegramChatId;
+  const message = query.message;
+  const parts = query.data?.split(":") ?? [];
+  const authorized = Boolean(configured && message?.chat.type === "private"
+    && String(message.chat.id) === String(configured)
+    && String(query.from?.id) === String(configured)
+    && parts.length === 3 && parts[0] === "purchase" && ["paid", "rejected"].includes(parts[1]));
+  if (!authorized) {
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không được phép", show_alert: true });
+    return;
+  }
+  try {
+    const order = await reviewOrder(parts[2], String(query.from!.id), parts[1] as "paid" | "rejected");
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: order?.status === "paid" ? "Đã duyệt" : "Đã từ chối" });
+    if (order) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
+  } catch (error) {
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không thể xử lý đơn", show_alert: true });
+    logger.warn({ err: error, callbackId: query.id }, "Purchase callback review failed");
+  }
 }
 
 function localDayCondition(column: typeof licenseKeysTable.claimedAt, timezone: string, date: string) {
@@ -478,11 +522,12 @@ async function pollTelegram(): Promise<void> {
     const updates = await telegramCall<TelegramUpdate[]>("getUpdates", {
       offset,
       timeout: 20,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
     });
     for (const update of updates ?? []) {
       offset = Math.max(offset, update.update_id + 1);
       if (update.message) await handleTelegramMessage(update.message);
+      if (update.callback_query) await handlePurchaseCallback(update.callback_query);
     }
   } catch (error) {
     logger.warn({ err: error }, "Support Telegram polling failed");

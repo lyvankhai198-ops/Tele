@@ -16,6 +16,7 @@ import {
   EmptyState,
   Toast,
 } from "@/components/layout/AppLayout";
+import { AdminPurchaseOrders } from "@/components/admin/AdminPurchaseOrders";
 import {
   useListAdminLicenseKeys,
   useCreateAdminLicenseKey,
@@ -1030,6 +1031,8 @@ export function AdminLicenseKeysPage() {
           </div>
         </Modal>
       )}
+
+      <AdminPurchaseOrders />
 
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
