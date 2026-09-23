@@ -48,6 +48,7 @@ export type SubscriptionReminderSettings = {
   senderAccountId: string | null;
   reminderDays: number[];
   sendAfterExpiry: boolean;
+  renewalUrl: string;
   messageVi: string;
   messageEn: string;
 };
@@ -189,8 +190,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
     senderAccountId: null,
     reminderDays: [7, 3, 1],
     sendAfterExpiry: false,
-    messageVi: "TeleCampaign: Gói của bạn còn {days} ngày sẽ hết hạn vào {expiresAt}. Hãy gia hạn gói để không bị gián đoạn.\nGia hạn gói hoặc xem hướng dẫn: {purchaseLink}",
-    messageEn: "TeleCampaign: Your subscription expires in {days} days on {expiresAt}. Renew your plan to avoid interruption.\nRenew your plan or view instructions: {purchaseLink}",
+    renewalUrl: "https://tele.khaimmo.shop/upgrade",
+    messageVi: "TeleCampaign:\n\nGói dịch vụ của bạn sẽ hết hạn sau {days} ngày, vào {expiresAt}.\nHãy gia hạn ngay để tiếp tục sử dụng mà không bị gián đoạn.\n\nGia hạn trên web: {renewalLink}\nMua key qua Telegram Bot: {purchaseLink}",
+    messageEn: "TeleCampaign:\n\nYour subscription expires in {days} days on {expiresAt}.\nRenew now to continue using the service without interruption.\n\nRenew on the web: {renewalLink}\nBuy a license key via Telegram Bot: {purchaseLink}",
   },
   defaultAccountDailyLimit: 200,
   campaignDefaults: {
@@ -342,6 +344,9 @@ function normalizedSubscriptionReminder(
       : null,
     reminderDays: reminderDays.length ? reminderDays : fallback.reminderDays,
     sendAfterExpiry: typeof stored?.sendAfterExpiry === "boolean" ? stored.sendAfterExpiry : fallback.sendAfterExpiry,
+    renewalUrl: typeof stored?.renewalUrl === "string" && stored.renewalUrl.trim().length <= 512
+      ? stored.renewalUrl.trim()
+      : fallback.renewalUrl,
     messageVi: typeof stored?.messageVi === "string" && stored.messageVi.trim().length <= 4096
       ? stored.messageVi.trim()
       : typeof (stored as Partial<SubscriptionReminderSettings> & { message?: unknown })?.message === "string"

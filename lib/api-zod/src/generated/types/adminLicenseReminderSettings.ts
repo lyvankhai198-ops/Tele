@@ -16,6 +16,11 @@ export interface AdminLicenseReminderSettings {
      */
   reminderDays: number[];
   sendAfterExpiry: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 512
+     */
+  renewalUrl: string;
   /** @maxLength 4096 */
   messageVi: string;
   /** @maxLength 4096 */

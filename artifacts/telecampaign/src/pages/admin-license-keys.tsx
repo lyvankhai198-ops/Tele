@@ -22,6 +22,7 @@ import {
   useCreateAdminLicenseKey,
   useRevokeAdminLicenseKey,
   useGetAdminPurchaseSettings,
+  useGetAdminPurchaseOrderSettings,
   useUpdateAdminPurchaseSettings,
   useGetAdminLicenseReminderSettings,
   useUpdateAdminLicenseReminderSettings,
@@ -31,6 +32,7 @@ import {
   getListAdminLicenseKeysQueryKey,
   type CreateAdminLicenseKeyInput,
   type AdminLicenseReminderSettings,
+  type PurchaseOrderSettings,
   type LicenseKeyStatus,
   type LicenseKeyPool,
   type PlanCode,
@@ -64,7 +66,7 @@ const copy = {
         ? "Only HTTPS links on t.me or telegram.me are accepted."
         : "No purchase link is configured. Users will be told to contact an administrator.",
     reminderTitle: "Telegram renewal reminders",
-    reminderDetail: "Use an admin Telegram account to send direct private reminders to linked user accounts. A username is required; users do not need to message the admin first.",
+    reminderDetail: "Use an admin Telegram account to send direct private reminders to linked user accounts. Each message can include a web renewal link and a Telegram Bot link for buying a key.",
     reminderEnabled: "Enable automatic reminders",
     reminderSender: "Admin sender account",
     reminderSenderPlaceholder: "Select a connected admin Telegram account",
@@ -73,7 +75,10 @@ const copy = {
     reminderAfterExpiry: "Send one reminder after expiry",
      reminderMessageVi: "Vietnamese message template",
      reminderMessageEn: "English message template",
-     reminderMessageHint: "Available placeholders: {days}, {expiresAt}, {username}, {purchaseLink}. The message is selected from the user's interface language.",
+     reminderRenewalUrl: "Web renewal URL",
+     reminderRenewalUrlPlaceholder: "https://tele.khaimmo.shop/upgrade",
+     reminderRenewalUrlNote: "Use the full HTTPS URL users should open to renew their subscription.",
+     reminderMessageHint: "Available placeholders: {days}, {expiresAt}, {username}, {renewalLink}, {purchaseLink}. The message is selected from the user's interface language.",
     reminderSave: "Save reminders",
     reminderSaving: "Saving…",
     reminderSaved: "Telegram renewal reminders saved.",
@@ -110,7 +115,7 @@ const copy = {
     durationLabel: "Duration (Days)",
     salePriceLabel: "Sale price (VND)",
     salePricePlaceholder: "E.g. 149000",
-    salePriceHint: "Stored on each key and used for revenue reports. Adjust the reference price when needed.",
+    salePriceHint: "Defaults to the current VND plan price and is stored on each key as a historical snapshot. You can override it for a promotion.",
     salePriceValidationError: "Sale price must be an integer from 0 to 1,000,000,000 VND.",
     durationPlaceholder: "E.g. 30",
     quantityLabel: "Quantity",
@@ -168,7 +173,7 @@ const copy = {
         ? "Chỉ chấp nhận link HTTPS thuộc t.me hoặc telegram.me."
         : "Chưa cấu hình link mua key. Người dùng sẽ được yêu cầu liên hệ quản trị viên.",
     reminderTitle: "Nhắc mua key qua Telegram",
-    reminderDetail: "Dùng tài khoản Telegram của admin để nhắn riêng trực tiếp đến tài khoản người dùng đã liên kết. Người nhận phải có username và không cần nhắn admin trước.",
+    reminderDetail: "Dùng tài khoản Telegram của admin để nhắn riêng trực tiếp đến tài khoản người dùng đã liên kết. Mỗi tin có thể kèm link gia hạn trên web và link bot để mua key.",
     reminderEnabled: "Bật tự động nhắc mua key",
     reminderSender: "Tài khoản admin gửi tin",
     reminderSenderPlaceholder: "Chọn tài khoản Telegram admin đang kết nối",
@@ -177,7 +182,10 @@ const copy = {
     reminderAfterExpiry: "Gửi thêm một lần sau khi hết hạn",
      reminderMessageVi: "Mẫu tin nhắn tiếng Việt",
      reminderMessageEn: "Mẫu tin nhắn tiếng Anh",
-     reminderMessageHint: "Placeholder dùng được: {days}, {expiresAt}, {username}, {purchaseLink}. Hệ thống chọn mẫu theo ngôn ngữ giao diện của người dùng.",
+     reminderRenewalUrl: "Link gia hạn trên website",
+     reminderRenewalUrlPlaceholder: "https://tele.khaimmo.shop/upgrade",
+     reminderRenewalUrlNote: "Nhập đầy đủ URL HTTPS mà người dùng sẽ mở để gia hạn gói.",
+     reminderMessageHint: "Placeholder dùng được: {days}, {expiresAt}, {username}, {renewalLink}, {purchaseLink}. Hệ thống chọn mẫu theo ngôn ngữ giao diện của người dùng.",
     reminderSave: "Lưu cấu hình nhắc",
     reminderSaving: "Đang lưu…",
     reminderSaved: "Đã lưu cấu hình nhắc mua key qua Telegram.",
@@ -214,7 +222,7 @@ const copy = {
     durationLabel: "Thời hạn (Ngày)",
     salePriceLabel: "Giá bán (VND)",
     salePricePlaceholder: "VD: 149000",
-    salePriceHint: "Giá được lưu riêng trên từng key và dùng cho báo cáo doanh thu. Có thể chỉnh theo thời giá.",
+     salePriceHint: "Tự điền theo giá VND hiện tại của gói và lưu riêng trên key để làm snapshot lịch sử. Có thể sửa nếu đây là giá khuyến mãi.",
     salePriceValidationError: "Giá bán phải là số nguyên từ 0 đến 1.000.000.000 VND.",
     durationPlaceholder: "VD: 30",
     quantityLabel: "Số lượng mã",
@@ -264,11 +272,18 @@ function formatVnd(value: number): string {
   return `${new Intl.NumberFormat("vi-VN").format(value)} đ`;
 }
 
-const REFERENCE_PRICE_VND: Record<LicenseKeyPlan, number> = {
-  plus: 60_000,
-  pro: 149_000,
-  unlimited: 250_000,
-};
+function configuredSalePrice(
+  settings: PurchaseOrderSettings | undefined,
+  plan: LicenseKeyPlan,
+  durationDays: number,
+): number {
+  if (!settings || !Number.isInteger(durationDays) || durationDays < 1) return 0;
+  const planCode = plan.toUpperCase() as keyof PurchaseOrderSettings["pricesVnd"];
+  const configuredPrice = settings.pricesVnd[planCode];
+  const configuredDuration = settings.durationsDays?.[planCode];
+  if (!Number.isFinite(configuredPrice) || configuredDuration === undefined || !Number.isInteger(configuredDuration) || configuredDuration < 1) return 0;
+  return Math.max(0, Math.round(configuredPrice * durationDays / configuredDuration));
+}
 
 export function AdminLicenseKeysPage() {
   const [, navigate] = useLocation();
@@ -297,6 +312,7 @@ export function AdminLicenseKeysPage() {
     isLoading: isPurchaseSettingsLoading,
     isError: isPurchaseSettingsError,
   } = useGetAdminPurchaseSettings();
+  const { data: purchaseOrderSettings } = useGetAdminPurchaseOrderSettings();
   const {
     data: reminderData,
     isLoading: isReminderLoading,
@@ -319,10 +335,10 @@ export function AdminLicenseKeysPage() {
   const [formPlan, setFormPlan] = useState<LicenseKeyPlan>("pro");
   const [formDuration, setFormDuration] = useState<string>("30");
   const [formQuantity, setFormQuantity] = useState<string>("1");
-  const [formSalePrice, setFormSalePrice] = useState<string>("149000");
+  const [formSalePrice, setFormSalePrice] = useState<string>("");
   const [formLabel, setFormLabel] = useState<string>("");
   const [formPool, setFormPool] = useState<LicenseKeyPool>("normal");
-  const lastAutoSalePrice = useRef<number | null>(149000);
+  const lastAutoSalePrice = useRef<number | null>(null);
   const [telegramPurchaseUrl, setTelegramPurchaseUrl] = useState("");
   const [reminderForm, setReminderForm] = useState<AdminLicenseReminderSettings | null>(null);
 
@@ -359,13 +375,13 @@ export function AdminLicenseKeysPage() {
   useEffect(() => {
     const durationDays = Number(formDuration);
     if (!Number.isInteger(durationDays) || durationDays < 1) return;
-    const nextPrice = Math.round(REFERENCE_PRICE_VND[formPlan] * durationDays / 30);
+    const nextPrice = configuredSalePrice(purchaseOrderSettings, formPlan, durationDays);
     const currentPrice = Number(formSalePrice);
     if (!formSalePrice || currentPrice === lastAutoSalePrice.current) {
       setFormSalePrice(String(nextPrice));
       lastAutoSalePrice.current = nextPrice;
     }
-  }, [formPlan, formDuration]);
+  }, [formPlan, formDuration, purchaseOrderSettings]);
 
   const handleSavePurchaseLink = () => {
     const value = telegramPurchaseUrl.trim();
@@ -455,8 +471,8 @@ export function AdminLicenseKeysPage() {
           setFormPlan("pro");
           setFormDuration("30");
           setFormQuantity("1");
-           setFormSalePrice("149000");
-           lastAutoSalePrice.current = 149000;
+           setFormSalePrice(String(configuredSalePrice(purchaseOrderSettings, "pro", 30)));
+           lastAutoSalePrice.current = configuredSalePrice(purchaseOrderSettings, "pro", 30);
           setFormLabel("");
            setFormPool("normal");
           setToastMessage(text.createSuccess(result.licenseKeys.length));
@@ -689,6 +705,19 @@ export function AdminLicenseKeysPage() {
                   )}
                 </label>
 
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderRenewalUrl}</span>
+                  <input
+                    type="url"
+                    value={reminderForm.renewalUrl}
+                    onChange={(event) => setReminderForm({ ...reminderForm, renewalUrl: event.target.value })}
+                    placeholder={text.reminderRenewalUrlPlaceholder}
+                    className="h-12 w-full rounded-2xl border border-[#cbd5e1] bg-white px-4 text-[14px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
+                    data-testid="input-license-reminder-renewal-url"
+                  />
+                  <span className="mt-1.5 block text-[12px] font-medium text-[#64748b]">{text.reminderRenewalUrlNote}</span>
+                </label>
+
                 <div>
                   <span className="mb-2 block text-[12px] font-extrabold uppercase tracking-wider text-[#475569]">{text.reminderDays}</span>
                   <div className="flex flex-wrap gap-2">
@@ -751,7 +780,7 @@ export function AdminLicenseKeysPage() {
               <div className="flex justify-end">
                 <PrimaryButton
                   onClick={handleSaveReminderSettings}
-                   disabled={reminderMutation.isPending || reminderForm.reminderDays.length === 0 || !reminderForm.messageVi.trim() || !reminderForm.messageEn.trim()}
+                   disabled={reminderMutation.isPending || reminderForm.reminderDays.length === 0 || !reminderForm.renewalUrl.trim() || !reminderForm.messageVi.trim() || !reminderForm.messageEn.trim()}
                 >
                   <Save className="h-4 w-4" />
                   {reminderMutation.isPending ? text.reminderSaving : text.reminderSave}

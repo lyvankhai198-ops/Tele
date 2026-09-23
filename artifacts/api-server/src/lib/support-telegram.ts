@@ -4,6 +4,7 @@ import {
   appUsersTable,
   db,
   licenseKeysTable,
+  purchaseOrdersTable,
   subscriptionsTable,
   supportMessagesTable,
 } from "@workspace/db";
@@ -150,6 +151,7 @@ async function getAdminOverview() {
     [expiringCount],
     [soldToday],
     [revenueToday],
+    [renewalRevenueToday],
     [soldTotal],
     [inventory],
   ] = await Promise.all([
@@ -169,6 +171,12 @@ async function getAdminOverview() {
       isNotNull(licenseKeysTable.claimedAt),
       localDayCondition(licenseKeysTable.claimedAt, settings.defaultTimezone, today),
     )),
+    db.select({ value: sum(purchaseOrdersTable.amount) }).from(purchaseOrdersTable).where(and(
+      eq(purchaseOrdersTable.orderType, "renewal"),
+      eq(purchaseOrdersTable.status, "paid"),
+      eq(purchaseOrdersTable.currency, "VND"),
+      sql`(COALESCE(${purchaseOrdersTable.reviewedAt}, ${purchaseOrdersTable.updatedAt}) AT TIME ZONE ${settings.defaultTimezone})::date = ${today}::date`,
+    )),
     db.select({ value: count() }).from(licenseKeysTable).where(and(
       isNull(licenseKeysTable.revokedAt),
       isNotNull(licenseKeysTable.claimedAt),
@@ -183,7 +191,7 @@ async function getAdminOverview() {
     active: Number(activeCount?.value ?? 0),
     expiring: Number(expiringCount?.value ?? 0),
     soldToday: Number(soldToday?.value ?? 0),
-    revenueToday: Number(revenueToday?.value ?? 0),
+    revenueToday: Number(revenueToday?.value ?? 0) + Number(renewalRevenueToday?.value ?? 0),
     soldTotal: Number(soldTotal?.value ?? 0),
     inventory: Number(inventory?.value ?? 0),
   };

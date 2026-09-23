@@ -16,7 +16,7 @@ const copy = {
   vi: {
     pageTitle: "Doanh thu & khách hàng ruột",
     eyebrow: "Trung tâm quản trị",
-    pageDetail: "Theo dõi doanh thu từ license key, giá trị tồn kho và nhóm khách hàng mua nhiều nhất.",
+    pageDetail: "Theo dõi doanh thu từ license key và gia hạn, giá trị tồn kho và nhóm khách hàng chi tiêu nhiều nhất.",
     loadError: "Không thể tải báo cáo doanh thu",
     loadErrorDetail: "Vui lòng thử lại sau hoặc kiểm tra quyền quản trị.",
     revenue: "Doanh thu đã ghi nhận",
@@ -48,7 +48,7 @@ const copy = {
   en: {
     pageTitle: "Revenue & loyal customers",
     eyebrow: "Admin Center",
-    pageDetail: "Track license-key revenue, unsold inventory value, and the customers who buy most.",
+    pageDetail: "Track license-key and renewal revenue, unsold inventory value, and the customers who spend the most.",
     loadError: "Could not load the revenue report",
     loadErrorDetail: "Please try again later or check your administrator access.",
     revenue: "Recorded revenue",

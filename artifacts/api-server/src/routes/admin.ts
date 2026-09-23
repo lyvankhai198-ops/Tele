@@ -1713,6 +1713,15 @@ router.patch("/admin/license-reminder-settings", async (req, res): Promise<void>
   ) {
     return void sendError(res, 400, "Mốc nhắc phải là 1, 3 hoặc 7 ngày và nội dung không được để trống.");
   }
+  let renewalUrl: URL;
+  try {
+    renewalUrl = new URL(parsed.data.renewalUrl.trim());
+  } catch {
+    return void sendError(res, 400, "Link gia hạn phải là một URL HTTPS hợp lệ.");
+  }
+  if (renewalUrl.protocol !== "https:" || renewalUrl.username || renewalUrl.password || !renewalUrl.hostname) {
+    return void sendError(res, 400, "Link gia hạn phải dùng HTTPS và không được chứa thông tin đăng nhập.");
+  }
 
   let senderAccount: { id: string; status: string } | null = null;
   if (parsed.data.senderAccountId) {
@@ -1745,6 +1754,7 @@ router.patch("/admin/license-reminder-settings", async (req, res): Promise<void>
       senderAccountId: parsed.data.senderAccountId,
       reminderDays: reminderDays.sort((left, right) => right - left),
       sendAfterExpiry: parsed.data.sendAfterExpiry,
+      renewalUrl: parsed.data.renewalUrl.trim(),
       messageVi: parsed.data.messageVi.trim(),
       messageEn: parsed.data.messageEn.trim(),
     },

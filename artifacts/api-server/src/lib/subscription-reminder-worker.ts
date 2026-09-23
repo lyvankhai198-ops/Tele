@@ -77,6 +77,7 @@ function renderReminderMessage(
     expiresAt: Date;
     now: Date;
     recipientUsername: string;
+    renewalLink: string;
     purchaseLink: string | null;
     reminderType: string;
   },
@@ -86,6 +87,7 @@ function renderReminderMessage(
     .replace(/\{days\}/g, String(remainingDays))
     .replace(/\{expiresAt\}/g, input.expiresAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }))
     .replace(/\{username\}/g, `@${input.recipientUsername.replace(/^@+/, "")}`)
+    .replace(/\{renewalLink\}/g, input.renewalLink)
     .replace(/\{purchaseLink\}/g, input.purchaseLink ?? "")
     .replace(/\{reminderType\}/g, input.reminderType);
 }
@@ -220,6 +222,7 @@ async function processJob(
   senderAccountId: string,
   messageVi: string,
   messageEn: string,
+  renewalLink: string,
   purchaseLink: string | null,
   now: Date,
 ): Promise<void> {
@@ -280,6 +283,7 @@ async function processJob(
       expiresAt: recipient.expiresAt,
       now,
       recipientUsername: recipient.username,
+        renewalLink,
       purchaseLink,
       reminderType: job.reminderType,
       },
@@ -340,6 +344,7 @@ export async function startSubscriptionReminderWorker(): Promise<() => void> {
           settings.subscriptionReminder.senderAccountId,
           settings.subscriptionReminder.messageVi,
           settings.subscriptionReminder.messageEn,
+          settings.subscriptionReminder.renewalUrl,
           telegramPurchaseUrl,
           now,
         );

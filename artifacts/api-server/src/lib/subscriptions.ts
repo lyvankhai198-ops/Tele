@@ -6,6 +6,7 @@ import {
   activityLogsTable,
   db,
   licenseKeysTable,
+  purchaseOrdersTable,
   subscriptionsTable,
   telegramAccountsTable,
   campaignsTable,
@@ -537,8 +538,20 @@ export async function getAdminOverview() {
 }
 
 export async function getAdminRevenueInsights() {
-  const [licenses, users, sentTargets] = await Promise.all([
+  const [licenses, renewalOrders, users, sentTargets] = await Promise.all([
     db.select().from(licenseKeysTable),
+    db.select({
+      ownerUserId: purchaseOrdersTable.ownerUserId,
+      plan: purchaseOrdersTable.plan,
+      durationDays: purchaseOrdersTable.durationDays,
+      amount: purchaseOrdersTable.amount,
+      paidAt: purchaseOrdersTable.reviewedAt,
+      updatedAt: purchaseOrdersTable.updatedAt,
+    }).from(purchaseOrdersTable).where(and(
+      eq(purchaseOrdersTable.orderType, "renewal"),
+      eq(purchaseOrdersTable.status, "paid"),
+      eq(purchaseOrdersTable.currency, "VND"),
+    )),
     db.select({ id: appUsersTable.id, username: appUsersTable.username }).from(appUsersTable),
     db.select({ ownerUserId: campaignsTable.ownerUserId })
       .from(campaignTargetsTable)
@@ -626,6 +639,30 @@ export async function getAdminRevenueInsights() {
         insight.inventoryValueVnd += license.salePriceVnd;
       }
     }
+  }
+
+  for (const order of renewalOrders) {
+    const amount = Number(order.amount);
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    const plan = isPlanCode(order.plan) ? order.plan : "plus";
+    const insight = planInsights[plan];
+    const customer = customers.get(order.ownerUserId) ?? {
+      totalSpentVnd: 0,
+      keysPurchased: 0,
+      coveredDays: 0,
+      messagesSent: 0,
+      missingPriceKeys: 0,
+    };
+    const paidAt = order.paidAt ?? order.updatedAt;
+    customer.totalSpentVnd += amount;
+    customer.coveredDays += order.durationDays;
+    totalRevenueVnd += amount;
+    const month = paidAt.toISOString().slice(0, 7);
+    const monthInsight = monthInsights.get(month) ?? { revenueVnd: 0, soldKeys: 0 };
+    monthInsight.revenueVnd += amount;
+    monthInsights.set(month, monthInsight);
+    insight.revenueVnd += amount;
+    customers.set(order.ownerUserId, customer);
   }
 
   const usernameById = new Map(users.map((user) => [user.id, user.username]));

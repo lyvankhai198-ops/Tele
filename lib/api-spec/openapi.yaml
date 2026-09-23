@@ -3061,7 +3061,7 @@ components:
         status: { type: string }
     AdminLicenseReminderSettings:
       type: object
-      required: [enabled, senderAccountId, reminderDays, sendAfterExpiry, messageVi, messageEn]
+      required: [enabled, senderAccountId, reminderDays, sendAfterExpiry, renewalUrl, messageVi, messageEn]
       properties:
         enabled: { type: boolean }
         senderAccountId: { type: ["string", "null"] }
@@ -3069,6 +3069,7 @@ components:
           type: array
           items: { type: number, minimum: 1, maximum: 30, multipleOf: 1 }
         sendAfterExpiry: { type: boolean }
+        renewalUrl: { type: string, minLength: 1, maxLength: 512 }
         messageVi: { type: string, maxLength: 4096 }
         messageEn: { type: string, maxLength: 4096 }
     AdminLicenseReminderSettingsResponse:
@@ -3081,7 +3082,7 @@ components:
           items: { $ref: "#/components/schemas/AdminLicenseReminderAccount" }
     AdminLicenseReminderSettingsInput:
       type: object
-      required: [enabled, senderAccountId, reminderDays, sendAfterExpiry, messageVi, messageEn]
+      required: [enabled, senderAccountId, reminderDays, sendAfterExpiry, renewalUrl, messageVi, messageEn]
       properties:
         enabled: { type: boolean }
         senderAccountId: { type: ["string", "null"] }
@@ -3091,6 +3092,7 @@ components:
           maxItems: 3
           items: { type: number, minimum: 1, maximum: 30, multipleOf: 1 }
         sendAfterExpiry: { type: boolean }
+        renewalUrl: { type: string, minLength: 1, maxLength: 512 }
         messageVi: { type: string, maxLength: 4096 }
         messageEn: { type: string, maxLength: 4096 }
     AuthLanguageInput:
