@@ -401,6 +401,18 @@ export default function Upgrade() {
            >
              {t("Close")}
            </button>
+           {derivedStatus === "verifying" && isAutomated && !isExpired && (
+             <button
+               type="button"
+               onClick={handleCancelOrder}
+               disabled={cancelOrderMutation.isPending}
+               className="mt-3 w-full rounded-xl border border-[#be123c] py-4 font-extrabold text-[#be123c] hover:bg-[#fff1f2] disabled:opacity-50"
+             >
+               {cancelOrderMutation.isPending
+                 ? (language === "vi" ? "Đang hủy…" : "Cancelling…")
+                 : (language === "vi" ? "Hủy đơn thanh toán" : "Cancel payment order")}
+             </button>
+           )}
         </div>
       );
     }
