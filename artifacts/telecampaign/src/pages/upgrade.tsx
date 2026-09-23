@@ -71,7 +71,14 @@ export default function Upgrade() {
   const [, setLocation] = useLocation();
   const { data: summary, isLoading, isError } = useGetUpgradeSummary();
   const { data: purchaseSettings } = useGetPurchaseOrderSettings();
-  const { data: purchaseOrders } = useListPurchaseOrders({ query: { queryKey: getListPurchaseOrdersQueryKey(), refetchInterval: 5000 } });
+  const { data: purchaseOrders, refetch: refetchPurchaseOrders } = useListPurchaseOrders({
+    query: {
+      queryKey: getListPurchaseOrdersQueryKey(),
+      refetchInterval: 3000,
+      refetchIntervalInBackground: true,
+      refetchOnWindowFocus: true,
+    },
+  });
   const activateMutation = useActivateLicense();
   const createOrderMutation = useCreatePurchaseOrder();
   const submitProofMutation = useSubmitPurchaseOrderProof();
@@ -90,25 +97,30 @@ export default function Upgrade() {
   const [, setTick] = useState(0);
 
   const licenseInputRef = useRef<HTMLInputElement>(null);
-  const lastPaidIds = useRef<Set<string>>(new Set());
+  const lastObservedStatuses = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
-    if (purchaseOrders) {
-      const paidOrders = purchaseOrders.filter(o => o.status === "paid").map(o => o.id);
-      const newPaidIds = new Set(paidOrders);
-      let hasNew = false;
-      for (const id of newPaidIds) {
-        if (!lastPaidIds.current.has(id)) {
-          hasNew = true;
-          break;
+    if (!purchaseOrders) return;
+    let hasNewlyPaidOrder = false;
+    for (const order of purchaseOrders) {
+      const previousStatus = lastObservedStatuses.current.get(order.id);
+      if (previousStatus !== "paid" && order.status === "paid") {
+        hasNewlyPaidOrder = true;
+        if (createdOrder?.id === order.id) {
+          setToastMessage({
+            title: language === "vi"
+              ? `Chúc mừng! Gói ${order.plan.toUpperCase()} đã được kích hoạt thành công.`
+              : `Congratulations! Your ${order.plan.toUpperCase()} plan is now active.`,
+            type: "success",
+          });
         }
       }
-      if (hasNew) {
-        queryClient.invalidateQueries({ queryKey: getGetUpgradeSummaryQueryKey() });
-      }
-      lastPaidIds.current = newPaidIds;
+      lastObservedStatuses.current.set(order.id, order.status);
     }
-  }, [purchaseOrders, queryClient]);
+    if (hasNewlyPaidOrder) {
+      queryClient.invalidateQueries({ queryKey: getGetUpgradeSummaryQueryKey() });
+    }
+  }, [purchaseOrders, createdOrder?.id, language, queryClient]);
 
   const handleCopy = (textToCopy: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -150,9 +162,12 @@ export default function Upgrade() {
     }, {
       onSuccess: () => {
         setToastMessage({ title: currentOrder.automated
-          ? (language === "vi" ? "Đã ghi nhận TxHash, đang xác minh trên blockchain." : "TxHash recorded. Verifying on-chain.")
+          ? currentOrder.currency === "VND"
+            ? (language === "vi" ? "Đã ghi nhận xác nhận chuyển khoản. Hệ thống đang tự kiểm tra giao dịch." : "Transfer confirmation recorded. The system is checking the payment automatically.")
+            : (language === "vi" ? "Đã ghi nhận TxHash, đang xác minh trên blockchain." : "TxHash recorded. Verifying on-chain.")
           : (language === "vi" ? "Đã báo quản trị kiểm tra đơn cũ." : "An admin will review this older order."), type: "success" });
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+        void refetchPurchaseOrders();
       },
       onError: (err) => {
         setToastMessage({ title: t("Could not submit proof"), type: "error" });
@@ -295,7 +310,9 @@ export default function Upgrade() {
           <CheckCircle2 className="w-16 h-16 text-[#10b981] mx-auto mb-4" />
           <h3 className="text-[22px] font-extrabold text-[#0f172a] mb-2">{language === "vi" ? "Thanh toán thành công" : "Payment Successful"}</h3>
           <p className="text-[#64748b] text-[15px] mb-8 font-medium">
-            {language === "vi" ? "Gói của bạn đã được kích hoạt thành công." : "Your plan has been activated successfully."}
+            {language === "vi"
+              ? `Chúc mừng! Gói ${currentOrder.plan.toUpperCase()} đã được kích hoạt thành công trong ${currentOrder.durationDays} ngày.`
+              : `Congratulations! Your ${currentOrder.plan.toUpperCase()} plan has been activated for ${currentOrder.durationDays} days.`}
           </p>
           <button onClick={() => { setCheckoutPlan(null); setCreatedOrder(null); setTxHash(""); }} className="w-full py-4 rounded-xl border border-[#cbd5e1] text-[#475569] font-extrabold hover:bg-[#f8fafc] transition-colors bg-white">
             {t("Close")}
@@ -425,8 +442,24 @@ export default function Upgrade() {
                 </span>
               </div>
               <p className="text-[#1e3a8a] text-[13px] font-medium text-center">
-                {language === "vi" ? "SePay đang chờ giao dịch đến. Bạn có thể đóng cửa sổ này và xem lại trạng thái trong lịch sử đơn." : "SePay is waiting for the transfer. You may close this window and check order history later."}
+                {language === "vi" ? "Hệ thống đang chờ xác nhận giao dịch. Bạn có thể đóng cửa sổ này và xem lại trạng thái trong lịch sử đơn." : "The system is waiting for payment confirmation. You may close this window and check the order history later."}
               </p>
+              {!currentOrder.proofInfo && (
+                <button
+                  type="button"
+                  onClick={handleSubmitProof}
+                  disabled={submitProofMutation.isPending}
+                  className="mt-2 bg-[#1a2b88] text-white font-bold px-5 py-3 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {submitProofMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {language === "vi" ? "Tôi đã chuyển khoản" : "I have transferred"}
+                </button>
+              )}
+              {currentOrder.proofInfo && (
+                <p className="text-[#1e3a8a] text-[12px] font-bold text-center">
+                  {language === "vi" ? "Đã gửi xác nhận. Đang chờ hệ thống đối soát tự động." : "Confirmation sent. Waiting for automatic payment matching."}
+                </p>
+              )}
             </div>
           ) : (
              <div className="flex flex-col gap-1 items-center bg-[#fff1f2] p-4 rounded-2xl border border-[#fecdd3]">

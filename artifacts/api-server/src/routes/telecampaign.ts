@@ -687,7 +687,6 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
   if (!valid) { res.status(400).json({ error: "Invalid purchase order" }); return; }
   try {
     const order = await createOrder({ plan: value.plan, currency: value.currency, network: value.network, ownerUserId: currentUserId(req) });
-    await notifyPurchaseOrder(`🧾 Đơn mới user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network ?? "VN-bank"}. Đang chờ xác minh tự động.`);
     res.status(201).json(order);
   } catch (error) {
     if (error instanceof Error && ["PLAN_PRICE_NOT_CONFIGURED", "INVALID_PAYMENT_AMOUNT", "PAYMENT_DESTINATION_NOT_CONFIGURED", "INVALID_PLAN_DURATION", "PLAN_DOWNGRADE_NOT_ALLOWED", "LICENSE_STOCK_EMPTY", "PAYMENT_AUTOMATION_NOT_CONFIGURED"].includes(error.message)) { res.status(400).json({ error: error.message }); return; }
@@ -702,9 +701,11 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
   try { order = await updateOrderProof(req.params.orderId, currentUserId(req), value.txHash, value.proofInfo); }
   catch (error) { if (error instanceof Error && error.message === "TX_HASH_ALREADY_SUBMITTED") { res.status(409).json({ error: "Transaction hash already submitted" }); return; } throw error; }
   if (!order) { res.status(409).json({ error: "Order is expired or cannot accept a transaction hash" }); return; }
-  await notifyPurchaseOrder(order.automated
-    ? `🔎 Đang xác minh giao dịch USDT trên chuỗi user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network}. Chưa kích hoạt khi chỉ có TxHash.`
-    : `🏦 Khách báo giao dịch đơn cũ user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency}. Cần đối chiếu thủ công trước khi duyệt.`, order.automated ? undefined : order.id);
+  await notifyPurchaseOrder(order.automated && order.currency === "VND"
+    ? `🏦 Khách xác nhận đã chuyển khoản user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} VND. Hệ thống đang tự đối soát; không cần duyệt thủ công.`
+    : order.automated
+      ? `🔎 Đang xác minh giao dịch USDT trên chuỗi user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network}. Chưa kích hoạt khi chỉ có TxHash.`
+      : `🏦 Khách báo giao dịch đơn cũ user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency}. Cần đối chiếu thủ công trước khi duyệt.`, order.automated ? undefined : order.id);
   res.json(order);
 });
 router.use((req, res, next): void => {
