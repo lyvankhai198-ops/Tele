@@ -2095,7 +2095,7 @@ router.patch("/message-templates/:templateId", async (req, res): Promise<void> =
     updatedAt: new Date(),
   }).where(and(
     eq(campaignsTable.templateId, updated.id),
-    inArray(campaignsTable.status, ["draft", "paused"]),
+    eq(campaignsTable.ownerUserId, ownerUserId),
   ));
   await recordActivity({ ownerUserId, event: "template.updated", message: `Updated message template: ${updated.name}`, level: "success" });
   res.json(UpdateMessageTemplateResponse.parse(templateResponse(updated)));
