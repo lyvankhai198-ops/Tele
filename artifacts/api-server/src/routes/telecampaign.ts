@@ -3095,8 +3095,18 @@ router.delete("/campaigns/:campaignId", async (req, res): Promise<void> => {
   const params = UpdateCampaignStatusParams.safeParse(req.params);
   if (!params.success) return void sendError(res, 400, params.error.message);
   const [campaign] = await db.delete(campaignsTable)
-    .where(and(eq(campaignsTable.id, params.data.campaignId), eq(campaignsTable.ownerUserId, currentUserId(req)))).returning();
-  if (!campaign) return void sendError(res, 404, "Campaign not found");
+    .where(and(
+      eq(campaignsTable.id, params.data.campaignId),
+      eq(campaignsTable.ownerUserId, currentUserId(req)),
+      notInArray(campaignsTable.status, ["queued", "running"]),
+    )).returning();
+  if (!campaign) {
+    const [existing] = await db.select({ status: campaignsTable.status }).from(campaignsTable)
+      .where(and(eq(campaignsTable.id, params.data.campaignId), eq(campaignsTable.ownerUserId, currentUserId(req)))).limit(1);
+    return void sendError(res, existing ? 409 : 404, existing
+      ? "Dừng chiến dịch trước khi xóa."
+      : "Campaign not found");
+  }
   await recordActivity({ event: "campaign.deleted", message: `Deleted campaign "${campaign.name}"`, ownerUserId: currentUserId(req) });
   res.sendStatus(204);
 });

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
   CircleStop,
@@ -14,12 +15,14 @@ import {
 } from "lucide-react";
 import type { Campaign, MessageTemplate } from "@workspace/api-client-react";
 import {
-  deleteCampaign,
+  getListCalendarItemsQueryKey,
+  getListCampaignsQueryKey,
   useCloneCampaign,
   useGetCampaignCloneReadiness,
   useGetTelegramSavedMessage,
   useBulkControlCampaigns,
   useBulkDeleteCampaigns,
+  useDeleteCampaign,
   useBulkUpdateCampaignTemplate,
   useListCampaigns,
   useListMessageTemplates,
@@ -95,6 +98,9 @@ const copy = {
     editBtn: "Edit",
     cloneBtn: "Clone",
     deleteBtn: "Delete",
+    deleteTitle: "Delete campaign",
+    deleteWarning: (name: string) => `Delete "${name}" and its delivery history? This cannot be undone.`,
+    deleteActiveHint: "Pause this campaign before deleting it.",
     errorsLabel: "Errors",
     dailyQuotaLabel: "Today",
     dailyQuotaValue: (used: number, limit: number) => `${used}/${limit}`,
@@ -138,7 +144,6 @@ const copy = {
     toastDeleted: "Campaign deleted.",
     toastCloned: "Campaign copied as a draft. Review it before running.",
     toastError: (msg: string) => msg,
-    confirmDelete: (name: string) => `Delete campaign "${name}"?`,
     detailStatusPrefix: "Status:",
     detailStatTotal: "Total",
     detailStatSent: "Sent",
@@ -243,6 +248,9 @@ const copy = {
     editBtn: "Chỉnh sửa",
     cloneBtn: "Nhân bản",
     deleteBtn: "Xóa",
+    deleteTitle: "Xóa chiến dịch",
+    deleteWarning: (name: string) => `Xóa "${name}" cùng lịch sử gửi? Thao tác này không thể hoàn tác.`,
+    deleteActiveHint: "Dừng chiến dịch trước khi xóa.",
     errorsLabel: "Lỗi",
     dailyQuotaLabel: "Hôm nay",
     dailyQuotaValue: (used: number, limit: number) => `${used}/${limit}`,
@@ -286,7 +294,6 @@ const copy = {
     toastDeleted: "Đã xóa chiến dịch.",
     toastCloned: "Đã tạo bản sao ở dạng nháp. Hãy kiểm tra trước khi chạy.",
     toastError: (msg: string) => msg,
-    confirmDelete: (name: string) => `Xóa chiến dịch "${name}"?`,
     detailStatusPrefix: "Trạng thái:",
     detailStatTotal: "Tổng gửi",
     detailStatSent: "Đã gửi",
@@ -453,6 +460,7 @@ function resumesAfterDailyQuota(campaign: Campaign) {
 // ---------------------------------------------------------------------------
 export default function Campaigns() {
   const { language } = useLanguage();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const isSupportMode = Boolean(user?.support);
   const isAdmin = user?.role === "admin" && !isSupportMode;
@@ -466,6 +474,7 @@ export default function Campaigns() {
   const cloneCampaign = useCloneCampaign();
   const bulkControl = useBulkControlCampaigns();
   const bulkDelete = useBulkDeleteCampaigns();
+  const deleteOne = useDeleteCampaign();
   const bulkTemplate = useBulkUpdateCampaignTemplate();
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
@@ -474,6 +483,7 @@ export default function Campaigns() {
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
+  const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null);
   const [highlightedCampaignId, setHighlightedCampaignId] = useState<string | null>(null);
   const [templatePreview, setTemplatePreview] = useState<MessageTemplate | null>(null);
   const [forwardPreviewSource, setForwardPreviewSource] = useState<{ accountId: string; messageId: string } | null>(null);
@@ -750,11 +760,16 @@ export default function Campaigns() {
     }
   }
 
-  async function remove(campaign: Campaign) {
-    if (!window.confirm(c.confirmDelete(campaign.name))) return;
+  async function remove() {
+    if (!campaignToDelete || deleteOne.isPending) return;
     try {
-      await deleteCampaign(campaign.id);
-      await campaigns.refetch();
+      await deleteOne.mutateAsync({ campaignId: campaignToDelete.id });
+      if (details?.id === campaignToDelete.id) setDetails(null);
+      setCampaignToDelete(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListCampaignsQueryKey() }),
+        queryClient.invalidateQueries({ queryKey: getListCalendarItemsQueryKey() }),
+      ]);
       setToast(c.toastDeleted);
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
@@ -880,7 +895,22 @@ export default function Campaigns() {
                             <span>OK {campaign.sentCount} · {c.errorsLabel} {campaign.failedCount}</span>
                           </div>
                         </div>
-                        <span className="pt-1 text-[12px] font-extrabold text-[#64748b]">{complete}%</span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-[12px] font-extrabold text-[#64748b]">{complete}%</span>
+                          {!isSupportMode && (
+                            <button
+                              type="button"
+                              onClick={() => isActive(campaign.status) ? setToast(c.deleteActiveHint) : setCampaignToDelete(campaign)}
+                              disabled={deleteOne.isPending}
+                              title={isActive(campaign.status) ? c.deleteActiveHint : c.deleteTitle}
+                              aria-label={`${c.deleteTitle}: ${campaign.name}`}
+                              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#fecaca] bg-[#fff1f2] px-2.5 text-[12px] font-extrabold text-[#b91c1c] hover:bg-[#ffe4e6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
+                              data-testid={`campaign-delete-${campaign.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />{c.deleteBtn}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="mt-3 space-y-0.5 text-[12px] font-medium text-[#64748b]">
                         <p>{account?.phone ?? account?.name ?? c.accountFallback}</p>
@@ -934,7 +964,6 @@ export default function Campaigns() {
                            {c.userClonedDraft}
                          </p>
                        )}
-                       {!isSupportMode && <button onClick={() => void remove(campaign)} disabled={updateStatus.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#f99a9d] text-[14px] font-extrabold text-white hover:bg-[#f57c80]"><Trash2 className="h-[17px] w-[17px]" />{c.deleteBtn}</button>}
                     </article>
                   );
                 })}</div>
@@ -1245,6 +1274,20 @@ export default function Campaigns() {
           </div>
         </Modal>
       )}
+
+       {campaignToDelete && (
+         <Modal title={c.deleteTitle} description={c.deleteWarning(campaignToDelete.name)} onClose={() => {
+           if (!deleteOne.isPending) setCampaignToDelete(null);
+         }}>
+           <div className="flex justify-end gap-3">
+             <button type="button" onClick={() => setCampaignToDelete(null)} disabled={deleteOne.isPending} className="rounded-xl border border-[#cbd5e1] px-4 py-2.5 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50">{c.bulkCancel}</button>
+             <button type="button" onClick={() => void remove()} disabled={deleteOne.isPending} className="inline-flex items-center gap-2 rounded-xl bg-[#dc2626] px-4 py-2.5 text-[13px] font-extrabold text-white hover:bg-[#b91c1c] disabled:opacity-50" data-testid="confirm-campaign-delete">
+               {deleteOne.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+               {c.deleteBtn}
+             </button>
+           </div>
+         </Modal>
+       )}
 
        {details && (
         <Modal title={details.name} description={`${c.detailStatusPrefix} ${statusLabel(details.status, c)}`} onClose={() => setDetails(null)}>
