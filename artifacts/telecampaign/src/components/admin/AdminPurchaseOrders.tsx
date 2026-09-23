@@ -10,12 +10,14 @@ import {
 } from "@/components/layout/AppLayout";
 import {
   useGetAdminPurchaseOrderSettings,
+  getAdminPurchaseOrderSettings,
   useUpdateAdminPurchaseOrderSettings,
   useListAdminPurchaseOrders,
   useReviewPurchaseOrder,
   PurchaseOrderSettings,
   PurchaseOrder,
   getGetAdminPurchaseOrderSettingsQueryKey,
+  getGetPurchaseOrderSettingsQueryKey,
   getListAdminPurchaseOrdersQueryKey
 } from "@workspace/api-client-react";
 import { useLanguage, localizedErrorMessage } from "@/lib/i18n";
@@ -37,6 +39,8 @@ export function AdminPurchaseOrders() {
   const [form, setForm] = useState<PurchaseOrderSettings | null>(null);
   const [priceInputs, setPriceInputs] = useState<Record<string, string> | null>(null);
   const [toast, setToast] = useState<{title: string, type: "success"|"error"} | null>(null);
+  const [destinationError, setDestinationError] = useState<string | null>(null);
+  const [savingPrices, setSavingPrices] = useState(false);
   const [reviewOrder, setReviewOrder] = useState<PurchaseOrder | null>(null);
   const [reviewDecision, setReviewDecision] = useState<"paid" | "rejected" | null>(null);
 
@@ -50,8 +54,9 @@ export function AdminPurchaseOrders() {
     }
   }, [settings, form]);
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async (pricesOnly = false) => {
     if (!form || !priceInputs) return;
+    setDestinationError(null);
     const pricesVnd = {} as Record<PlanCode, number>;
     const pricesUsdt = {} as Record<PlanCode, number>;
     for (const plan of planCodes) {
@@ -71,16 +76,51 @@ export function AdminPurchaseOrders() {
       pricesVnd[plan] = Number(normalizedVnd);
       pricesUsdt[plan] = Number(usdt);
     }
-    updateSettingsMutation.mutate({ data: { ...form, pricesVnd, pricesUsdt } }, {
-      onSuccess: (newSettings) => {
-        setForm(newSettings);
-        setToast({ title: t("Settings saved"), type: "success" });
-        queryClient.invalidateQueries({ queryKey: getGetAdminPurchaseOrderSettingsQueryKey() });
-      },
-      onError: (err) => {
-        setToast({ title: localizedErrorMessage(err, language, t("Could not save settings")), type: "error" });
+    const normalizedForm = {
+      ...form,
+      vnBankCode: form.vnBankCode.trim().toUpperCase(),
+      vnBankName: form.vnBankName.trim(),
+      vnBankAccount: form.vnBankAccount.replace(/\s/g, ""),
+      vnAccountName: form.vnAccountName.trim(),
+      vietQrTemplate: form.vietQrTemplate.trim(),
+      usdtBep20Address: form.usdtBep20Address.trim(),
+      usdtTrc20Address: form.usdtTrc20Address.trim(),
+    };
+    if (!pricesOnly) {
+      const invalid = [
+        [normalizedForm.vnBankCode, /^(?:|[A-Z0-9]{2,20})$/, "Mã ngân hàng (2–20 chữ cái/số)", "Bank code (2–20 letters/digits)"],
+        [normalizedForm.vnBankName, /^(?:|.+)$/, "Tên ngân hàng", "Bank name"],
+        [normalizedForm.vnBankAccount, /^(?:|[0-9]{4,30})$/, "Số tài khoản ngân hàng (4–30 chữ số)", "Bank account (4–30 digits)"],
+        [normalizedForm.vnAccountName, /^(?:|[\p{L}\p{M}0-9 .'-]{2,120})$/u, "Tên tài khoản ngân hàng", "Bank account name"],
+        [normalizedForm.usdtBep20Address, /^(?:|0x[0-9a-fA-F]{40})$/, "Địa chỉ USDT BEP20 (0x + 40 ký tự hex)", "USDT BEP20 address (0x + 40 hex characters)"],
+        [normalizedForm.usdtTrc20Address, /^(?:|T[1-9A-HJ-NP-Za-km-z]{33})$/, "Địa chỉ USDT TRC20 (T + 33 ký tự)", "USDT TRC20 address (T + 33 characters)"],
+      ] as const;
+      const bad = invalid.find(([value, pattern]) => !pattern.test(value));
+      if (bad) {
+        setDestinationError(language === "vi" ? `Chưa lưu: ${bad[2]} không hợp lệ. Sửa hoặc để trống ô này; bạn cũng có thể lưu giá riêng.` : `Not saved: Invalid ${bad[3]}. Fix or clear this field, or save prices separately.`);
+        return;
       }
-    });
+    }
+    try {
+      setSavingPrices(pricesOnly);
+      // Fetch the latest saved destinations so saving prices cannot overwrite
+      // unsaved or invalid payment details (or another admin's recent changes).
+      const current = pricesOnly ? await getAdminPurchaseOrderSettings() : normalizedForm;
+      const newSettings = await updateSettingsMutation.mutateAsync({ data: {
+        ...current,
+        pricesVnd,
+        pricesUsdt,
+        durationsDays: form.durationsDays,
+      } });
+      if (!pricesOnly) setForm(newSettings);
+      setToast({ title: pricesOnly ? (language === "vi" ? "Đã lưu giá gói. Thông tin nhận tiền chưa lưu." : "Plan prices saved. Payment details not saved.") : t("Settings saved"), type: "success" });
+      queryClient.invalidateQueries({ queryKey: getGetAdminPurchaseOrderSettingsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetPurchaseOrderSettingsQueryKey() });
+    } catch (err) {
+      setToast({ title: localizedErrorMessage(err, language, t("Could not save settings")), type: "error" });
+    } finally {
+      setSavingPrices(false);
+    }
   };
 
   const handleReview = () => {
@@ -193,8 +233,12 @@ export function AdminPurchaseOrders() {
           </div>
         </div>
 
-        <div className="mt-8 flex justify-end">
-          <PrimaryButton onClick={handleSaveSettings} disabled={updateSettingsMutation.isPending} data-testid="button-save-order-settings">
+        {destinationError && <p role="alert" className="mt-6 text-[13px] font-semibold text-[#be123c]" data-testid="payment-destination-error">{destinationError}</p>}
+        <div className="mt-8 flex flex-wrap justify-end gap-3">
+          <button type="button" onClick={() => void handleSaveSettings(true)} disabled={updateSettingsMutation.isPending || savingPrices} className="rounded-xl border border-[#1a2b88] px-4 py-2 font-bold text-[#1a2b88] disabled:opacity-50" data-testid="button-save-prices-only">
+            {language === "vi" ? "Chỉ lưu giá gói" : "Save plan prices only"}
+          </button>
+          <PrimaryButton onClick={() => void handleSaveSettings()} disabled={updateSettingsMutation.isPending || savingPrices} data-testid="button-save-order-settings">
             <Save className="h-4 w-4" />
             {t("Save Settings")}
           </PrimaryButton>
