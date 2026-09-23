@@ -886,8 +886,8 @@ export default function Campaigns() {
                    return (
                      <article key={campaign.id} className={`p-4 sm:p-5 ${isHighlighted ? "bg-[#fff7f7] ring-2 ring-inset ring-[#fca5a5]" : isLatestCompleted ? "bg-[#f8fbff]" : ""}`} data-testid={`campaign-row-${campaign.id}`}>
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                           <button onClick={() => setDetails(campaign)} className={`truncate text-left text-[15px] hover:underline ${isHighlighted ? "font-black text-[#b91c1c]" : isLatestCompleted ? "font-black text-[#1839b5]" : "font-extrabold text-[#1839b5]"}`}>{campaign.name}</button>
+                        <div className="min-w-0 flex-1">
+                           <button onClick={() => setDetails(campaign)} className={`block max-w-full truncate text-left text-[15px] hover:underline ${isHighlighted ? "font-black text-[#b91c1c]" : isLatestCompleted ? "font-black text-[#1839b5]" : "font-extrabold text-[#1839b5]"}`}>{campaign.name}</button>
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] font-semibold text-[#64748b]">
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${isActive(campaign.status) ? "bg-[#eff6ff] text-[#0f172a]" : campaign.status === "paused" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#f1f5f9] text-[#64748b]"}`}>{statusLabel(campaign.status, c)}</span>
                             <span>{campaign.completedCount}/{campaign.targetCount}</span>
@@ -895,22 +895,7 @@ export default function Campaigns() {
                             <span>OK {campaign.sentCount} · {c.errorsLabel} {campaign.failedCount}</span>
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="text-[12px] font-extrabold text-[#64748b]">{complete}%</span>
-                          {!isSupportMode && (
-                            <button
-                              type="button"
-                              onClick={() => isActive(campaign.status) ? setToast(c.deleteActiveHint) : setCampaignToDelete(campaign)}
-                              disabled={deleteOne.isPending}
-                              title={isActive(campaign.status) ? c.deleteActiveHint : c.deleteTitle}
-                              aria-label={`${c.deleteTitle}: ${campaign.name}`}
-                              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#fecaca] bg-[#fff1f2] text-[#b91c1c] hover:bg-[#ffe4e6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
-                              data-testid={`campaign-delete-${campaign.id}`}
-                            >
-                              <Trash2 className="h-[18px] w-[18px]" />
-                            </button>
-                          )}
-                        </div>
+                        <span className="shrink-0 pt-1 text-[12px] font-extrabold text-[#64748b]">{complete}%</span>
                       </div>
                       <div className="mt-3 space-y-0.5 text-[12px] font-medium text-[#64748b]">
                         <p>{account?.phone ?? account?.name ?? c.accountFallback}</p>
@@ -949,10 +934,23 @@ export default function Campaigns() {
                             : <span className="h-10" />}
                       </div>
                         {!isSupportMode && (
-                          <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
-                            {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
-                            {c.cloneBtn}
-                          </button>
+                          <div className="mt-2 flex items-center gap-2">
+                            <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
+                              {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
+                              {c.cloneBtn}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => isActive(campaign.status) ? setToast(c.deleteActiveHint) : setCampaignToDelete(campaign)}
+                              disabled={deleteOne.isPending}
+                              title={isActive(campaign.status) ? c.deleteActiveHint : c.deleteTitle}
+                              aria-label={`${c.deleteTitle}: ${campaign.name}`}
+                              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#fecaca] bg-[#fff1f2] text-[#b91c1c] hover:bg-[#ffe4e6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
+                              data-testid={`campaign-delete-${campaign.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         )}
                        {campaign.cloneMode === "admin" && campaign.status === "draft" && (
                         <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
