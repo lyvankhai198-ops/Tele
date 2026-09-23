@@ -904,10 +904,10 @@ export default function Campaigns() {
                               disabled={deleteOne.isPending}
                               title={isActive(campaign.status) ? c.deleteActiveHint : c.deleteTitle}
                               aria-label={`${c.deleteTitle}: ${campaign.name}`}
-                              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#fecaca] bg-[#fff1f2] px-2.5 text-[12px] font-extrabold text-[#b91c1c] hover:bg-[#ffe4e6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
+                              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#fecaca] bg-[#fff1f2] text-[#b91c1c] hover:bg-[#ffe4e6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
                               data-testid={`campaign-delete-${campaign.id}`}
                             >
-                              <Trash2 className="h-4 w-4" />{c.deleteBtn}
+                              <Trash2 className="h-[18px] w-[18px]" />
                             </button>
                           )}
                         </div>
