@@ -702,7 +702,7 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
   try { order = await updateOrderProof(req.params.orderId, currentUserId(req), value.txHash, value.proofInfo); }
   catch (error) { if (error instanceof Error && error.message === "TX_HASH_ALREADY_SUBMITTED") { res.status(409).json({ error: "Transaction hash already submitted" }); return; } throw error; }
   if (!order) { res.status(404).json({ error: "Order not found or already reviewed" }); return; }
-  await notifyPurchaseOrder(`🔎 Bằng chứng mới user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network ?? "VN-bank"}. Hãy kiểm tra tiền thực nhận trước khi duyệt.`, order.id);
+  await notifyPurchaseOrder(`${order.currency === "VND" ? "🏦 Khách báo đã chuyển khoản" : "🔎 Mã giao dịch mới"} user=${currentUserId(req)} ref=${order.reference} plan=${order.plan} amount=${order.amount} ${order.currency} network=${order.network ?? "VN-bank"}. Hãy kiểm tra tiền thực nhận trước khi duyệt.`, order.id);
   res.json(order);
 });
 router.use((req, res, next): void => {

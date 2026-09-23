@@ -52,7 +52,8 @@ export async function createOrder(input: { ownerUserId: string; plan: string; cu
   }
   const durationDays = settings.durationsDays[plan];
   if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3660) throw new Error("INVALID_PLAN_DURATION");
-  const reference = `TC-${randomUUID().replaceAll("-", "").slice(0, 20).toUpperCase()}`;
+  // Keep bank transfer content short; existing orders retain their original reference.
+  const reference = `TC${randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
   const [order] = await db.insert(purchaseOrdersTable).values({ ownerUserId: input.ownerUserId, plan, durationDays, currency: input.currency, network: input.network ?? null, amount: amount.toFixed(8), paymentDestination: destination, reference }).returning();
   return order;
 }

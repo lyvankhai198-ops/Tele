@@ -28,7 +28,7 @@ export default function Upgrade() {
   const [checkoutNetwork, setCheckoutNetwork] = useState<"BEP20" | "TRC20">("BEP20");
   const [createdOrder, setCreatedOrder] = useState<any>(null);
   const [txHash, setTxHash] = useState("");
-  const [proofInfo, setProofInfo] = useState("");
+  const [qrFailed, setQrFailed] = useState(false);
   const [licenseKey, setLicenseKey] = useState("");
   const [toastMessage, setToastMessage] = useState<{ title: string; type: "success" | "error" } | null>(null);
   const [activateError, setActivateError] = useState<Error | null>(null);
@@ -72,6 +72,7 @@ export default function Upgrade() {
     }, {
       onSuccess: (order) => {
         setCreatedOrder(order);
+        setQrFailed(false);
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       },
       onError: (err) => {
@@ -85,16 +86,16 @@ export default function Upgrade() {
     submitProofMutation.mutate({
       orderId: createdOrder.id,
       data: {
-        txHash: txHash.trim() || undefined,
-        proofInfo: proofInfo.trim() || undefined,
+        txHash: createdOrder.currency === "USDT" ? txHash.trim() : undefined,
       }
     }, {
       onSuccess: () => {
-        setToastMessage({ title: t("Proof submitted successfully"), type: "success" });
+        setToastMessage({ title: createdOrder.currency === "VND"
+          ? (language === "vi" ? "Đã báo chuyển khoản. Quản trị sẽ kiểm tra tiền thực nhận." : "Transfer reported. An admin will verify the received payment.")
+          : t("Proof submitted successfully"), type: "success" });
         setCheckoutPlan(null);
         setCreatedOrder(null);
         setTxHash("");
-        setProofInfo("");
         queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       },
       onError: (err) => {
@@ -116,9 +117,11 @@ export default function Upgrade() {
   }
 
   const renderVietQr = (bank: string, acc: string, name: string, amount: string, reference: string) => {
+    // Some saved bank settings contain the SWIFT code rather than the VietQR bank code.
+    const vietQrBank = bank.trim().toUpperCase() === "MSCBVNVX" ? "MB" : bank.trim().toUpperCase();
     const encodedName = encodeURIComponent(name);
     const encodedRef = encodeURIComponent(reference);
-    return `https://img.vietqr.io/image/${encodeURIComponent(bank)}-${encodeURIComponent(acc)}-compact2.png?amount=${encodeURIComponent(amount)}&addInfo=${encodedRef}&accountName=${encodedName}`;
+    return `https://img.vietqr.io/image/${encodeURIComponent(vietQrBank)}-${encodeURIComponent(acc)}-compact2.png?amount=${encodeURIComponent(amount)}&addInfo=${encodedRef}&accountName=${encodedName}`;
   };
 
   const handleActivate = () => {
@@ -474,6 +477,7 @@ export default function Upgrade() {
                       <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Amount")}</th>
                       <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Transfer Reference")}</th>
                       <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Status")}</th>
+                        <th className="px-6 py-4" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#f1f5f9]">
@@ -489,6 +493,19 @@ export default function Upgrade() {
                             status={order.status === "paid" ? "success" : order.status === "rejected" ? "failed" : order.status === "pending" ? "warning" : "draft"}
                             label={order.status === "paid" ? t("Approved") : order.status === "rejected" ? t("Rejected") : t("Pending")}
                           />
+                        </td>
+                        <td className="px-6 py-4">
+                          {order.status === "pending" && (
+                            <button type="button" onClick={() => {
+                              setCheckoutPlan(order.plan.toLowerCase());
+                              setCheckoutCurrency(order.currency as "VND" | "USDT");
+                              setCheckoutNetwork((order.network || "BEP20") as "BEP20" | "TRC20");
+                              setCreatedOrder(order);
+                              setQrFailed(false);
+                            }} className="text-[#1a2b88] font-bold whitespace-nowrap underline" data-testid={`button-view-order-${order.id}`}>
+                              {language === "vi" ? "Xem chuyển khoản" : "View payment"}
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -548,10 +565,9 @@ export default function Upgrade() {
         <Modal
           title={t("Order checkout")}
           onClose={() => {
-            if (!createdOrder || createdOrder.status !== "pending") {
-              setCheckoutPlan(null);
-              setCreatedOrder(null);
-            }
+            setCheckoutPlan(null);
+            setCreatedOrder(null);
+            setTxHash("");
           }}
         >
           <div className="py-2 flex flex-col gap-6" data-testid="modal-checkout-plan">
@@ -651,15 +667,19 @@ export default function Upgrade() {
                           <button onClick={() => handleCopy(createdOrder.reference)} className="text-[#64748b] hover:text-[#1a2b88]"><Copy className="h-4 w-4" /></button>
                         </div>
                       </div>
-                      {destBank && destAccount && (
-                        <div className="mt-2 flex justify-center">
+                      {destBankCode && destAccount && !qrFailed && (
+                        <div className="mt-2 flex flex-col items-center gap-2">
                           <img
                             src={renderVietQr(destBankCode, destAccount, destName, String(Number(createdOrder.amount)), createdOrder.reference)}
                             alt="VietQR"
-                            className="max-w-[200px] h-auto rounded-xl border-2 border-[#e2e8f0]"
+                            onError={() => setQrFailed(true)}
+                            className="w-[200px] h-auto rounded-xl border-2 border-[#e2e8f0]"
                           />
                         </div>
                       )}
+                      {qrFailed && <p role="alert" className="text-[13px] text-[#be123c] text-center">
+                        {language === "vi" ? "Không tải được VietQR. Hãy chuyển khoản thủ công theo số tài khoản, số tiền và nội dung phía trên." : "VietQR unavailable. Transfer manually using the account, amount and reference above."}
+                      </p>}
                     </>
                   ) : (
                     <>
@@ -691,10 +711,12 @@ export default function Upgrade() {
 
                 <div className="flex flex-col gap-4 mt-2">
                   <p className="text-[13px] text-[#475569] font-medium text-center">
-                    {language === "en" ? t("Please enter your transaction hash after transferring.") : t("Please enter payment proof info.")}
+                    {createdOrder.currency === "VND"
+                      ? (language === "vi" ? "Sau khi chuyển khoản, bấm xác nhận. Quản trị đối chiếu số tiền và nội dung CK với giao dịch thực nhận; không cần gửi ảnh hay lời nhắn." : "After transferring, confirm below. An admin checks the received amount and reference; no screenshot or message is needed.")
+                      : t("Please enter your transaction hash after transferring.")}
                   </p>
 
-                  {checkoutCurrency === "USDT" ? (
+                  {createdOrder.currency === "USDT" && (
                     <input
                       type="text"
                       placeholder={t("Transaction Hash")}
@@ -703,25 +725,16 @@ export default function Upgrade() {
                       data-testid="input-txhash"
                       className="w-full border-2 border-[#cbd5e1] rounded-xl px-4 py-3 text-[15px] font-mono outline-none focus:border-[#1a2b88]"
                     />
-                  ) : (
-                    <input
-                      type="text"
-                      placeholder={t("Message/Proof (Optional)")}
-                      value={proofInfo}
-                      onChange={(e) => setProofInfo(e.target.value)}
-                      data-testid="input-proofinfo"
-                      className="w-full border-2 border-[#cbd5e1] rounded-xl px-4 py-3 text-[15px] outline-none focus:border-[#1a2b88]"
-                    />
                   )}
 
                   <button
                     onClick={handleSubmitProof}
-                    disabled={submitProofMutation.isPending || (checkoutCurrency === "USDT" && !txHash.trim())}
+                    disabled={submitProofMutation.isPending || (createdOrder.currency === "USDT" && !txHash.trim())}
                     data-testid="button-submit-proof"
                     className="w-full bg-[#1a2b88] text-white py-4 rounded-xl font-extrabold text-[15px] hover:bg-[#152473] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                   >
                     {submitProofMutation.isPending && <LoaderCircle className="h-5 w-5 animate-spin" />}
-                    {t("Submit proof")}
+                    {createdOrder.currency === "VND" ? (language === "vi" ? "Tôi đã chuyển khoản" : "I have transferred") : t("Submit proof")}
                   </button>
                 </div>
               </>

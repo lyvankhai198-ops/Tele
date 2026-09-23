@@ -203,7 +203,7 @@ export function AdminPurchaseOrders() {
 
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] font-bold text-[#64748b]">{language === "vi" ? "Mã ngân hàng VietQR (VD: MB, VCB)" : "VietQR bank code (e.g. MB, VCB)"}</span>
+                <span className="text-[12px] font-bold text-[#64748b]">{language === "vi" ? "Mã ngân hàng VietQR (MB hoặc 970422; không dùng mã SWIFT)" : "VietQR bank code (MB or 970422; not a SWIFT code)"}</span>
                 <input type="text" value={form.vnBankCode} onChange={e => setForm({...form, vnBankCode: e.target.value.toUpperCase()})} className="border border-[#cbd5e1] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#1a2b88]" data-testid="input-vietqr-bank-code" />
               </label>
               <label className="flex flex-col gap-1.5">
