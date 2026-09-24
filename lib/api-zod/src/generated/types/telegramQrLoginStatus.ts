@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TelegramAccount } from './telegramAccount';
+import type { TelegramQrLoginStatusErrorCode } from './telegramQrLoginStatusErrorCode';
 import type { TelegramQrLoginStatusStatus } from './telegramQrLoginStatusStatus';
 
 export interface TelegramQrLoginStatus {
@@ -13,4 +14,5 @@ export interface TelegramQrLoginStatus {
   account: TelegramAccount;
   expiresAt: Date;
   qrUrl: string | null;
+  errorCode: TelegramQrLoginStatusErrorCode;
 }

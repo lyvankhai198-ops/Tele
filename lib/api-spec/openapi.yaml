@@ -2065,12 +2065,13 @@ components:
         challenge: { $ref: "#/components/schemas/TelegramLoginChallenge" }
     TelegramQrLoginStatus:
       type: object
-      required: [status, account, expiresAt, qrUrl]
+      required: [status, account, expiresAt, qrUrl, errorCode]
       properties:
         status: { type: string, enum: [waiting_qr, requires_2fa, connected, expired, cancelled] }
         account: { $ref: "#/components/schemas/TelegramAccount" }
         expiresAt: { type: string, format: date-time }
         qrUrl: { type: string, nullable: true }
+        errorCode: { type: string, enum: [TELEGRAM_ACCOUNT_ALREADY_LINKED], nullable: true }
     SyncResult:
       type: object
       required: [count]

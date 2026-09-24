@@ -233,6 +233,7 @@ export * from './telegramLoginStart';
 export * from './telegramQrAccountInput';
 export * from './telegramQrLoginStart';
 export * from './telegramQrLoginStatus';
+export * from './telegramQrLoginStatusErrorCode';
 export * from './telegramQrLoginStatusStatus';
 export * from './telegramSavedMessage';
 export * from './updateAdminSupportConversationInput';

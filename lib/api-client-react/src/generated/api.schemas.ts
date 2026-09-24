@@ -293,11 +293,19 @@ export const TelegramQrLoginStatusStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type TelegramQrLoginStatusErrorCode = typeof TelegramQrLoginStatusErrorCode[keyof typeof TelegramQrLoginStatusErrorCode] | null;
+
+
+export const TelegramQrLoginStatusErrorCode = {
+  TELEGRAM_ACCOUNT_ALREADY_LINKED: 'TELEGRAM_ACCOUNT_ALREADY_LINKED',
+} as const;
+
 export interface TelegramQrLoginStatus {
   status: TelegramQrLoginStatusStatus;
   account: TelegramAccount;
   expiresAt: string;
   qrUrl: string | null;
+  errorCode: TelegramQrLoginStatusErrorCode;
 }
 
 export interface SyncResult {

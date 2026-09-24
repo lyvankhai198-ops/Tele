@@ -115,6 +115,7 @@ const copy = {
     qrWaiting: "Waiting for Telegram to confirm the scan...",
     qrTwoFactor: "Telegram accepted the QR scan. Enter your 2FA password to finish.",
     qrExpired: "This QR code has expired. Generate a new one to try again.",
+    qrAlreadyLinked: "This Telegram account is already logged in to another TeleCampaign session. Sign in to that session or ask an administrator to release the link.",
     qrCancel: "Cancel",
     qrRegenerate: "Generate new QR",
   },
@@ -198,6 +199,7 @@ const copy = {
     qrWaiting: "Đang chờ Telegram xác nhận quét mã...",
     qrTwoFactor: "Telegram đã nhận mã QR. Nhập mật khẩu 2FA để hoàn tất.",
     qrExpired: "Mã QR đã hết hạn. Hãy tạo mã mới để thử lại.",
+    qrAlreadyLinked: "Tài khoản Telegram này đã đăng nhập ở một phiên TeleCampaign khác. Hãy dùng phiên đó hoặc nhờ quản trị viên gỡ liên kết.",
     qrCancel: "Hủy",
     qrRegenerate: "Tạo mã QR mới",
   },
@@ -519,10 +521,10 @@ export default function Accounts() {
     }
     if (status.status === "expired" || status.status === "cancelled") {
       void invalidateAccounts();
-      setToast(text.qrExpired);
+      setToast(status.errorCode === "TELEGRAM_ACCOUNT_ALREADY_LINKED" ? text.qrAlreadyLinked : text.qrExpired);
       closeLoginDialog(false);
     }
-  }, [qrStatus.data?.status, qrStatus.data?.qrUrl]);
+  }, [qrStatus.data?.status, qrStatus.data?.qrUrl, qrStatus.data?.errorCode]);
 
   const submitAccount = () => {
     const parsedApiId = Number(apiId);

@@ -1742,6 +1742,9 @@ router.get("/telegram/accounts/:accountId/login/qr/:challengeId", async (req, re
     qrUrl: status === "waiting_qr" && row.challenge.loginLink
       ? decryptSecret(row.challenge.loginLink)
       : null,
+    errorCode: row.challenge.error === "TELEGRAM_ACCOUNT_ALREADY_LINKED"
+      ? "TELEGRAM_ACCOUNT_ALREADY_LINKED"
+      : null,
   }));
 });
 

@@ -444,7 +444,8 @@ export const GetTelegramQrLoginStatusResponse = zod.object({
   "createdAt": zod.coerce.date()
 }),
   "expiresAt": zod.coerce.date(),
-  "qrUrl": zod.string().nullable()
+  "qrUrl": zod.string().nullable(),
+  "errorCode": zod.enum(['TELEGRAM_ACCOUNT_ALREADY_LINKED']).nullable()
 })
 
 
