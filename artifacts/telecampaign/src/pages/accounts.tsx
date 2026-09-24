@@ -408,7 +408,10 @@ export default function Accounts() {
         openCodeVerification(data);
         setToast(text.codeSent);
       },
-      onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onError: (error) => {
+        void invalidateAccounts();
+        setToast(errorMessage(error, language, text.requestFailed));
+      },
       onSettled: () => {
         loginSubmissionLocked.current = false;
       },
@@ -431,7 +434,10 @@ export default function Accounts() {
           expiresAt: data.challenge.expiresAt,
         });
       },
-      onError: (error) => setToast(errorMessage(error, language, text.requestFailed)),
+      onError: (error) => {
+        void invalidateAccounts();
+        setToast(errorMessage(error, language, text.requestFailed));
+      },
       onSettled: () => {
         loginSubmissionLocked.current = false;
       },
@@ -703,8 +709,8 @@ export default function Accounts() {
                      {account.status === "connected" && <button onClick={() => handleSync(account.id)} disabled={sync.isPending} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#f8fafc] px-3 text-[13px] font-bold text-[#475569] ring-1 ring-inset ring-[#e2e8f0] transition-all hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50" aria-label={text.syncDestinations}>
                       <RefreshCw className={`h-3.5 w-3.5 ${syncingId === account.id ? "animate-spin text-[#2aabee]" : ""}`} /><span className="hidden sm:inline">{text.sync}</span>
                     </button>}
-                     {account.status !== "connected" && <button onClick={() => startAccountLogin(account.id)} disabled={startLogin.isPending} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#eaf6fd] px-3 text-[13px] font-bold text-[#1c93d4] ring-1 ring-inset ring-[#bde4f9] transition-all hover:bg-[#dff2fc] disabled:cursor-not-allowed disabled:opacity-50" data-testid={`telegram-account-verify-${account.id}`}>
-                       {startLogin.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Smartphone className="h-3.5 w-3.5" />}<span>{text.verify}</span>
+                      {account.status !== "connected" && <button onClick={() => account.phone ? startAccountLogin(account.id) : startQrAccountLogin(account.id)} disabled={startLogin.isPending || startQrLogin.isPending} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#eaf6fd] px-3 text-[13px] font-bold text-[#1c93d4] ring-1 ring-inset ring-[#bde4f9] transition-all hover:bg-[#dff2fc] disabled:cursor-not-allowed disabled:opacity-50" data-testid={`telegram-account-verify-${account.id}`}>
+                        {startLogin.isPending || startQrLogin.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : account.phone ? <Smartphone className="h-3.5 w-3.5" /> : <QrCode className="h-3.5 w-3.5" />}<span>{text.verify}</span>
                      </button>}
                     <button onClick={() => removeAccount(account.id)} disabled={deletingId === account.id} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#fff7f8] px-3 text-[13px] font-bold text-[#e11d48] ring-1 ring-inset ring-[#fecdd3] transition-all hover:bg-[#ffe4e6] disabled:cursor-not-allowed disabled:opacity-50" aria-label={text.deleteAccount} data-testid={`telegram-account-delete-${account.id}`}>
                       {deletingId === account.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}<span>{text.delete}</span>
