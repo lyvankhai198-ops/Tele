@@ -352,8 +352,18 @@ function qrPasswordError(error: unknown): boolean {
 }
 
 function telegramQrErrorCode(error: unknown): string {
-  const errorMessage = (error as { errorMessage?: unknown } | null)?.errorMessage;
+  const details = error as { errorMessage?: unknown; message?: unknown } | null;
+  const errorMessage = details?.errorMessage;
   if (typeof errorMessage === "string" && /^[A-Z0-9_]{1,80}$/.test(errorMessage)) return errorMessage;
+  const message = typeof details?.message === "string" ? details.message : "";
+  if (message === "TELEGRAM_ACCOUNT_ALREADY_LINKED") return message;
+  if (message === "TIMEOUT") return message;
+  if (message === "Telegram account is no longer active") return "TELEGRAM_ACCOUNT_NO_LONGER_ACTIVE";
+  if (message === "Telegram login challenge is no longer active") return "TELEGRAM_LOGIN_CHALLENGE_NO_LONGER_ACTIVE";
+  if (message === "QR auth failed") return "TELEGRAM_QR_AUTH_FAILED";
+  if (message === "Unexpected" || /^Received unknown result while scanning QR [A-Za-z0-9_.]+$/.test(message)) {
+    return "TELEGRAM_QR_UNEXPECTED_AUTH_RESULT";
+  }
   if (error instanceof Error && /^[A-Za-z][A-Za-z0-9]*$/.test(error.name)) return error.name;
   return "TELEGRAM_QR_LOGIN_FAILED";
 }
@@ -446,7 +456,7 @@ async function startQrLoginChallenge(account: typeof telegramAccountsTable.$infe
       onLoginTokenUpdate: () => {
         logger.info({ accountId: account.id, challengeId: challenge.id }, "Telegram QR login token update received");
       },
-      onError: async (error) => {
+      onError: async (error, stage) => {
         if (qrPasswordError(error)) return;
         const errorCode = telegramQrErrorCode(error);
         const [failedChallenge] = await db.update(authChallengesTable).set({
@@ -457,7 +467,12 @@ async function startQrLoginChallenge(account: typeof telegramAccountsTable.$infe
         }).where(and(eq(authChallengesTable.id, challenge.id), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])))
           .returning({ id: authChallengesTable.id });
         if (failedChallenge) {
-          logger.warn({ accountId: account.id, challengeId: challenge.id, errorCode }, "Telegram QR login failed");
+          logger.warn({
+            accountId: account.id,
+            challengeId: challenge.id,
+            errorCode,
+            stage: stage ?? "telegram_authorization",
+          }, "Telegram QR login failed");
         }
         await db.update(telegramAccountsTable).set({ status: "saved", updatedAt: new Date() })
           .where(and(eq(telegramAccountsTable.id, account.id), eq(telegramAccountsTable.status, "authorizing")));

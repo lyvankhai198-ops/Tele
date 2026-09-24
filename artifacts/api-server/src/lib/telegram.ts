@@ -178,7 +178,7 @@ export type TelegramQrLoginCallbacks = {
   onTwoFactor: (hint?: string) => Promise<void> | void;
   onConnected: (user: TelegramLoginUser, session: string) => Promise<void>;
   onLoginTokenUpdate?: () => void;
-  onError: (error: unknown) => Promise<void> | void;
+  onError: (error: unknown, stage?: "telegram_authorization" | "persisting_account") => Promise<void> | void;
 };
 
 export type TelegramQrLoginHandle = {
@@ -206,6 +206,7 @@ export async function startTelegramQrLogin(
   });
   let resolvePassword: ((password: string) => void) | null = null;
   let cancelled = false;
+  let currentStage: "telegram_authorization" | "persisting_account" = "telegram_authorization";
   const loginTokenUpdateHandler = (update: unknown) => {
     if (update instanceof Api.UpdateLoginToken) callbacks.onLoginTokenUpdate?.();
   };
@@ -239,18 +240,19 @@ export async function startTelegramQrLogin(
           });
         },
         onError: async (error) => {
-          await callbacks.onError(error);
+          await callbacks.onError(error, currentStage);
           const details = String((error as { errorMessage?: unknown })?.errorMessage ?? error).toUpperCase();
           return !details.includes("PASSWORD_HASH_INVALID") && !details.includes("PASSWORD_EMPTY");
         },
       });
+      currentStage = "persisting_account";
       await callbacks.onConnected(telegramLoginUser(user), savedSession(client));
     } catch (error) {
       if (!firstQrResolved) {
         firstQrResolved = true;
         rejectFirstQr(error);
       }
-      if (!cancelled) await callbacks.onError(error);
+      if (!cancelled) await callbacks.onError(error, currentStage);
       throw error;
     } finally {
       await destroyQuietly(client);
