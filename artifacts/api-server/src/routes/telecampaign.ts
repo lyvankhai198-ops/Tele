@@ -186,7 +186,7 @@ const MAX_CONCURRENT_PROXY_TESTS_PER_USER = 1;
 const proxyTestLimits = new Map<string, { active: number; attempts: number[] }>();
 type WaitingLoginStatus = "waiting_code" | "waiting_password";
 type ProcessingLoginStatus = "processing_code" | "processing_password";
-type LoginCompletionStatus = ProcessingLoginStatus | "waiting_qr";
+type LoginCompletionStatus = ProcessingLoginStatus | "waiting_qr" | "waiting_password";
 const qrLoginHandles = new Map<string, {
   accountId: string;
   ownerUserId: string;
@@ -448,7 +448,7 @@ async function startQrLoginChallenge(account: typeof telegramAccountsTable.$infe
         await completeTelegramLogin({
           account: latestAccount,
           challengeId: challenge.id,
-          challengeStatus: "waiting_qr",
+          challengeStatuses: ["waiting_qr", "waiting_password"],
           session,
           user,
         });
@@ -623,7 +623,7 @@ async function recordLoginAttemptFailure(input: {
 async function completeTelegramLogin(input: {
   account: typeof telegramAccountsTable.$inferSelect;
   challengeId: string;
-  challengeStatus: LoginCompletionStatus;
+  challengeStatuses: LoginCompletionStatus[];
   session: string;
   user: { id: string; username: string | null; name: string | null };
 }) {
@@ -667,7 +667,7 @@ async function completeTelegramLogin(input: {
       eq(authChallengesTable.id, input.challengeId),
       eq(authChallengesTable.accountId, input.account.id),
       eq(authChallengesTable.ownerUserId, input.account.ownerUserId),
-      eq(authChallengesTable.status, input.challengeStatus),
+      inArray(authChallengesTable.status, input.challengeStatuses),
       gt(authChallengesTable.expiresAt, new Date()),
     )).returning();
     if (!authorizedChallenge) throw new Error("Telegram login challenge is no longer active");
@@ -695,7 +695,7 @@ async function completeDevelopmentDemoLogin(input: {
   const account = await completeTelegramLogin({
     account: input.account,
     challengeId: input.challengeId,
-    challengeStatus: input.challengeStatus,
+    challengeStatuses: [input.challengeStatus],
     session: "development-demo-session",
     user: {
       id: `development-demo-${input.account.id}`,
@@ -1835,7 +1835,7 @@ router.post("/telegram/accounts/:accountId/login/code", async (req, res): Promis
     const connectedAccount = await completeTelegramLogin({
       account,
       challengeId: reservation.challenge.id,
-      challengeStatus: reservation.processingStatus,
+      challengeStatuses: [reservation.processingStatus],
       session: result.session,
       user: result.user,
     });
@@ -1919,7 +1919,7 @@ router.post("/telegram/accounts/:accountId/login/password", async (req, res): Pr
     const connectedAccount = await completeTelegramLogin({
       account,
       challengeId: reservation.challenge.id,
-      challengeStatus: reservation.processingStatus,
+      challengeStatuses: [reservation.processingStatus],
       session: result.session,
       user: result.user,
     });
