@@ -625,6 +625,7 @@ export default function Accounts() {
     setSyncingId(accountId);
     sync.mutate({ accountId }, {
       onSuccess: (data) => {
+        void invalidateAccounts();
         setToast(`${text.synced}: ${data.count} ${text.items}`);
         setSyncingId(null);
       },

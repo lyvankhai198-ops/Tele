@@ -40,6 +40,11 @@ export type TelegramCredentials = { apiId: number; apiHash: string };
 export type TelegramLoginUser = { id: string; username: string | null; phone: string | null; name: string | null };
 export const DEVELOPMENT_DEMO_TELEGRAM_PHONE = "+84987654321";
 
+export function normalizeTelegramPhone(phone: string | null): string | null {
+  const digits = phone?.replace(/\D/g, "") ?? "";
+  return digits ? `+${digits}` : null;
+}
+
 export function createTelegramClient(session = "", credentials?: TelegramCredentials, proxy?: TelegramProxyConfig) {
   const { apiId, apiHash } = credentials ?? requireTelegramConfiguration();
   return new TelegramClient(new StringSession(session), apiId, apiHash, {
@@ -79,7 +84,7 @@ function telegramLoginUser(user: any): TelegramLoginUser {
   return {
     id: String(user.id),
     username: user.username ?? null,
-    phone: user.phone ?? null,
+    phone: normalizeTelegramPhone(typeof user.phone === "string" ? user.phone : null),
     name: name || null,
   };
 }
@@ -475,15 +480,25 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     if (currentUser.id !== account.telegramUserId) {
       throw new Error("Telegram session identity does not match the saved account");
     }
-    if (currentUser.username !== account.username) {
-      const [updatedAccount] = await db.update(telegramAccountsTable).set({
+    const currentPhone = normalizeTelegramPhone(currentUser.phone);
+    const storedPhone = account.phoneEncrypted ? decryptSecret(account.phoneEncrypted) : null;
+    const phoneChanged = currentPhone !== null && currentPhone !== storedPhone;
+    if (currentUser.username !== account.username || phoneChanged) {
+      const phoneFields = phoneChanged && currentPhone
+        ? { phoneEncrypted: encryptSecret(currentPhone), phoneMasked: `••••${currentPhone.slice(-4)}` }
+        : {};
+      const accountUpdate = {
         username: currentUser.username,
+        ...phoneFields,
         updatedAt: new Date(),
+      };
+      const [updatedAccount] = await db.update(telegramAccountsTable).set({
+        ...accountUpdate,
       }).where(and(
         eq(telegramAccountsTable.id, account.id),
         isNull(telegramAccountsTable.deletedAt),
       )).returning();
-      return { client, account: updatedAccount ?? { ...account, username: currentUser.username } };
+      return { client, account: updatedAccount ?? { ...account, ...accountUpdate } };
     }
     return { client, account };
   } catch (error) {

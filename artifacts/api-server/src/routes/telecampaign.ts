@@ -126,6 +126,7 @@ import {
   isDevelopmentDemoTelegramAccount,
   isTelegramSessionRevoked,
   listTelegramSavedMessages,
+  normalizeTelegramPhone,
   phoneForAccount,
   startTelegramQrLogin,
   type TelegramQrLoginHandle,
@@ -625,7 +626,7 @@ async function completeTelegramLogin(input: {
   challengeId: string;
   challengeStatuses: LoginCompletionStatus[];
   session: string;
-  user: { id: string; username: string | null; name: string | null };
+  user: { id: string; username: string | null; phone: string | null; name: string | null };
 }) {
   const account = await db.transaction(async (tx) => {
     const [duplicate] = await tx.select({
@@ -647,10 +648,15 @@ async function completeTelegramLogin(input: {
       }).where(eq(telegramAccountsTable.id, duplicate.id));
     }
 
+    const verifiedPhone = normalizeTelegramPhone(input.user.phone);
     const [connectedAccount] = await tx.update(telegramAccountsTable).set({
       name: input.user.name ?? input.account.name,
       username: input.user.username,
       telegramUserId: input.user.id,
+      ...(verifiedPhone ? {
+        phoneEncrypted: encryptSecret(verifiedPhone),
+        phoneMasked: maskPhone(verifiedPhone),
+      } : {}),
       sessionEncrypted: encryptSecret(input.session),
       status: "connected",
       updatedAt: new Date(),
@@ -700,6 +706,7 @@ async function completeDevelopmentDemoLogin(input: {
     user: {
       id: `development-demo-${input.account.id}`,
       username: "telecampaign_demo",
+      phone: null,
       name: "TeleCampaign Demo",
     },
   });
