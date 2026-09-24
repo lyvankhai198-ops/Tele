@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { createReadStream } from "node:fs";
-import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   CreateCampaignBody,
@@ -351,19 +351,46 @@ function qrPasswordError(error: unknown): boolean {
   return details.includes("PASSWORD_HASH_INVALID") || details.includes("PASSWORD_EMPTY");
 }
 
+function telegramQrErrorCode(error: unknown): string {
+  const errorMessage = (error as { errorMessage?: unknown } | null)?.errorMessage;
+  if (typeof errorMessage === "string" && /^[A-Z0-9_]{1,80}$/.test(errorMessage)) return errorMessage;
+  if (error instanceof Error && /^[A-Za-z][A-Za-z0-9]*$/.test(error.name)) return error.name;
+  return "TELEGRAM_QR_LOGIN_FAILED";
+}
+
 async function stopQrLogin(challengeId: string, status: "expired" | "cancelled" = "cancelled") {
   const pending = qrLoginHandles.get(challengeId);
   qrLoginHandles.delete(challengeId);
-  if (pending) await pending.handle.cancel();
-  await db.update(authChallengesTable).set({
-    status,
-    loginLink: null,
-    sessionEncrypted: null,
-    error: status === "expired" ? "Telegram QR login challenge expired" : "Telegram QR login cancelled",
-  }).where(and(eq(authChallengesTable.id, challengeId), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])));
-  if (pending) {
+  let stoppedChallenge: { accountId: string; ownerUserId: string } | undefined;
+  try {
+    [stoppedChallenge] = await db.update(authChallengesTable).set({
+      status,
+      loginLink: null,
+      sessionEncrypted: null,
+      error: status === "expired" ? "Telegram QR login challenge expired" : "Telegram QR login cancelled",
+    }).where(and(eq(authChallengesTable.id, challengeId), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])))
+      .returning({
+        accountId: authChallengesTable.accountId,
+        ownerUserId: authChallengesTable.ownerUserId,
+      });
+  } finally {
+    if (pending) await pending.handle.cancel();
+  }
+  if (stoppedChallenge) {
+    const activeStatuses = ["waiting_code", "waiting_password", "processing_code", "processing_password", "waiting_qr"];
     await db.update(telegramAccountsTable).set({ status: "saved", updatedAt: new Date() })
-      .where(and(eq(telegramAccountsTable.id, pending.accountId), eq(telegramAccountsTable.status, "authorizing")));
+      .where(and(
+        eq(telegramAccountsTable.id, stoppedChallenge.accountId),
+        eq(telegramAccountsTable.ownerUserId, stoppedChallenge.ownerUserId),
+        eq(telegramAccountsTable.status, "authorizing"),
+        isNull(telegramAccountsTable.deletedAt),
+        notExists(db.select({ id: authChallengesTable.id }).from(authChallengesTable).where(and(
+          eq(authChallengesTable.accountId, stoppedChallenge.accountId),
+          eq(authChallengesTable.ownerUserId, stoppedChallenge.ownerUserId),
+          inArray(authChallengesTable.status, activeStatuses),
+          gt(authChallengesTable.expiresAt, new Date()),
+        ))),
+      ));
   }
 }
 
@@ -416,14 +443,22 @@ async function startQrLoginChallenge(account: typeof telegramAccountsTable.$infe
           user,
         });
       },
+      onLoginTokenUpdate: () => {
+        logger.info({ accountId: account.id, challengeId: challenge.id }, "Telegram QR login token update received");
+      },
       onError: async (error) => {
         if (qrPasswordError(error)) return;
-        await db.update(authChallengesTable).set({
+        const errorCode = telegramQrErrorCode(error);
+        const [failedChallenge] = await db.update(authChallengesTable).set({
           status: "expired",
           loginLink: null,
           sessionEncrypted: null,
-          error: String((error as { errorMessage?: unknown })?.errorMessage ?? "Telegram QR login failed"),
-        }).where(and(eq(authChallengesTable.id, challenge.id), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])));
+          error: errorCode,
+        }).where(and(eq(authChallengesTable.id, challenge.id), inArray(authChallengesTable.status, ["waiting_qr", "waiting_password"])))
+          .returning({ id: authChallengesTable.id });
+        if (failedChallenge) {
+          logger.warn({ accountId: account.id, challengeId: challenge.id, errorCode }, "Telegram QR login failed");
+        }
         await db.update(telegramAccountsTable).set({ status: "saved", updatedAt: new Date() })
           .where(and(eq(telegramAccountsTable.id, account.id), eq(telegramAccountsTable.status, "authorizing")));
       },
@@ -1659,9 +1694,20 @@ router.get("/telegram/accounts/:accountId/login/qr/:challengeId", async (req, re
 
   let status: "waiting_qr" | "requires_2fa" | "connected" | "expired" | "cancelled";
   if (row.challenge.status === "waiting_qr" || row.challenge.status === "waiting_password") {
-    if (row.challenge.expiresAt.getTime() <= Date.now()) {
+    const pending = qrLoginHandles.get(row.challenge.id);
+    const hasMatchingPendingHandle = pending?.accountId === row.account.id && pending.ownerUserId === ownerUserId;
+    if (row.challenge.expiresAt.getTime() <= Date.now() || !hasMatchingPendingHandle) {
+      if (!hasMatchingPendingHandle && row.challenge.expiresAt.getTime() > Date.now()) {
+        req.log.warn({ accountId: row.account.id, challengeId: row.challenge.id }, "Telegram QR login continuation missing; expiring challenge");
+      }
       await stopQrLogin(row.challenge.id, "expired");
-      status = "expired";
+      const [latestChallenge] = await db.select({ status: authChallengesTable.status }).from(authChallengesTable)
+        .where(eq(authChallengesTable.id, row.challenge.id));
+      status = latestChallenge?.status === "authorized"
+        ? "connected"
+        : latestChallenge?.status === "cancelled"
+          ? "cancelled"
+          : "expired";
     } else {
       status = row.challenge.status === "waiting_password" ? "requires_2fa" : "waiting_qr";
     }

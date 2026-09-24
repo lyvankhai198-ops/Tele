@@ -177,6 +177,7 @@ export type TelegramQrLoginCallbacks = {
   onQrCode: (qrCode: TelegramQrCode) => Promise<void> | void;
   onTwoFactor: (hint?: string) => Promise<void> | void;
   onConnected: (user: TelegramLoginUser, session: string) => Promise<void>;
+  onLoginTokenUpdate?: () => void;
   onError: (error: unknown) => Promise<void> | void;
 };
 
@@ -205,6 +206,10 @@ export async function startTelegramQrLogin(
   });
   let resolvePassword: ((password: string) => void) | null = null;
   let cancelled = false;
+  const loginTokenUpdateHandler = (update: unknown) => {
+    if (update instanceof Api.UpdateLoginToken) callbacks.onLoginTokenUpdate?.();
+  };
+  client.addEventHandler(loginTokenUpdateHandler);
 
   const completion = (async () => {
     try {

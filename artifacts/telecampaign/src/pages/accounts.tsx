@@ -376,7 +376,7 @@ export default function Accounts() {
 
   const completeTelegramLogin = () => {
     void invalidateAccounts();
-    closeLoginDialog();
+    closeLoginDialog(false);
     setToast(text.loginComplete);
   };
 
@@ -387,9 +387,13 @@ export default function Accounts() {
     setLoginFlow({ accountId: data.account.id, challengeId: data.challenge.id, delivery, step: "code" });
   };
 
-  const closeLoginDialog = () => {
+  const closeLoginDialog = (cancelQr = true) => {
     if (loginFlow?.delivery === "qr" && !cancelQrLogin.isPending) {
-      cancelQrLogin.mutate({ accountId: loginFlow.accountId, challengeId: loginFlow.challengeId });
+      if (cancelQr) {
+        cancelQrLogin.mutate({ accountId: loginFlow.accountId, challengeId: loginFlow.challengeId }, {
+          onSettled: () => void invalidateAccounts(),
+        });
+      }
     }
     loginSubmissionLocked.current = false;
     setVerificationCode("");
@@ -514,8 +518,9 @@ export default function Accounts() {
       return;
     }
     if (status.status === "expired" || status.status === "cancelled") {
+      void invalidateAccounts();
       setToast(text.qrExpired);
-      closeLoginDialog();
+      closeLoginDialog(false);
     }
   }, [qrStatus.data?.status, qrStatus.data?.qrUrl]);
 
@@ -821,7 +826,7 @@ export default function Accounts() {
                  <button type="button" onClick={() => startQrAccountLogin(loginFlow.accountId)} disabled={startQrLogin.isPending} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f1f5f9] px-5 text-[14px] font-bold text-[#475569] transition-colors hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50">
                    {startQrLogin.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}{text.qrRegenerate}
                  </button>
-                 <button type="button" onClick={closeLoginDialog} className="inline-flex h-11 items-center justify-center rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4]">{text.qrCancel}</button>
+                 <button type="button" onClick={() => closeLoginDialog()} className="inline-flex h-11 items-center justify-center rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4]">{text.qrCancel}</button>
                </div>
              </div>
           ) : (
