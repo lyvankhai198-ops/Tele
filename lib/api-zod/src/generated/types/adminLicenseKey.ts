@@ -28,6 +28,8 @@ export interface AdminLicenseKey {
   /** @nullable */
   claimedAt: Date | null;
   /** @nullable */
+  claimedByUserId: string | null;
+  /** @nullable */
   claimedByUsername: string | null;
   /** @nullable */
   revokedAt: Date | null;

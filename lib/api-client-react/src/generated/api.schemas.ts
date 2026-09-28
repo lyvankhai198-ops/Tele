@@ -1920,11 +1920,40 @@ export interface AdminLicenseKey {
   /** @nullable */
   claimedAt: string | null;
   /** @nullable */
+  claimedByUserId: string | null;
+  /** @nullable */
   claimedByUsername: string | null;
   /** @nullable */
   revokedAt: string | null;
   /** @nullable */
   revokedByUsername: string | null;
+}
+
+export interface AdminLicenseKeyRecipientTelegramAccount {
+  id: string;
+  /** @nullable */
+  username: string | null;
+  status: string;
+}
+
+export interface AdminLicenseKeyReminderDelivery {
+  id: string;
+  telegramAccountId: string;
+  subscriptionExpiresAt: string;
+  reminderType: string;
+  status: string;
+  attemptCount: number;
+  nextAttemptAt: string;
+  /** @nullable */
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminLicenseKeyRecipientDetails {
+  userId: string;
+  telegramAccounts: AdminLicenseKeyRecipientTelegramAccount[];
+  reminders: AdminLicenseKeyReminderDelivery[];
 }
 
 export interface AdminLicenseKeySecret {

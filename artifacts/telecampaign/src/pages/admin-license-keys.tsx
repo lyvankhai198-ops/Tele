@@ -1,9 +1,28 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Key, Copy, AlertCircle, Trash2, CheckCircle2, Filter, Bot, ExternalLink, Save, Send } from "lucide-react";
+import {
+  Key,
+  Copy,
+  AlertCircle,
+  Trash2,
+  CheckCircle2,
+  Filter,
+  Bot,
+  ExternalLink,
+  Save,
+  Send,
+  Search,
+  Clock3,
+  Check,
+  ChevronRight,
+  X,
+  KeyRound,
+  UserRound,
+} from "lucide-react";
 import { format } from "date-fns";
 import { vi as viLocale, enUS } from "date-fns/locale";
+import "./admin-license-keys.css";
 
 import {
   AppLayout,
@@ -27,15 +46,23 @@ import {
   useGetAdminLicenseReminderSettings,
   useUpdateAdminLicenseReminderSettings,
   useResetAdminRenewalTestAccount,
+  useListAdminUsers,
+  useListAdminLicenseKeyRecipientDetails,
   getGetAdminPurchaseSettingsQueryKey,
   getGetAdminLicenseReminderSettingsQueryKey,
   getListAdminLicenseKeysQueryKey,
+  getListAdminUsersQueryKey,
+  getListAdminLicenseKeyRecipientDetailsQueryKey,
   type CreateAdminLicenseKeyInput,
   type AdminLicenseReminderSettings,
   type PurchaseOrderSettings,
   type LicenseKeyStatus,
   type LicenseKeyPool,
   type PlanCode,
+  type AdminUser,
+  type AdminLicenseKey,
+  type AdminLicenseKeyRecipientDetails,
+  type AdminLicenseKeyReminderDelivery,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 
@@ -47,9 +74,69 @@ const copy = {
     loadError: "Could not load data",
     loadErrorDetail: "Please check your access rights or try again later.",
     eyebrow: "System administration",
-    sectionTitle: "License Keys",
-    sectionDetail: "Create and manage single-use license keys for users.",
+    sectionTitle: "Keys & renewals",
+    sectionDetail: "Match recipients, current subscriptions, key state, and real Telegram reminder records.",
     createButton: "Create key",
+    configureReminders: "Reminder settings",
+    resetRenewalTest: "Reset renewal test",
+    totalKeys: "Total keys",
+    activeSubscriptions: "Active subscriptions",
+    expiringSoon: "Expiring in 7 days",
+    pendingReminders: "Queued reminder jobs",
+    priorityTitle: "Subscriptions to review",
+    automationTitle: "Telegram renewal reminders",
+    automationEnabled: "Enabled",
+    automationDisabled: "Disabled",
+    automationSender: "Sender",
+    noSender: "No sender selected",
+    noUpcoming: "No linked subscriptions are expiring in the next 7 days.",
+    openQueue: "Show expiring",
+    inventoryTitle: "Key inventory",
+    inventoryDetail: "Subscription and key states are shown separately. Key values are never listed here.",
+    searchPlaceholder: "Username, Telegram handle, label, or key ID",
+    searchLabel: "Search key inventory",
+    subscriptionFilterLabel: "Subscription",
+    allSubscriptions: "All subscriptions",
+    subscriptionActive: "Active",
+    subscriptionSoon: "Expiring soon",
+    subscriptionExpired: "Expired",
+    subscriptionUnavailable: "Not linked",
+    quickAll: "All keys",
+    quickSoon: "Expiring soon",
+    quickActive: "Active subscription",
+    quickAvailable: "Available keys",
+    tableRecipient: "Recipient",
+    tableSubscription: "Current subscription",
+    tableIdentifier: "Key reference",
+    tableKeyState: "Key state",
+    tableReminder: "Latest reminder",
+    noRecipient: "Unclaimed key",
+    recipientUnavailable: "Account not found",
+    appUsername: "App account",
+    noTelegramAccount: "No linked Telegram account",
+    noExpiry: "No expiry",
+    notAvailable: "Unavailable",
+    noReminderRecord: "No current-period record",
+    reminderSent: "Sent",
+    reminderFailed: "Failed",
+    reminderPending: "Queued",
+    reminderSending: "Sending",
+    reminderHistoryTitle: "Reminder records",
+    reminderHistoryScope: "Current subscription expiry",
+    reminderHistoryEmpty: "No delivery records are stored for this subscription expiry.",
+    reminderHistoryLoadError: "Reminder records could not be loaded.",
+    reminderDeliveryTo: "Telegram recipient",
+    reminderAttempts: "Attempts",
+    detailTitle: "License details",
+    detailKeyLabel: "Masked key reference",
+    detailPlanDuration: "Key plan and duration",
+    detailCreated: "Created",
+    detailClaimed: "Claimed",
+    detailPool: "Inventory pool",
+    keyReferenceNote: "This is an internal record ID, not the license key.",
+    contextLoadError: "Recipient or reminder details are temporarily unavailable.",
+    noMatch: "No keys match the current search and filters.",
+    closeDetails: "Close details",
     botSectionTitle: "Telegram Bot purchase link",
     botSectionDetail: "This is the destination users open from the upgrade page to buy a license key.",
     loadingPurchaseLink: "Loading purchase link…",
@@ -154,9 +241,69 @@ const copy = {
     loadError: "Không thể tải dữ liệu",
     loadErrorDetail: "Vui lòng kiểm tra lại quyền truy cập của bạn hoặc thử lại sau.",
     eyebrow: "Quản trị hệ thống",
-    sectionTitle: "Danh sách Mã bản quyền",
-    sectionDetail: "Tạo và quản lý các mã bản quyền cấp phát một lần cho người dùng.",
+    sectionTitle: "Keys & gia hạn",
+    sectionDetail: "Đối chiếu người nhận, thuê bao hiện tại, trạng thái key và lịch sử nhắc Telegram thực tế.",
     createButton: "Tạo mã mới",
+    configureReminders: "Cấu hình nhắc",
+    resetRenewalTest: "Reset test gia hạn",
+    totalKeys: "Tổng key",
+    activeSubscriptions: "Thuê bao hoạt động",
+    expiringSoon: "Hết hạn trong 7 ngày",
+    pendingReminders: "Lượt nhắc đang chờ",
+    priorityTitle: "Thuê bao cần theo dõi",
+    automationTitle: "Nhắc gia hạn Telegram",
+    automationEnabled: "Đang bật",
+    automationDisabled: "Đang tắt",
+    automationSender: "Tài khoản gửi",
+    noSender: "Chưa chọn tài khoản gửi",
+    noUpcoming: "Không có thuê bao đã liên kết nào hết hạn trong 7 ngày tới.",
+    openQueue: "Xem sắp hết hạn",
+    inventoryTitle: "Danh mục key",
+    inventoryDetail: "Trạng thái thuê bao và trạng thái key được hiển thị riêng. Không hiển thị giá trị key.",
+    searchPlaceholder: "Username, Telegram, nhãn hoặc ID key",
+    searchLabel: "Tìm trong danh mục key",
+    subscriptionFilterLabel: "Thuê bao",
+    allSubscriptions: "Mọi trạng thái",
+    subscriptionActive: "Đang hoạt động",
+    subscriptionSoon: "Sắp hết hạn",
+    subscriptionExpired: "Đã hết hạn",
+    subscriptionUnavailable: "Chưa đối chiếu",
+    quickAll: "Tất cả key",
+    quickSoon: "Sắp hết hạn",
+    quickActive: "Thuê bao hoạt động",
+    quickAvailable: "Key khả dụng",
+    tableRecipient: "Người nhận",
+    tableSubscription: "Thuê bao hiện tại",
+    tableIdentifier: "Mã tham chiếu",
+    tableKeyState: "Trạng thái key",
+    tableReminder: "Nhắc gần nhất",
+    noRecipient: "Key chưa được nhận",
+    recipientUnavailable: "Không tìm thấy tài khoản",
+    appUsername: "Tài khoản ứng dụng",
+    noTelegramAccount: "Chưa liên kết tài khoản Telegram",
+    noExpiry: "Không hết hạn",
+    notAvailable: "Không có dữ liệu",
+    noReminderRecord: "Chưa có bản ghi kỳ hạn hiện tại",
+    reminderSent: "Đã gửi",
+    reminderFailed: "Thất bại",
+    reminderPending: "Đang chờ",
+    reminderSending: "Đang gửi",
+    reminderHistoryTitle: "Lịch sử nhắc",
+    reminderHistoryScope: "Kỳ hạn thuê bao hiện tại",
+    reminderHistoryEmpty: "Chưa có bản ghi gửi cho kỳ hạn thuê bao này.",
+    reminderHistoryLoadError: "Không thể tải dữ liệu nhắc.",
+    reminderDeliveryTo: "Tài khoản Telegram nhận",
+    reminderAttempts: "Số lần thử",
+    detailTitle: "Chi tiết license",
+    detailKeyLabel: "Mã tham chiếu đã che",
+    detailPlanDuration: "Gói và thời hạn key",
+    detailCreated: "Ngày tạo",
+    detailClaimed: "Ngày nhận",
+    detailPool: "Kho key",
+    keyReferenceNote: "Đây là ID nội bộ của bản ghi, không phải license key.",
+    contextLoadError: "Tạm thời không tải được thông tin người nhận hoặc lịch sử nhắc.",
+    noMatch: "Không tìm thấy key phù hợp với từ khóa và bộ lọc hiện tại.",
+    closeDetails: "Đóng chi tiết",
     botSectionTitle: "Link mua key qua Telegram Bot",
     botSectionDetail: "Đây là link người dùng sẽ mở từ trang nâng cấp để mua license key.",
     loadingPurchaseLink: "Đang tải link mua key…",
@@ -258,14 +405,35 @@ const copy = {
   },
 } as const;
 
-function formatKeyDate(dateStr: string, language: string, includeTime = false): string {
+function formatKeyDate(dateStr: string | Date, language: string, includeTime = false): string {
   try {
     const locale = language === "vi" ? viLocale : enUS;
     const pattern = includeTime ? "dd/MM/yyyy HH:mm" : "dd/MM/yyyy";
-    return format(new Date(dateStr), pattern, { locale });
+    const date = dateStr instanceof Date ? dateStr : new Date(dateStr);
+    return format(date, pattern, { locale });
   } catch {
-    return dateStr;
+    return String(dateStr);
   }
+}
+
+function asDate(value: Date | string | null | undefined): Date | null {
+  if (value == null) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function reminderStatusLabel(status: string, language: string): string {
+  const labels = language === "vi"
+    ? { sent: "Đã gửi", failed: "Thất bại", pending: "Đang chờ", sending: "Đang gửi" }
+    : { sent: "Sent", failed: "Failed", pending: "Queued", sending: "Sending" };
+  return labels[status as keyof typeof labels] ?? status;
+}
+
+function reminderTypeLabel(reminderType: string, language: string): string {
+  if (reminderType === "expired") return language === "vi" ? "Sau khi hết hạn" : "After expiry";
+  const match = /^(\d+)d$/.exec(reminderType);
+  if (match) return language === "vi" ? `Trước hạn ${match[1]} ngày` : `${match[1]} days before expiry`;
+  return reminderType;
 }
 
 function formatVnd(value: number): string {
@@ -295,6 +463,11 @@ export function AdminLicenseKeysPage() {
   const [statusFilter, setStatusFilter] = useState<LicenseKeyStatus | "all">("all");
   const [planFilter, setPlanFilter] = useState<PlanCode | "all">("all");
   const [poolFilter, setPoolFilter] = useState<LicenseKeyPool | "all">("all");
+  const [subscriptionFilter, setSubscriptionFilter] = useState<"all" | "active" | "expiring" | "expired" | "unmatched">("all");
+  const [quickFilter, setQuickFilter] = useState<"all" | "soon" | "active" | "available">("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
 
   // Queries
   const queryParams = {
@@ -305,6 +478,27 @@ export function AdminLicenseKeysPage() {
   const { data: licenseKeys, isLoading, error } = useListAdminLicenseKeys(queryParams, {
     query: {
       queryKey: getListAdminLicenseKeysQueryKey(queryParams),
+    },
+  });
+  const usersQueryParams = {};
+  const {
+    data: adminUsers,
+    error: usersError,
+    isLoading: isUsersLoading,
+  } = useListAdminUsers(usersQueryParams, {
+    query: {
+      queryKey: getListAdminUsersQueryKey(usersQueryParams),
+      staleTime: 30_000,
+    },
+  });
+  const {
+    data: recipientDetails,
+    error: recipientDetailsError,
+    isLoading: isRecipientDetailsLoading,
+  } = useListAdminLicenseKeyRecipientDetails({
+    query: {
+      queryKey: getListAdminLicenseKeyRecipientDetailsQueryKey(),
+      staleTime: 30_000,
     },
   });
   const {
@@ -517,15 +711,78 @@ export function AdminLicenseKeysPage() {
     setIsCreateModalOpen(false);
   };
 
+  const usersById = useMemo(() => new Map(
+    (adminUsers ?? []).map((user) => [user.id, user]),
+  ), [adminUsers]);
+  const recipientDetailsByUserId = useMemo(() => new Map(
+    (recipientDetails ?? []).map((details) => [details.userId, details]),
+  ), [recipientDetails]);
+  const licenseRows = useMemo(() => (licenseKeys ?? []).map((key) => {
+    const user = key.claimedByUserId ? usersById.get(key.claimedByUserId) : undefined;
+    const details = key.claimedByUserId ? recipientDetailsByUserId.get(key.claimedByUserId) : undefined;
+    const expiresAt = asDate(user?.subscription.expiresAt);
+    const daysLeft = expiresAt
+      ? Math.ceil((expiresAt.getTime() - Date.now()) / 86_400_000)
+      : null;
+    const subscriptionState = !user
+      ? key.status === "claimed" ? "unmatched" : "none"
+      : user.subscription.status !== "active"
+        ? "expired"
+        : daysLeft !== null && daysLeft >= 0 && daysLeft <= 7
+          ? "expiring"
+          : "active";
+    return { key, user, details, expiresAt, daysLeft, subscriptionState };
+  }), [licenseKeys, usersById, recipientDetailsByUserId]);
+
   const filteredKeys = useMemo(() => {
-    if (!licenseKeys) return [];
-    return licenseKeys.filter((key) => {
+    const normalizedSearch = searchTerm.trim().toLocaleLowerCase(language === "vi" ? "vi" : "en");
+    return licenseRows.filter((row) => {
+      const { key, user, details, subscriptionState } = row;
       if (statusFilter !== "all" && key.status !== statusFilter) return false;
       if (planFilter !== "all" && key.plan !== planFilter) return false;
       if (poolFilter !== "all" && key.pool !== poolFilter) return false;
+      if (
+        subscriptionFilter === "active" && subscriptionState !== "active" && subscriptionState !== "expiring"
+        || subscriptionFilter === "expiring" && subscriptionState !== "expiring"
+        || subscriptionFilter === "expired" && subscriptionState !== "expired"
+        || subscriptionFilter === "unmatched" && subscriptionState !== "unmatched" && subscriptionState !== "none"
+      ) return false;
+      if (
+        quickFilter === "soon" && subscriptionState !== "expiring"
+        || quickFilter === "active" && subscriptionState !== "active" && subscriptionState !== "expiring"
+        || quickFilter === "available" && key.status !== "available"
+      ) return false;
+      if (normalizedSearch) {
+        const searchable = [
+          key.id,
+          key.label ?? "",
+          key.plan,
+          key.pool,
+          key.claimedByUsername ?? "",
+          user?.username ?? "",
+          ...(details?.telegramAccounts.map((account) => account.username ?? "") ?? []),
+        ].join(" ").toLocaleLowerCase(language === "vi" ? "vi" : "en");
+        if (!searchable.includes(normalizedSearch)) return false;
+      }
       return true;
     });
-  }, [licenseKeys, statusFilter, planFilter, poolFilter]);
+  }, [licenseRows, statusFilter, planFilter, poolFilter, subscriptionFilter, quickFilter, searchTerm, language]);
+
+  const subscriberRows = useMemo(() => {
+    const byUserId = new Map<string, (typeof licenseRows)[number]>();
+    for (const row of licenseRows) {
+      if (row.user && row.key.claimedByUserId) byUserId.set(row.key.claimedByUserId, row);
+    }
+    return [...byUserId.values()];
+  }, [licenseRows]);
+  const expiringRecipients = useMemo(() => subscriberRows
+    .filter((row) => row.subscriptionState === "expiring")
+    .sort((left, right) => (left.daysLeft ?? 99) - (right.daysLeft ?? 99)), [subscriberRows]);
+  const pendingReminderCount = useMemo(() => (recipientDetails ?? [])
+    .flatMap((details) => details.reminders)
+    .filter((reminder) => reminder.status === "pending" || reminder.status === "sending")
+    .length, [recipientDetails]);
+  const selectedRow = selectedKeyId ? licenseRows.find((row) => row.key.id === selectedKeyId) : undefined;
 
   if (error) {
     return (
@@ -546,14 +803,19 @@ export function AdminLicenseKeysPage() {
 
   return (
     <AppLayout activePage="license-keys" title={text.pageTitle}>
+      <div className="license-key-page">
       <SectionHeader
         eyebrow={text.eyebrow}
         title={text.sectionTitle}
         detail={text.sectionDetail}
         action={
           <div className="flex flex-wrap justify-end gap-2">
+            <QuietButton onClick={() => setSettingsOpen((open) => !open)} aria-expanded={settingsOpen} data-testid="toggle-license-settings">
+              <Send className="h-4 w-4" />
+              {text.configureReminders}
+            </QuietButton>
             <QuietButton onClick={handleResetRenewalTestAccount}>
-              {resetRenewalTestMutation.isPending ? "Đang reset…" : "Reset test gia hạn"}
+              {resetRenewalTestMutation.isPending ? (language === "vi" ? "Đang reset…" : "Resetting…") : text.resetRenewalTest}
             </QuietButton>
             <PrimaryButton onClick={() => setIsCreateModalOpen(true)}>
               {text.createButton}
@@ -561,6 +823,84 @@ export function AdminLicenseKeysPage() {
           </div>
         }
       />
+
+      <section className="license-key-page__stats" aria-label={language === "vi" ? "Tóm tắt license" : "License summary"}>
+        <article className="license-key-page__stat">
+          <span className="license-key-page__stat-icon"><KeyRound /></span>
+          <div><span className="license-key-page__stat-label">{text.totalKeys}</span><strong>{isLoading ? "—" : licenseRows.length}</strong></div>
+          <span className="license-key-page__stat-note">{language === "vi" ? "trong kho" : "in inventory"}</span>
+        </article>
+        <article className="license-key-page__stat">
+          <span className="license-key-page__stat-icon"><Check /></span>
+          <div><span className="license-key-page__stat-label">{text.activeSubscriptions}</span><strong>{isUsersLoading ? "—" : subscriberRows.filter((row) => row.subscriptionState === "active" || row.subscriptionState === "expiring").length}</strong></div>
+          <span className="license-key-page__stat-note">{language === "vi" ? "tài khoản đã nhận key" : "claimed accounts"}</span>
+        </article>
+        <article className="license-key-page__stat">
+          <span className="license-key-page__stat-icon license-key-page__stat-icon--amber"><Clock3 /></span>
+          <div><span className="license-key-page__stat-label">{text.expiringSoon}</span><strong>{isUsersLoading ? "—" : expiringRecipients.length}</strong></div>
+          <span className="license-key-page__stat-note">{language === "vi" ? "thuê bao" : "subscriptions"}</span>
+        </article>
+        <article className="license-key-page__stat">
+          <span className="license-key-page__stat-icon license-key-page__stat-icon--rose"><Send /></span>
+          <div><span className="license-key-page__stat-label">{text.pendingReminders}</span><strong>{isRecipientDetailsLoading ? "—" : pendingReminderCount}</strong></div>
+          <span className="license-key-page__stat-note">{language === "vi" ? "bản ghi đang chờ/gửi" : "pending or sending"}</span>
+        </article>
+      </section>
+
+      <section className="license-key-page__workbench">
+        <div className="license-key-page__queue">
+          <div className="license-key-page__section-head">
+            <div className="license-key-page__section-title"><Clock3 /><span>{text.priorityTitle}</span><span className="license-key-page__count">{isUsersLoading ? "—" : expiringRecipients.length}</span></div>
+            <button type="button" className="license-key-page__text-link" onClick={() => { setQuickFilter("soon"); setSubscriptionFilter("all"); }}>
+              {text.openQueue}<ChevronRight size={14} />
+            </button>
+          </div>
+          {isUsersLoading ? (
+            <p className="license-key-page__empty">{language === "vi" ? "Đang tải thuê bao…" : "Loading subscriptions…"}</p>
+          ) : expiringRecipients.length === 0 ? (
+            <p className="license-key-page__empty">{text.noUpcoming}</p>
+          ) : (
+            <div className="license-key-page__queue-list">
+              {expiringRecipients.slice(0, 3).map((row) => (
+                <button key={row.key.claimedByUserId} type="button" className="license-key-page__queue-item" onClick={() => setSelectedKeyId(row.key.id)}>
+                  <span className="license-key-page__queue-person">
+                    <span className="license-key-page__avatar">{(row.user?.username ?? "?").slice(0, 2).toUpperCase()}</span>
+                    <span><strong>{row.user?.username ?? row.key.claimedByUsername ?? text.recipientUnavailable}</strong>
+                      <small>{row.details?.telegramAccounts.find((account) => account.status === "connected" && account.username)?.username
+                        ? `@${row.details.telegramAccounts.find((account) => account.status === "connected" && account.username)!.username!.replace(/^@+/, "")}`
+                        : text.noTelegramAccount}</small>
+                    </span>
+                  </span>
+                  <span className="license-key-page__queue-meta"><strong>{row.daysLeft} {language === "vi" ? "ngày" : "days"}</strong><small>{row.expiresAt ? formatKeyDate(row.expiresAt, language) : "—"}</small></span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="license-key-page__automation">
+          <div className="license-key-page__automation-top">
+            <span className="license-key-page__automation-icon"><Bot /></span>
+            <div><strong>{text.automationTitle}</strong><p>{text.reminderDetail}</p></div>
+          </div>
+          <div className="license-key-page__automation-bottom">
+            <span>{text.automationSender}: <strong>
+              {reminderData?.accounts.find((account) => account.id === reminderForm?.senderAccountId)
+                ? `${reminderData.accounts.find((account) => account.id === reminderForm?.senderAccountId)!.ownerUsername} · ${reminderData.accounts.find((account) => account.id === reminderForm?.senderAccountId)!.name}`
+                : text.noSender}
+            </strong></span>
+            <span className={`license-key-page__reminder-toggle-label ${reminderForm?.enabled ? "is-on" : ""}`}>
+              {reminderForm?.enabled ? text.automationEnabled : text.automationDisabled}
+            </span>
+          </div>
+          {reminderData?.accounts.find((account) => account.id === reminderForm?.senderAccountId)?.username && (
+            <p className="license-key-page__automation-handle">
+              @{reminderData.accounts.find((account) => account.id === reminderForm?.senderAccountId)!.username!.replace(/^@+/, "")}
+            </p>
+          )}
+        </div>
+      </section>
+
+      {settingsOpen && <div className="license-key-page__settings">
       <button
         type="button"
         onClick={() => navigate("/admin/purchase-orders")}
@@ -790,154 +1130,292 @@ export function AdminLicenseKeysPage() {
           )}
         </div>
       </Panel>
+      </div>}
 
-      <Panel className="mb-6 p-4 flex flex-col sm:flex-row gap-4 bg-[#f8fafc]">
-        <div className="flex items-center gap-2 text-sm font-bold text-[#475569]">
-          <Filter className="h-4 w-4" />
-          <span>{text.filterLabel}</span>
+      {(usersError || recipientDetailsError) && (
+        <div className="license-key-page__context-warning" role="status">
+          <AlertCircle size={16} /> {text.contextLoadError}
         </div>
-        <div className="flex flex-wrap gap-3">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as LicenseKeyStatus | "all")}
-            className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10"
-          >
-            <option value="all">{text.filterAllStatus}</option>
-            <option value="available">{text.filterAvailable}</option>
-            <option value="claimed">{text.filterClaimed}</option>
-            <option value="revoked">{text.filterRevoked}</option>
-          </select>
-          <select
-            value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value as PlanCode | "all")}
-            className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10"
-          >
-            <option value="all">{text.filterAllPlans}</option>
-            <option value="pro">Pro</option>
-            <option value="unlimited">Unlimited</option>
-            <option value="plus">Plus</option>
-          </select>
-          <select
-            value={poolFilter}
-            onChange={(e) => setPoolFilter(e.target.value as LicenseKeyPool | "all")}
-            className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10"
-          >
-            <option value="all">Tất cả kho</option>
-            <option value="normal">Kho website</option>
-            <option value="external">Kho bán ngoài</option>
-          </select>
-        </div>
-      </Panel>
-
-       <Panel className="overflow-x-auto">
-        {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#eef2f6] border-t-[#1a2b88]" />
+      )}
+      <section className="license-key-page__inventory">
+        <div className="license-key-page__inventory-head">
+          <div>
+            <h2>{text.inventoryTitle}</h2>
+            <p>{text.inventoryDetail}</p>
           </div>
-        ) : filteredKeys.length === 0 ? (
-          <EmptyState
-            icon={Key}
-            title={text.emptyTitle}
-            detail={text.emptyDetail}
-          />
-        ) : (
-           <table className="w-full min-w-[1020px] text-left text-[14px]">
-            <thead>
-              <tr className="border-b border-[#eef2f6] bg-[#f8fafc]">
-                <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableKeyLabel}</th>
-                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tablePlanDuration}</th>
-                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">Kho</th>
-                 <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableSalePrice}</th>
-                <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableStatus}</th>
-                <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableCreated}</th>
-                <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px]">{text.tableUsage}</th>
-                <th className="px-6 py-4 font-extrabold text-[#64748b] uppercase tracking-wider text-[11px] text-right">{text.tableActions}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#eef2f6]">
-              {filteredKeys.map((key) => (
-                <tr key={key.id} className="hover:bg-[#f8fafc]/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-[#0f172a]">{key.label || "—"}</div>
-                    <div className="text-[12px] font-mono text-[#64748b] mt-0.5">{key.id.split("-")[0]}...</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="inline-flex items-center gap-1.5 font-bold uppercase text-[12px] tracking-wide text-[#1a2b88] bg-[#eef2fa] px-2 py-0.5 rounded">
-                      {key.plan}
-                    </div>
-                    <div className="text-[13px] font-medium text-[#475569] mt-1">{text.durationDays(key.durationDays)}</div>
-                  </td>
-                   <td className="px-6 py-4">
-                     <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${key.pool === "external" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#eff6ff] text-[#1d4ed8]"}`}>
-                       {key.pool === "external" ? "Bán ngoài" : "Website"}
-                     </span>
-                   </td>
-                   <td className="px-6 py-4">
-                     {key.salePriceVnd === null ? (
-                       <span className="text-[13px] font-semibold text-[#b45309]">Chưa nhập</span>
-                     ) : (
-                       <span className="font-bold text-[#0f172a]">{formatVnd(key.salePriceVnd)}</span>
-                     )}
-                   </td>
-                  <td className="px-6 py-4">
-                    <StatusBadge
-                      status={
-                        key.status === "available"
-                          ? "success"
-                          : key.status === "claimed"
-                          ? "active"
-                          : "restricted"
-                      }
-                      label={
-                        key.status === "available"
-                          ? text.statusAvailable
-                          : key.status === "claimed"
-                          ? text.statusClaimed
-                          : text.statusRevoked
-                      }
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-[#0f172a]">
-                      {formatKeyDate(key.createdAt, language)}
-                    </div>
-                    <div className="text-[12px] text-[#64748b] mt-0.5">
-                      {text.createdBy} {key.createdByUsername || text.bySystem}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {key.status === "claimed" && key.claimedByUsername ? (
-                      <div>
-                        <div className="font-semibold text-[#0f172a]">{key.claimedByUsername}</div>
-                        <div className="text-[12px] text-[#64748b] mt-0.5">
-                          {key.claimedAt && formatKeyDate(key.claimedAt, language, true)}
-                        </div>
-                      </div>
-                    ) : key.status === "revoked" ? (
-                      <div className="text-[13px] font-medium text-[#94a3b8] italic">
-                        {text.revokedBy(key.revokedByUsername || text.bySystem)}
-                      </div>
-                    ) : (
-                      <span className="text-[#94a3b8] text-[13px]">—</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {key.status === "available" && (
-                      <button
-                        onClick={() => setRevokeConfirmId(key.id)}
-                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-bold text-[#e11d48] hover:bg-[#fff1f2] transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        {text.revokeAction}
-                      </button>
-                    )}
-                  </td>
+          <label className="license-key-page__search">
+            <Search size={16} />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={text.searchPlaceholder}
+              aria-label={text.searchLabel}
+              data-testid="search-license-inventory"
+            />
+          </label>
+        </div>
+        <div className="license-key-page__filters">
+          <div className="license-key-page__quick-filters" role="group" aria-label={text.subscriptionFilterLabel}>
+            {([
+              ["all", text.quickAll],
+              ["soon", text.quickSoon],
+              ["active", text.quickActive],
+              ["available", text.quickAvailable],
+            ] as const).map(([filter, label]) => (
+              <button key={filter} type="button" className={`license-key-page__pill ${quickFilter === filter ? "is-selected" : ""}`} onClick={() => setQuickFilter(filter)}>
+                {filter === "all" && <Filter size={12} />}
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="license-key-page__select-filters">
+            <label>
+              <span>{text.subscriptionFilterLabel}</span>
+              <select value={subscriptionFilter} onChange={(event) => setSubscriptionFilter(event.target.value as typeof subscriptionFilter)} aria-label={text.subscriptionFilterLabel}>
+                <option value="all">{text.allSubscriptions}</option>
+                <option value="active">{text.subscriptionActive}</option>
+                <option value="expiring">{text.subscriptionSoon}</option>
+                <option value="expired">{text.subscriptionExpired}</option>
+                <option value="unmatched">{text.subscriptionUnavailable}</option>
+              </select>
+            </label>
+            <label>
+              <span>{text.tableKeyState}</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as LicenseKeyStatus | "all")} aria-label={text.tableKeyState}>
+                <option value="all">{text.filterAllStatus}</option>
+                <option value="available">{text.filterAvailable}</option>
+                <option value="claimed">{text.filterClaimed}</option>
+                <option value="revoked">{text.filterRevoked}</option>
+              </select>
+            </label>
+            <label>
+              <span>{text.planLabel}</span>
+              <select value={planFilter} onChange={(event) => setPlanFilter(event.target.value as PlanCode | "all")} aria-label={text.planLabel}>
+                <option value="all">{text.filterAllPlans}</option>
+                <option value="plus">PLUS</option>
+                <option value="pro">PRO</option>
+                <option value="unlimited">UNLIMITED</option>
+              </select>
+            </label>
+            <label>
+              <span>{text.detailPool}</span>
+              <select value={poolFilter} onChange={(event) => setPoolFilter(event.target.value as LicenseKeyPool | "all")} aria-label={text.detailPool}>
+                <option value="all">{language === "vi" ? "Tất cả kho" : "All pools"}</option>
+                <option value="normal">{language === "vi" ? "Kho website" : "Website"}</option>
+                <option value="external">{language === "vi" ? "Kho bán ngoài" : "External"}</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="license-key-page__table-scroll">
+          {isLoading ? (
+            <div className="license-key-page__loading"><span />{language === "vi" ? "Đang tải danh mục key…" : "Loading license inventory…"}</div>
+          ) : filteredKeys.length === 0 ? (
+            <div className="license-key-page__empty-state">
+              <Key size={24} />
+              <strong>{text.noMatch}</strong>
+            </div>
+          ) : (
+            <table className="license-key-page__table">
+              <thead>
+                <tr>
+                  <th>{text.tableRecipient}</th>
+                  <th>{text.tableSubscription}</th>
+                  <th>{text.tableIdentifier}</th>
+                  <th>{text.tableKeyState}</th>
+                  <th>{text.tableReminder}</th>
+                  <th aria-label={text.tableActions} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Panel>
+              </thead>
+              <tbody>
+                {filteredKeys.map((row) => {
+                  const { key, user, details, expiresAt, daysLeft, subscriptionState } = row;
+                  const linkedAccount = details?.telegramAccounts.find((account) => account.username && account.status === "connected")
+                    ?? details?.telegramAccounts.find((account) => account.username);
+                  const latestReminder = details?.reminders[0];
+                  const subLabel = subscriptionState === "active"
+                    ? text.subscriptionActive
+                    : subscriptionState === "expiring"
+                      ? text.subscriptionSoon
+                      : subscriptionState === "expired"
+                        ? text.subscriptionExpired
+                        : text.subscriptionUnavailable;
+                  const keyLabel = key.status === "available"
+                    ? text.statusAvailable
+                    : key.status === "claimed"
+                      ? text.statusClaimed
+                      : text.statusRevoked;
+                  return (
+                    <tr
+                      key={key.id}
+                      tabIndex={0}
+                      onClick={() => setSelectedKeyId(key.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedKeyId(key.id);
+                        }
+                      }}
+                      data-testid={`license-row-${key.id}`}
+                    >
+                      <td>
+                        <span className="license-key-page__recipient">
+                          <span className="license-key-page__avatar">{(user?.username ?? key.claimedByUsername ?? "—").slice(0, 2).toUpperCase()}</span>
+                          <span>
+                            <strong>{user?.username ?? (key.status === "claimed" ? key.claimedByUsername ?? text.recipientUnavailable : text.noRecipient)}</strong>
+                            <small>{linkedAccount?.username
+                              ? `@${linkedAccount.username.replace(/^@+/, "")}${linkedAccount.status !== "connected" ? ` · ${linkedAccount.status}` : ""}`
+                              : user ? text.noTelegramAccount : text.appUsername}</small>
+                          </span>
+                        </span>
+                      </td>
+                      <td>
+                        {user ? (
+                          <>
+                            <span className="license-key-page__plan">{user.subscription.plan.toUpperCase()}</span>
+                            <span className={`license-key-page__expiry ${subscriptionState === "expiring" ? "is-soon" : subscriptionState === "expired" ? "is-expired" : ""}`}>
+                              {expiresAt ? formatKeyDate(expiresAt, language) : text.noExpiry}
+                              {daysLeft !== null && subscriptionState === "expiring" && <small> · {daysLeft} {language === "vi" ? "ngày" : "days"}</small>}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="license-key-page__muted">{key.status === "claimed" && isUsersLoading ? (language === "vi" ? "Đang tải…" : "Loading…") : text.notAvailable}</span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="license-key-page__masked-id" title={text.keyReferenceNote}>••••{key.id.slice(-6)}</span>
+                        <small className="license-key-page__subtext">{key.label || `#${key.id.slice(0, 8)}`}</small>
+                      </td>
+                      <td>
+                        <span className={`license-key-page__badge license-key-page__badge--${subscriptionState}`}>
+                          {subLabel}
+                        </span>
+                        <span className={`license-key-page__key-state license-key-page__key-state--${key.status}`}>
+                          {keyLabel}
+                        </span>
+                      </td>
+                      <td>
+                        {recipientDetailsError ? (
+                          <span className="license-key-page__muted">{text.notAvailable}</span>
+                        ) : isRecipientDetailsLoading ? (
+                          <span className="license-key-page__muted">{language === "vi" ? "Đang tải…" : "Loading…"}</span>
+                        ) : latestReminder ? (
+                          <>
+                            <span className={`license-key-page__reminder-state license-key-page__reminder-state--${latestReminder.status}`}>
+                              {reminderStatusLabel(latestReminder.status, language)}
+                            </span>
+                            <small className="license-key-page__subtext">
+                              {formatKeyDate(latestReminder.sentAt ?? latestReminder.updatedAt, language, true)}
+                            </small>
+                          </>
+                        ) : (
+                          <span className="license-key-page__muted">{key.status === "claimed" ? text.noReminderRecord : "—"}</span>
+                        )}
+                      </td>
+                      <td className="license-key-page__row-actions">
+                        {key.status === "available" && (
+                          <button
+                            type="button"
+                            aria-label={`${text.revokeAction}: ${key.label ?? key.id.slice(-6)}`}
+                            onClick={(event) => { event.stopPropagation(); setRevokeConfirmId(key.id); }}
+                            data-testid={`revoke-license-${key.id}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                        <ChevronRight size={15} aria-hidden="true" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="license-key-page__table-foot">
+          <span>{language === "vi" ? "Đang hiển thị" : "Showing"} <strong>{filteredKeys.length}</strong> {language === "vi" ? "trong" : "of"} {licenseRows.length}</span>
+          <span>{language === "vi" ? "Mã key gốc chỉ hiển thị một lần khi tạo." : "Plaintext keys are shown only once at creation."}</span>
+        </div>
+      </section>
+
+      {selectedRow && (
+        <div className="license-key-page__drawer-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSelectedKeyId(null)}>
+          <aside className="license-key-page__drawer" role="dialog" aria-modal="true" aria-label={text.detailTitle}>
+            <div className="license-key-page__drawer-head">
+              <div><small>{text.tableIdentifier} · #{selectedRow.key.id.slice(0, 8)}</small><h2>{text.detailTitle}</h2></div>
+              <button type="button" aria-label={text.closeDetails} onClick={() => setSelectedKeyId(null)}><X size={17} /></button>
+            </div>
+            <div className="license-key-page__detail-person">
+              <span className="license-key-page__detail-avatar"><UserRound size={20} /></span>
+              <div>
+                <strong>{selectedRow.user?.username ?? selectedRow.key.claimedByUsername ?? text.noRecipient}</strong>
+                <small>{selectedRow.details?.telegramAccounts.length
+                  ? selectedRow.details.telegramAccounts.map((account) => account.username ? `@${account.username.replace(/^@+/, "")}` : account.status).join(" · ")
+                  : text.noTelegramAccount}</small>
+              </div>
+            </div>
+            <div className="license-key-page__detail-grid">
+              <div><small>{text.tableSubscription}</small><strong>{selectedRow.user?.subscription.plan.toUpperCase() ?? text.notAvailable}</strong></div>
+              <div><small>{text.expiringSoon}</small><strong>{selectedRow.expiresAt ? formatKeyDate(selectedRow.expiresAt, language) : text.noExpiry}</strong></div>
+              <div><small>{text.subscriptionFilterLabel}</small><span className={`license-key-page__badge license-key-page__badge--${selectedRow.subscriptionState}`}>
+                {selectedRow.subscriptionState === "active" ? text.subscriptionActive
+                  : selectedRow.subscriptionState === "expiring" ? text.subscriptionSoon
+                    : selectedRow.subscriptionState === "expired" ? text.subscriptionExpired
+                      : text.subscriptionUnavailable}
+              </span></div>
+              <div><small>{text.tableKeyState}</small><span className={`license-key-page__key-state license-key-page__key-state--${selectedRow.key.status}`}>
+                {selectedRow.key.status === "available" ? text.statusAvailable : selectedRow.key.status === "claimed" ? text.statusClaimed : text.statusRevoked}
+              </span></div>
+            </div>
+            <section className="license-key-page__key-detail">
+              <small>{text.detailKeyLabel}</small>
+              <strong>••••{selectedRow.key.id.slice(-6)}</strong>
+              <p>{text.keyReferenceNote}</p>
+            </section>
+            <div className="license-key-page__detail-grid license-key-page__detail-grid--secondary">
+              <div><small>{text.detailPlanDuration}</small><strong>{selectedRow.key.plan.toUpperCase()} · {text.durationDays(selectedRow.key.durationDays)}</strong></div>
+              <div><small>{text.detailPool}</small><strong>{selectedRow.key.pool === "external" ? (language === "vi" ? "Bán ngoài" : "External") : (language === "vi" ? "Website" : "Website")}</strong></div>
+              <div><small>{text.detailCreated}</small><strong>{formatKeyDate(selectedRow.key.createdAt, language, true)}</strong></div>
+              <div><small>{text.detailClaimed}</small><strong>{selectedRow.key.claimedAt ? formatKeyDate(selectedRow.key.claimedAt, language, true) : "—"}</strong></div>
+              <div><small>{text.tableSalePrice}</small><strong>{selectedRow.key.salePriceVnd === null ? "—" : formatVnd(selectedRow.key.salePriceVnd)}</strong></div>
+              <div><small>{text.createdBy}</small><strong>{selectedRow.key.createdByUsername ?? text.bySystem}</strong></div>
+            </div>
+            <section className="license-key-page__timeline">
+              <div className="license-key-page__timeline-head">
+                <h3>{text.reminderHistoryTitle}</h3>
+                <small>{text.reminderHistoryScope}</small>
+              </div>
+              {recipientDetailsError ? (
+                <p className="license-key-page__timeline-empty">{text.reminderHistoryLoadError}</p>
+              ) : isRecipientDetailsLoading ? (
+                <p className="license-key-page__timeline-empty">{language === "vi" ? "Đang tải bản ghi…" : "Loading reminder records…"}</p>
+              ) : selectedRow.details?.reminders.length ? (
+                <ol>
+                  {selectedRow.details.reminders.map((reminder: AdminLicenseKeyReminderDelivery) => {
+                    const targetAccount = selectedRow.details?.telegramAccounts.find((account) => account.id === reminder.telegramAccountId);
+                    const eventTime = reminder.sentAt ?? reminder.updatedAt;
+                    return (
+                      <li key={reminder.id}>
+                        <span className={`license-key-page__timeline-dot license-key-page__timeline-dot--${reminder.status}`} />
+                        <div>
+                          <strong>{reminderTypeLabel(reminder.reminderType, language)} · {reminderStatusLabel(reminder.status, language)}</strong>
+                          <small>{text.reminderDeliveryTo}: {targetAccount?.username ? `@${targetAccount.username.replace(/^@+/, "")}` : text.notAvailable}</small>
+                          <small>{formatKeyDate(eventTime, language, true)} · {text.reminderAttempts}: {reminder.attemptCount}</small>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : selectedRow.key.status === "claimed" ? (
+                <p className="license-key-page__timeline-empty">{text.reminderHistoryEmpty}</p>
+              ) : (
+                <p className="license-key-page__timeline-empty">{language === "vi" ? "Không áp dụng cho key chưa được nhận." : "Not applicable until a key is claimed."}</p>
+              )}
+            </section>
+          </aside>
+        </div>
+      )}
 
       {/* Create Modal */}
       {isCreateModalOpen && !newLicenseData && (
@@ -1131,6 +1609,7 @@ export function AdminLicenseKeysPage() {
       {toastMessage && (
         <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
       )}
+      </div>
     </AppLayout>
   );
 }

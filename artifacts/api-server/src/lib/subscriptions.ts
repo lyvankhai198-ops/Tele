@@ -165,6 +165,7 @@ type AdminLicenseRecord = {
   createdAt: Date;
   createdByUsername: string | null;
   claimedAt: Date | null;
+  claimedByUserId: string | null;
   claimedByUsername: string | null;
   revokedAt: Date | null;
   revokedByUsername: string | null;
@@ -200,6 +201,7 @@ function toAdminLicenseRecord(license: typeof licenseKeysTable.$inferSelect, use
     createdAt: license.createdAt,
     createdByUsername: license.createdBy ? usernames.get(license.createdBy) ?? null : null,
     claimedAt: license.claimedAt,
+    claimedByUserId: license.claimedBy,
     claimedByUsername: license.claimedBy ? usernames.get(license.claimedBy) ?? null : null,
     revokedAt: license.revokedAt,
     revokedByUsername: license.revokedBy ? usernames.get(license.revokedBy) ?? null : null,

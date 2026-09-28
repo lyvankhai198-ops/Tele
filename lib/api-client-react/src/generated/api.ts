@@ -37,6 +37,7 @@ import type {
   AdminGroupLibraryRevokeResult,
   AdminGroupLibrarySyncResult,
   AdminLicenseKey,
+  AdminLicenseKeyRecipientDetails,
   AdminLicenseKeySecret,
   AdminLicenseReminderSettingsInput,
   AdminLicenseReminderSettingsResponse,
@@ -6300,6 +6301,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateAdminLicenseKeyMutationOptions(options));
     }
+
+export const getListAdminLicenseKeyRecipientDetailsUrl = () => {
+
+
+
+
+  return `/api/admin/license-key-recipient-details`
+}
+
+export const listAdminLicenseKeyRecipientDetails = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminLicenseKeyRecipientDetails[]> => {
+
+  return customFetch<AdminLicenseKeyRecipientDetails[]>(getListAdminLicenseKeyRecipientDetailsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminLicenseKeyRecipientDetailsQueryKey = () => {
+    return [
+    `/api/admin/license-key-recipient-details`
+    ] as const;
+    }
+
+
+export const getListAdminLicenseKeyRecipientDetailsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminLicenseKeyRecipientDetailsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>> = ({ signal }) => listAdminLicenseKeyRecipientDetails({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminLicenseKeyRecipientDetailsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>>
+export type ListAdminLicenseKeyRecipientDetailsQueryError = ErrorType<void>
+
+
+
+export function useListAdminLicenseKeyRecipientDetails<TData = Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLicenseKeyRecipientDetails>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminLicenseKeyRecipientDetailsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRevokeAdminLicenseKeyUrl = (licenseKeyId: string,) => {
 

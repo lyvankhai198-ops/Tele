@@ -2740,6 +2740,7 @@ export const ListAdminLicenseKeysResponseItem = zod.object({
   "createdAt": zod.coerce.date(),
   "createdByUsername": zod.string().nullable(),
   "claimedAt": zod.coerce.date().nullable(),
+  "claimedByUserId": zod.string().nullable(),
   "claimedByUsername": zod.string().nullable(),
   "revokedAt": zod.coerce.date().nullable(),
   "revokedByUsername": zod.string().nullable()
@@ -2787,11 +2788,35 @@ export const CreateAdminLicenseKeyResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "createdByUsername": zod.string().nullable(),
   "claimedAt": zod.coerce.date().nullable(),
+  "claimedByUserId": zod.string().nullable(),
   "claimedByUsername": zod.string().nullable(),
   "revokedAt": zod.coerce.date().nullable(),
   "revokedByUsername": zod.string().nullable()
 }))
 })
+
+
+export const ListAdminLicenseKeyRecipientDetailsResponseItem = zod.object({
+  "userId": zod.string(),
+  "telegramAccounts": zod.array(zod.object({
+  "id": zod.string(),
+  "username": zod.string().nullable(),
+  "status": zod.string()
+})),
+  "reminders": zod.array(zod.object({
+  "id": zod.string(),
+  "telegramAccountId": zod.string(),
+  "subscriptionExpiresAt": zod.coerce.date(),
+  "reminderType": zod.string(),
+  "status": zod.string(),
+  "attemptCount": zod.number(),
+  "nextAttemptAt": zod.coerce.date(),
+  "sentAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}))
+})
+export const ListAdminLicenseKeyRecipientDetailsResponse = zod.array(ListAdminLicenseKeyRecipientDetailsResponseItem)
 
 
 export const RevokeAdminLicenseKeyParams = zod.object({

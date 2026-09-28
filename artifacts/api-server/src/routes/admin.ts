@@ -5,6 +5,7 @@ import {
   GetAdminPurchaseSettingsResponse,
   ListAdminLicenseKeysQueryParams,
   ListAdminLicenseKeysResponse,
+  ListAdminLicenseKeyRecipientDetailsResponse,
   UpdateAdminPurchaseSettingsBody,
   UpdateAdminPurchaseSettingsResponse,
   RevokeAdminLicenseKeyParams,
@@ -97,7 +98,10 @@ import {
   campaignsTable,
   destinationsTable,
   messageTemplatesTable,
+  licenseKeysTable,
   proxiesTable,
+  subscriptionReminderDeliveriesTable,
+  subscriptionsTable,
   telegramAccountsTable,
   db,
 } from "@workspace/db";
@@ -1654,6 +1658,77 @@ router.get("/admin/license-keys", async (req, res): Promise<void> => {
   if (!parsed.success) return void sendError(res, 400, "Bộ lọc license key không hợp lệ.");
   const licenses = await listAdminLicenseKeys(parsed.data);
   res.json(ListAdminLicenseKeysResponse.parse(licenses));
+});
+
+router.get("/admin/license-key-recipient-details", async (_req, res): Promise<void> => {
+  const claimedRows = await db.select({ userId: licenseKeysTable.claimedBy })
+    .from(licenseKeysTable)
+    .where(sql`${licenseKeysTable.claimedBy} is not null`);
+  const userIds = [...new Set(claimedRows.flatMap(({ userId }) => userId ? [userId] : []))];
+  if (!userIds.length) {
+    res.json(ListAdminLicenseKeyRecipientDetailsResponse.parse([]));
+    return;
+  }
+
+  const [accounts, deliveries] = await Promise.all([
+    db.select({
+      ownerUserId: telegramAccountsTable.ownerUserId,
+      id: telegramAccountsTable.id,
+      username: telegramAccountsTable.username,
+      status: telegramAccountsTable.status,
+    }).from(telegramAccountsTable)
+      .where(and(
+        inArray(telegramAccountsTable.ownerUserId, userIds),
+        isNull(telegramAccountsTable.deletedAt),
+      )),
+    db.select({
+      ownerUserId: subscriptionReminderDeliveriesTable.ownerUserId,
+      id: subscriptionReminderDeliveriesTable.id,
+      telegramAccountId: subscriptionReminderDeliveriesTable.telegramAccountId,
+      subscriptionExpiresAt: subscriptionReminderDeliveriesTable.subscriptionExpiresAt,
+      reminderType: subscriptionReminderDeliveriesTable.reminderType,
+      status: subscriptionReminderDeliveriesTable.status,
+      attemptCount: subscriptionReminderDeliveriesTable.attemptCount,
+      nextAttemptAt: subscriptionReminderDeliveriesTable.nextAttemptAt,
+      sentAt: subscriptionReminderDeliveriesTable.sentAt,
+      createdAt: subscriptionReminderDeliveriesTable.createdAt,
+      updatedAt: subscriptionReminderDeliveriesTable.updatedAt,
+    }).from(subscriptionReminderDeliveriesTable)
+      .innerJoin(subscriptionsTable, and(
+        eq(subscriptionsTable.ownerUserId, subscriptionReminderDeliveriesTable.ownerUserId),
+        eq(subscriptionsTable.expiresAt, subscriptionReminderDeliveriesTable.subscriptionExpiresAt),
+      ))
+      .where(inArray(subscriptionReminderDeliveriesTable.ownerUserId, userIds))
+      .orderBy(desc(subscriptionReminderDeliveriesTable.updatedAt)),
+  ]);
+
+  const detailsByUser = new Map<string, {
+    userId: string;
+    telegramAccounts: typeof accounts;
+    reminders: Array<Omit<(typeof deliveries)[number], "ownerUserId">>;
+  }>();
+  for (const userId of userIds) {
+    detailsByUser.set(userId, { userId, telegramAccounts: [], reminders: [] });
+  }
+  for (const account of accounts) {
+    detailsByUser.get(account.ownerUserId)?.telegramAccounts.push({
+      ownerUserId: account.ownerUserId,
+      id: account.id,
+      username: account.username,
+      status: account.status,
+    });
+  }
+  for (const delivery of deliveries) {
+    const { ownerUserId, ...reminder } = delivery;
+    detailsByUser.get(ownerUserId)?.reminders.push(reminder);
+  }
+
+  const response = [...detailsByUser.values()].map(({ userId, telegramAccounts, reminders }) => ({
+    userId,
+    telegramAccounts: telegramAccounts.map(({ id, username, status }) => ({ id, username, status })),
+    reminders,
+  }));
+  res.json(ListAdminLicenseKeyRecipientDetailsResponse.parse(response));
 });
 
 router.post("/admin/test-accounts/renewal/reset", async (req, res): Promise<void> => {

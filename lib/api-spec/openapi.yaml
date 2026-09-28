@@ -1258,6 +1258,20 @@ paths:
         "400": { description: Invalid key parameters }
         "401": { description: Authentication is required }
         "403": { description: Administrator permission is required }
+  /admin/license-key-recipient-details:
+    get:
+      operationId: listAdminLicenseKeyRecipientDetails
+      tags: [admin]
+      responses:
+        "200":
+          description: Telegram account links and current-period reminder deliveries for users who claimed a license key
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminLicenseKeyRecipientDetails" }
+        "401": { description: Authentication is required }
+        "403": { description: Administrator permission is required }
   /admin/license-keys/{licenseKeyId}/revoke:
     post:
       operationId: revokeAdminLicenseKey
@@ -3023,7 +3037,7 @@ components:
       enum: [normal, external]
     AdminLicenseKey:
       type: object
-      required: [id, plan, durationDays, salePriceVnd, label, pool, status, createdAt, createdByUsername, claimedAt, claimedByUsername, revokedAt, revokedByUsername]
+      required: [id, plan, durationDays, salePriceVnd, label, pool, status, createdAt, createdByUsername, claimedAt, claimedByUserId, claimedByUsername, revokedAt, revokedByUsername]
       properties:
         id: { type: string }
         plan: { $ref: "#/components/schemas/PlanCode" }
@@ -3035,9 +3049,42 @@ components:
         createdAt: { type: string, format: date-time }
         createdByUsername: { type: ["string", "null"] }
         claimedAt: { type: ["string", "null"], format: date-time }
+        claimedByUserId: { type: ["string", "null"] }
         claimedByUsername: { type: ["string", "null"] }
         revokedAt: { type: ["string", "null"], format: date-time }
         revokedByUsername: { type: ["string", "null"] }
+    AdminLicenseKeyRecipientTelegramAccount:
+      type: object
+      required: [id, username, status]
+      properties:
+        id: { type: string }
+        username: { type: ["string", "null"] }
+        status: { type: string }
+    AdminLicenseKeyReminderDelivery:
+      type: object
+      required: [id, telegramAccountId, subscriptionExpiresAt, reminderType, status, attemptCount, nextAttemptAt, sentAt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        telegramAccountId: { type: string }
+        subscriptionExpiresAt: { type: string, format: date-time }
+        reminderType: { type: string }
+        status: { type: string }
+        attemptCount: { type: number }
+        nextAttemptAt: { type: string, format: date-time }
+        sentAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AdminLicenseKeyRecipientDetails:
+      type: object
+      required: [userId, telegramAccounts, reminders]
+      properties:
+        userId: { type: string }
+        telegramAccounts:
+          type: array
+          items: { $ref: "#/components/schemas/AdminLicenseKeyRecipientTelegramAccount" }
+        reminders:
+          type: array
+          items: { $ref: "#/components/schemas/AdminLicenseKeyReminderDelivery" }
     AdminLicenseKeySecret:
       type: object
       required: [licenseKey]
