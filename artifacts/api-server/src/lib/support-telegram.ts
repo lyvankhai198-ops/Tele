@@ -11,6 +11,13 @@ import {
 import { getSystemSettings } from "./system-settings";
 import { localQuotaDate } from "./user-daily-quota";
 import {
+  claimPendingPasswordResetNotifications,
+  markPasswordResetAdminNotificationSent,
+  restorePasswordResetAfterDeliveryFailure,
+  reviewPasswordResetRequest,
+  verifyPasswordResetTelegram,
+} from "./password-recovery";
+import {
   appendSupportMessage,
   ensureSupportConversation,
   findSupportMessageByTelegramReply,
@@ -33,7 +40,7 @@ type TelegramMessage = {
   caption?: string;
   photo?: Array<{ file_id: string; width: number; height: number; file_size?: number }>;
   reply_to_message?: { message_id: number };
-  from?: { username?: string; first_name?: string; last_name?: string };
+  from?: { id?: number; username?: string; first_name?: string; last_name?: string };
 };
 
 type TelegramUpdate = { update_id: number; message?: TelegramMessage; callback_query?: { id: string; data?: string; from?: { id: number }; message?: TelegramMessage } };
@@ -41,6 +48,8 @@ type TelegramUpdate = { update_id: number; message?: TelegramMessage; callback_q
 const botToken = () => process.env.TELECAMPAIGN_SUPPORT_BOT_TOKEN ?? process.env.TELECAMPAIGN_KGPT_BOT_TOKEN;
 let polling = false;
 let offset = 0;
+let recoveryBotUsername: string | null = null;
+let recoveryBotUsernameLoadedAt = 0;
 
 const ADMIN_MENU = {
   keyboard: [
@@ -110,7 +119,187 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
   }
 }
 
+export async function getPasswordRecoveryBotStartUrl(rawToken: string): Promise<string | null> {
+  const settings = await getSystemSettings();
+  if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) {
+    return null;
+  }
+
+  const adminChat = await telegramCall<{ type?: string }>("getChat", {
+    chat_id: settings.supportChat.adminTelegramChatId,
+  });
+  if (adminChat?.type !== "private") return null;
+
+  if (!recoveryBotUsername || Date.now() - recoveryBotUsernameLoadedAt > 5 * 60_000) {
+    const bot = await telegramCall<{ username?: string }>("getMe", {});
+    recoveryBotUsername = bot?.username?.replace(/^@/, "") || null;
+    recoveryBotUsernameLoadedAt = Date.now();
+  }
+  if (!recoveryBotUsername) return null;
+  return `https://t.me/${recoveryBotUsername}?start=pr_${rawToken}`;
+}
+
+function passwordResetStartToken(text: string): string | null {
+  const match = text.match(/^\/start(?:@\w+)?\s+pr_([A-Za-z0-9_-]{20,60})$/);
+  return match?.[1] ?? null;
+}
+
+async function handlePasswordResetStart(message: TelegramMessage, rawToken: string): Promise<void> {
+  const telegramUserId = message.from?.id;
+  if (message.chat.type !== "private" || !telegramUserId) return;
+
+  try {
+    const verified = await verifyPasswordResetTelegram(
+      rawToken,
+      String(telegramUserId),
+      String(message.chat.id),
+    );
+    if (verified) await notifyPendingPasswordResetRequests();
+    await telegramCall("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Nếu yêu cầu khôi phục hợp lệ, quản trị viên sẽ xem xét và bot sẽ gửi liên kết đặt lại một lần vào cuộc trò chuyện này.",
+    });
+  } catch (error) {
+    logger.warn({ err: error }, "Telegram password recovery verification failed");
+    await telegramCall("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
+    }).catch((sendError) => logger.warn({ err: sendError }, "Unable to send password recovery status"));
+  }
+}
+
+async function notifyPendingPasswordResetRequests(): Promise<void> {
+  const settings = await getSystemSettings();
+  const adminChatId = settings.supportChat.adminTelegramChatId;
+  if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled || !adminChatId) return;
+
+  try {
+    const adminChat = await telegramCall<{ type?: string }>("getChat", { chat_id: adminChatId });
+    if (adminChat?.type !== "private") return;
+
+    const pending = await claimPendingPasswordResetNotifications();
+    for (const request of pending) {
+      try {
+        const sent = await telegramCall<TelegramMessage>("sendMessage", {
+          chat_id: adminChatId,
+          text: `🔐 Yêu cầu khôi phục mật khẩu\nTài khoản: ${request.username}\nNgười dùng đã xác minh Telegram liên kết. Hãy duyệt hoặc từ chối:`,
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "✅ Duyệt", callback_data: `password_reset:approve:${request.id}` },
+              { text: "❌ Từ chối", callback_data: `password_reset:reject:${request.id}` },
+            ]],
+          },
+        });
+        if (sent) await markPasswordResetAdminNotificationSent(request.id, sent.message_id);
+      } catch (error) {
+        logger.warn({ err: error, requestId: request.id }, "Password recovery admin notification failed");
+      }
+    }
+  } catch (error) {
+    logger.warn({ err: error }, "Unable to load password recovery requests for Telegram");
+  }
+}
+
+async function handlePasswordResetCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+  const settings = await getSystemSettings();
+  const configured = settings.supportChat.adminTelegramChatId;
+  const message = query.message;
+  const parts = query.data?.split(":") ?? [];
+  const authorized = Boolean(
+    configured
+    && message?.chat.type === "private"
+    && String(message.chat.id) === String(configured)
+    && String(query.from?.id) === String(configured)
+    && parts.length === 3
+    && parts[0] === "password_reset"
+    && ["approve", "reject"].includes(parts[1])
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parts[2]),
+  );
+  if (!authorized) {
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không được phép", show_alert: true });
+    return;
+  }
+  if (parts[1] === "approve" && !settings.publicAppUrl) {
+    await telegramCall("answerCallbackQuery", {
+      callback_query_id: query.id,
+      text: "Hãy cấu hình địa chỉ web công khai trong Cài đặt hệ thống trước khi duyệt.",
+      show_alert: true,
+    });
+    return;
+  }
+
+  try {
+    const decision = await reviewPasswordResetRequest(
+      parts[2],
+      String(query.from!.id),
+      parts[1] === "approve",
+    );
+    if (decision.outcome === "stale") {
+      await telegramCall("answerCallbackQuery", {
+        callback_query_id: query.id,
+        text: "Yêu cầu đã hết hạn hoặc đã được xử lý",
+        show_alert: true,
+      });
+      if (message) {
+        await telegramCall("editMessageReplyMarkup", {
+          chat_id: message.chat.id,
+          message_id: message.message_id,
+          reply_markup: { inline_keyboard: [] },
+        });
+      }
+      return;
+    }
+
+    if (decision.outcome === "approved") {
+      try {
+        const resetUrl = new URL("/forgot-password", settings.publicAppUrl!);
+        resetUrl.hash = new URLSearchParams({ token: decision.resetToken }).toString();
+        const sent = await telegramCall<TelegramMessage>("sendMessage", {
+          chat_id: decision.telegramChatId,
+          text: `Yêu cầu khôi phục đã được duyệt.\nMở liên kết dùng một lần sau để đặt mật khẩu mới (hết hạn sau 15 phút):\n${resetUrl.toString()}\n\nKhông chia sẻ liên kết này cho người khác.`,
+        });
+        if (!sent) throw new Error("Telegram did not confirm delivery");
+      } catch (error) {
+        await restorePasswordResetAfterDeliveryFailure(parts[2]);
+        await telegramCall("answerCallbackQuery", {
+          callback_query_id: query.id,
+          text: "Không gửi được liên kết cho người dùng. Bạn có thể thử lại.",
+          show_alert: true,
+        });
+        logger.warn({ err: error, requestId: parts[2] }, "Unable to deliver approved password reset link");
+        return;
+      }
+      await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Đã duyệt và gửi liên kết đặt lại" });
+    } else {
+      await telegramCall("sendMessage", {
+        chat_id: decision.telegramChatId,
+        text: "Yêu cầu khôi phục mật khẩu đã bị từ chối. Nếu bạn vẫn cần trợ giúp, vui lòng liên hệ bộ phận hỗ trợ.",
+      }).catch((error) => logger.warn({ err: error }, "Unable to notify user about rejected password reset"));
+      await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Đã từ chối yêu cầu" });
+    }
+
+    if (message) {
+      await telegramCall("editMessageReplyMarkup", {
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        reply_markup: { inline_keyboard: [] },
+      });
+    }
+  } catch (error) {
+    await telegramCall("answerCallbackQuery", {
+      callback_query_id: query.id,
+      text: "Không thể xử lý yêu cầu lúc này",
+      show_alert: true,
+    });
+    logger.warn({ err: error, callbackId: query.id }, "Password recovery callback failed");
+  }
+}
+
 async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+  if (query.data?.startsWith("password_reset:")) {
+    await handlePasswordResetCallback(query);
+    return;
+  }
   const settings = await getSystemSettings();
   const configured = settings.supportChat.adminTelegramChatId;
   const message = query.message;
@@ -448,9 +637,15 @@ export async function notifySupportConversationClosed(input: {
 }
 
 async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
+  const text = message.text?.trim() ?? "";
+  const recoveryToken = passwordResetStartToken(text);
+  if (recoveryToken && message.chat.type === "private") {
+    await handlePasswordResetStart(message, recoveryToken);
+    return;
+  }
+
   const settings = await getSystemSettings();
   const configuredChatId = settings.supportChat.adminTelegramChatId;
-  const text = message.text?.trim() ?? "";
   const caption = message.caption?.trim() ?? "";
   const hasPhoto = Boolean(message.photo?.length);
   if (!configuredChatId || String(message.chat.id) !== configuredChatId || (!text && !caption && !hasPhoto)) return;
@@ -540,6 +735,7 @@ async function pollTelegram(): Promise<void> {
       if (update.message) await handleTelegramMessage(update.message);
       if (update.callback_query) await handlePurchaseCallback(update.callback_query);
     }
+    await notifyPendingPasswordResetRequests();
   } catch (error) {
     logger.warn({ err: error }, "Support Telegram polling failed");
   } finally {

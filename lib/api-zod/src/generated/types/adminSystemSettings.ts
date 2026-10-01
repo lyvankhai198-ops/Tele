@@ -14,6 +14,11 @@ import type { SupportChatSettings } from './supportChatSettings';
 import type { SupportSettings } from './supportSettings';
 
 export interface AdminSystemSettings {
+  /**
+     * @maxLength 512
+     * @nullable
+     */
+  publicAppUrl: string | null;
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
   supportLinks: SupportSettings;

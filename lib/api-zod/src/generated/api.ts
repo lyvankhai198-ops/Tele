@@ -101,6 +101,51 @@ export const GetAuthCaptchaResponse = zod.object({
 })
 
 
+/**
+ * @summary Request a password reset after CAPTCHA verification
+ */
+export const requestAuthPasswordResetBodyUsernameMax = 128;
+
+export const requestAuthPasswordResetBodyCaptchaChallengeIdMax = 128;
+
+export const requestAuthPasswordResetBodyCaptchaCodeMax = 32;
+
+
+
+export const RequestAuthPasswordResetBody = zod.object({
+  "username": zod.string().min(1).max(requestAuthPasswordResetBodyUsernameMax),
+  "captchaChallengeId": zod.string().min(1).max(requestAuthPasswordResetBodyCaptchaChallengeIdMax),
+  "captchaCode": zod.string().min(1).max(requestAuthPasswordResetBodyCaptchaCodeMax)
+})
+
+export const RequestAuthPasswordResetResponse = zod.object({
+  "message": zod.string(),
+  "telegramStartUrl": zod.string().nullable()
+})
+
+
+/**
+ * @summary Set a new password using a one-time Telegram reset-link token
+ */
+export const completeAuthPasswordResetBodyResetTokenMax = 64;
+
+export const completeAuthPasswordResetBodyNewPasswordMin = 10;
+export const completeAuthPasswordResetBodyNewPasswordMax = 128;
+
+export const completeAuthPasswordResetBodyConfirmPasswordMin = 10;
+export const completeAuthPasswordResetBodyConfirmPasswordMax = 128;
+
+
+
+export const CompleteAuthPasswordResetBody = zod.object({
+  "resetToken": zod.string().min(1).max(completeAuthPasswordResetBodyResetTokenMax),
+  "newPassword": zod.string().min(completeAuthPasswordResetBodyNewPasswordMin).max(completeAuthPasswordResetBodyNewPasswordMax),
+  "confirmPassword": zod.string().min(completeAuthPasswordResetBodyConfirmPasswordMin).max(completeAuthPasswordResetBodyConfirmPasswordMax)
+})
+
+export const CompleteAuthPasswordResetResponse = zod.void()
+
+
 export const LogoutAuthResponse = zod.void()
 
 
@@ -1841,6 +1886,8 @@ export const ReviewPurchaseOrderResponse = zod.object({
 })
 
 
+export const getAdminSystemSettingsResponsePublicAppUrlMax = 512;
+
 export const getAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin = 0;
 
 export const getAdminSystemSettingsResponsePlanLimitsPlusCampaignLimitMin = 0;
@@ -1942,6 +1989,7 @@ export const getAdminSystemSettingsResponseDefaultTimezoneMax = 100;
 
 
 export const GetAdminSystemSettingsResponse = zod.object({
+  "publicAppUrl": zod.string().max(getAdminSystemSettingsResponsePublicAppUrlMax).nullable(),
   "planLimits": zod.object({
   "plus": zod.object({
   "accountLimit": zod.number().min(getAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin).nullable(),
@@ -2018,6 +2066,8 @@ export const GetAdminSystemSettingsResponse = zod.object({
   "defaultTimezone": zod.string().min(1).max(getAdminSystemSettingsResponseDefaultTimezoneMax)
 })
 
+
+export const updateAdminSystemSettingsBodyPublicAppUrlMax = 512;
 
 export const updateAdminSystemSettingsBodyPlanLimitsPlusAccountLimitMin = 0;
 
@@ -2120,6 +2170,7 @@ export const updateAdminSystemSettingsBodyDefaultTimezoneMax = 100;
 
 
 export const UpdateAdminSystemSettingsBody = zod.object({
+  "publicAppUrl": zod.string().max(updateAdminSystemSettingsBodyPublicAppUrlMax).nullable(),
   "planLimits": zod.object({
   "plus": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsBodyPlanLimitsPlusAccountLimitMin).nullable(),
@@ -2195,6 +2246,8 @@ export const UpdateAdminSystemSettingsBody = zod.object({
   "nationalDayThemeEnabled": zod.boolean(),
   "defaultTimezone": zod.string().min(1).max(updateAdminSystemSettingsBodyDefaultTimezoneMax)
 })
+
+export const updateAdminSystemSettingsResponsePublicAppUrlMax = 512;
 
 export const updateAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin = 0;
 
@@ -2297,6 +2350,7 @@ export const updateAdminSystemSettingsResponseDefaultTimezoneMax = 100;
 
 
 export const UpdateAdminSystemSettingsResponse = zod.object({
+  "publicAppUrl": zod.string().max(updateAdminSystemSettingsResponsePublicAppUrlMax).nullable(),
   "planLimits": zod.object({
   "plus": zod.object({
   "accountLimit": zod.number().min(updateAdminSystemSettingsResponsePlanLimitsPlusAccountLimitMin).nullable(),

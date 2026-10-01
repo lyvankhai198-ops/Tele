@@ -1,6 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AuthCaptcha, SupportSession } from "@workspace/api-client-react";
+import type {
+  AuthCaptcha,
+  PasswordResetCompletionInput,
+  PasswordResetRequestInput,
+  PasswordResetRequestResult,
+  SupportSession,
+} from "@workspace/api-client-react";
 import { localizedErrorMessage, type Language } from "@/lib/i18n";
 
 export type AuthUser = {
@@ -19,6 +25,8 @@ type AuthContextValue = {
   getCaptcha: () => Promise<AuthCaptcha>;
   register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string, preferredLanguage: Language) => Promise<void>;
   login: (username: string, password: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
+  requestPasswordReset: (input: PasswordResetRequestInput) => Promise<PasswordResetRequestResult>;
+  completePasswordReset: (input: PasswordResetCompletionInput) => Promise<void>;
   logout: () => Promise<void>;
   exitSupport: () => Promise<void>;
 };
@@ -106,6 +114,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(currentUser);
   }, [queryClient]);
 
+  const requestPasswordReset = useCallback(async (input: PasswordResetRequestInput) => {
+    return authRequest<PasswordResetRequestResult>("/password-reset/request", currentLanguage(), {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }, []);
+
+  const completePasswordReset = useCallback(async (input: PasswordResetCompletionInput) => {
+    await authRequest<void>("/password-reset/complete", currentLanguage(), {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await authRequest<void>("/logout", currentLanguage(), { method: "POST" });
@@ -125,8 +147,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient, refresh]);
 
   const value = useMemo(
-    () => ({ user, isLoading, refresh, getCaptcha, register, login, logout, exitSupport }),
-    [exitSupport, getCaptcha, isLoading, login, logout, refresh, register, user],
+    () => ({
+      user,
+      isLoading,
+      refresh,
+      getCaptcha,
+      register,
+      login,
+      requestPasswordReset,
+      completePasswordReset,
+      logout,
+      exitSupport,
+    }),
+    [completePasswordReset, exitSupport, getCaptcha, isLoading, login, logout, refresh, register, requestPasswordReset, user],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -130,6 +130,48 @@ export interface PasswordChangeInput {
   confirmPassword: string;
 }
 
+export interface PasswordResetRequestInput {
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  username: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  captchaChallengeId: string;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  captchaCode: string;
+}
+
+export interface PasswordResetRequestResult {
+  message: string;
+  /** @nullable */
+  telegramStartUrl: string | null;
+}
+
+export interface PasswordResetCompletionInput {
+  /**
+     * @minLength 1
+     * @maxLength 64
+     */
+  resetToken: string;
+  /**
+     * @minLength 10
+     * @maxLength 128
+     */
+  newPassword: string;
+  /**
+     * @minLength 10
+     * @maxLength 128
+     */
+  confirmPassword: string;
+}
+
 export interface RevokeSessionsResult {
   revokedCount: number;
 }
@@ -1683,6 +1725,11 @@ export interface PostJoinCampaignSettings {
 }
 
 export interface AdminSystemSettings {
+  /**
+     * @maxLength 512
+     * @nullable
+     */
+  publicAppUrl: string | null;
   planLimits: AdminSystemSettingsPlanLimits;
   planContent: AdminSystemSettingsPlanContent;
   supportLinks: SupportSettings;
@@ -1728,6 +1775,11 @@ export const AdminSystemSettingsInputGroupLibraryMinimumJoinPlan = {
 } as const;
 
 export interface AdminSystemSettingsInput {
+  /**
+     * @maxLength 512
+     * @nullable
+     */
+  publicAppUrl: string | null;
   planLimits: AdminSystemSettingsInputPlanLimits;
   planContent?: AdminSystemSettingsInputPlanContent;
   supportLinks: SupportSettings;

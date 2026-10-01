@@ -434,6 +434,25 @@ const translations: Record<string, string> = {
   "Password placeholder": "Nhập mật khẩu",
   "Signing in…": "Đang đăng nhập...",
   "No account yet? Register for free": "Chưa có tài khoản? Đăng ký miễn phí",
+  "Forgot password?": "Quên mật khẩu?",
+  "Forgot your password?": "Quên mật khẩu?",
+  "Verify the Telegram account linked to your username. An administrator will review the request before a one-time reset link is sent.": "Xác minh Telegram đã liên kết với tên đăng nhập. Quản trị viên sẽ xem xét yêu cầu trước khi gửi liên kết đặt lại dùng một lần.",
+  "Enter your username": "Vui lòng nhập tên đăng nhập",
+  "Could not request a password reset. Please try again.": "Không thể gửi yêu cầu khôi phục mật khẩu. Vui lòng thử lại.",
+  "Request account verification": "Yêu cầu xác minh tài khoản",
+  "Sending request…": "Đang gửi yêu cầu...",
+  "Request reset link": "Yêu cầu khôi phục mật khẩu",
+  "If the account and linked Telegram are valid, the administrator will review the request.": "Nếu tài khoản và Telegram liên kết hợp lệ, quản trị viên sẽ xem xét yêu cầu.",
+  "Open Telegram bot": "Mở bot Telegram",
+  "Set a new password": "Đặt mật khẩu mới",
+  "Request a new reset link": "Yêu cầu liên kết đặt lại mới",
+  "Your one-time reset link is ready. Choose a new password to finish account recovery.": "Liên kết đặt lại dùng một lần đã sẵn sàng. Hãy chọn mật khẩu mới để hoàn tất khôi phục tài khoản.",
+  "After the administrator approves the request, the bot will send a one-time password-reset link to your verified Telegram chat. The link expires in 15 minutes.": "Sau khi quản trị viên duyệt, bot sẽ gửi liên kết đặt lại mật khẩu dùng một lần vào cuộc trò chuyện Telegram đã xác minh. Liên kết hết hạn sau 15 phút.",
+  "Could not reset your password. Check the reset link and try again.": "Không thể đặt lại mật khẩu. Hãy kiểm tra liên kết và thử lại.",
+  "Resetting password…": "Đang đặt lại mật khẩu...",
+  "Could not reset your password. Check the code and try again.": "Không thể đặt lại mật khẩu. Hãy kiểm tra mã và thử lại.",
+  "Password reset complete. Sign in with your new password.": "Đã đặt lại mật khẩu. Hãy đăng nhập bằng mật khẩu mới.",
+  "Back to sign in": "Quay lại đăng nhập",
   "Register": "Đăng ký",
   "Create your account": "Đăng ký",
   "Create an account to use TeleCampaign.": "Tạo tài khoản để sử dụng Tele Campaign",
@@ -598,6 +617,29 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
     },
   };
   if (captchaMessages[cleanMessage]) return captchaMessages[cleanMessage][language];
+  const recoveryMessages: Record<string, Record<Language, string>> = {
+    "Bạn đã yêu cầu khôi phục quá nhiều lần. Vui lòng thử lại sau 15 phút": {
+      vi: "Bạn đã yêu cầu khôi phục quá nhiều lần. Vui lòng thử lại sau 15 phút.",
+      en: "Too many password recovery requests. Please try again in 15 minutes.",
+    },
+    "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau 15 phút": {
+      vi: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau 15 phút.",
+      en: "Too many attempts. Please try again in 15 minutes.",
+    },
+    "Bạn đã thử quá nhiều lần với liên kết này. Vui lòng thử lại sau 15 phút": {
+      vi: "Bạn đã thử quá nhiều lần với liên kết này. Vui lòng thử lại sau 15 phút.",
+      en: "Too many attempts with this reset link. Please try again in 15 minutes.",
+    },
+    "Liên kết đặt lại không hợp lệ hoặc đã hết hạn": {
+      vi: "Liên kết đặt lại không hợp lệ hoặc đã hết hạn.",
+      en: "The reset link is invalid or has expired.",
+    },
+    "Khôi phục mật khẩu hiện chưa khả dụng. Vui lòng thử lại sau": {
+      vi: "Khôi phục mật khẩu hiện chưa khả dụng. Vui lòng thử lại sau.",
+      en: "Password recovery is temporarily unavailable. Please try again later.",
+    },
+  };
+  if (recoveryMessages[cleanMessage]) return recoveryMessages[cleanMessage][language];
   if (/Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission/i.test(cleanMessage)) {
     return language === "vi"
       ? "Mỗi nhóm đang bị hạn chế cần có lịch đã xác nhận, ít nhất 5 phút sau khi Telegram khôi phục quyền đăng."

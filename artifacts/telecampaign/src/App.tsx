@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { KeyRound, Languages, LoaderCircle, LockKeyhole, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
-import type { AuthCaptcha } from '@workspace/api-client-react';
+import type { AuthCaptcha, PasswordResetRequestResult } from '@workspace/api-client-react';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -320,6 +320,15 @@ function LoginPage() {
           onChange={setPassword}
           autoComplete="current-password"
         />
+        <div className="-mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setLocation('/forgot-password')}
+            className="text-sm font-semibold text-[#147ed8] hover:underline"
+          >
+            {t('Forgot password?')}
+          </button>
+        </div>
         <CaptchaField
           challenge={captcha.challenge}
           code={captcha.code}
@@ -347,6 +356,240 @@ function LoginPage() {
           {t('No account yet? Register for free')}
         </button>
       </p>
+    </AuthShell>
+  );
+}
+
+function ForgotPasswordPage() {
+  const [, setLocation] = useLocation();
+  const { requestPasswordReset, completePasswordReset } = useAuth();
+  const { language, t } = useLanguage();
+  const captcha = useCaptcha();
+  const [username, setUsername] = useState('');
+  const [request, setRequest] = useState<PasswordResetRequestResult | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetComplete, setResetComplete] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get('token');
+    if (!token) return;
+    setResetToken(token);
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+  }, []);
+
+  async function submitRequest(event: FormEvent) {
+    event.preventDefault();
+    if (!username.trim()) {
+      setRequestError(t('Enter your username'));
+      return;
+    }
+    if (!captcha.challenge || !captcha.code.trim()) {
+      setRequestError(t('Enter the CAPTCHA code'));
+      if (!captcha.challenge && !captcha.loading) void captcha.refresh();
+      return;
+    }
+
+    setRequestError(null);
+    setRequesting(true);
+    try {
+      setRequest(await requestPasswordReset({
+        username,
+        captchaChallengeId: captcha.challenge.challengeId,
+        captchaCode: captcha.code,
+      }));
+      await captcha.refresh();
+    } catch (cause) {
+      setRequestError(localizedErrorMessage(
+        cause,
+        language,
+        t('Could not request a password reset. Please try again.'),
+      ));
+      await captcha.refresh();
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  async function submitReset(event: FormEvent) {
+    event.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setResetError(t('Passwords do not match'));
+      return;
+    }
+    setResetError(null);
+    setResetting(true);
+    try {
+      await completePasswordReset({ resetToken, newPassword, confirmPassword });
+      setResetComplete(true);
+      setResetToken('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (cause) {
+      setResetError(localizedErrorMessage(
+        cause,
+        language,
+          t('Could not reset your password. Check the reset link and try again.'),
+      ));
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <AuthShell>
+      <div className="mb-6 text-center">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#edf7ff] text-[#1888e8]">
+          <KeyRound className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <h1 className="text-2xl font-bold tracking-[-0.035em]">{t('Forgot your password?')}</h1>
+        <p className="mt-2 text-sm leading-6 text-[#6d8499]">
+          {t('Verify the Telegram account linked to your username. An administrator will review the request before a one-time reset link is sent.')}
+        </p>
+      </div>
+
+      {resetComplete ? (
+        <div className="space-y-4">
+          <p role="status" className="rounded-xl border border-[#bce8d0] bg-[#f0fff6] px-4 py-3 text-sm leading-6 text-[#216946]">
+            {t('Password reset complete. Sign in with your new password.')}
+          </p>
+          <button
+            type="button"
+            onClick={() => setLocation('/login', { replace: true })}
+            className="w-full rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0877d5]"
+          >
+            {t('Back to sign in')}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {!resetToken && (
+            <>
+              <form className="space-y-4" onSubmit={submitRequest}>
+                <h2 className="text-sm font-bold text-[#28445e]">{t('Request account verification')}</h2>
+                <AuthField
+                  icon={UserRound}
+                  label={t('Username')}
+                  placeholder={t('Username placeholder')}
+                  value={username}
+                  onChange={setUsername}
+                  autoComplete="username"
+                />
+                <CaptchaField
+                  challenge={captcha.challenge}
+                  code={captcha.code}
+                  onCodeChange={captcha.setCode}
+                  loading={captcha.loading}
+                  loadError={captcha.loadError}
+                  onRefresh={() => void captcha.refresh()}
+                />
+                <AuthError message={requestError} />
+                <button
+                  disabled={requesting || captcha.loading || !captcha.challenge}
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {requesting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {requesting ? t('Sending request…') : t('Request reset link')}
+                </button>
+              </form>
+
+              {request && (
+                <div role="status" className="space-y-3 rounded-2xl border border-[#bde4f9] bg-[#eff8ff] p-4">
+                  <p className="text-sm leading-6 text-[#36566f]">
+                    {t('If the account and linked Telegram are valid, the administrator will review the request.')}
+                  </p>
+                  {request.telegramStartUrl && (
+                    <a
+                      href={request.telegramStartUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#9dd6fb] bg-white px-4 py-2.5 text-sm font-bold text-[#0877d5] hover:bg-[#f7fcff]"
+                    >
+                      {t('Open Telegram bot')}
+                    </a>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {resetToken ? (
+            <div className="border-t border-[#e4edf5] pt-5">
+              <h2 className="mb-3 text-sm font-bold text-[#28445e]">{t('Set a new password')}</h2>
+              <p className="mb-4 text-xs leading-5 text-[#7190ab]">
+                {t('Your one-time reset link is ready. Choose a new password to finish account recovery.')}
+              </p>
+              <form className="space-y-4" onSubmit={submitReset}>
+                <AuthField
+                  icon={LockKeyhole}
+                  label={t('New password')}
+                  placeholder={t('New password placeholder')}
+                  type="password"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  autoComplete="new-password"
+                  helperText={t('At least 10 characters with both letters and numbers.')}
+                />
+                <AuthField
+                  icon={LockKeyhole}
+                  label={t('Confirm new password')}
+                  placeholder={t('Confirm new password placeholder')}
+                  type="password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  autoComplete="new-password"
+                />
+                <AuthError message={resetError} />
+                <button
+                  disabled={resetting || !newPassword || !confirmPassword}
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#cbdde9] bg-white px-5 py-3 text-sm font-semibold text-[#244761] transition hover:border-[#1888e8] hover:bg-[#f7fbfe] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {resetting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {resetting ? t('Resetting password…') : t('Set a new password')}
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetToken('');
+                  setResetError(null);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                }}
+                className="mt-3 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-[#147ed8] transition hover:bg-[#f3f9fe]"
+              >
+                {t('Request a new reset link')}
+              </button>
+            </div>
+          ) : (
+            <div className="border-t border-[#e4edf5] pt-5">
+              <h2 className="mb-2 text-sm font-bold text-[#28445e]">{t('Set a new password')}</h2>
+              <p className="text-xs leading-5 text-[#7190ab]">
+                {t('After the administrator approves the request, the bot will send a one-time password-reset link to your verified Telegram chat. The link expires in 15 minutes.')}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!resetComplete && (
+        <p className="mt-5 text-center text-sm text-[#66809a]">
+          <button
+            type="button"
+            onClick={() => setLocation('/login')}
+            className="font-semibold text-[#147ed8] hover:underline"
+          >
+            {t('Back to sign in')}
+          </button>
+        </p>
+      )}
     </AuthShell>
   );
 }
@@ -573,6 +816,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Landing} />
         <Route path="/login" component={LoginPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/register" component={RegisterPage} />
         <Route path="/sign-in/*?"><Redirect to="/login" replace /></Route>
         <Route path="/sign-up/*?"><Redirect to="/register" replace /></Route>

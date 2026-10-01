@@ -103,6 +103,9 @@ import type {
   MessageTemplateInput,
   MessageTemplateUpdateInput,
   PasswordChangeInput,
+  PasswordResetCompletionInput,
+  PasswordResetRequestInput,
+  PasswordResetRequestResult,
   Proxy,
   ProxyTestResponse,
   PurchaseOrder,
@@ -458,6 +461,148 @@ export function useGetAuthCaptcha<TData = Awaited<ReturnType<typeof getAuthCaptc
 
 
 
+
+export const getRequestAuthPasswordResetUrl = () => {
+
+
+
+
+  return `/api/auth/password-reset/request`
+}
+
+/**
+ * @summary Request a password reset after CAPTCHA verification
+ */
+export const requestAuthPasswordReset = async (passwordResetRequestInput: PasswordResetRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<PasswordResetRequestResult> => {
+
+  return customFetch<PasswordResetRequestResult>(getRequestAuthPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passwordResetRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestAuthPasswordResetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestAuthPasswordReset>>, TError,{data: BodyType<PasswordResetRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestAuthPasswordReset>>, TError,{data: BodyType<PasswordResetRequestInput>}, TContext> => {
+
+const mutationKey = ['requestAuthPasswordReset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestAuthPasswordReset>>, {data: BodyType<PasswordResetRequestInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  requestAuthPasswordReset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestAuthPasswordResetMutationResult = NonNullable<Awaited<ReturnType<typeof requestAuthPasswordReset>>>
+    export type RequestAuthPasswordResetMutationBody = BodyType<PasswordResetRequestInput>
+    export type RequestAuthPasswordResetMutationError = ErrorType<void>
+
+    /**
+ * @summary Request a password reset after CAPTCHA verification
+ */
+export const useRequestAuthPasswordReset = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestAuthPasswordReset>>, TError,{data: BodyType<PasswordResetRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestAuthPasswordReset>>,
+        TError,
+        {data: BodyType<PasswordResetRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestAuthPasswordResetMutationOptions(options));
+    }
+
+export const getCompleteAuthPasswordResetUrl = () => {
+
+
+
+
+  return `/api/auth/password-reset/complete`
+}
+
+/**
+ * @summary Set a new password using a one-time Telegram reset-link token
+ */
+export const completeAuthPasswordReset = async (passwordResetCompletionInput: PasswordResetCompletionInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getCompleteAuthPasswordResetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(passwordResetCompletionInput)
+  }
+);}
+
+
+
+
+
+export const getCompleteAuthPasswordResetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeAuthPasswordReset>>, TError,{data: BodyType<PasswordResetCompletionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeAuthPasswordReset>>, TError,{data: BodyType<PasswordResetCompletionInput>}, TContext> => {
+
+const mutationKey = ['completeAuthPasswordReset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeAuthPasswordReset>>, {data: BodyType<PasswordResetCompletionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeAuthPasswordReset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteAuthPasswordResetMutationResult = NonNullable<Awaited<ReturnType<typeof completeAuthPasswordReset>>>
+    export type CompleteAuthPasswordResetMutationBody = BodyType<PasswordResetCompletionInput>
+    export type CompleteAuthPasswordResetMutationError = ErrorType<void>
+
+    /**
+ * @summary Set a new password using a one-time Telegram reset-link token
+ */
+export const useCompleteAuthPasswordReset = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeAuthPasswordReset>>, TError,{data: BodyType<PasswordResetCompletionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeAuthPasswordReset>>,
+        TError,
+        {data: BodyType<PasswordResetCompletionInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteAuthPasswordResetMutationOptions(options));
+    }
 
 export const getLogoutAuthUrl = () => {
 

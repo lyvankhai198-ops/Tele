@@ -82,6 +82,39 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AuthCaptcha" }
         "429": { description: Too many CAPTCHA requests }
+  /auth/password-reset/request:
+    post:
+      operationId: requestAuthPasswordReset
+      tags: [auth]
+      summary: Request a password reset after CAPTCHA verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetRequestInput" }
+      responses:
+        "200":
+          description: Generic response with a Telegram verification link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PasswordResetRequestResult" }
+        "400": { description: Invalid request or CAPTCHA }
+        "429": { description: Too many recovery requests }
+        "503": { description: Password recovery is temporarily unavailable }
+  /auth/password-reset/complete:
+    post:
+      operationId: completeAuthPasswordReset
+      tags: [auth]
+      summary: Set a new password using a one-time Telegram reset-link token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordResetCompletionInput" }
+      responses:
+        "204": { description: Password reset completed and existing sessions revoked }
+        "400": { description: "Invalid or expired reset link, or invalid password" }
+        "429": { description: Too many reset attempts }
   /auth/logout:
     post:
       operationId: logoutAuth
@@ -1971,6 +2004,26 @@ components:
         currentPassword: { type: string, minLength: 1, maxLength: 128 }
         newPassword: { type: string, minLength: 10, maxLength: 128 }
         confirmPassword: { type: string, minLength: 10, maxLength: 128 }
+    PasswordResetRequestInput:
+      type: object
+      required: [username, captchaChallengeId, captchaCode]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128 }
+        captchaChallengeId: { type: string, minLength: 1, maxLength: 128 }
+        captchaCode: { type: string, minLength: 1, maxLength: 32 }
+    PasswordResetRequestResult:
+      type: object
+      required: [message, telegramStartUrl]
+      properties:
+        message: { type: string }
+        telegramStartUrl: { type: ["string", "null"] }
+    PasswordResetCompletionInput:
+      type: object
+      required: [resetToken, newPassword, confirmPassword]
+      properties:
+        resetToken: { type: string, minLength: 1, maxLength: 64 }
+        newPassword: { type: string, minLength: 10, maxLength: 128 }
+        confirmPassword: { type: string, minLength: 10, maxLength: 128 }
     RevokeSessionsResult:
       type: object
       required: [revokedCount]
@@ -2837,8 +2890,9 @@ components:
         canOpenLinks: { type: boolean }
     AdminSystemSettings:
       type: object
-      required: [planLimits, planContent, supportLinks, supportChat, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, postJoinCampaign, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [publicAppUrl, planLimits, planContent, supportLinks, supportChat, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, postJoinCampaign, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
+        publicAppUrl: { type: ["string", "null"], maxLength: 512 }
         planLimits:
           type: object
           required: [plus, pro, unlimited]
@@ -2867,8 +2921,9 @@ components:
         defaultTimezone: { type: string, minLength: 1, maxLength: 100 }
     AdminSystemSettingsInput:
       type: object
-      required: [planLimits, supportLinks, supportChat, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
+      required: [publicAppUrl, planLimits, supportLinks, supportChat, groupLibraryVisibleToUsers, groupLibraryMinimumJoinPlan, groupLibraryAutoJoinEnabled, defaultAccountDailyLimit, campaignDefaults, registrationEnabled, maintenanceMode, nationalDayThemeEnabled, defaultTimezone]
       properties:
+        publicAppUrl: { type: ["string", "null"], maxLength: 512 }
         planLimits:
           type: object
           required: [plus, pro, unlimited]

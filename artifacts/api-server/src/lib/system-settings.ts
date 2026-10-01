@@ -54,6 +54,7 @@ export type SubscriptionReminderSettings = {
 };
 
 export type SystemSettings = {
+  publicAppUrl: string | null;
   planLimits: Record<PlanCode, ConfiguredPlanLimits>;
   planContent: Record<PlanCode, ConfiguredPlanContent>;
   supportLinks: SupportSettings;
@@ -76,6 +77,7 @@ export type SystemSettings = {
 };
 
 type StoredSystemSettings = {
+  publicAppUrl?: unknown;
   planLimits?: Partial<Record<PlanCode, Partial<ConfiguredPlanLimits>>>;
   planContent?: Partial<Record<PlanCode, Partial<ConfiguredPlanContent>>>;
   supportLinks?: Partial<SupportSettings>;
@@ -95,6 +97,7 @@ type StoredSystemSettings = {
 };
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  publicAppUrl: null,
   planLimits: {
     plus: { accountLimit: 1, campaignLimit: 10, messageDailyLimit: 300, userMessageDailyLimit: 3000 },
     pro: { accountLimit: 3, campaignLimit: 50, messageDailyLimit: 600, userMessageDailyLimit: 30000 },
@@ -205,6 +208,25 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   nationalDayThemeEnabled: true,
   defaultTimezone: "Asia/Ho_Chi_Minh",
 };
+
+export function normalizePublicAppUrl(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (
+      url.protocol !== "https:"
+      || !url.hostname
+      || url.username
+      || url.password
+      || url.pathname !== "/"
+      || url.search
+      || url.hash
+    ) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
 
 export function isSupportUrl(value: string, channel: "telegram" | "zalo"): boolean {
   try {
@@ -367,6 +389,7 @@ function parseSettings(value: string | undefined): SystemSettings {
     const planContent = raw.planContent ?? {};
     const campaignDefaults = raw.campaignDefaults ?? {};
     return {
+      publicAppUrl: normalizePublicAppUrl(raw.publicAppUrl),
       planLimits: {
         plus: normalizedPlanLimits(planLimits.plus, DEFAULT_SYSTEM_SETTINGS.planLimits.plus),
         pro: normalizedPlanLimits(planLimits.pro, DEFAULT_SYSTEM_SETTINGS.planLimits.pro),

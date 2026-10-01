@@ -10,7 +10,10 @@ import {
   RegisterAuthBody,
   RegisterAuthResponse,
   ChangeAuthPasswordBody,
+  CompleteAuthPasswordResetBody,
   RevokeOtherAuthSessionsResponse,
+  RequestAuthPasswordResetBody,
+  RequestAuthPasswordResetResponse,
   UpdateAuthLanguageBody,
   UpdateAuthLanguageResponse,
 } from "@workspace/api-zod";
@@ -44,7 +47,12 @@ import {
   issueCaptcha,
   verifyAndConsumeCaptcha,
 } from "../lib/captcha";
-import { notifySupportNewRegistration } from "../lib/support-telegram";
+import { getPasswordRecoveryBotStartUrl, notifySupportNewRegistration } from "../lib/support-telegram";
+import {
+  completePasswordReset,
+  createPasswordResetChallenge,
+  createPasswordResetStartToken,
+} from "../lib/password-recovery";
 
 const router: IRouter = Router();
 const MAX_CREDENTIAL_ATTEMPTS = 5;
@@ -57,6 +65,10 @@ const loginIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const registrationIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const passwordChangeUserAttempts = new Map<string, { count: number; resetAt: number }>();
 const passwordChangeIpAttempts = new Map<string, { count: number; resetAt: number }>();
+const passwordResetRequestIpAttempts = new Map<string, { count: number; resetAt: number }>();
+const passwordResetRequestIdentityAttempts = new Map<string, { count: number; resetAt: number }>();
+const passwordResetCompletionIpAttempts = new Map<string, { count: number; resetAt: number }>();
+const passwordResetCompletionTokenAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function attemptKey(req: any, username: string): string {
   return `${req.ip ?? "unknown"}:${username}`;
@@ -322,6 +334,89 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     }
     req.log.error({ err: error }, "Unable to register user");
     res.status(500).json({ error: "Không thể tạo tài khoản lúc này. Vui lòng thử lại" });
+  }
+});
+
+router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
+  if (!requireValidCaptcha(req, res)) return;
+  const parsed = RequestAuthPasswordResetBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Thông tin khôi phục không hợp lệ" });
+    return;
+  }
+
+  const ip = ipKey(req);
+  const usernameKey = hashSessionToken(`${ip}:${normalizeUsername(parsed.data.username)}`);
+  if (!reserveAttempt(passwordResetRequestIpAttempts, ip, 8)) {
+    res.status(429).json({ error: "Bạn đã yêu cầu khôi phục quá nhiều lần. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+  if (!reserveAttempt(passwordResetRequestIdentityAttempts, usernameKey, 5)) {
+    refundAttempt(passwordResetRequestIpAttempts, ip);
+    res.status(429).json({ error: "Bạn đã yêu cầu khôi phục quá nhiều lần. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+
+  try {
+    const rawToken = createPasswordResetStartToken();
+    const telegramStartUrl = await getPasswordRecoveryBotStartUrl(rawToken);
+    if (!telegramStartUrl) {
+      res.status(503).json({ error: "Khôi phục mật khẩu hiện chưa khả dụng. Vui lòng thử lại sau" });
+      return;
+    }
+    await createPasswordResetChallenge(parsed.data.username, rawToken);
+    res.json(RequestAuthPasswordResetResponse.parse({
+      message: "Nếu tài khoản có Telegram đã xác minh, hãy mở bot và chờ quản trị viên xem xét yêu cầu.",
+      telegramStartUrl,
+    }));
+  } catch (error) {
+    req.log.warn({ err: error }, "Unable to create password recovery request");
+    res.status(503).json({ error: "Khôi phục mật khẩu hiện chưa khả dụng. Vui lòng thử lại sau" });
+  }
+});
+
+router.post("/auth/password-reset/complete", async (req, res): Promise<void> => {
+  const parsed = CompleteAuthPasswordResetBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Thông tin mật khẩu không hợp lệ" });
+    return;
+  }
+  const passwordError = validatePassword(parsed.data.newPassword);
+  if (passwordError) {
+    res.status(400).json({ error: passwordError });
+    return;
+  }
+  if (parsed.data.newPassword !== parsed.data.confirmPassword) {
+    res.status(400).json({ error: "Mật khẩu xác nhận không khớp" });
+    return;
+  }
+
+  const ip = ipKey(req);
+  const tokenKey = hashSessionToken(`${ip}:${parsed.data.resetToken}`);
+  if (!reserveAttempt(passwordResetCompletionIpAttempts, ip, 20)) {
+    res.status(429).json({ error: "Bạn đã thử quá nhiều lần. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+  if (!reserveAttempt(passwordResetCompletionTokenAttempts, tokenKey, 5)) {
+    refundAttempt(passwordResetCompletionIpAttempts, ip);
+    res.status(429).json({ error: "Bạn đã thử quá nhiều lần với liên kết này. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+
+  try {
+    const completed = await completePasswordReset(parsed.data.resetToken, parsed.data.newPassword);
+    if (!completed) {
+      res.status(400).json({ error: "Liên kết đặt lại không hợp lệ hoặc đã hết hạn" });
+      return;
+    }
+    passwordResetCompletionTokenAttempts.delete(tokenKey);
+    refundAttempt(passwordResetCompletionIpAttempts, ip);
+    res.sendStatus(204);
+  } catch (error) {
+    refundAttempt(passwordResetCompletionTokenAttempts, tokenKey);
+    refundAttempt(passwordResetCompletionIpAttempts, ip);
+    req.log.error({ err: error }, "Unable to complete password recovery");
+    res.status(500).json({ error: "Không thể đặt lại mật khẩu lúc này. Vui lòng thử lại" });
   }
 });
 

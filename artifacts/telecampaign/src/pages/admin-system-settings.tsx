@@ -62,6 +62,9 @@ const copy = {
     invalidContent: "Each plan needs both descriptions and 1–8 non-empty benefits per language.",
     support: "Support channels",
     supportDetail: "Give users a direct way to reach your team. Leave a field empty to hide that channel.",
+    publicAppUrl: "Public app URL",
+    publicAppUrlHint: "The HTTPS site origin used in one-time password-reset links. Enter only the origin, such as https://app.example.com.",
+    publicAppUrlInvalid: "Enter a valid HTTPS origin with no path, query, or login information.",
     telegramSupport: "Telegram support link",
     zaloSupport: "Zalo support link",
     supportHint: "Only HTTPS links on t.me, telegram.me, or zalo.me are accepted.",
@@ -121,6 +124,9 @@ const copy = {
     invalidContent: "Mỗi gói cần đủ mô tả và từ 1–8 quyền lợi không để trống cho từng ngôn ngữ.",
     support: "Kênh hỗ trợ",
     supportDetail: "Cung cấp cách liên hệ trực tiếp cho user. Để trống một ô để ẩn kênh đó.",
+    publicAppUrl: "Địa chỉ web công khai",
+    publicAppUrlHint: "Địa chỉ HTTPS được dùng trong liên kết đặt lại mật khẩu một lần. Chỉ nhập origin, ví dụ https://app.example.com.",
+    publicAppUrlInvalid: "Hãy nhập origin HTTPS hợp lệ, không có đường dẫn, query hoặc thông tin đăng nhập.",
     telegramSupport: "Link hỗ trợ Telegram",
     zaloSupport: "Link hỗ trợ Zalo",
     supportHint: "Chỉ chấp nhận link HTTPS thuộc t.me, telegram.me hoặc zalo.me.",
@@ -151,6 +157,22 @@ function validOptionalSupportUrl(value: string, channel: "telegram" | "zalo"): b
     const url = new URL(value.trim());
     const hostnames = channel === "telegram" ? ["t.me", "telegram.me"] : ["zalo.me"];
     return url.protocol === "https:" && hostnames.includes(url.hostname.toLowerCase()) && url.pathname.length > 1 && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function validOptionalPublicAppUrl(value: string): boolean {
+  if (!value.trim()) return true;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:"
+      && Boolean(url.hostname)
+      && !url.username
+      && !url.password
+      && url.pathname === "/"
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }
@@ -255,6 +277,10 @@ export default function AdminSystemSettingsPage() {
     }
     if (!validOptionalSupportUrl(form.supportLinks.telegramUrl ?? "", "telegram") || !validOptionalSupportUrl(form.supportLinks.zaloUrl ?? "", "zalo")) {
       setToast({ message: text.supportInvalid, error: true });
+      return;
+    }
+    if (!validOptionalPublicAppUrl(form.publicAppUrl ?? "")) {
+      setToast({ message: text.publicAppUrlInvalid, error: true });
       return;
     }
     update.mutate({ data: form }, {
@@ -399,6 +425,18 @@ export default function AdminSystemSettingsPage() {
 
       <Panel className="p-5 sm:p-7">
         <SectionHeader eyebrow="Support" title={text.support} detail={text.supportDetail} />
+        <label className="mb-5 block">
+          <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.publicAppUrl}</span>
+          <input
+            type="url"
+            value={form.publicAppUrl ?? ""}
+            onChange={(event) => setForm({ ...form, publicAppUrl: event.target.value || null })}
+            placeholder="https://app.example.com"
+            className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]"
+            data-testid="public-app-url"
+          />
+          <span className="mt-1.5 block text-[11px] font-medium text-[#64748b]">{text.publicAppUrlHint}</span>
+        </label>
         <div className="grid gap-5 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-bold text-[#475569]">{text.telegramSupport}</span>

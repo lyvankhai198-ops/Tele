@@ -140,7 +140,7 @@ import {
 import { requireAdmin } from "../middlewares/authMiddleware";
 import { isTelegramPurchaseUrl, getPurchaseSettings, updatePurchaseSettings } from "../lib/purchase-settings";
 import { recordActivity } from "../lib/activity";
-import { getSystemSettings, isSupportUrl, updateSystemSettings } from "../lib/system-settings";
+import { getSystemSettings, isSupportUrl, normalizePublicAppUrl, updateSystemSettings } from "../lib/system-settings";
 import {
   pauseCampaignsOverCurrentQuotaAfterSettingsUpdate,
   resumeQuotaPausedCampaignsAfterSettingsUpdate,
@@ -1133,6 +1133,12 @@ router.patch("/admin/system-settings", async (req, res): Promise<void> => {
     subscriptionReminder: previousSettings.subscriptionReminder,
     supportChat: parsed.data.supportChat ?? previousSettings.supportChat,
   };
+  const rawPublicAppUrl = parsed.data.publicAppUrl?.trim() ?? "";
+  const publicAppUrl = rawPublicAppUrl ? normalizePublicAppUrl(rawPublicAppUrl) : null;
+  if (rawPublicAppUrl && !publicAppUrl) {
+    return void sendError(res, 400, "Địa chỉ web công khai phải là URL gốc HTTPS, không có đường dẫn, query hoặc thông tin đăng nhập.");
+  }
+  settings.publicAppUrl = publicAppUrl;
   const supportLinks = {
     telegramUrl: parsed.data.supportLinks.telegramUrl?.trim() || null,
     zaloUrl: parsed.data.supportLinks.zaloUrl?.trim() || null,
