@@ -33,6 +33,7 @@ import {
 import { supportMediaStorage } from "./supportMediaStorage";
 import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { logger } from "./logger";
+import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-admin-access";
 import {
   translateAdminReplyForCustomer,
   translateCustomerMessageForAdmin,
@@ -99,7 +100,7 @@ function escapeTelegramHtml(value: string): string {
 async function isPrivateAdminChat(chatId: string): Promise<boolean> {
   try {
     const chat = await telegramCall<{ type?: string }>("getChat", { chat_id: chatId });
-    return chat?.type === "private";
+    return isPrivateAdminChatType(chat?.type);
   } catch (error) {
     logger.warn({ err: error }, "Unable to confirm the Telegram admin chat is private");
     return false;
@@ -926,10 +927,12 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const caption = message.caption?.trim() ?? "";
   const hasPhoto = Boolean(message.photo?.length);
   if (
-    !configuredChatId ||
-    message.chat.type !== "private" ||
-    String(message.chat.id) !== configuredChatId ||
-    String(message.from?.id ?? "") !== configuredChatId ||
+    !isAuthorizedAdminMessage({
+      configuredChatId,
+      chatType: message.chat.type,
+      chatId: message.chat.id,
+      senderId: message.from?.id,
+    }) ||
     (!text && !caption && !hasPhoto)
   ) return;
 
