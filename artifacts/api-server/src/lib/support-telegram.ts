@@ -96,11 +96,22 @@ function escapeTelegramHtml(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+async function isPrivateAdminChat(chatId: string): Promise<boolean> {
+  try {
+    const chat = await telegramCall<{ type?: string }>("getChat", { chat_id: chatId });
+    return chat?.type === "private";
+  } catch (error) {
+    logger.warn({ err: error }, "Unable to confirm the Telegram admin chat is private");
+    return false;
+  }
+}
+
 async function sendSupportMessage(text: string, replyToMessageId?: number): Promise<TelegramMessage | null> {
   const settings = await getSystemSettings();
-  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
+  const chatId = settings.supportChat.adminTelegramChatId;
+  if (!settings.supportChat.telegramBridgeEnabled || !chatId || !(await isPrivateAdminChat(chatId))) return null;
   return telegramCall<TelegramMessage>("sendMessage", {
-    chat_id: settings.supportChat.adminTelegramChatId,
+    chat_id: chatId,
     text,
     reply_to_message_id: replyToMessageId,
     allow_sending_without_reply: true,
@@ -109,9 +120,10 @@ async function sendSupportMessage(text: string, replyToMessageId?: number): Prom
 
 async function sendAdminMenu(text = "Chọn một thao tác:", parseMode?: "HTML"): Promise<TelegramMessage | null> {
   const settings = await getSystemSettings();
-  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
+  const chatId = settings.supportChat.adminTelegramChatId;
+  if (!settings.supportChat.telegramBridgeEnabled || !chatId || !(await isPrivateAdminChat(chatId))) return null;
   return telegramCall<TelegramMessage>("sendMessage", {
-    chat_id: settings.supportChat.adminTelegramChatId,
+    chat_id: chatId,
     text,
     parse_mode: parseMode,
     reply_markup: ADMIN_MENU,
@@ -123,10 +135,11 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
   const settings = await getSystemSettings();
   if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
   const chat = await telegramCall<{ type?: string }>("getChat", { chat_id: settings.supportChat.adminTelegramChatId });
+  if (chat?.type !== "private") return;
   await telegramCall("sendMessage", {
     chat_id: settings.supportChat.adminTelegramChatId,
     text,
-    reply_markup: orderId && chat?.type === "private" ? {
+    reply_markup: orderId ? {
       inline_keyboard: [[
         { text: "✅ Duyệt", callback_data: `purchase:paid:${orderId}` },
         { text: "❌ Từ chối", callback_data: `purchase:rejected:${orderId}` },
@@ -749,13 +762,14 @@ async function sendSupportPhoto(input: {
   replyToMessageId?: number;
 }): Promise<TelegramMessage | null> {
   const settings = await getSystemSettings();
-  if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
+  const chatId = settings.supportChat.adminTelegramChatId;
+  if (!settings.supportChat.telegramBridgeEnabled || !chatId || !(await isPrivateAdminChat(chatId))) return null;
   const token = botToken();
   if (!token) return null;
   const stored = await supportMediaStorage.readImage(input.mediaPath);
   const bytes = await readFile(stored.filePath);
   const form = new FormData();
-  form.set("chat_id", settings.supportChat.adminTelegramChatId);
+  form.set("chat_id", chatId);
   form.set("allow_sending_without_reply", "true");
   if (input.replyToMessageId) form.set("reply_to_message_id", String(input.replyToMessageId));
   if (input.caption?.trim()) form.set("caption", input.caption.trim().slice(0, 1024));
@@ -911,7 +925,13 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const configuredChatId = settings.supportChat.adminTelegramChatId;
   const caption = message.caption?.trim() ?? "";
   const hasPhoto = Boolean(message.photo?.length);
-  if (!configuredChatId || String(message.chat.id) !== configuredChatId || (!text && !caption && !hasPhoto)) return;
+  if (
+    !configuredChatId ||
+    message.chat.type !== "private" ||
+    String(message.chat.id) !== configuredChatId ||
+    String(message.from?.id ?? "") !== configuredChatId ||
+    (!text && !caption && !hasPhoto)
+  ) return;
 
   if (text === "/chatid") {
     await telegramCall("sendMessage", {
