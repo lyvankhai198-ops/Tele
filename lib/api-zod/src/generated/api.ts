@@ -102,6 +102,14 @@ export const GetAuthCaptchaResponse = zod.object({
 
 
 /**
+ * @summary Get a private Telegram bot link for username recovery
+ */
+export const RequestAuthUsernameRecoveryStartResponse = zod.object({
+  "telegramStartUrl": zod.string()
+})
+
+
+/**
  * @summary Request a password reset after CAPTCHA verification
  */
 export const requestAuthPasswordResetBodyUsernameMax = 128;

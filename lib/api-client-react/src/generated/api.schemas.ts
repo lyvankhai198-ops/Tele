@@ -154,6 +154,10 @@ export interface PasswordResetRequestResult {
   telegramStartUrl: string | null;
 }
 
+export interface UsernameRecoveryStartResult {
+  telegramStartUrl: string;
+}
+
 export interface PasswordResetCompletionInput {
   /**
      * @minLength 1

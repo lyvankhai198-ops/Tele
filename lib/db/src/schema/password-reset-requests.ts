@@ -11,6 +11,8 @@ export const passwordResetRequestsTable = pgTable(
     resetTokenHash: text("reset_token_hash"),
     telegramUserId: text("telegram_user_id"),
     telegramChatId: text("telegram_chat_id"),
+    temporaryPasswordEncrypted: text("temporary_password_encrypted"),
+    passwordDeliveryAttemptedAt: timestamp("password_delivery_attempted_at", { withTimezone: true }),
     adminMessageId: integer("admin_message_id"),
     adminNotificationAttemptedAt: timestamp("admin_notification_attempted_at", { withTimezone: true }),
     adminNotificationSentAt: timestamp("admin_notification_sent_at", { withTimezone: true }),

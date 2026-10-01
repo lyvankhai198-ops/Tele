@@ -11,12 +11,17 @@ import {
 import { getSystemSettings } from "./system-settings";
 import { localQuotaDate } from "./user-daily-quota";
 import {
+  claimPendingTemporaryPasswordDeliveries,
   claimPendingPasswordResetNotifications,
+  completePasswordRecoveryWithContact,
+  findUsernameForVerifiedTelegramContact,
   markPasswordResetAdminNotificationSent,
+  markTemporaryPasswordDelivered,
   restorePasswordResetAfterDeliveryFailure,
   reviewPasswordResetRequest,
   verifyPasswordResetTelegram,
 } from "./password-recovery";
+import { decryptSecret } from "./crypto";
 import {
   appendSupportMessage,
   ensureSupportConversation,
@@ -39,6 +44,7 @@ type TelegramMessage = {
   text?: string;
   caption?: string;
   photo?: Array<{ file_id: string; width: number; height: number; file_size?: number }>;
+  contact?: { phone_number?: string; user_id?: number | string };
   reply_to_message?: { message_id: number };
   from?: { id?: number; username?: string; first_name?: string; last_name?: string };
 };
@@ -50,6 +56,11 @@ let polling = false;
 let offset = 0;
 let recoveryBotUsername: string | null = null;
 let recoveryBotUsernameLoadedAt = 0;
+const usernameRecoveryStarts = new Map<string, { count: number; resetAt: number }>();
+const usernameRecoveryContacts = new Map<string, { count: number; resetAt: number }>();
+const pendingUsernameRecoveryChats = new Map<string, number>();
+const pendingPasswordRecoveryChats = new Map<string, number>();
+const TELEGRAM_RECOVERY_WINDOW_MS = 15 * 60_000;
 
 const ADMIN_MENU = {
   keyboard: [
@@ -119,7 +130,7 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
   }
 }
 
-export async function getPasswordRecoveryBotStartUrl(rawToken: string): Promise<string | null> {
+async function getRecoveryBotStartUrl(startParameter: string): Promise<string | null> {
   const settings = await getSystemSettings();
   if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) {
     return null;
@@ -136,7 +147,15 @@ export async function getPasswordRecoveryBotStartUrl(rawToken: string): Promise<
     recoveryBotUsernameLoadedAt = Date.now();
   }
   if (!recoveryBotUsername) return null;
-  return `https://t.me/${recoveryBotUsername}?start=pr_${rawToken}`;
+  return `https://t.me/${recoveryBotUsername}?start=${startParameter}`;
+}
+
+export async function getPasswordRecoveryBotStartUrl(rawToken: string): Promise<string | null> {
+  return getRecoveryBotStartUrl(`pr_${rawToken}`);
+}
+
+export async function getUsernameRecoveryBotStartUrl(): Promise<string | null> {
+  return getRecoveryBotStartUrl("fu");
 }
 
 function passwordResetStartToken(text: string): string | null {
@@ -149,15 +168,16 @@ async function handlePasswordResetStart(message: TelegramMessage, rawToken: stri
   if (message.chat.type !== "private" || !telegramUserId) return;
 
   try {
-    const verified = await verifyPasswordResetTelegram(
+    pendingPasswordRecoveryChats.set(recoveryConversationKey(message.chat.id, telegramUserId), Date.now() + TELEGRAM_RECOVERY_WINDOW_MS);
+    await verifyPasswordResetTelegram(
       rawToken,
       String(telegramUserId),
       String(message.chat.id),
     );
-    if (verified) await notifyPendingPasswordResetRequests();
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Nếu yêu cầu khôi phục hợp lệ, quản trị viên sẽ xem xét và bot sẽ gửi liên kết đặt lại một lần vào cuộc trò chuyện này.",
+      text: "Để tiếp tục khôi phục, hãy chia sẻ số điện thoại của chính bạn bằng nút bên dưới. Bot chỉ gửi mật khẩu tạm khi danh tính Telegram và số điện thoại khớp với tài khoản đã liên kết.",
+      reply_markup: TELEGRAM_CONTACT_KEYBOARD,
     });
   } catch (error) {
     logger.warn({ err: error }, "Telegram password recovery verification failed");
@@ -165,6 +185,164 @@ async function handlePasswordResetStart(message: TelegramMessage, rawToken: stri
       chat_id: message.chat.id,
       text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
     }).catch((sendError) => logger.warn({ err: sendError }, "Unable to send password recovery status"));
+  }
+}
+
+const TELEGRAM_CONTACT_KEYBOARD = {
+  keyboard: [[{ text: "📱 Chia sẻ số điện thoại của tôi", request_contact: true }]],
+  resize_keyboard: true,
+  one_time_keyboard: true,
+};
+
+function recoveryConversationKey(chatId: number | string, telegramUserId: number | string): string {
+  return `${chatId}:${telegramUserId}`;
+}
+
+function usernameRecoveryStart(text: string): boolean {
+  return /^\/start(?:@\w+)?\s+fu$/.test(text);
+}
+
+function reserveTelegramRecoveryAttempt(
+  attempts: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  limit: number,
+): boolean {
+  const now = Date.now();
+  for (const [existingKey, attempt] of attempts) {
+    if (attempt.resetAt <= now) attempts.delete(existingKey);
+  }
+  if (attempts.size > 10_000) {
+    const oldest = [...attempts.entries()].sort((left, right) => left[1].resetAt - right[1].resetAt);
+    for (const [oldestKey] of oldest.slice(0, attempts.size - 9_000)) attempts.delete(oldestKey);
+  }
+
+  const current = attempts.get(key);
+  if (current && current.count >= limit) return false;
+  attempts.set(key, current
+    ? { count: current.count + 1, resetAt: current.resetAt }
+    : { count: 1, resetAt: now + TELEGRAM_RECOVERY_WINDOW_MS });
+  return true;
+}
+
+async function handleUsernameRecoveryStart(message: TelegramMessage): Promise<void> {
+  const telegramUserId = message.from?.id;
+  if (message.chat.type !== "private" || !telegramUserId) return;
+  const conversationKey = recoveryConversationKey(message.chat.id, telegramUserId);
+  if (!reserveTelegramRecoveryAttempt(usernameRecoveryStarts, String(telegramUserId), 5)) {
+    await telegramCall("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Đã có quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.",
+      reply_markup: { remove_keyboard: true },
+    });
+    return;
+  }
+  pendingUsernameRecoveryChats.set(conversationKey, Date.now() + TELEGRAM_RECOVERY_WINDOW_MS);
+  await telegramCall("sendMessage", {
+    chat_id: message.chat.id,
+    text: "Để tìm tên tài khoản, hãy chia sẻ số điện thoại của chính bạn bằng nút bên dưới. Bot chỉ trả tên khi cả danh tính Telegram và số điện thoại khớp với tài khoản đã liên kết.",
+    reply_markup: TELEGRAM_CONTACT_KEYBOARD,
+  });
+}
+
+async function handleRecoveryContact(message: TelegramMessage): Promise<boolean> {
+  const telegramUserId = message.from?.id;
+  const contact = message.contact;
+  if (message.chat.type !== "private" || !telegramUserId || !contact) return false;
+
+  const now = Date.now();
+  const conversationKey = recoveryConversationKey(message.chat.id, telegramUserId);
+  const usernameExpiry = pendingUsernameRecoveryChats.get(conversationKey);
+  const usernameFlow = usernameExpiry !== undefined && usernameExpiry > now;
+  if (usernameExpiry !== undefined && usernameExpiry <= now) pendingUsernameRecoveryChats.delete(conversationKey);
+
+  if (!reserveTelegramRecoveryAttempt(usernameRecoveryContacts, String(telegramUserId), 8)) {
+    await telegramCall("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Đã có quá nhiều lần xác minh. Vui lòng thử lại sau 15 phút.",
+      reply_markup: { remove_keyboard: true },
+    });
+    return true;
+  }
+
+  const contactUserId = contact.user_id === undefined ? null : String(contact.user_id);
+  if (usernameFlow) {
+    pendingUsernameRecoveryChats.delete(conversationKey);
+    try {
+      const username = await findUsernameForVerifiedTelegramContact(
+        String(telegramUserId),
+        contactUserId,
+        contact.phone_number ?? null,
+      );
+      await telegramCall("sendMessage", {
+        chat_id: message.chat.id,
+        text: username
+          ? `Tên tài khoản của bạn là: ${username}`
+          : "Không thể xác minh yêu cầu này. Bot không cung cấp tên tài khoản. Hãy bắt đầu lại và chia sẻ số điện thoại của chính bạn.",
+        reply_markup: { remove_keyboard: true },
+      });
+    } catch (error) {
+      logger.warn({ err: error }, "Telegram username recovery verification failed");
+      await telegramCall("sendMessage", {
+        chat_id: message.chat.id,
+        text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
+        reply_markup: { remove_keyboard: true },
+      });
+    }
+    return true;
+  }
+
+  const pendingPasswordExpiry = pendingPasswordRecoveryChats.get(conversationKey);
+  const hasPendingPasswordFlow = pendingPasswordExpiry !== undefined && pendingPasswordExpiry > now;
+  if (pendingPasswordExpiry !== undefined && pendingPasswordExpiry <= now) pendingPasswordRecoveryChats.delete(conversationKey);
+
+  try {
+    const result = await completePasswordRecoveryWithContact(
+      String(telegramUserId),
+      String(message.chat.id),
+      contactUserId,
+      contact.phone_number ?? null,
+    );
+    if (result === "no_request" && !hasPendingPasswordFlow) return false;
+    if (result === "issued") {
+      pendingPasswordRecoveryChats.delete(conversationKey);
+      await deliverPendingTemporaryPasswords();
+      return true;
+    }
+    await telegramCall("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Không thể xác minh yêu cầu này. Bot không gửi mật khẩu. Hãy mở lại liên kết khôi phục và chia sẻ số điện thoại của chính bạn.",
+      reply_markup: { remove_keyboard: true },
+    });
+    return true;
+  } catch (error) {
+    logger.warn({ err: error }, "Telegram password recovery contact verification failed");
+    await telegramCall("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
+      reply_markup: { remove_keyboard: true },
+    }).catch((sendError) => logger.warn({ err: sendError }, "Unable to send password recovery status"));
+    return true;
+  }
+}
+
+async function deliverPendingTemporaryPasswords(): Promise<void> {
+  try {
+    const pending = await claimPendingTemporaryPasswordDeliveries();
+    for (const delivery of pending) {
+      try {
+        const temporaryPassword = decryptSecret(delivery.temporaryPasswordEncrypted);
+        const sent = await telegramCall<TelegramMessage>("sendMessage", {
+          chat_id: delivery.telegramChatId,
+          text: `Khôi phục thành công cho tài khoản ${delivery.username}.\nMật khẩu tạm thời của bạn là:\n${temporaryPassword}\n\nHãy đăng nhập bằng mật khẩu này và đổi mật khẩu ngay sau đó.`,
+          reply_markup: { remove_keyboard: true },
+        });
+        if (sent) await markTemporaryPasswordDelivered(delivery.id);
+      } catch (error) {
+        logger.warn({ err: error, requestId: delivery.id }, "Temporary password delivery failed");
+      }
+    }
+  } catch (error) {
+    logger.warn({ err: error }, "Unable to load pending temporary password deliveries");
   }
 }
 
@@ -638,11 +816,16 @@ export async function notifySupportConversationClosed(input: {
 
 async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const text = message.text?.trim() ?? "";
+  if (usernameRecoveryStart(text) && message.chat.type === "private") {
+    await handleUsernameRecoveryStart(message);
+    return;
+  }
   const recoveryToken = passwordResetStartToken(text);
   if (recoveryToken && message.chat.type === "private") {
     await handlePasswordResetStart(message, recoveryToken);
     return;
   }
+  if (await handleRecoveryContact(message)) return;
 
   const settings = await getSystemSettings();
   const configuredChatId = settings.supportChat.adminTelegramChatId;
@@ -735,6 +918,7 @@ async function pollTelegram(): Promise<void> {
       if (update.message) await handleTelegramMessage(update.message);
       if (update.callback_query) await handlePurchaseCallback(update.callback_query);
     }
+    await deliverPendingTemporaryPasswords();
     await notifyPendingPasswordResetRequests();
   } catch (error) {
     logger.warn({ err: error }, "Support Telegram polling failed");

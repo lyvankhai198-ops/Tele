@@ -26,6 +26,7 @@ type AuthContextValue = {
   register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string, preferredLanguage: Language) => Promise<void>;
   login: (username: string, password: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
   requestPasswordReset: (input: PasswordResetRequestInput) => Promise<PasswordResetRequestResult>;
+  requestUsernameRecovery: () => Promise<{ telegramStartUrl: string | null }>;
   completePasswordReset: (input: PasswordResetCompletionInput) => Promise<void>;
   logout: () => Promise<void>;
   exitSupport: () => Promise<void>;
@@ -121,6 +122,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const requestUsernameRecovery = useCallback(async () => {
+    return authRequest<{ telegramStartUrl: string | null }>("/username-recovery/start", currentLanguage(), {
+      method: "POST",
+    });
+  }, []);
+
   const completePasswordReset = useCallback(async (input: PasswordResetCompletionInput) => {
     await authRequest<void>("/password-reset/complete", currentLanguage(), {
       method: "POST",
@@ -155,11 +162,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       login,
       requestPasswordReset,
+      requestUsernameRecovery,
       completePasswordReset,
       logout,
       exitSupport,
     }),
-    [completePasswordReset, exitSupport, getCaptcha, isLoading, login, logout, refresh, register, requestPasswordReset, user],
+    [completePasswordReset, exitSupport, getCaptcha, isLoading, login, logout, refresh, register, requestPasswordReset, requestUsernameRecovery, user],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

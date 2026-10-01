@@ -147,7 +147,8 @@ import type {
   UpgradeSummary,
   UserNotification,
   UserNotificationList,
-  UserNotificationsReadResult
+  UserNotificationsReadResult,
+  UsernameRecoveryStartResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -461,6 +462,77 @@ export function useGetAuthCaptcha<TData = Awaited<ReturnType<typeof getAuthCaptc
 
 
 
+
+export const getRequestAuthUsernameRecoveryStartUrl = () => {
+
+
+
+
+  return `/api/auth/username-recovery/start`
+}
+
+/**
+ * @summary Get a private Telegram bot link for username recovery
+ */
+export const requestAuthUsernameRecoveryStart = async ( options?: Parameters<typeof customFetch>[1]): Promise<UsernameRecoveryStartResult> => {
+
+  return customFetch<UsernameRecoveryStartResult>(getRequestAuthUsernameRecoveryStartUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRequestAuthUsernameRecoveryStartMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestAuthUsernameRecoveryStart>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestAuthUsernameRecoveryStart>>, TError,void, TContext> => {
+
+const mutationKey = ['requestAuthUsernameRecoveryStart'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestAuthUsernameRecoveryStart>>, void> = () => {
+
+
+          return  requestAuthUsernameRecoveryStart(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestAuthUsernameRecoveryStartMutationResult = NonNullable<Awaited<ReturnType<typeof requestAuthUsernameRecoveryStart>>>
+
+    export type RequestAuthUsernameRecoveryStartMutationError = ErrorType<void>
+
+    /**
+ * @summary Get a private Telegram bot link for username recovery
+ */
+export const useRequestAuthUsernameRecoveryStart = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestAuthUsernameRecoveryStart>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestAuthUsernameRecoveryStart>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRequestAuthUsernameRecoveryStartMutationOptions(options));
+    }
 
 export const getRequestAuthPasswordResetUrl = () => {
 

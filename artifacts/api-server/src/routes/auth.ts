@@ -14,6 +14,7 @@ import {
   RevokeOtherAuthSessionsResponse,
   RequestAuthPasswordResetBody,
   RequestAuthPasswordResetResponse,
+  RequestAuthUsernameRecoveryStartResponse,
   UpdateAuthLanguageBody,
   UpdateAuthLanguageResponse,
 } from "@workspace/api-zod";
@@ -38,7 +39,7 @@ import {
   SUPPORT_COOKIE_NAME,
   supportSessionCookieOptions,
 } from "../lib/support-session";
-import { requireSession } from "../middlewares/authMiddleware";
+import { requirePasswordChangeComplete, requireSession } from "../middlewares/authMiddleware";
 import { getSystemSettings } from "../lib/system-settings";
 import { recordActivity } from "../lib/activity";
 import { TRIAL_DURATION_DAYS } from "../lib/subscriptions";
@@ -47,7 +48,11 @@ import {
   issueCaptcha,
   verifyAndConsumeCaptcha,
 } from "../lib/captcha";
-import { getPasswordRecoveryBotStartUrl, notifySupportNewRegistration } from "../lib/support-telegram";
+import {
+  getPasswordRecoveryBotStartUrl,
+  getUsernameRecoveryBotStartUrl,
+  notifySupportNewRegistration,
+} from "../lib/support-telegram";
 import {
   completePasswordReset,
   createPasswordResetChallenge,
@@ -67,6 +72,7 @@ const passwordChangeUserAttempts = new Map<string, { count: number; resetAt: num
 const passwordChangeIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const passwordResetRequestIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const passwordResetRequestIdentityAttempts = new Map<string, { count: number; resetAt: number }>();
+const usernameRecoveryStartIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const passwordResetCompletionIpAttempts = new Map<string, { count: number; resetAt: number }>();
 const passwordResetCompletionTokenAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -337,6 +343,26 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   }
 });
 
+router.post("/auth/username-recovery/start", async (req, res): Promise<void> => {
+  const ip = ipKey(req);
+  if (!reserveAttempt(usernameRecoveryStartIpAttempts, ip, 8)) {
+    res.status(429).json({ error: "Bạn đã yêu cầu quá nhiều lần. Vui lòng thử lại sau 15 phút" });
+    return;
+  }
+
+  try {
+    const telegramStartUrl = await getUsernameRecoveryBotStartUrl();
+    if (!telegramStartUrl) {
+      res.status(503).json({ error: "Khôi phục tên tài khoản hiện chưa khả dụng. Vui lòng thử lại sau" });
+      return;
+    }
+    res.json(RequestAuthUsernameRecoveryStartResponse.parse({ telegramStartUrl }));
+  } catch (error) {
+    req.log.warn({ err: error }, "Unable to create username recovery link");
+    res.status(503).json({ error: "Khôi phục tên tài khoản hiện chưa khả dụng. Vui lòng thử lại sau" });
+  }
+});
+
 router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
   if (!requireValidCaptcha(req, res)) return;
   const parsed = RequestAuthPasswordResetBody.safeParse(req.body);
@@ -366,7 +392,7 @@ router.post("/auth/password-reset/request", async (req, res): Promise<void> => {
     }
     await createPasswordResetChallenge(parsed.data.username, rawToken);
     res.json(RequestAuthPasswordResetResponse.parse({
-      message: "Nếu tài khoản có Telegram đã xác minh, hãy mở bot và chờ quản trị viên xem xét yêu cầu.",
+      message: "Nếu tài khoản và Telegram liên kết hợp lệ, hãy mở bot và chia sẻ số điện thoại của chính bạn để nhận mật khẩu tạm.",
       telegramStartUrl,
     }));
   } catch (error) {
@@ -632,7 +658,7 @@ router.post("/auth/change-password", requireSession, async (req, res): Promise<v
   res.sendStatus(204);
 });
 
-router.post("/auth/revoke-other-sessions", requireSession, async (req, res): Promise<void> => {
+router.post("/auth/revoke-other-sessions", requireSession, requirePasswordChangeComplete, async (req, res): Promise<void> => {
   const currentToken = req.cookies?.[SESSION_COOKIE_NAME];
   if (typeof currentToken !== "string" || !currentToken) {
     res.status(401).json({ error: "Authentication is required" });
@@ -692,7 +718,7 @@ router.get("/auth/me", requireSession, (req, res): void => {
   }));
 });
 
-router.patch("/auth/language", requireSession, async (req, res): Promise<void> => {
+router.patch("/auth/language", requireSession, requirePasswordChangeComplete, async (req, res): Promise<void> => {
   const parsed = UpdateAuthLanguageBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Ngôn ngữ giao diện không hợp lệ" });
@@ -715,7 +741,7 @@ router.patch("/auth/language", requireSession, async (req, res): Promise<void> =
   res.json(UpdateAuthLanguageResponse.parse(authUserResponse(await resolveAuthenticatedUser(updated))));
 });
 
-router.post("/auth/legacy-owner-mappings", requireSession, async (req, res): Promise<void> => {
+router.post("/auth/legacy-owner-mappings", requireSession, requirePasswordChangeComplete, async (req, res): Promise<void> => {
   const parsed = MigrateLegacyAuthOwnerBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Thông tin mapping owner cũ không hợp lệ" });

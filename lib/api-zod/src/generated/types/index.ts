@@ -249,6 +249,7 @@ export * from './updateProxyInputStatus';
 export * from './updateProxyInputType';
 export * from './upgradeSummary';
 export * from './usageMetric';
+export * from './usernameRecoveryStartResult';
 export * from './userNotification';
 export * from './userNotificationKind';
 export * from './userNotificationLevel';

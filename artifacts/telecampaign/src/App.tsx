@@ -320,13 +320,20 @@ function LoginPage() {
           onChange={setPassword}
           autoComplete="current-password"
         />
-        <div className="-mt-2 flex justify-end">
+        <div className="-mt-2 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setLocation('/forgot-password')}
             className="text-sm font-semibold text-[#147ed8] hover:underline"
           >
             {t('Forgot password?')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLocation('/forgot-username')}
+            className="text-sm font-semibold text-[#147ed8] hover:underline"
+          >
+            {t('Forgot username?')}
           </button>
         </div>
         <CaptchaField
@@ -449,7 +456,7 @@ function ForgotPasswordPage() {
         </div>
         <h1 className="text-2xl font-bold tracking-[-0.035em]">{t('Forgot your password?')}</h1>
         <p className="mt-2 text-sm leading-6 text-[#6d8499]">
-          {t('Verify the Telegram account linked to your username. An administrator will review the request before a one-time reset link is sent.')}
+          {t('Enter your username and open the Telegram bot. After you share your own contact, the bot will send a temporary password if your Telegram identity and linked phone both match.')}
         </p>
       </div>
 
@@ -471,7 +478,7 @@ function ForgotPasswordPage() {
           {!resetToken && (
             <>
               <form className="space-y-4" onSubmit={submitRequest}>
-                <h2 className="text-sm font-bold text-[#28445e]">{t('Request account verification')}</h2>
+                <h2 className="text-sm font-bold text-[#28445e]">{t('Request a temporary password')}</h2>
                 <AuthField
                   icon={UserRound}
                   label={t('Username')}
@@ -495,14 +502,14 @@ function ForgotPasswordPage() {
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {requesting && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {requesting ? t('Sending request…') : t('Request reset link')}
+                  {requesting ? t('Sending request…') : t('Request temporary password')}
                 </button>
               </form>
 
               {request && (
                 <div role="status" className="space-y-3 rounded-2xl border border-[#bde4f9] bg-[#eff8ff] p-4">
                   <p className="text-sm leading-6 text-[#36566f]">
-                    {t('If the account and linked Telegram are valid, the administrator will review the request.')}
+                    {t('If your account is eligible, open the bot and share your own Telegram contact. It will send a temporary password only after your Telegram ID and linked phone both match.')}
                   </p>
                   {request.telegramStartUrl && (
                     <a
@@ -565,14 +572,14 @@ function ForgotPasswordPage() {
                 }}
                 className="mt-3 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-[#147ed8] transition hover:bg-[#f3f9fe]"
               >
-                {t('Request a new reset link')}
+                {t('Request a temporary password instead')}
               </button>
             </div>
           ) : (
             <div className="border-t border-[#e4edf5] pt-5">
-              <h2 className="mb-2 text-sm font-bold text-[#28445e]">{t('Set a new password')}</h2>
+              <h2 className="mb-2 text-sm font-bold text-[#28445e]">{t('Receive a temporary password')}</h2>
               <p className="text-xs leading-5 text-[#7190ab]">
-                {t('After the administrator approves the request, the bot will send a one-time password-reset link to your verified Telegram chat. The link expires in 15 minutes.')}
+                {t('The bot will ask you to share your own Telegram contact. When the linked Telegram ID and phone match, it will send a temporary password automatically. You must change it after signing in.')}
               </p>
             </div>
           )}
@@ -590,6 +597,90 @@ function ForgotPasswordPage() {
           </button>
         </p>
       )}
+    </AuthShell>
+  );
+}
+
+function ForgotUsernamePage() {
+  const [, setLocation] = useLocation();
+  const { requestUsernameRecovery } = useAuth();
+  const { language, t } = useLanguage();
+  const [telegramStartUrl, setTelegramStartUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+
+  async function requestRecoveryLink() {
+    setError(null);
+    setTelegramStartUrl(null);
+    setRequesting(true);
+    try {
+      const response = await requestUsernameRecovery();
+      if (!response.telegramStartUrl) {
+        setError(t('Username recovery is temporarily unavailable. Please try again later.'));
+        return;
+      }
+      setTelegramStartUrl(response.telegramStartUrl);
+    } catch (cause) {
+      setError(localizedErrorMessage(
+        cause,
+        language,
+        t('Could not start username recovery. Please try again.'),
+      ));
+    } finally {
+      setRequesting(false);
+    }
+  }
+
+  return (
+    <AuthShell>
+      <div className="mb-6 text-center">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-[#edf7ff] text-[#1888e8]">
+          <UserRound className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <h1 className="text-2xl font-bold tracking-[-0.035em]">{t('Forgot your username?')}</h1>
+        <p className="mt-2 text-sm leading-6 text-[#6d8499]">
+          {t('Open the recovery bot and share your own Telegram contact when prompted. It will reveal your username only after your Telegram ID and linked phone both match.')}
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <AuthError message={error} />
+        <button
+          type="button"
+          disabled={requesting}
+          onClick={() => void requestRecoveryLink()}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {requesting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+          {requesting ? t('Getting link…') : t('Get Telegram recovery link')}
+        </button>
+
+        {telegramStartUrl && (
+          <div role="status" className="space-y-3 rounded-2xl border border-[#bde4f9] bg-[#eff8ff] p-4">
+            <p className="text-sm leading-6 text-[#36566f]">
+              {t('The bot will show a username only when the Telegram ID and linked phone match.')}
+            </p>
+            <a
+              href={telegramStartUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#9dd6fb] bg-white px-4 py-2.5 text-sm font-bold text-[#0877d5] hover:bg-[#f7fcff]"
+            >
+              {t('Open Telegram bot')}
+            </a>
+          </div>
+        )}
+
+        <p className="pt-1 text-center text-sm text-[#66809a]">
+          <button
+            type="button"
+            onClick={() => setLocation('/login')}
+            className="font-semibold text-[#147ed8] hover:underline"
+          >
+            {t('Back to sign in')}
+          </button>
+        </p>
+      </div>
     </AuthShell>
   );
 }
@@ -789,12 +880,16 @@ function SubscriptionGate({ children }: { children: ReactNode }) {
 
 function AdminRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
   if (isLoading)
     return (
       <main className="grid min-h-screen place-items-center bg-[#0b1420] text-[#dce8f5]">
         <LoaderCircle className="h-6 w-6 animate-spin text-[#65b8f8]" />
       </main>
     );
+  if (user?.mustChangePassword && location !== "/dashboard/settings") {
+    return <Redirect to="/dashboard/settings" replace />;
+  }
   if (user?.support) return <Redirect to="/dashboard" replace />;
   return user?.role === 'admin' ? <LanguageOverride language="vi">{children}</LanguageOverride> : <Redirect to="/dashboard" replace />;
 }
@@ -817,6 +912,7 @@ function Router() {
         <Route path="/" component={Landing} />
         <Route path="/login" component={LoginPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/forgot-username" component={ForgotUsernamePage} />
         <Route path="/register" component={RegisterPage} />
         <Route path="/sign-in/*?"><Redirect to="/login" replace /></Route>
         <Route path="/sign-up/*?"><Redirect to="/register" replace /></Route>

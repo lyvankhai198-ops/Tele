@@ -82,6 +82,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AuthCaptcha" }
         "429": { description: Too many CAPTCHA requests }
+  /auth/username-recovery/start:
+    post:
+      operationId: requestAuthUsernameRecoveryStart
+      tags: [auth]
+      summary: Get a private Telegram bot link for username recovery
+      responses:
+        "200":
+          description: Telegram bot link for contact verification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UsernameRecoveryStartResult" }
+        "429": { description: Too many recovery-link requests }
+        "503": { description: Username recovery is temporarily unavailable }
   /auth/password-reset/request:
     post:
       operationId: requestAuthPasswordReset
@@ -2017,6 +2030,11 @@ components:
       properties:
         message: { type: string }
         telegramStartUrl: { type: ["string", "null"] }
+    UsernameRecoveryStartResult:
+      type: object
+      required: [telegramStartUrl]
+      properties:
+        telegramStartUrl: { type: string }
     PasswordResetCompletionInput:
       type: object
       required: [resetToken, newPassword, confirmPassword]

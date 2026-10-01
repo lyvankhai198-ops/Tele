@@ -69,6 +69,14 @@ export function requireSession(req: Request, res: Response, next: NextFunction):
   next();
 }
 
+export function requirePasswordChangeComplete(req: Request, res: Response, next: NextFunction): void {
+  if (req.authUser?.mustChangePassword) {
+    res.status(403).json({ error: "You must change your temporary password before continuing", code: "PASSWORD_CHANGE_REQUIRED" });
+    return;
+  }
+  next();
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (!req.authUser || !req.userId) {
     res.status(401).json({ error: "Authentication is required" });
@@ -82,6 +90,10 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     res.status(403).json({ error: "Không thể mở khu vực quản trị trong phiên hỗ trợ." });
     return;
   }
+  if (req.authUser.mustChangePassword) {
+    res.status(403).json({ error: "You must change your temporary password before continuing", code: "PASSWORD_CHANGE_REQUIRED" });
+    return;
+  }
   next();
 }
 
@@ -92,6 +104,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   if (!req.authUser || !req.userId) {
     res.status(401).json({ error: "Authentication is required" });
+    return;
+  }
+  if (req.authUser.mustChangePassword) {
+    res.status(403).json({ error: "You must change your temporary password before continuing", code: "PASSWORD_CHANGE_REQUIRED" });
     return;
   }
   const systemSettings = await getSystemSettings();
