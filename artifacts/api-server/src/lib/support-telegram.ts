@@ -89,6 +89,13 @@ async function telegramCall<T>(method: string, payload: Record<string, unknown>)
   return result.result ?? null;
 }
 
+function escapeTelegramHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 async function sendSupportMessage(text: string, replyToMessageId?: number): Promise<TelegramMessage | null> {
   const settings = await getSystemSettings();
   if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
@@ -100,12 +107,13 @@ async function sendSupportMessage(text: string, replyToMessageId?: number): Prom
   });
 }
 
-async function sendAdminMenu(text = "Chọn một thao tác:"): Promise<TelegramMessage | null> {
+async function sendAdminMenu(text = "Chọn một thao tác:", parseMode?: "HTML"): Promise<TelegramMessage | null> {
   const settings = await getSystemSettings();
   if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return null;
   return telegramCall<TelegramMessage>("sendMessage", {
     chat_id: settings.supportChat.adminTelegramChatId,
     text,
+    parse_mode: parseMode,
     reply_markup: ADMIN_MENU,
   });
 }
@@ -176,14 +184,24 @@ async function handlePasswordResetStart(message: TelegramMessage, rawToken: stri
     );
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Để tiếp tục khôi phục, hãy chia sẻ số điện thoại của chính bạn bằng nút bên dưới. Bot chỉ gửi mật khẩu tạm khi danh tính Telegram và số điện thoại khớp với tài khoản đã liên kết.",
+      text: [
+        "🔐 <b>KHÔI PHỤC MẬT KHẨU TELECAMPAIGN</b>",
+        "",
+        "<b>Bước 1/2 · Xác minh chủ tài khoản</b>",
+        "Nhấn <b>Chia sẻ số điện thoại của tôi</b> ở bên dưới để tiếp tục.",
+        "",
+        "Thông tin chỉ được chấp nhận khi tài khoản Telegram đang dùng và số điện thoại khớp với tài khoản đã liên kết.",
+        "<i>Bot sẽ không gửi mật khẩu nếu chưa xác minh thành công.</i>",
+      ].join("\n"),
+      parse_mode: "HTML",
       reply_markup: TELEGRAM_CONTACT_KEYBOARD,
     });
   } catch (error) {
     logger.warn({ err: error }, "Telegram password recovery verification failed");
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
+      text: "⚠️ <b>CHƯA THỂ XỬ LÝ YÊU CẦU</b>\nHệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút.",
+      parse_mode: "HTML",
     }).catch((sendError) => logger.warn({ err: sendError }, "Unable to send password recovery status"));
   }
 }
@@ -231,7 +249,8 @@ async function handleUsernameRecoveryStart(message: TelegramMessage): Promise<vo
   if (!reserveTelegramRecoveryAttempt(usernameRecoveryStarts, String(telegramUserId), 5)) {
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Đã có quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.",
+      text: "🚦 <b>ĐÃ ĐẠT GIỚI HẠN YÊU CẦU</b>\nVì lý do bảo mật, bạn có thể thử lại sau <b>15 phút</b>.",
+      parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
     return;
@@ -239,7 +258,15 @@ async function handleUsernameRecoveryStart(message: TelegramMessage): Promise<vo
   pendingUsernameRecoveryChats.set(conversationKey, Date.now() + TELEGRAM_RECOVERY_WINDOW_MS);
   await telegramCall("sendMessage", {
     chat_id: message.chat.id,
-    text: "Để tìm tên tài khoản, hãy chia sẻ số điện thoại của chính bạn bằng nút bên dưới. Bot chỉ trả tên khi cả danh tính Telegram và số điện thoại khớp với tài khoản đã liên kết.",
+    text: [
+      "🔎 <b>TÌM LẠI TÊN ĐĂNG NHẬP</b>",
+      "",
+      "<b>Bước 1/2 · Xác minh chủ tài khoản</b>",
+      "Nhấn <b>Chia sẻ số điện thoại của tôi</b> ở bên dưới.",
+      "",
+      "Bot chỉ cung cấp tên đăng nhập khi danh tính Telegram và số điện thoại khớp với tài khoản đã liên kết.",
+    ].join("\n"),
+    parse_mode: "HTML",
     reply_markup: TELEGRAM_CONTACT_KEYBOARD,
   });
 }
@@ -258,7 +285,8 @@ async function handleRecoveryContact(message: TelegramMessage): Promise<boolean>
   if (!reserveTelegramRecoveryAttempt(usernameRecoveryContacts, String(telegramUserId), 8)) {
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Đã có quá nhiều lần xác minh. Vui lòng thử lại sau 15 phút.",
+      text: "🚦 <b>TẠM DỪNG XÁC MINH</b>\nBạn đã đạt giới hạn thử. Vui lòng bắt đầu lại sau <b>15 phút</b>.",
+      parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
     return true;
@@ -276,15 +304,30 @@ async function handleRecoveryContact(message: TelegramMessage): Promise<boolean>
       await telegramCall("sendMessage", {
         chat_id: message.chat.id,
         text: username
-          ? `Tên tài khoản của bạn là: ${username}`
-          : "Không thể xác minh yêu cầu này. Bot không cung cấp tên tài khoản. Hãy bắt đầu lại và chia sẻ số điện thoại của chính bạn.",
+          ? [
+            "✅ <b>ĐÃ XÁC MINH THÀNH CÔNG</b>",
+            "",
+            "Tên đăng nhập TeleCampaign của bạn:",
+            `<code>${escapeTelegramHtml(username)}</code>`,
+            "",
+            "Bạn có thể dùng tên này để đăng nhập.",
+            "<i>Đừng chia sẻ thông tin đăng nhập với người khác.</i>",
+          ].join("\n")
+          : [
+            "⚠️ <b>CHƯA THỂ XÁC MINH</b>",
+            "",
+            "Thông tin chưa khớp hoặc yêu cầu đã hết hạn. Vì lý do bảo mật, bot không tiết lộ chi tiết về tài khoản.",
+            "Vui lòng bắt đầu lại từ trang khôi phục và chia sẻ số điện thoại của chính bạn.",
+          ].join("\n"),
+        parse_mode: "HTML",
         reply_markup: { remove_keyboard: true },
       });
     } catch (error) {
       logger.warn({ err: error }, "Telegram username recovery verification failed");
       await telegramCall("sendMessage", {
         chat_id: message.chat.id,
-        text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
+        text: "⚠️ <b>CHƯA THỂ XỬ LÝ YÊU CẦU</b>\nHệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút.",
+        parse_mode: "HTML",
         reply_markup: { remove_keyboard: true },
       });
     }
@@ -310,7 +353,13 @@ async function handleRecoveryContact(message: TelegramMessage): Promise<boolean>
     }
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Không thể xác minh yêu cầu này. Bot không gửi mật khẩu. Hãy mở lại liên kết khôi phục và chia sẻ số điện thoại của chính bạn.",
+      text: [
+        "⚠️ <b>CHƯA THỂ XÁC MINH</b>",
+        "",
+        "Thông tin chưa khớp hoặc yêu cầu đã hết hạn. Bot không gửi mật khẩu và không tiết lộ chi tiết về tài khoản.",
+        "Vui lòng mở lại liên kết khôi phục, sau đó chia sẻ số điện thoại của chính bạn.",
+      ].join("\n"),
+      parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     });
     return true;
@@ -318,7 +367,8 @@ async function handleRecoveryContact(message: TelegramMessage): Promise<boolean>
     logger.warn({ err: error }, "Telegram password recovery contact verification failed");
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
-      text: "Không thể xử lý yêu cầu lúc này. Vui lòng thử lại sau.",
+      text: "⚠️ <b>CHƯA THỂ XỬ LÝ YÊU CẦU</b>\nHệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút.",
+      parse_mode: "HTML",
       reply_markup: { remove_keyboard: true },
     }).catch((sendError) => logger.warn({ err: sendError }, "Unable to send password recovery status"));
     return true;
@@ -333,7 +383,21 @@ async function deliverPendingTemporaryPasswords(): Promise<void> {
         const temporaryPassword = decryptSecret(delivery.temporaryPasswordEncrypted);
         const sent = await telegramCall<TelegramMessage>("sendMessage", {
           chat_id: delivery.telegramChatId,
-          text: `Khôi phục thành công cho tài khoản ${delivery.username}.\nMật khẩu tạm thời của bạn là:\n${temporaryPassword}\n\nHãy đăng nhập bằng mật khẩu này và đổi mật khẩu ngay sau đó.`,
+          text: [
+            "✅ <b>KHÔI PHỤC TÀI KHOẢN THÀNH CÔNG</b>",
+            "",
+            `Tài khoản: <code>${escapeTelegramHtml(delivery.username)}</code>`,
+            "",
+            "🔑 <b>MẬT KHẨU TẠM THỜI</b>",
+            `<code>${escapeTelegramHtml(temporaryPassword)}</code>`,
+            "",
+            "⚠️ <b>VUI LÒNG THỰC HIỆN NGAY</b>",
+            "1. Đăng nhập TeleCampaign bằng mật khẩu tạm thời ở trên.",
+            "2. Đổi sang mật khẩu mới khi hệ thống yêu cầu.",
+            "",
+            "<i>Không chia sẻ tin nhắn hoặc mật khẩu này với bất kỳ ai.</i>",
+          ].join("\n"),
+          parse_mode: "HTML",
           reply_markup: { remove_keyboard: true },
         });
         if (sent) await markTemporaryPasswordDelivered(delivery.id);
@@ -571,48 +635,54 @@ function money(value: number): string {
 async function sendOverview(): Promise<void> {
   const stats = await getAdminOverview();
   await sendAdminMenu(
-    `📊 TỔNG QUAN TELECAMPAIGN\n\n` +
-    `👥 Người dùng: ${stats.users}\n` +
-    `🟢 Gói đang hoạt động: ${stats.active}\n` +
-    `⏳ Hết hạn trong 7 ngày: ${stats.expiring}\n\n` +
-    `💰 Doanh thu hôm nay: ${money(stats.revenueToday)}\n` +
-    `🔑 Key kích hoạt hôm nay: ${stats.soldToday}\n` +
-    `📦 Key đã bán: ${stats.soldTotal}\n` +
-    `🗃 Key còn tồn: ${stats.inventory}`,
+    `📊 <b>TỔNG QUAN TELECAMPAIGN</b>\n\n` +
+    `👥 <b>NGƯỜI DÙNG</b>\n` +
+    `• Tổng tài khoản: <b>${stats.users}</b>\n` +
+    `• Gói đang hoạt động: <b>${stats.active}</b>\n` +
+    `• Hết hạn trong 7 ngày: <b>${stats.expiring}</b>\n\n` +
+    `💰 <b>DOANH THU & LICENSE</b>\n` +
+    `• Doanh thu hôm nay: <b>${money(stats.revenueToday)}</b>\n` +
+    `• Key kích hoạt hôm nay: <b>${stats.soldToday}</b>\n` +
+    `• Tổng key đã bán: <b>${stats.soldTotal}</b>\n` +
+    `• Key còn trong kho: <b>${stats.inventory}</b>`,
+    "HTML",
   );
 }
 
 async function sendRevenue(): Promise<void> {
   const stats = await getAdminOverview();
   await sendAdminMenu(
-    `💰 DOANH THU & LICENSE\n\n` +
-    `Hôm nay: ${money(stats.revenueToday)}\n` +
-    `Key hôm nay: ${stats.soldToday}\n` +
-    `Tổng key đã kích hoạt: ${stats.soldTotal}\n` +
-    `Key còn tồn: ${stats.inventory}\n\n` +
-    `⏳ User sắp hết hạn: ${stats.expiring}`,
+    `💰 <b>DOANH THU & LICENSE</b>\n\n` +
+    `• Doanh thu hôm nay: <b>${money(stats.revenueToday)}</b>\n` +
+    `• Key kích hoạt hôm nay: <b>${stats.soldToday}</b>\n` +
+    `• Tổng key đã kích hoạt: <b>${stats.soldTotal}</b>\n` +
+    `• Key còn trong kho: <b>${stats.inventory}</b>\n\n` +
+    `⏳ Tài khoản sắp hết hạn: <b>${stats.expiring}</b>`,
+    "HTML",
   );
 }
 
 async function sendUsers(): Promise<void> {
   const stats = await getAdminOverview();
   await sendAdminMenu(
-    `👥 NGƯỜI DÙNG\n\n` +
-    `Tổng user: ${stats.users}\n` +
-    `Gói đang hoạt động: ${stats.active}\n` +
-    `Sắp hết hạn 7 ngày: ${stats.expiring}\n\n` +
-    `Dùng Dashboard để xem và thao tác từng user.`,
+    `👥 <b>NGƯỜI DÙNG</b>\n\n` +
+    `• Tổng tài khoản: <b>${stats.users}</b>\n` +
+    `• Gói đang hoạt động: <b>${stats.active}</b>\n` +
+    `• Hết hạn trong 7 ngày: <b>${stats.expiring}</b>\n\n` +
+    `<i>Mở Dashboard để xem hồ sơ và quản lý từng tài khoản.</i>`,
+    "HTML",
   );
 }
 
 async function sendLicenseKeys(): Promise<void> {
   const stats = await getAdminOverview();
   await sendAdminMenu(
-    `🔑 LICENSE KEYS\n\n` +
-    `✅ Đã kích hoạt tổng: ${stats.soldTotal}\n` +
-    `🧾 Kích hoạt hôm nay: ${stats.soldToday}\n` +
-    `📦 Còn tồn: ${stats.inventory}\n\n` +
-    `Dùng Dashboard để tạo hoặc quản lý key.`,
+    `🔑 <b>QUẢN LÝ LICENSE KEY</b>\n\n` +
+    `• Đã kích hoạt: <b>${stats.soldTotal}</b>\n` +
+    `• Kích hoạt hôm nay: <b>${stats.soldToday}</b>\n` +
+    `• Còn trong kho: <b>${stats.inventory}</b>\n\n` +
+    `<i>Mở Dashboard để tạo hoặc quản lý license key.</i>`,
+    "HTML",
   );
 }
 
@@ -634,9 +704,12 @@ async function sendExpiringUsers(): Promise<void> {
     .orderBy(subscriptionsTable.expiresAt)
     .limit(10);
   const body = rows.length
-    ? rows.map((row, index) => `${index + 1}. @${row.username} — ${row.plan.toUpperCase()} — ${row.expiresAt?.toLocaleDateString("vi-VN")}`).join("\n")
-    : "Không có user nào hết hạn trong 7 ngày tới.";
-  await sendAdminMenu(`⏳ SẮP HẾT HẠN\n\n${body}`);
+    ? rows.map((row, index) => `${index + 1}. <code>@${escapeTelegramHtml(row.username)}</code> · ${escapeTelegramHtml(row.plan.toUpperCase())} · ${row.expiresAt?.toLocaleDateString("vi-VN") ?? "—"}`).join("\n")
+    : "Không có tài khoản nào hết hạn trong 7 ngày tới.";
+  await sendAdminMenu(
+    `⏳ <b>TÀI KHOẢN SẮP HẾT HẠN</b>\n<i>Dự kiến trong 7 ngày tới · tối đa 10 tài khoản</i>\n\n${body}`,
+    "HTML",
+  );
 }
 
 async function sendTodayKeys(): Promise<void> {
@@ -659,9 +732,15 @@ async function sendTodayKeys(): Promise<void> {
     .orderBy(desc(licenseKeysTable.claimedAt))
     .limit(20);
   const body = rows.length
-    ? rows.map((row, index) => `${index + 1}. @${row.username ?? "unknown"} — ${row.plan.toUpperCase()} ${row.durationDays} ngày — ${money(row.salePriceVnd ?? 0)}`).join("\n")
-    : "Hôm nay chưa có key nào được kích hoạt.";
-  await sendAdminMenu(`🧾 KEY HÔM NAY (${rows.length})\n\n${body}`);
+    ? rows.map((row, index) => {
+      const salePrice = row.salePriceVnd === null ? "Chưa định giá" : money(row.salePriceVnd);
+      return `${index + 1}. <code>@${escapeTelegramHtml(row.username ?? "unknown")}</code> · ${escapeTelegramHtml(row.plan.toUpperCase())} ${row.durationDays} ngày · ${salePrice}`;
+    }).join("\n")
+    : "Hôm nay chưa có license key nào được kích hoạt.";
+  await sendAdminMenu(
+    `🧾 <b>LICENSE KEY HÔM NAY · ${rows.length}</b>\n\n${body}`,
+    "HTML",
+  );
 }
 
 async function sendSupportPhoto(input: {
@@ -779,12 +858,13 @@ export async function notifyAdminLicenseActivated(input: {
   const settings = await getSystemSettings();
   if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
   await sendAdminMenu(
-    `💰 CÓ KHÁCH KÍCH HOẠT KEY\n\n` +
-    `👤 User: @${input.username}\n` +
-    `📦 Gói: ${input.plan.toUpperCase()}\n` +
-    `📅 Thời hạn: ${input.durationDays} ngày\n` +
-    `💵 Giá key: ${input.salePriceVnd === null ? "Chưa định giá" : money(input.salePriceVnd)}\n\n` +
-    `Đã cập nhật vào doanh thu và số lượng key hôm nay.`,
+    `💳 <b>LICENSE ĐÃ ĐƯỢC KÍCH HOẠT</b>\n\n` +
+    `👤 Tài khoản: <code>@${escapeTelegramHtml(input.username)}</code>\n` +
+    `📦 Gói: <b>${escapeTelegramHtml(input.plan.toUpperCase())}</b>\n` +
+    `📅 Thời hạn: <b>${input.durationDays} ngày</b>\n` +
+    `💵 Giá ghi nhận: <b>${input.salePriceVnd === null ? "Chưa định giá" : money(input.salePriceVnd)}</b>\n\n` +
+    `Số liệu đã được cập nhật trong báo cáo.`,
+    "HTML",
   );
 }
 
@@ -841,7 +921,10 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
     return;
   }
   if (text === "/start" || text === "/menu" || text === "🏠 Menu") {
-    await sendAdminMenu("👋 TeleCampaign Admin\n\nChọn thao tác bạn muốn xem:");
+    await sendAdminMenu(
+      "👋 <b>TELECAMPAIGN ADMIN</b>\n\nChọn một mục bên dưới để xem báo cáo mới nhất.",
+      "HTML",
+    );
     return;
   }
   if (text === "📊 Tổng quan" || text === "🔄 Làm mới") {
