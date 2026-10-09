@@ -1351,7 +1351,20 @@ export const PurchaseOrderReviewInputDecision = {
 
 export interface PurchaseOrderReviewInput {
   decision: PurchaseOrderReviewInputDecision;
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
   reason?: string;
+  manualVerification?: boolean;
+}
+
+export interface PurchaseOrderRevokeInput {
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
+  reason: string;
 }
 
 export type PurchaseOrderOrderType = typeof PurchaseOrderOrderType[keyof typeof PurchaseOrderOrderType];
@@ -1372,6 +1385,7 @@ export const PurchaseOrderStatus = {
   expired: 'expired',
   rejected: 'rejected',
   cancelled: 'cancelled',
+  revoked: 'revoked',
 } as const;
 
 export interface PurchaseOrder {

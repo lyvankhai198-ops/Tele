@@ -13,6 +13,7 @@ import QRCode from "qrcode";
 const planOrder: Record<string, number> = { plus: 1, pro: 2, unlimited: 3 };
 
 const getDerivedStatus = (order: any) => {
+  if (order.status === "revoked") return "revoked";
   if (order.status === "rejected") return "rejected";
   if (order.status === "paid") return "paid";
   if (order.status === "received") return "received";
@@ -972,8 +973,8 @@ export default function Upgrade() {
                           <td className="px-6 py-4 font-mono text-[13px] text-[#64748b]">{order.reference}</td>
                           <td className="px-6 py-4">
                             <StatusBadge
-                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" || orderStatus === "cancelled" || orderStatus === "invalid" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
-                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled") : orderStatus === "invalid" ? (language === "vi" ? "TxHash không hợp lệ" : "Invalid TxHash") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
+                              status={orderStatus === "paid" ? "success" : orderStatus === "rejected" || orderStatus === "expired" || orderStatus === "cancelled" || orderStatus === "invalid" || orderStatus === "revoked" ? "failed" : orderStatus === "received" || orderStatus === "verifying" ? "warning" : "draft"}
+                              label={orderStatus === "paid" ? t("Approved") : orderStatus === "revoked" ? (language === "vi" ? "Đã thu hồi" : "Revoked") : orderStatus === "rejected" ? t("Rejected") : orderStatus === "expired" ? (language === "vi" ? "Hết hạn" : "Expired") : orderStatus === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled") : orderStatus === "invalid" ? (language === "vi" ? "TxHash không hợp lệ" : "Invalid TxHash") : orderStatus === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED" ? (language === "vi" ? "Đã nhận, cần xử lý" : "Received, needs review") : (language === "vi" ? "Đã nhận, chờ key" : "Received, awaiting key")) : orderStatus === "verifying" ? (order.automated ? (language === "vi" ? "Đang xác minh" : "Verifying") : (language === "vi" ? "Chờ quản trị" : "Awaiting admin")) : t("Pending")}
                             />
                             {orderStatus === "paid" && (
                               <div className="text-[11px] text-[#64748b] mt-1.5 font-bold">

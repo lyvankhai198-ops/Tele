@@ -87,6 +87,12 @@ import {
   ListAdminSystemEventsResponse,
   MarkAdminSystemEventReadParams,
   MarkAllAdminSystemEventsReadResponse,
+  ReviewPurchaseOrderParams,
+  ReviewPurchaseOrderBody,
+  ReviewPurchaseOrderResponse,
+  RevokePurchaseOrderParams,
+  RevokePurchaseOrderBody,
+  RevokePurchaseOrderResponse,
 } from "@workspace/api-zod";
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
@@ -157,7 +163,7 @@ import { getStorageStatus } from "../lib/storage-status";
 import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
 import { notifyPurchaseOrder, notifySupportConversationClosed } from "../lib/support-telegram";
 import { translateAdminReplyForCustomer } from "../lib/support-translation";
-import { getOrderSettings, listOrders, reviewOrder, saveOrderSettings, verifiedOrderNotification } from "../lib/telecampaign-orders";
+import { getOrderSettings, listOrders, reviewOrder, revokePurchaseOrder, saveOrderSettings, verifiedOrderNotification } from "../lib/telecampaign-orders";
 import { resetRenewalTestAccount } from "../lib/renewal-test-account";
 import {
   listAdminSystemEvents,
@@ -223,16 +229,54 @@ router.get("/admin/purchase-orders", async (_req, res): Promise<void> => {
   res.json(await listOrders());
 });
 router.post("/admin/purchase-orders/:orderId/review", async (req, res): Promise<void> => {
-  if (!["paid", "rejected"].includes(req.body?.decision)) { res.status(400).json({ error: "Invalid decision" }); return; }
+  const params = ReviewPurchaseOrderParams.safeParse(req.params);
+  const parsed = ReviewPurchaseOrderBody.safeParse(req.body);
+  if (!params.success || !parsed.success || (parsed.data.decision === "rejected" && !parsed.data.reason?.trim())) {
+    res.status(400).json({ error: "Invalid purchase-order review" }); return;
+  }
   let order;
-  try { order = await reviewOrder(req.params.orderId, req.userId!, req.body.decision, req.body.reason); }
-  catch (error) { if (error instanceof Error && ["PLAN_DOWNGRADE_NOT_ALLOWED", "ORDER_USER_NOT_FOUND", "AUTOMATIC_PAYMENT_NOT_VERIFIED"].includes(error.message)) { res.status(409).json({ error: error.message }); return; } throw error; }
+  try {
+    order = await reviewOrder(params.data.orderId, req.userId!, parsed.data.decision, {
+      reason: parsed.data.reason,
+      manualVerification: parsed.data.manualVerification,
+    });
+  } catch (error) {
+    if (error instanceof Error && [
+      "PLAN_DOWNGRADE_NOT_ALLOWED",
+      "ORDER_USER_NOT_FOUND",
+      "MANUAL_RECEIPT_CONFIRMATION_REQUIRED",
+      "CRYPTO_REQUIRES_CHAIN_VERIFICATION",
+      "ORDER_NOT_REVIEWABLE",
+      "ORDER_REVIEW_REASON_REQUIRED",
+    ].includes(error.message)) {
+      res.status(409).json({ error: error.message }); return;
+    }
+    throw error;
+  }
   if (!order) { res.status(404).json({ error: "Order not found" }); return; }
   if (order.status === "paid") {
     void notifyPurchaseOrder(verifiedOrderNotification(order))
       .catch((error) => req.log.warn({ err: error, orderId: order.id }, "could not notify admin about activated key"));
   }
-  res.json(order);
+  res.json(ReviewPurchaseOrderResponse.parse(order));
+});
+router.post("/admin/purchase-orders/:orderId/revoke", async (req, res): Promise<void> => {
+  const params = RevokePurchaseOrderParams.safeParse(req.params);
+  const parsed = RevokePurchaseOrderBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: "Invalid purchase-order revocation" }); return;
+  }
+  let order;
+  try {
+    order = await revokePurchaseOrder(params.data.orderId, req.userId!, parsed.data.reason);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ORDER_NOT_REVOCABLE") {
+      res.status(409).json({ error: error.message }); return;
+    }
+    throw error;
+  }
+  if (!order) { res.status(404).json({ error: "Order not found" }); return; }
+  res.json(RevokePurchaseOrderResponse.parse(order));
 });
 
 router.get("/admin/system-events", async (req, res): Promise<void> => {

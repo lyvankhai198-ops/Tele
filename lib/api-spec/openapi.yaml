@@ -1045,6 +1045,24 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrderReviewInput" } } }
       responses:
         "200": { description: Reviewed order, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+        "400": { description: Invalid review input }
+        "404": { description: Order not found }
+        "409": { description: Order cannot be reviewed in its current state }
+  /admin/purchase-orders/{orderId}/revoke:
+    post:
+      operationId: revokePurchaseOrder
+      tags: [admin]
+      parameters: [{ name: orderId, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseOrderRevokeInput" }
+      responses:
+        "200": { description: Revoked order and deactivated subscription, content: { application/json: { schema: { $ref: "#/components/schemas/PurchaseOrder" } } } }
+        "400": { description: Invalid reason }
+        "404": { description: Order not found }
+        "409": { description: Order is not activated and cannot be revoked }
   /admin/system-settings:
     get:
       operationId: getAdminSystemSettings
@@ -2719,7 +2737,13 @@ components:
       required: [decision]
       properties:
         decision: { type: string, enum: [paid, rejected] }
-        reason: { type: string }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+        manualVerification: { type: boolean, default: false }
+    PurchaseOrderRevokeInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000 }
     PurchaseOrder:
       type: object
       required: [id, ownerUserId, plan, durationDays, currency, amount, reference, status, orderType, createdAt]
@@ -2737,7 +2761,7 @@ components:
         proofInfo: { type: ["string", "null"] }
         automated: { type: boolean }
         orderType: { type: string, enum: [license, renewal] }
-        status: { type: string, enum: [pending, received, paid, expired, rejected, cancelled] }
+        status: { type: string, enum: [pending, received, paid, expired, rejected, cancelled, revoked] }
         activatedLicenseKeyId: { type: ["string", "null"] }
         reviewedBy: { type: ["string", "null"] }
         reviewedAt: { type: ["string", "null"], format: date-time }

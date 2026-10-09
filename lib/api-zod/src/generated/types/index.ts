@@ -193,6 +193,7 @@ export * from './purchaseOrderOrderType';
 export * from './purchaseOrderProofInput';
 export * from './purchaseOrderReviewInput';
 export * from './purchaseOrderReviewInputDecision';
+export * from './purchaseOrderRevokeInput';
 export * from './purchaseOrderSettings';
 export * from './purchaseOrderSettingsDurationsDays';
 export * from './purchaseOrderSettingsPricesUsdt';

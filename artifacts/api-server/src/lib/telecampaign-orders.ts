@@ -171,7 +171,7 @@ export async function updateOrderProof(id: string, ownerUserId: string, txHash?:
   return order;
 }
 
-/** Only a verified gateway receipt or confirmed on-chain transfer may call this. */
+/** Settle orders after gateway/on-chain verification or an admin's explicit bank-receipt confirmation. */
 export async function settleVerifiedOrder(id: string, paymentEventId: string, reviewedBy = "automatic") {
   return db.transaction(async (tx) => {
     const [order] = await tx.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).for("update");
@@ -285,21 +285,75 @@ export async function expireUnpaidOrders() {
       .where(inArray(licenseKeysTable.reservedOrderId, expired.map((order) => order.id)));
   }
 }
-export async function reviewOrder(id: string, adminUserId: string, decision: "paid" | "rejected", reason?: string) {
+export async function reviewOrder(
+  id: string,
+  adminUserId: string,
+  decision: "paid" | "rejected",
+  options: { reason?: string; manualVerification?: boolean } = {},
+) {
   if (decision === "paid") {
     const [order] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).limit(1);
     if (!order) return null;
-    if (order.status !== "pending" && order.status !== "received") return order;
-    if (order.automated && order.status === "pending") throw new Error("AUTOMATIC_PAYMENT_NOT_VERIFIED");
-    return settleVerifiedOrder(id, order.paymentEventId ?? `manual:${id}`, adminUserId);
+    if (order.status === "pending" || order.status === "expired") {
+      if (order.currency !== "VND" || options.manualVerification !== true) {
+        throw new Error(order.currency === "USDT" ? "CRYPTO_REQUIRES_CHAIN_VERIFICATION" : "MANUAL_RECEIPT_CONFIRMATION_REQUIRED");
+      }
+      return settleVerifiedOrder(id, order.paymentEventId ?? `manual:vnd:${id}`, adminUserId);
+    }
+    if (order.status === "received") {
+      return settleVerifiedOrder(id, order.paymentEventId ?? `manual:received:${id}`, adminUserId);
+    }
+    throw new Error("ORDER_NOT_REVIEWABLE");
   }
+  const rejectionReason = options.reason?.trim();
+  if (!rejectionReason || rejectionReason.length < 3) throw new Error("ORDER_REVIEW_REASON_REQUIRED");
   return db.transaction(async (tx) => {
     const [order] = await tx.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).for("update");
     if (!order) return null;
-    if (order.status !== "pending") return order;
-    if (order.automated) throw new Error("AUTOMATIC_PAYMENT_NOT_VERIFIED");
+    if (order.status !== "pending") throw new Error("ORDER_NOT_REVIEWABLE");
     const now = new Date();
-    const [updated] = await tx.update(purchaseOrdersTable).set({ status: "rejected", reviewedBy: adminUserId, reviewedAt: now, rejectionReason: reason ?? null, updatedAt: now }).where(eq(purchaseOrdersTable.id, id)).returning();
+    const [updated] = await tx.update(purchaseOrdersTable).set({
+      status: "rejected",
+      reviewedBy: adminUserId,
+      reviewedAt: now,
+      rejectionReason,
+      updatedAt: now,
+    }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.status, "pending"))).returning();
+    if (!updated) throw new Error("ORDER_NOT_REVIEWABLE");
+    await tx.update(licenseKeysTable).set({ reservedOrderId: null, reservedUntil: null })
+      .where(eq(licenseKeysTable.reservedOrderId, id));
     return updated;
+  });
+}
+
+export async function revokePurchaseOrder(id: string, adminUserId: string, reason: string) {
+  return db.transaction(async (tx) => {
+    const [order] = await tx.select().from(purchaseOrdersTable)
+      .where(eq(purchaseOrdersTable.id, id)).for("update");
+    if (!order) return null;
+    if (order.status !== "paid") throw new Error("ORDER_NOT_REVOCABLE");
+
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${order.ownerUserId}))`);
+    const now = new Date();
+    const [subscription] = await tx.select().from(subscriptionsTable)
+      .where(eq(subscriptionsTable.ownerUserId, order.ownerUserId)).for("update");
+    if (subscription && (!subscription.expiresAt || subscription.expiresAt > now)) {
+      await tx.update(subscriptionsTable).set({ expiresAt: now, updatedAt: now })
+        .where(eq(subscriptionsTable.id, subscription.id));
+    }
+    if (order.activatedLicenseKeyId) {
+      await tx.update(licenseKeysTable).set({ revokedAt: now, revokedBy: adminUserId })
+        .where(eq(licenseKeysTable.id, order.activatedLicenseKeyId));
+    }
+    const [revoked] = await tx.update(purchaseOrdersTable).set({
+      status: "revoked",
+      reviewedBy: adminUserId,
+      reviewedAt: now,
+      rejectionReason: reason.trim(),
+      updatedAt: now,
+    }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.status, "paid"))).returning();
+    if (!revoked) throw new Error("ORDER_NOT_REVOCABLE");
+    logger.warn({ orderId: id, adminUserId }, "admin revoked paid order and deactivated subscription");
+    return revoked;
   });
 }

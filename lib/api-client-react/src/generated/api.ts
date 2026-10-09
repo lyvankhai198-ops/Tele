@@ -112,6 +112,7 @@ import type {
   PurchaseOrderInput,
   PurchaseOrderProofInput,
   PurchaseOrderReviewInput,
+  PurchaseOrderRevokeInput,
   PurchaseOrderSettings,
   PurchaseSettings,
   PurchaseSettingsInput,
@@ -5457,7 +5458,7 @@ export const reviewPurchaseOrder = async (orderId: string,
 
 
 
-export const getReviewPurchaseOrderMutationOptions = <TError = ErrorType<unknown>,
+export const getReviewPurchaseOrderMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewPurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof reviewPurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderReviewInput>}, TContext> => {
 
@@ -5486,9 +5487,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type ReviewPurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof reviewPurchaseOrder>>>
     export type ReviewPurchaseOrderMutationBody = BodyType<PurchaseOrderReviewInput>
-    export type ReviewPurchaseOrderMutationError = ErrorType<unknown>
+    export type ReviewPurchaseOrderMutationError = ErrorType<void>
 
-    export const useReviewPurchaseOrder = <TError = ErrorType<unknown>,
+    export const useReviewPurchaseOrder = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewPurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderReviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof reviewPurchaseOrder>>,
@@ -5497,6 +5498,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getReviewPurchaseOrderMutationOptions(options));
+    }
+
+export const getRevokePurchaseOrderUrl = (orderId: string,) => {
+
+
+
+
+  return `/api/admin/purchase-orders/${orderId}/revoke`
+}
+
+export const revokePurchaseOrder = async (orderId: string,
+    purchaseOrderRevokeInput: PurchaseOrderRevokeInput, options?: Parameters<typeof customFetch>[1]): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getRevokePurchaseOrderUrl(orderId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderRevokeInput)
+  }
+);}
+
+
+
+
+
+export const getRevokePurchaseOrderMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokePurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderRevokeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokePurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderRevokeInput>}, TContext> => {
+
+const mutationKey = ['revokePurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokePurchaseOrder>>, {orderId: string;data: BodyType<PurchaseOrderRevokeInput>}> = (props) => {
+          const {orderId,data} = props ?? {};
+
+          return  revokePurchaseOrder(orderId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokePurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof revokePurchaseOrder>>>
+    export type RevokePurchaseOrderMutationBody = BodyType<PurchaseOrderRevokeInput>
+    export type RevokePurchaseOrderMutationError = ErrorType<void>
+
+    export const useRevokePurchaseOrder = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokePurchaseOrder>>, TError,{orderId: string;data: BodyType<PurchaseOrderRevokeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokePurchaseOrder>>,
+        TError,
+        {orderId: string;data: BodyType<PurchaseOrderRevokeInput>},
+        TContext
+      > => {
+      return useMutation(getRevokePurchaseOrderMutationOptions(options));
     }
 
 export const getGetAdminSystemSettingsUrl = () => {

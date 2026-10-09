@@ -9,5 +9,10 @@ import type { PurchaseOrderReviewInputDecision } from './purchaseOrderReviewInpu
 
 export interface PurchaseOrderReviewInput {
   decision: PurchaseOrderReviewInputDecision;
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
   reason?: string;
+  manualVerification?: boolean;
 }

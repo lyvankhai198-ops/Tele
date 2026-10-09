@@ -1669,7 +1669,7 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
   "orderType": zod.enum(['license', 'renewal']),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1702,7 +1702,7 @@ export const CreatePurchaseOrderResponse = zod.object({
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
   "orderType": zod.enum(['license', 'renewal']),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1740,7 +1740,7 @@ export const SubmitPurchaseOrderProofResponse = zod.object({
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
   "orderType": zod.enum(['license', 'renewal']),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1767,7 +1767,7 @@ export const CancelPurchaseOrderResponse = zod.object({
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
   "orderType": zod.enum(['license', 'renewal']),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1790,7 +1790,7 @@ export const ListAdminPurchaseOrdersResponseItem = zod.object({
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
   "orderType": zod.enum(['license', 'renewal']),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),
@@ -1866,9 +1866,15 @@ export const ReviewPurchaseOrderParams = zod.object({
   "orderId": zod.coerce.string()
 })
 
+export const reviewPurchaseOrderBodyReasonMin = 3;
+export const reviewPurchaseOrderBodyReasonMax = 1000;
+
+export const reviewPurchaseOrderBodyManualVerificationDefault = false;
+
 export const ReviewPurchaseOrderBody = zod.object({
   "decision": zod.enum(['paid', 'rejected']),
-  "reason": zod.string().optional()
+  "reason": zod.string().min(reviewPurchaseOrderBodyReasonMin).max(reviewPurchaseOrderBodyReasonMax).optional(),
+  "manualVerification": zod.boolean().default(reviewPurchaseOrderBodyManualVerificationDefault)
 })
 
 export const ReviewPurchaseOrderResponse = zod.object({
@@ -1885,7 +1891,43 @@ export const ReviewPurchaseOrderResponse = zod.object({
   "proofInfo": zod.string().nullish(),
   "automated": zod.boolean().optional(),
   "orderType": zod.enum(['license', 'renewal']),
-  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
+  "activatedLicenseKeyId": zod.string().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const RevokePurchaseOrderParams = zod.object({
+  "orderId": zod.coerce.string()
+})
+
+export const revokePurchaseOrderBodyReasonMin = 3;
+export const revokePurchaseOrderBodyReasonMax = 1000;
+
+
+
+export const RevokePurchaseOrderBody = zod.object({
+  "reason": zod.string().min(revokePurchaseOrderBodyReasonMin).max(revokePurchaseOrderBodyReasonMax)
+})
+
+export const RevokePurchaseOrderResponse = zod.object({
+  "id": zod.string(),
+  "ownerUserId": zod.string(),
+  "plan": zod.string(),
+  "durationDays": zod.number(),
+  "currency": zod.string(),
+  "amount": zod.string(),
+  "paymentDestination": zod.string().optional(),
+  "network": zod.string().nullish(),
+  "reference": zod.string(),
+  "txHash": zod.string().nullish(),
+  "proofInfo": zod.string().nullish(),
+  "automated": zod.boolean().optional(),
+  "orderType": zod.enum(['license', 'renewal']),
+  "status": zod.enum(['pending', 'received', 'paid', 'expired', 'rejected', 'cancelled', 'revoked']),
   "activatedLicenseKeyId": zod.string().nullish(),
   "reviewedBy": zod.string().nullish(),
   "reviewedAt": zod.coerce.date().nullish(),

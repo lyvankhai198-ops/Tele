@@ -569,7 +569,10 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
     return;
   }
   try {
-    const order = await reviewOrder(parts[2], String(query.from!.id), parts[1] as "paid" | "rejected");
+    const decision = parts[1] as "paid" | "rejected";
+    const order = await reviewOrder(parts[2], String(query.from!.id), decision, {
+      reason: decision === "rejected" ? "Admin rejected via Telegram after reviewing payment." : undefined,
+    });
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: order?.status === "paid" ? "Đã duyệt" : "Đã từ chối" });
     if (order) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
     if (order?.status === "paid") {

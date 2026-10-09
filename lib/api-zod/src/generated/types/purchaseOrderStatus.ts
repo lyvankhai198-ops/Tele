@@ -16,4 +16,5 @@ export const PurchaseOrderStatus = {
   expired: 'expired',
   rejected: 'rejected',
   cancelled: 'cancelled',
+  revoked: 'revoked',
 } as const;
