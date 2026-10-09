@@ -437,7 +437,7 @@ const translations: Record<string, string> = {
   "Forgot password?": "Quên mật khẩu?",
   "Forgot username?": "Quên tên đăng nhập?",
   "Forgot your password?": "Quên mật khẩu?",
-  "Enter your username and open the Telegram bot. After you share your own contact, the bot will send a temporary password if your Telegram identity and linked phone both match.": "Nhập tên đăng nhập và mở bot Telegram. Sau khi bạn chia sẻ danh bạ Telegram của chính mình, bot sẽ gửi mật khẩu tạm nếu tài khoản Telegram và số điện thoại đã liên kết đều khớp.",
+  "Enter your username and request recovery. If eligible, open the Telegram bot and share your own contact; it will send a temporary password only when your Telegram identity and linked phone match.": "Nhập tên đăng nhập và gửi yêu cầu khôi phục. Nếu tài khoản đủ điều kiện, hãy mở bot Telegram và chia sẻ danh bạ của chính mình; bot chỉ gửi mật khẩu tạm khi danh tính Telegram và số điện thoại đã liên kết khớp.",
   "Forgot your username?": "Quên tên đăng nhập?",
   "Open the recovery bot and share your own Telegram contact when prompted. It will reveal your username only after your Telegram ID and linked phone both match.": "Mở bot khôi phục và chia sẻ danh bạ Telegram của chính bạn khi được yêu cầu. Bot chỉ tiết lộ tên đăng nhập sau khi ID Telegram và số điện thoại đã liên kết cùng khớp.",
   "Username recovery is temporarily unavailable. Please try again later.": "Tính năng tìm tên đăng nhập hiện chưa khả dụng. Vui lòng thử lại sau.",
@@ -451,6 +451,7 @@ const translations: Record<string, string> = {
   "Sending request…": "Đang gửi yêu cầu...",
   "Request temporary password": "Yêu cầu mật khẩu tạm",
   "If your account is eligible, open the bot and share your own Telegram contact. It will send a temporary password only after your Telegram ID and linked phone both match.": "Nếu tài khoản đủ điều kiện, hãy mở bot và chia sẻ danh bạ Telegram của chính mình. Bot chỉ gửi mật khẩu tạm sau khi ID Telegram và số điện thoại đã liên kết cùng khớp.",
+  "No account eligible for recovery was found. Check the username and make sure the account has a linked Telegram account.": "Không tìm thấy tài khoản đủ điều kiện khôi phục. Hãy kiểm tra tên đăng nhập và bảo đảm tài khoản đã liên kết Telegram.",
   "Open Telegram bot": "Mở bot Telegram",
   "Set a new password": "Đặt mật khẩu mới",
   "Request a temporary password instead": "Thay vào đó, yêu cầu mật khẩu tạm",
@@ -649,6 +650,29 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
     },
   };
   if (recoveryMessages[cleanMessage]) return recoveryMessages[cleanMessage][language];
+  const purchaseOrderMessages: Record<string, Record<Language, string>> = {
+    MANUAL_RECEIPT_CONFIRMATION_REQUIRED: {
+      vi: "Hãy xác nhận đã đối chiếu tiền thực nhận trong ngân hàng trước khi duyệt đơn VND.",
+      en: "Confirm that you matched the received bank transfer before approving this VND order.",
+    },
+    CRYPTO_REQUIRES_CHAIN_VERIFICATION: {
+      vi: "Đơn USDT phải được xác minh giao dịch trên blockchain; không thể duyệt thủ công.",
+      en: "USDT orders require on-chain transaction verification and cannot be manually approved.",
+    },
+    ORDER_NOT_REVIEWABLE: {
+      vi: "Đơn đã đổi trạng thái nên không thể xử lý theo thao tác này. Hãy làm mới danh sách.",
+      en: "The order changed state and can no longer be processed this way. Refresh the list.",
+    },
+    ORDER_REVIEW_REASON_REQUIRED: {
+      vi: "Cần nhập lý do từ chối đơn.",
+      en: "A rejection reason is required.",
+    },
+    ORDER_NOT_REVOCABLE: {
+      vi: "Chỉ đơn đã kích hoạt mới có thể thu hồi.",
+      en: "Only an activated order can be revoked.",
+    },
+  };
+  if (purchaseOrderMessages[cleanMessage]) return purchaseOrderMessages[cleanMessage][language];
   if (/Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission/i.test(cleanMessage)) {
     return language === "vi"
       ? "Mỗi nhóm đang bị hạn chế cần có lịch đã xác nhận, ít nhất 5 phút sau khi Telegram khôi phục quyền đăng."

@@ -14,11 +14,13 @@ import {
   useUpdateAdminPurchaseOrderSettings,
   useListAdminPurchaseOrders,
   useReviewPurchaseOrder,
+  useRevokePurchaseOrder,
   PurchaseOrderSettings,
   PurchaseOrder,
   getGetAdminPurchaseOrderSettingsQueryKey,
   getGetPurchaseOrderSettingsQueryKey,
-  getListAdminPurchaseOrdersQueryKey
+  getListAdminPurchaseOrdersQueryKey,
+  getListPurchaseOrdersQueryKey,
 } from "@workspace/api-client-react";
 import { useLanguage, localizedErrorMessage } from "@/lib/i18n";
 import { format } from "date-fns";
@@ -35,6 +37,7 @@ export function AdminPurchaseOrders() {
 
   const updateSettingsMutation = useUpdateAdminPurchaseOrderSettings();
   const reviewMutation = useReviewPurchaseOrder();
+  const revokeMutation = useRevokePurchaseOrder();
 
   const [form, setForm] = useState<PurchaseOrderSettings | null>(null);
   const [priceInputs, setPriceInputs] = useState<Record<string, string> | null>(null);
@@ -43,6 +46,10 @@ export function AdminPurchaseOrders() {
   const [savingPrices, setSavingPrices] = useState(false);
   const [reviewOrder, setReviewOrder] = useState<PurchaseOrder | null>(null);
   const [reviewDecision, setReviewDecision] = useState<"paid" | "rejected" | null>(null);
+  const [reviewReason, setReviewReason] = useState("");
+  const [manualReceiptConfirmed, setManualReceiptConfirmed] = useState(false);
+  const [revokeOrder, setRevokeOrder] = useState<PurchaseOrder | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
 
   useEffect(() => {
     if (settings && !form) {
@@ -123,20 +130,69 @@ export function AdminPurchaseOrders() {
     }
   };
 
+  const startReview = (order: PurchaseOrder, decision: "paid" | "rejected") => {
+    setReviewOrder(order);
+    setReviewDecision(decision);
+    setReviewReason("");
+    setManualReceiptConfirmed(false);
+  };
+
   const handleReview = () => {
     if (!reviewOrder || !reviewDecision) return;
+    const needsManualConfirmation = reviewDecision === "paid"
+      && (reviewOrder.status === "pending" || reviewOrder.status === "expired")
+      && reviewOrder.currency === "VND";
+    if (reviewDecision === "rejected" && reviewReason.trim().length < 3) {
+      setToast({ title: language === "vi" ? "Nhập lý do từ chối (ít nhất 3 ký tự)." : "Enter a rejection reason (at least 3 characters).", type: "error" });
+      return;
+    }
+    if (needsManualConfirmation && !manualReceiptConfirmed) {
+      setToast({ title: language === "vi" ? "Hãy xác nhận đã đối chiếu tiền thực nhận." : "Confirm that you verified the funds were received.", type: "error" });
+      return;
+    }
     reviewMutation.mutate({
       orderId: reviewOrder.id,
-      data: { decision: reviewDecision }
+      data: {
+        decision: reviewDecision,
+        reason: reviewDecision === "rejected" ? reviewReason.trim() : undefined,
+        manualVerification: needsManualConfirmation ? manualReceiptConfirmed : false,
+      }
     }, {
-      onSuccess: () => {
-        setToast({ title: t("Order " + reviewDecision), type: "success" });
+      onSuccess: (order) => {
+        setToast({
+          title: reviewDecision === "paid"
+            ? order.status === "received"
+              ? (language === "vi" ? "Đã xác minh tiền; đơn đang chờ key hoặc cần xử lý gói." : "Payment verified; the order is awaiting a key or needs plan review.")
+              : (language === "vi" ? "Đã xác minh và kích hoạt đơn." : "Order verified and activated.")
+            : (language === "vi" ? "Đã từ chối đơn." : "Order rejected."),
+          type: "success",
+        });
         setReviewOrder(null);
         setReviewDecision(null);
         queryClient.invalidateQueries({ queryKey: getListAdminPurchaseOrdersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       },
       onError: (err) => {
         setToast({ title: localizedErrorMessage(err, language, t("Could not review order")), type: "error" });
+      }
+    });
+  };
+
+  const handleRevoke = () => {
+    if (!revokeOrder || revokeReason.trim().length < 3) return;
+    revokeMutation.mutate({
+      orderId: revokeOrder.id,
+      data: { reason: revokeReason.trim() },
+    }, {
+      onSuccess: () => {
+        setToast({ title: language === "vi" ? "Đã thu hồi đơn và tắt gói." : "Order revoked and plan deactivated.", type: "success" });
+        setRevokeOrder(null);
+        setRevokeReason("");
+        queryClient.invalidateQueries({ queryKey: getListAdminPurchaseOrdersQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+      },
+      onError: (err) => {
+        setToast({ title: localizedErrorMessage(err, language, language === "vi" ? "Không thể thu hồi đơn." : "Could not revoke order."), type: "error" });
       }
     });
   };
@@ -292,13 +348,14 @@ export function AdminPurchaseOrders() {
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge
-                       status={order.status === "paid" ? "success" : order.status === "rejected" || order.status === "expired" || order.status === "cancelled" ? "failed" : "warning"}
+                       status={order.status === "paid" ? "success" : order.status === "rejected" || order.status === "expired" || order.status === "cancelled" || order.status === "revoked" ? "failed" : "warning"}
                       label={order.status === "paid" ? (language === "vi" ? "Đã kích hoạt" : "Activated")
                         : order.status === "received" ? (order.rejectionReason === "PLAN_DOWNGRADE_NOT_ALLOWED"
                           ? (language === "vi" ? "Đã nhận tiền, cần xử lý gói" : "Paid, plan conflict")
                           : (language === "vi" ? "Đã nhận tiền, chờ key" : "Paid, awaiting key"))
                          : order.status === "expired" ? (language === "vi" ? "Hết hạn" : "Expired")
                          : order.status === "cancelled" ? (language === "vi" ? "Đã hủy" : "Cancelled")
+                         : order.status === "revoked" ? (language === "vi" ? "Đã thu hồi" : "Revoked")
                         : order.status === "rejected" ? (language === "vi" ? "Từ chối" : "Rejected")
                         : (language === "vi" ? "Chờ xác minh" : "Verifying")}
                     />
@@ -309,16 +366,55 @@ export function AdminPurchaseOrders() {
                           : (language === "vi" ? "Thêm key đúng gói và thời hạn để tự kích hoạt, hoặc xử lý hoàn tiền." : "Add a matching key for automatic activation, or arrange a refund.")}
                       </div>
                     )}
+                    {order.reviewedAt && (
+                      <div className="mt-1 text-[11px] text-[#64748b]">
+                        {language === "vi" ? "Đã xử lý" : "Reviewed"}{order.reviewedBy ? ` · ${order.reviewedBy === "automatic" ? (language === "vi" ? "tự động" : "automatic") : order.reviewedBy.slice(0, 8)}` : ""}
+                        {" · "}{format(order.reviewedAt, "dd/MM/yyyy HH:mm")}
+                      </div>
+                    )}
+                    {(order.status === "rejected" || order.status === "revoked") && order.rejectionReason && (
+                      <div className="mt-1 max-w-56 text-[11px] text-rose-700">{order.rejectionReason}</div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
-                     {(order.status === "received" || (order.status === "pending" && !order.automated)) && (
-                      <button
-                        onClick={() => { setReviewOrder(order); setReviewDecision("paid"); }}
-                        className="bg-white border border-[#cbd5e1] text-[#0f172a] px-3 py-1.5 rounded-lg text-[13px] font-bold hover:bg-[#f8fafc]"
-                      >
-                        Review
-                      </button>
-                    )}
+                    <div className="flex min-w-32 flex-wrap gap-2">
+                      {(order.status === "pending" || order.status === "expired") && order.currency === "VND" && (
+                        <button
+                          onClick={() => startReview(order, "paid")}
+                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-800 hover:bg-emerald-100"
+                          data-testid={`button-verify-order-${order.id}`}
+                        >
+                          {language === "vi" ? "Xác minh" : "Verify"}
+                        </button>
+                      )}
+                      {order.status === "received" && (
+                        <button
+                          onClick={() => startReview(order, "paid")}
+                          className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-[13px] font-bold text-[#0f172a] hover:bg-[#f8fafc]"
+                          data-testid={`button-retry-fulfillment-${order.id}`}
+                        >
+                          {language === "vi" ? "Thử cấp lại" : "Retry fulfillment"}
+                        </button>
+                      )}
+                      {order.status === "pending" && (
+                        <button
+                          onClick={() => startReview(order, "rejected")}
+                          className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[13px] font-bold text-rose-700 hover:bg-rose-50"
+                          data-testid={`button-reject-order-${order.id}`}
+                        >
+                          {language === "vi" ? "Từ chối" : "Reject"}
+                        </button>
+                      )}
+                      {order.status === "paid" && (
+                        <button
+                          onClick={() => { setRevokeOrder(order); setRevokeReason(""); }}
+                          className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-[13px] font-bold text-rose-800 hover:bg-rose-100"
+                          data-testid={`button-revoke-order-${order.id}`}
+                        >
+                          {language === "vi" ? "Thu hồi" : "Revoke"}
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -328,43 +424,125 @@ export function AdminPurchaseOrders() {
       </Panel>
 
       {reviewOrder && reviewDecision && (
-        <Modal title={reviewDecision === "paid" ? t("Confirm Approval") : t("Confirm Rejection")} onClose={() => setReviewOrder(null)}>
+        <Modal
+          title={reviewDecision === "paid"
+            ? (reviewOrder.status === "received"
+              ? (language === "vi" ? "Thử cấp gói/key lại" : "Retry plan/key fulfillment")
+              : (language === "vi" ? "Xác minh thanh toán" : "Verify payment"))
+            : (language === "vi" ? "Từ chối đơn hàng" : "Reject order")}
+          onClose={() => setReviewOrder(null)}
+        >
           <div className="flex flex-col gap-6 py-2">
             <div className={`p-4 rounded-xl border-2 flex items-start gap-3 ${reviewDecision === "paid" ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#166534]" : "bg-[#fef2f2] border-[#fecdd3] text-[#991b1b]"}`}>
               <AlertCircle className="h-6 w-6 shrink-0" />
               <div>
                 <h4 className="font-extrabold text-[15px] mb-1">
-                  {reviewDecision === "paid" ? t("Verify Money Received!") : t("Reject Order")}
+                  {reviewDecision === "paid"
+                    ? (reviewOrder.status === "received" ? (language === "vi" ? "Tiền đã được xác minh" : "Payment already verified") : (language === "vi" ? "Chỉ xác nhận sau khi kiểm tra tiền" : "Confirm only after checking the payment"))
+                    : (language === "vi" ? "Chỉ từ chối sau khi kiểm tra giao dịch" : "Reject only after checking the transaction")}
                 </h4>
                 <p className="text-[13px] font-medium">
                   {reviewDecision === "paid"
-                    ? t("Do not approve this order unless you have successfully verified the funds in your bank or crypto wallet. Once approved, the user's limits will be instantly expanded.")
-                    : t("Are you sure you want to reject this order? The user will have to create a new one to try again.")}
+                    ? (reviewOrder.status === "received"
+                      ? (language === "vi" ? "Hệ thống sẽ thử cấp gói hoặc key lại từ khoản tiền đã xác minh." : "The system will retry assigning a plan or key for the verified payment.")
+                      : (language === "vi" ? "Đối chiếu đúng tài khoản nhận, số tiền và nội dung chuyển khoản. Xác nhận sẽ cấp gói/key ngay. Đơn USDT phải được xác minh trên blockchain." : "Match the receiving account, amount, and transfer reference. Confirmation grants the plan/key immediately. USDT orders must be verified on-chain."))
+                    : (language === "vi" ? "Đơn bị từ chối sẽ không nhận được gói/key. Nếu khách đã chuyển tiền, hãy xác minh thay vì từ chối hoặc tự xử lý hoàn tiền." : "A rejected order will not receive a plan/key. If the customer paid, verify it instead or arrange a refund.")}
                 </p>
               </div>
             </div>
+
+            {reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && (
+              <label className="flex items-start gap-3 rounded-xl border border-[#cbd5e1] p-4 text-[13px] font-semibold text-[#334155]">
+                <input
+                  type="checkbox"
+                  checked={manualReceiptConfirmed}
+                  onChange={(event) => setManualReceiptConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#16a34a]"
+                  data-testid="checkbox-manual-payment-verified"
+                />
+                <span>
+                  {language === "vi"
+                    ? `Tôi đã đối chiếu tài khoản nhận, số tiền, nội dung chuyển khoản${reviewOrder.automated ? " và xác nhận giao dịch nằm trong thời hạn thanh toán" : ""}.`
+                    : `I matched the receiving account, amount, and transfer reference${reviewOrder.automated ? " and confirmed the transfer was within the payment window" : ""}.`}
+                </span>
+              </label>
+            )}
+
+            {reviewDecision === "rejected" && (
+              <label className="flex flex-col gap-2 text-[13px] font-bold text-[#334155]">
+                {language === "vi" ? "Lý do từ chối" : "Reason for rejection"}
+                <textarea
+                  value={reviewReason}
+                  onChange={(event) => setReviewReason(event.target.value)}
+                  rows={3}
+                  maxLength={1000}
+                  className="w-full resize-y rounded-xl border border-[#cbd5e1] px-3 py-2 font-medium outline-none focus:border-[#1a2b88]"
+                  placeholder={language === "vi" ? "Ví dụ: Không thấy giao dịch vào tài khoản nhận." : "For example: No matching incoming transfer found."}
+                  data-testid="input-order-rejection-reason"
+                />
+              </label>
+            )}
 
             <div className="flex gap-3">
               <button onClick={() => setReviewOrder(null)} className="flex-1 py-3 rounded-xl border border-[#cbd5e1] font-bold hover:bg-[#f8fafc]" data-testid="button-cancel-review">{t("Cancel")}</button>
               <button
                 onClick={handleReview}
-                disabled={reviewMutation.isPending}
+                disabled={reviewMutation.isPending
+                  || (reviewDecision === "rejected" && reviewReason.trim().length < 3)
+                  || (reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && !manualReceiptConfirmed)}
                 data-testid="button-submit-review"
                 className={`flex-1 py-3 rounded-xl font-bold text-white shadow-sm flex items-center justify-center gap-2 ${reviewDecision === "paid" ? "bg-[#16a34a] hover:bg-[#15803d]" : "bg-[#dc2626] hover:bg-[#b91c1c]"}`}
               >
                 {reviewMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                {reviewDecision === "paid" ? t("Approve Order") : t("Reject Order")}
+                {reviewDecision === "paid"
+                  ? (reviewOrder.status === "received" ? (language === "vi" ? "Thử cấp lại" : "Retry fulfillment") : (language === "vi" ? "Xác nhận đã nhận tiền" : "Confirm payment received"))
+                  : (language === "vi" ? "Từ chối đơn" : "Reject order")}
               </button>
             </div>
+          </div>
+        </Modal>
+      )}
 
-            {reviewDecision === "paid" && (
-              <button
-                onClick={() => setReviewDecision("rejected")}
-                className="text-[13px] font-bold text-[#dc2626] hover:underline mx-auto mt-2"
-              >
-                {t("Actually, reject this order")}
+      {revokeOrder && (
+        <Modal
+          title={language === "vi" ? "Xác nhận thu hồi đơn" : "Confirm order revocation"}
+          onClose={() => setRevokeOrder(null)}
+        >
+          <div className="flex flex-col gap-5 py-2">
+            <div className="rounded-xl border-2 border-rose-200 bg-rose-50 p-4 text-rose-900">
+              <h4 className="mb-1 font-extrabold">{language === "vi" ? "Gói sẽ mất hiệu lực ngay" : "The plan will be deactivated immediately"}</h4>
+              <p className="text-[13px] font-medium">
+                {language === "vi"
+                  ? "Thao tác này tắt gói hiện tại của khách và đánh dấu đơn đã thu hồi. Hệ thống không tự hoàn tiền và không tự khôi phục gói."
+                  : "This disables the customer’s current plan and marks the order revoked. No refund is issued and the plan will not be restored automatically."}
+              </p>
+            </div>
+            <label className="flex flex-col gap-2 text-[13px] font-bold text-[#334155]">
+              {language === "vi" ? "Lý do thu hồi" : "Reason for revocation"}
+              <textarea
+                value={revokeReason}
+                onChange={(event) => setRevokeReason(event.target.value)}
+                rows={3}
+                maxLength={1000}
+                className="w-full resize-y rounded-xl border border-[#cbd5e1] px-3 py-2 font-medium outline-none focus:border-[#1a2b88]"
+                placeholder={language === "vi" ? "Nhập lý do để lưu vào lịch sử đơn hàng." : "Enter a reason to keep with the order record."}
+                data-testid="input-order-revocation-reason"
+              />
+            </label>
+            <div className="flex gap-3">
+              <button onClick={() => setRevokeOrder(null)} className="flex-1 rounded-xl border border-[#cbd5e1] py-3 font-bold hover:bg-[#f8fafc]">
+                {t("Cancel")}
               </button>
-            )}
+              <button
+                onClick={handleRevoke}
+                disabled={revokeMutation.isPending || revokeReason.trim().length < 3}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-700 py-3 font-bold text-white hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="button-submit-revoke-order"
+              >
+                {revokeMutation.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                {language === "vi" ? "Thu hồi và tắt gói" : "Revoke and deactivate plan"}
+              </button>
+            </div>
           </div>
         </Modal>
       )}
