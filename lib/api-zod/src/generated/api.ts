@@ -833,7 +833,6 @@ export const createCampaignBodyContentMax = 4096;
 
 export const createCampaignBodyTimezoneDefault = `Asia/Ho_Chi_Minh`;
 export const createCampaignBodyRepeatCountDefault = 1;
-export const createCampaignBodyRepeatCountMax = 300;
 
 export const createCampaignBodyRoundDelayMinSecondsDefault = 1;
 export const createCampaignBodyRoundDelayMinSecondsMin = 0;
@@ -854,7 +853,7 @@ export const CreateCampaignBody = zod.object({
   "destinationIds": zod.array(zod.string()).min(1),
   "scheduledAt": zod.coerce.date().nullish(),
   "timezone": zod.string().default(createCampaignBodyTimezoneDefault),
-  "repeatCount": zod.number().min(1).max(createCampaignBodyRepeatCountMax).default(createCampaignBodyRepeatCountDefault),
+  "repeatCount": zod.number().min(1).default(createCampaignBodyRepeatCountDefault),
   "roundDelayMinSeconds": zod.number().min(createCampaignBodyRoundDelayMinSecondsMin).max(createCampaignBodyRoundDelayMinSecondsMax).default(createCampaignBodyRoundDelayMinSecondsDefault),
   "roundDelayMaxSeconds": zod.number().min(createCampaignBodyRoundDelayMaxSecondsMin).max(createCampaignBodyRoundDelayMaxSecondsMax).default(createCampaignBodyRoundDelayMaxSecondsDefault)
 })
@@ -974,7 +973,6 @@ export const UpdateCampaignStatusParams = zod.object({
 export const updateCampaignStatusBodyNameMax = 200;
 
 
-export const updateCampaignStatusBodyRepeatCountMax = 300;
 
 export const updateCampaignStatusBodyRoundDelayMinSecondsMin = 0;
 export const updateCampaignStatusBodyRoundDelayMinSecondsMax = 259200;
@@ -992,7 +990,7 @@ export const UpdateCampaignStatusBody = zod.object({
   "destinationIds": zod.array(zod.string()).min(1).optional(),
   "scheduledAt": zod.coerce.date().nullish(),
   "timezone": zod.string().optional(),
-  "repeatCount": zod.number().min(1).max(updateCampaignStatusBodyRepeatCountMax).optional(),
+  "repeatCount": zod.number().min(1).optional(),
   "roundDelayMinSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMinSecondsMin).max(updateCampaignStatusBodyRoundDelayMinSecondsMax).optional(),
   "roundDelayMaxSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMaxSecondsMin).max(updateCampaignStatusBodyRoundDelayMaxSecondsMax).optional()
 })

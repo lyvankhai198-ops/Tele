@@ -983,10 +983,11 @@ export async function processNextCampaignTarget(accountId?: string) {
         ? await forwardTelegramSavedMessage(job.destination.accountId, job.destination.id, job.campaign.templateSourceMessageId, job.campaign.ownerUserId)
         : await sendTelegramMessage(job.destination.accountId, job.destination.id, job.campaign.content, job.campaign.ownerUserId);
     telegramAcceptedDelivery = true;
+    const sentAt = new Date();
     const [persisted] = await db.update(campaignTargetsTable).set({
       status: "sent",
       sentMessageId: messageId,
-      sentAt: new Date(),
+      sentAt,
       nextAttemptAt: null,
       lastError: null,
       updatedAt: new Date(),
@@ -1003,6 +1004,29 @@ export async function processNextCampaignTarget(accountId?: string) {
       );
       logger.warn({ targetId: job.target.id }, "Telegram accepted delivery after target state changed; automatic retry is disabled");
       return true;
+    }
+    const [nextCampaignTarget] = await db.select({
+      id: campaignTargetsTable.id,
+      nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+    }).from(campaignTargetsTable).where(and(
+      eq(campaignTargetsTable.campaignId, job.campaign.id),
+      eq(campaignTargetsTable.status, "pending"),
+      isNotNull(campaignTargetsTable.nextAttemptAt),
+    )).orderBy(asc(campaignTargetsTable.nextAttemptAt)).limit(1);
+    if (nextCampaignTarget?.nextAttemptAt) {
+      const gapSeconds = job.campaign.roundDelayMinSeconds
+        + Math.floor(Math.random() * (
+          job.campaign.roundDelayMaxSeconds - job.campaign.roundDelayMinSeconds + 1
+        ));
+      const nextAttemptAt = new Date(Math.max(
+        nextCampaignTarget.nextAttemptAt.getTime(),
+        sentAt.getTime() + gapSeconds * 1000,
+      ));
+      await db.update(campaignTargetsTable).set({ nextAttemptAt, updatedAt: new Date() })
+        .where(and(
+          eq(campaignTargetsTable.id, nextCampaignTarget.id),
+          eq(campaignTargetsTable.status, "pending"),
+        ));
     }
     try {
       await recordActivity({

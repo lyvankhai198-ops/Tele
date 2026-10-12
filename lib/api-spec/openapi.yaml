@@ -2293,7 +2293,7 @@ components:
           items: { type: string }
         scheduledAt: { type: ["string", "null"], format: date-time }
         timezone: { type: string, default: Asia/Ho_Chi_Minh }
-        repeatCount: { type: number, minimum: 1, maximum: 300, default: 1 }
+        repeatCount: { type: number, minimum: 1, default: 1 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200, default: 1 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200, default: 3 }
     CloneCampaignInput:
@@ -2325,7 +2325,7 @@ components:
           items: { type: string }
         scheduledAt: { type: ["string", "null"], format: date-time }
         timezone: { type: string }
-        repeatCount: { type: number, minimum: 1, maximum: 300 }
+        repeatCount: { type: number, minimum: 1 }
         roundDelayMinSeconds: { type: number, minimum: 0, maximum: 259200 }
         roundDelayMaxSeconds: { type: number, minimum: 0, maximum: 259200 }
     BulkCampaignControlInput:

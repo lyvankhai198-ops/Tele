@@ -2344,15 +2344,19 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       }
 
       if (scope === "completed") {
+        if (completedAllowance?.plan === "plus" && campaign.repeatCount > 300) {
+          return { kind: "skip" as const, reason: "Gói PLUS giới hạn tối đa 300 lần lặp cho mỗi chiến dịch." };
+        }
         const randomRoundDelay = () => campaign.roundDelayMinSeconds
           + Math.floor(Math.random() * (
             campaign.roundDelayMaxSeconds - campaign.roundDelayMinSeconds + 1
           ));
         const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
-        let roundStartAt = campaignStart.getTime();
+        let nextDeliveryAt = campaignStart.getTime();
         for (let round = 0; round < campaign.repeatCount; round += 1) {
-          for (const destination of destinations) {
-            const nextAttemptAt = new Date(roundStartAt);
+          for (let destinationIndex = 0; destinationIndex < destinations.length; destinationIndex += 1) {
+            const destination = destinations[destinationIndex];
+            const nextAttemptAt = new Date(nextDeliveryAt);
             targetRows.push({
               campaignId: campaign.id,
               destinationId: destination.id,
@@ -2364,9 +2368,9 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
               sentMessageId: null,
               sentAt: null,
             });
-          }
-          if (round < campaign.repeatCount - 1) {
-            roundStartAt += randomRoundDelay() * 1000;
+            if (round < campaign.repeatCount - 1 || destinationIndex < destinations.length - 1) {
+              nextDeliveryAt += randomRoundDelay() * 1000;
+            }
           }
         }
         if (!targetRows.length) {
@@ -2636,13 +2640,16 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   ];
   if (!numericValues.every(Number.isInteger)) return void sendError(res, 400, "Số lần lặp và khoảng delay phải là số nguyên.");
   if (parsed.data.repeatCount < 1) return void sendError(res, 400, "Số lần lặp phải lớn hơn hoặc bằng 1.");
+  const campaignAllowance = await getCampaignAllowance(currentUserId(req));
+  if (campaignAllowance.plan === "plus" && parsed.data.repeatCount > 300) {
+    return void sendError(res, 400, "Gói PLUS giới hạn tối đa 300 lần lặp cho mỗi chiến dịch.");
+  }
   if (parsed.data.roundDelayMinSeconds > parsed.data.roundDelayMaxSeconds) {
     return void sendError(res, 400, "Delay tối thiểu không thể lớn hơn delay tối đa.");
   }
   if (parsed.data.mediaUrl) {
     return void sendError(res, 400, "Media delivery is not supported yet; remove the attachment before starting this campaign.");
   }
-  const campaignAllowance = await getCampaignAllowance(currentUserId(req));
   if (campaignAllowance.campaignLimit !== null && campaignAllowance.used >= campaignAllowance.campaignLimit) {
     return void sendError(res, 409, `Campaign limit reached for your ${campaignAllowance.plan.toUpperCase()} plan`);
   }
@@ -2706,19 +2713,20 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     roundDelayMinSeconds: parsed.data.roundDelayMinSeconds,
     roundDelayMaxSeconds: parsed.data.roundDelayMaxSeconds,
   }).returning();
-  let roundStartAt = initialRoundStartAt.getTime();
+  let nextDeliveryAt = initialRoundStartAt.getTime();
   const targetRows = [];
   for (let round = 0; round < parsed.data.repeatCount; round += 1) {
-    for (const destination of destinations) {
+    for (let destinationIndex = 0; destinationIndex < destinations.length; destinationIndex += 1) {
+      const destination = destinations[destinationIndex];
       targetRows.push({
         campaignId: campaign.id,
         destinationId: destination.id,
         status: "pending",
-        nextAttemptAt: new Date(roundStartAt),
+        nextAttemptAt: new Date(nextDeliveryAt),
       });
-    }
-    if (round < parsed.data.repeatCount - 1) {
-      roundStartAt += (parsed.data.roundDelayMinSeconds + Math.floor(Math.random() * (parsed.data.roundDelayMaxSeconds - parsed.data.roundDelayMinSeconds + 1))) * 1000;
+      if (round < parsed.data.repeatCount - 1 || destinationIndex < destinations.length - 1) {
+        nextDeliveryAt += (parsed.data.roundDelayMinSeconds + Math.floor(Math.random() * (parsed.data.roundDelayMaxSeconds - parsed.data.roundDelayMinSeconds + 1))) * 1000;
+      }
     }
   }
   await db.insert(campaignTargetsTable).values(targetRows);
@@ -2756,6 +2764,9 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
       eq(campaignsTable.ownerUserId, ownerUserId),
     ));
     if (!sourceCampaign) return { kind: "error" as const, status: 404, message: "Campaign nguồn không còn tồn tại." };
+    if (campaignAllowance.plan === "plus" && sourceCampaign.repeatCount > 300) {
+      return { kind: "error" as const, status: 400, message: "Gói PLUS giới hạn tối đa 300 lần lặp cho mỗi chiến dịch." };
+    }
 
     const [targetAccount] = await tx.select().from(telegramAccountsTable).where(and(
       eq(telegramAccountsTable.id, body.data.telegramAccountId),
@@ -2989,6 +3000,10 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       if (roundDelayMinSeconds > roundDelayMaxSeconds) {
         return { kind: "error" as const, status: 400, message: "Minimum delay cannot exceed maximum delay" };
       }
+      const editAllowance = await getCampaignAllowance(ownerUserId);
+      if (editAllowance.plan === "plus" && repeatCount > 300) {
+        return { kind: "error" as const, status: 400, message: "Gói PLUS giới hạn tối đa 300 lần lặp cho mỗi chiến dịch." };
+      }
 
       const [account] = await tx.select({ id: telegramAccountsTable.id }).from(telegramAccountsTable).where(and(
         eq(telegramAccountsTable.id, telegramAccountId),
@@ -3038,36 +3053,38 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
            }
          }
        }
-      const randomRoundDelay = () => roundDelayMinSeconds
+       const randomGroupDelay = () => roundDelayMinSeconds
         + Math.floor(Math.random() * (roundDelayMaxSeconds - roundDelayMinSeconds + 1));
-      const firstRoundAfterLastSend = latestSentAt
-        ? latestSentAt.getTime() + randomRoundDelay() * 1000
+       const firstDeliveryAfterLastSend = latestSentAt
+         ? latestSentAt.getTime() + randomGroupDelay() * 1000
         : Number.NEGATIVE_INFINITY;
-      let roundStartAt = Math.max(
+       let nextDeliveryAt = Math.max(
         configuredRoundStartAt.getTime(),
         editSetAt.getTime(),
-        firstRoundAfterLastSend,
+         firstDeliveryAfterLastSend,
       );
       const remainingByDestination = new Map(destinations.map((destination) => [
         destination.id,
         Math.max(0, repeatCount - (sentByDestination.get(destination.id) ?? 0)),
       ]));
       let remainingDeliveries = [...remainingByDestination.values()].reduce((total, count) => total + count, 0);
-      while (remainingDeliveries > 0) {
-        for (const destination of destinations) {
+       while (remainingDeliveries > 0) {
+         const roundDestinations = destinations.filter((destination) => (remainingByDestination.get(destination.id) ?? 0) > 0);
+         for (let destinationIndex = 0; destinationIndex < roundDestinations.length; destinationIndex += 1) {
+           const destination = roundDestinations[destinationIndex];
           const remaining = remainingByDestination.get(destination.id) ?? 0;
           if (remaining === 0) continue;
           targetRows.push({
             campaignId: lockedCampaign.id,
             destinationId: destination.id,
             status: "pending",
-            nextAttemptAt: new Date(roundStartAt),
+             nextAttemptAt: new Date(nextDeliveryAt),
           });
           remainingByDestination.set(destination.id, remaining - 1);
           remainingDeliveries -= 1;
-        }
-        if (remainingDeliveries > 0) {
-          roundStartAt += randomRoundDelay() * 1000;
+           if (destinationIndex < roundDestinations.length - 1 || remainingDeliveries > 0) {
+             nextDeliveryAt += randomGroupDelay() * 1000;
+           }
         }
       }
 
@@ -3189,21 +3206,23 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         targetsByDestination.set(target.destinationId, rows);
       }
       const { roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(existing.scheduledAt, new Date());
-      let roundStartAt = initialRoundStartAt.getTime();
+      let nextDeliveryAt = initialRoundStartAt.getTime();
       const destinationIds = [...targetsByDestination.keys()];
       for (let round = 0; round < existing.repeatCount; round += 1) {
-        await Promise.all(destinationIds.map(async (destinationId) => {
+        for (let destinationIndex = 0; destinationIndex < destinationIds.length; destinationIndex += 1) {
+          const destinationId = destinationIds[destinationIndex];
           const targetId = targetsByDestination.get(destinationId)?.shift();
-          if (!targetId) return;
-          await db.update(campaignTargetsTable).set({
-            nextAttemptAt: new Date(roundStartAt),
-            updatedAt: new Date(),
-          }).where(eq(campaignTargetsTable.id, targetId));
-        }));
-        if (round < existing.repeatCount - 1) {
-          roundStartAt += (existing.roundDelayMinSeconds + Math.floor(
+          if (targetId) {
+            await db.update(campaignTargetsTable).set({
+              nextAttemptAt: new Date(nextDeliveryAt),
+              updatedAt: new Date(),
+            }).where(eq(campaignTargetsTable.id, targetId));
+          }
+          if (round < existing.repeatCount - 1 || destinationIndex < destinationIds.length - 1) {
+            nextDeliveryAt += (existing.roundDelayMinSeconds + Math.floor(
             Math.random() * (existing.roundDelayMaxSeconds - existing.roundDelayMinSeconds + 1),
           )) * 1000;
+          }
         }
       }
     }

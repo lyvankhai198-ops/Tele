@@ -555,10 +555,7 @@ export interface CampaignInput {
   /** @nullable */
   scheduledAt?: string | null;
   timezone?: string;
-  /**
-     * @minimum 1
-     * @maximum 300
-     */
+  /** @minimum 1 */
   repeatCount?: number;
   /**
      * @minimum 0
@@ -600,10 +597,7 @@ export interface CampaignUpdateInput {
   /** @nullable */
   scheduledAt?: string | null;
   timezone?: string;
-  /**
-     * @minimum 1
-     * @maximum 300
-     */
+  /** @minimum 1 */
   repeatCount?: number;
   /**
      * @minimum 0

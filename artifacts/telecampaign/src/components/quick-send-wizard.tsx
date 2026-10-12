@@ -20,6 +20,7 @@ import {
 import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
+  useGetAccountSummary,
   useCreateMessageTemplate,
   getGetGroupLibraryQueryKey,
   getListCampaignsQueryKey,
@@ -180,7 +181,10 @@ const copy = {
     time: "Giờ",
     advanced: "Cài đặt thêm",
     repeat: "Số vòng",
-    delay: "Delay giữa các vòng",
+    delay: "Khoảng chờ giữa các nhóm",
+    delayHint: "Khoảng cách giữa tin nhắn gửi đến các nhóm liên tiếp trong cùng chiến dịch; áp dụng cho mọi gói.",
+    repeatHintPlus: "Gói Plus tối đa 300 vòng; gói Pro và Không giới hạn không giới hạn số vòng.",
+    repeatHintUnlimited: "Gói Pro và Không giới hạn không giới hạn số vòng.",
     seconds: "giây",
     defaultSafe: "Mặc định an toàn",
     run: "Tạo & bắt đầu gửi",
@@ -272,7 +276,10 @@ const copy = {
     time: "Time",
     advanced: "More settings",
     repeat: "Rounds",
-    delay: "Delay between rounds",
+    delay: "Gap between groups",
+    delayHint: "The wait between messages sent to successive groups in the same campaign; available on every plan.",
+    repeatHintPlus: "Plus allows up to 300 rounds; Pro and Unlimited have no plan limit.",
+    repeatHintUnlimited: "Pro and Unlimited have no repeat-count plan limit.",
     seconds: "seconds",
     defaultSafe: "Safe default",
     run: "Create & start sending",
@@ -328,6 +335,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   });
   const createTemplate = useCreateMessageTemplate();
   const createCampaign = useCreateCampaign();
+  const accountSummary = useGetAccountSummary();
   const [, setLocation] = useLocation();
   const [step, setStep] = useState(1);
   const [accountId, setAccountId] = useState(initialDraft.current?.accountId ?? "");
@@ -403,6 +411,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   ).format(value);
   const selectedMessage = (accountSavedMessages.data ?? []).find((message) => message.id === sourceMessageId);
   const isCreating = createTemplate.isPending || createCampaign.isPending;
+  const hasRepeatCountPlanCap = accountSummary.data?.subscription.plan === "plus";
 
   useEffect(() => {
     if (!accountId && connectedAccounts[0]) setAccountId(connectedAccounts[0].id);
@@ -894,10 +903,11 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                   <details className="rounded-2xl border border-[#e2e8f0] px-4 py-3">
                     <summary className="cursor-pointer text-[13px] font-extrabold text-[#334155]">{c.advanced}</summary>
                     <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.repeat}</span><input type="number" min="1" max="300" value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} ({c.seconds})</span><input type="number" min="0" value={delayMin} onChange={(event) => setDelayMin(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} max ({c.seconds})</span><input type="number" min="0" value={delayMax} onChange={(event) => setDelayMax(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.repeat}</span><input type="number" min="1" max={hasRepeatCountPlanCap ? 300 : undefined} value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><span className="mt-1 block text-[11px] text-[#64748b]">{hasRepeatCountPlanCap ? c.repeatHintPlus : c.repeatHintUnlimited}</span></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} min ({c.seconds})</span><input type="number" min="0" max="259200" value={delayMin} onChange={(event) => setDelayMin(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} max ({c.seconds})</span><input type="number" min="0" max="259200" value={delayMax} onChange={(event) => setDelayMax(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
                     </div>
+                    <p className="mt-2 text-[11px] leading-relaxed text-[#64748b]">{c.delayHint}</p>
                   </details>
                 </section>
               )}

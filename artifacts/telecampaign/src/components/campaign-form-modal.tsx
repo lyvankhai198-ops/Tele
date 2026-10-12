@@ -9,6 +9,7 @@ import {
 import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
+  useGetAccountSummary,
   getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   useGetSystemDefaults,
@@ -97,11 +98,13 @@ const copy = {
     generalTopic: "General",
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
-    repeatCountHint: "Max 300 (admin configured).",
+    repeatCountHint: "Pro and Unlimited have no plan limit on campaign rounds.",
+    repeatCountPlusHint: "Plus allows up to 300 rounds per campaign.",
     completedRerunHint: "This completed campaign will start a fresh run from 0 with the repeat count below.",
-    delayBetweenRounds: "Delay between rounds",
-    delayMinRoundLabel: "Min delay between rounds (sec)",
-    delayMaxRoundLabel: "Max delay between rounds (sec)",
+    delayBetweenRounds: "Delay between groups in each round",
+    delayBetweenGroupsHint: "The wait between messages sent to successive groups in the same campaign. Available on every plan.",
+    delayMinRoundLabel: "Minimum gap between groups (sec)",
+    delayMaxRoundLabel: "Maximum gap between groups (sec)",
     delayMaxHint: (max: number) => `Max ${max.toLocaleString("en-US")} seconds.`,
     fieldSchedule: "Schedule (optional)",
     validationRequired: "Please enter a name, select an account, template, and at least one destination.",
@@ -150,11 +153,13 @@ const copy = {
     generalTopic: "Chung",
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
-    repeatCountHint: "Tối đa 300 (admin cấu hình).",
+    repeatCountHint: "Gói Pro và Không giới hạn không giới hạn số vòng lặp.",
+    repeatCountPlusHint: "Gói Plus cho phép tối đa 300 vòng mỗi chiến dịch.",
     completedRerunHint: "Chiến dịch đã hoàn thành sẽ bắt đầu một lượt chạy mới từ 0 theo số vòng lặp bên dưới.",
-    delayBetweenRounds: "Delay giữa các vòng lặp",
-    delayMinRoundLabel: "Delay min giữa mỗi vòng lặp (giây)",
-    delayMaxRoundLabel: "Delay max giữa mỗi vòng lặp (giây)",
+    delayBetweenRounds: "Khoảng chờ giữa các nhóm trong mỗi vòng",
+    delayBetweenGroupsHint: "Đây là thời gian chờ giữa tin nhắn gửi đến hai nhóm liên tiếp trong cùng chiến dịch. Gói nào cũng sử dụng được.",
+    delayMinRoundLabel: "Khoảng chờ tối thiểu giữa các nhóm (giây)",
+    delayMaxRoundLabel: "Khoảng chờ tối đa giữa các nhóm (giây)",
     delayMaxHint: (max: number) => `Tối đa ${max.toLocaleString("vi-VN")} giây.`,
     fieldSchedule: "Lên lịch (tùy chọn)",
     validationRequired: "Hãy nhập tên, chọn tài khoản, mẫu tin và ít nhất một nhóm gửi.",
@@ -241,6 +246,7 @@ export function CampaignFormModal({
   });
   const templates = useListMessageTemplates();
   const systemDefaults = useGetSystemDefaults();
+  const accountSummary = useGetAccountSummary();
   const createCampaign = useCreateCampaign();
   const syncDestinations = useSyncTelegramDestinations();
   const updateStatus = useUpdateCampaignStatus();
@@ -248,6 +254,7 @@ export function CampaignFormModal({
   const [groupSearch, setGroupSearch] = useState("");
   const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>("all");
   const [formError, setFormError] = useState<string | null>(null);
+  const hasRepeatCountPlanCap = accountSummary.data?.subscription.plan === "plus";
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState(false);
   const syncedAccounts = useRef(new Set<string>());
@@ -692,13 +699,14 @@ export function CampaignFormModal({
           <span className="mb-2 block text-[12px] font-medium text-[#64748b]">
             {editingCampaign && ["completed", "completed_with_errors"].includes(editingCampaign.status)
               ? c.completedRerunHint
-              : c.repeatCountHint}
+              : hasRepeatCountPlanCap ? c.repeatCountPlusHint : c.repeatCountHint}
           </span>
-          <input type="number" min="1" max="300" value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
+          <input type="number" min="1" max={hasRepeatCountPlanCap ? 300 : undefined} value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
         </label>
 
         <div className="border-t border-[#eef2f6] pt-5">
-          <p className="mb-4 text-[13px] font-medium text-[#64748b]">{c.delayBetweenRounds}</p>
+          <p className="mb-1 text-[13px] font-medium text-[#64748b]">{c.delayBetweenRounds}</p>
+          <p className="mb-4 text-[12px] leading-relaxed text-[#64748b]">{c.delayBetweenGroupsHint}</p>
           <DelayFields
             form={form}
             setForm={setForm}
