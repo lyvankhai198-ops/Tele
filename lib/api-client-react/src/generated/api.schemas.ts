@@ -1385,6 +1385,11 @@ export const PurchaseOrderStatus = {
 export interface PurchaseOrder {
   id: string;
   ownerUserId: string;
+  /**
+     * Login account name; returned by the admin order list.
+     * @nullable
+     */
+  username?: string | null;
   plan: string;
   durationDays: number;
   currency: string;

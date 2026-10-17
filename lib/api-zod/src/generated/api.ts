@@ -1656,6 +1656,7 @@ export const GetPurchaseOrderSettingsResponse = zod.object({
 export const ListPurchaseOrdersResponseItem = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),
@@ -1689,6 +1690,7 @@ export const CreatePurchaseOrderBody = zod.object({
 export const CreatePurchaseOrderResponse = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),
@@ -1727,6 +1729,7 @@ export const SubmitPurchaseOrderProofBody = zod.object({
 export const SubmitPurchaseOrderProofResponse = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),
@@ -1754,6 +1757,7 @@ export const CancelPurchaseOrderParams = zod.object({
 export const CancelPurchaseOrderResponse = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),
@@ -1777,6 +1781,7 @@ export const CancelPurchaseOrderResponse = zod.object({
 export const ListAdminPurchaseOrdersResponseItem = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),
@@ -1878,6 +1883,7 @@ export const ReviewPurchaseOrderBody = zod.object({
 export const ReviewPurchaseOrderResponse = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),
@@ -1914,6 +1920,7 @@ export const RevokePurchaseOrderBody = zod.object({
 export const RevokePurchaseOrderResponse = zod.object({
   "id": zod.string(),
   "ownerUserId": zod.string(),
+  "username": zod.string().nullish().describe('Login account name; returned by the admin order list.'),
   "plan": zod.string(),
   "durationDays": zod.number(),
   "currency": zod.string(),

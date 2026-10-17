@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { appUsersTable, db, licenseKeysTable, purchaseOrdersTable, subscriptionsTable, systemSettingsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { PLAN_ORDER } from "./subscriptions";
@@ -62,6 +62,16 @@ export async function saveOrderSettings(value: OrderSettings, adminUserId: strin
 }
 export async function listOrders(userId?: string) {
   return db.select().from(purchaseOrdersTable).where(userId ? eq(purchaseOrdersTable.ownerUserId, userId) : undefined).orderBy(desc(purchaseOrdersTable.createdAt));
+}
+export async function listAdminOrders() {
+  return db
+    .select({
+      ...getTableColumns(purchaseOrdersTable),
+      username: appUsersTable.username,
+    })
+    .from(purchaseOrdersTable)
+    .leftJoin(appUsersTable, eq(purchaseOrdersTable.ownerUserId, appUsersTable.id))
+    .orderBy(desc(purchaseOrdersTable.createdAt));
 }
 export async function createOrder(input: { ownerUserId: string; plan: string; currency: string; network?: string; orderType?: PurchaseOrderType }) {
   const orderType = input.orderType ?? "license";

@@ -1020,7 +1020,7 @@ paths:
       operationId: listAdminPurchaseOrders
       tags: [admin]
       responses:
-        "200": { description: All orders, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PurchaseOrder" } } } } }
+        "200": { description: All orders with account names, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PurchaseOrder" } } } } }
   /admin/purchase-orders/settings:
     get:
       operationId: getAdminPurchaseOrderSettings
@@ -2750,6 +2750,7 @@ components:
       properties:
         id: { type: string }
         ownerUserId: { type: string }
+        username: { type: ["string", "null"], description: Login account name; returned by the admin order list. }
         plan: { type: string }
         durationDays: { type: number }
         currency: { type: string }

@@ -163,7 +163,7 @@ import { getStorageStatus } from "../lib/storage-status";
 import { createSupportSession, SUPPORT_COOKIE_NAME, supportSessionCookieOptions } from "../lib/support-session";
 import { notifyPurchaseOrder, notifySupportConversationClosed } from "../lib/support-telegram";
 import { translateAdminReplyForCustomer } from "../lib/support-translation";
-import { getOrderSettings, listOrders, reviewOrder, revokePurchaseOrder, saveOrderSettings, verifiedOrderNotification } from "../lib/telecampaign-orders";
+import { getOrderSettings, listAdminOrders, reviewOrder, revokePurchaseOrder, saveOrderSettings, verifiedOrderNotification } from "../lib/telecampaign-orders";
 import { resetRenewalTestAccount } from "../lib/renewal-test-account";
 import {
   listAdminSystemEvents,
@@ -226,7 +226,7 @@ router.patch("/admin/purchase-orders/settings", async (req, res): Promise<void> 
   res.json(await saveOrderSettings(value, req.userId!));
 });
 router.get("/admin/purchase-orders", async (_req, res): Promise<void> => {
-  res.json(await listOrders());
+  res.json(await listAdminOrders());
 });
 router.post("/admin/purchase-orders/:orderId/review", async (req, res): Promise<void> => {
   const params = ReviewPurchaseOrderParams.safeParse(req.params);

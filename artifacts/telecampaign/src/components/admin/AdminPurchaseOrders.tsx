@@ -316,7 +316,8 @@ export function AdminPurchaseOrders() {
         <table className="w-full text-left text-[14px]">
           <thead>
             <tr className="border-b border-[#e2e8f0] bg-[#f8fafc] text-[#475569]">
-              <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">ID / User</th>
+              <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">ID / USER ID</th>
+              <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{language === "vi" ? "TÊN TÀI KHOẢN" : "ACCOUNT NAME"}</th>
               <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Plan")}</th>
               <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Amount")}</th>
               <th className="px-6 py-4 font-extrabold uppercase tracking-wider text-[11px]">{t("Reference")}</th>
@@ -328,7 +329,7 @@ export function AdminPurchaseOrders() {
           <tbody className="divide-y divide-[#f1f5f9]">
             {!orders || orders.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-[#64748b] font-medium">
+                <td colSpan={8} className="px-6 py-8 text-center text-[#64748b] font-medium">
                   {ordersLoading ? <LoaderCircle className="h-6 w-6 animate-spin mx-auto" /> : t("No orders found")}
                 </td>
               </tr>
@@ -338,6 +339,14 @@ export function AdminPurchaseOrders() {
                   <td className="px-6 py-4">
                     <div className="font-mono text-[12px] text-[#94a3b8]">{order.id.slice(0, 8)}</div>
                     <div className="font-bold text-[#0f172a]">{order.ownerUserId.slice(0, 8)}</div>
+                  </td>
+                  <td className="min-w-36 px-6 py-4">
+                    <span
+                      className="block max-w-44 truncate font-semibold text-[#0f172a]"
+                      title={order.username ?? undefined}
+                    >
+                      {order.username?.trim() || "—"}
+                    </span>
                   </td>
                   <td className="px-6 py-4 font-extrabold text-[#0f172a] uppercase">{order.plan}</td>
                   <td className="px-6 py-4 font-bold text-[#475569]">
