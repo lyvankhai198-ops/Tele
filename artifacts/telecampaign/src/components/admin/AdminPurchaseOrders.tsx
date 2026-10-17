@@ -33,7 +33,12 @@ export function AdminPurchaseOrders() {
   const queryClient = useQueryClient();
 
   const { data: settings, isLoading: settingsLoading, isError: settingsError } = useGetAdminPurchaseOrderSettings();
-  const { data: orders, isLoading: ordersLoading } = useListAdminPurchaseOrders({ query: { queryKey: getListAdminPurchaseOrdersQueryKey(), refetchInterval: 5000 } });
+  const {
+    data: orders,
+    isLoading: ordersLoading,
+    isError: ordersError,
+    refetch: refetchOrders,
+  } = useListAdminPurchaseOrders({ query: { queryKey: getListAdminPurchaseOrdersQueryKey(), refetchInterval: 5000 } });
 
   const updateSettingsMutation = useUpdateAdminPurchaseOrderSettings();
   const reviewMutation = useReviewPurchaseOrder();
@@ -330,7 +335,18 @@ export function AdminPurchaseOrders() {
             {!orders || orders.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-8 text-center text-[#64748b] font-medium">
-                  {ordersLoading ? <LoaderCircle className="h-6 w-6 animate-spin mx-auto" /> : t("No orders found")}
+                  {ordersLoading ? <LoaderCircle className="h-6 w-6 animate-spin mx-auto" /> : ordersError ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <span>{language === "vi" ? "Không tải được danh sách đơn hàng." : "Could not load the order list."}</span>
+                      <button
+                        type="button"
+                        onClick={() => void refetchOrders()}
+                        className="rounded-lg border border-[#1a2b88] px-3 py-1.5 text-sm font-bold text-[#1a2b88] hover:bg-[#eff6ff]"
+                      >
+                        {language === "vi" ? "Thử lại" : "Try again"}
+                      </button>
+                    </div>
+                  ) : t("No orders found")}
                 </td>
               </tr>
             ) : (

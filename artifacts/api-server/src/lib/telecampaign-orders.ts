@@ -70,7 +70,7 @@ export async function listAdminOrders() {
       username: appUsersTable.username,
     })
     .from(purchaseOrdersTable)
-    .leftJoin(appUsersTable, eq(purchaseOrdersTable.ownerUserId, appUsersTable.id))
+    .leftJoin(appUsersTable, sql`${purchaseOrdersTable.ownerUserId} = ${appUsersTable.id}::text`)
     .orderBy(desc(purchaseOrdersTable.createdAt));
 }
 export async function createOrder(input: { ownerUserId: string; plan: string; currency: string; network?: string; orderType?: PurchaseOrderType }) {
