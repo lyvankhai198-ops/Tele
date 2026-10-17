@@ -295,6 +295,9 @@ export async function reviewOrder(
     const [order] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).limit(1);
     if (!order) return null;
     if (order.status === "pending" || order.status === "expired") {
+      if (order.automated) {
+        throw new Error("AUTOMATED_PAYMENT_REQUIRES_PROVIDER_VERIFICATION");
+      }
       if (order.currency !== "VND" || options.manualVerification !== true) {
         throw new Error(order.currency === "USDT" ? "CRYPTO_REQUIRES_CHAIN_VERIFICATION" : "MANUAL_RECEIPT_CONFIRMATION_REQUIRED");
       }

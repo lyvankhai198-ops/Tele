@@ -141,7 +141,8 @@ export function AdminPurchaseOrders() {
     if (!reviewOrder || !reviewDecision) return;
     const needsManualConfirmation = reviewDecision === "paid"
       && (reviewOrder.status === "pending" || reviewOrder.status === "expired")
-      && reviewOrder.currency === "VND";
+      && reviewOrder.currency === "VND"
+      && !reviewOrder.automated;
     if (reviewDecision === "rejected" && reviewReason.trim().length < 3) {
       setToast({ title: language === "vi" ? "Nhập lý do từ chối (ít nhất 3 ký tự)." : "Enter a rejection reason (at least 3 characters).", type: "error" });
       return;
@@ -378,7 +379,12 @@ export function AdminPurchaseOrders() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex min-w-32 flex-wrap gap-2">
-                      {(order.status === "pending" || order.status === "expired") && order.currency === "VND" && (
+                      {order.status === "pending" && order.automated && order.currency === "VND" && (
+                        <span className="max-w-44 text-xs font-medium text-amber-800">
+                          {language === "vi" ? "Chờ cổng thanh toán xác minh" : "Waiting for payment-provider verification"}
+                        </span>
+                      )}
+                      {(order.status === "pending" || order.status === "expired") && order.currency === "VND" && !order.automated && (
                         <button
                           onClick={() => startReview(order, "paid")}
                           className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-800 hover:bg-emerald-100"
@@ -451,7 +457,7 @@ export function AdminPurchaseOrders() {
               </div>
             </div>
 
-            {reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && (
+            {reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && !reviewOrder.automated && (
               <label className="flex items-start gap-3 rounded-xl border border-[#cbd5e1] p-4 text-[13px] font-semibold text-[#334155]">
                 <input
                   type="checkbox"
@@ -462,8 +468,8 @@ export function AdminPurchaseOrders() {
                 />
                 <span>
                   {language === "vi"
-                    ? `Tôi đã đối chiếu tài khoản nhận, số tiền, nội dung chuyển khoản${reviewOrder.automated ? " và xác nhận giao dịch nằm trong thời hạn thanh toán" : ""}.`
-                    : `I matched the receiving account, amount, and transfer reference${reviewOrder.automated ? " and confirmed the transfer was within the payment window" : ""}.`}
+                    ? "Tôi đã đối chiếu tài khoản nhận, số tiền và nội dung chuyển khoản."
+                    : "I matched the receiving account, amount, and transfer reference."}
                 </span>
               </label>
             )}
@@ -489,7 +495,7 @@ export function AdminPurchaseOrders() {
                 onClick={handleReview}
                 disabled={reviewMutation.isPending
                   || (reviewDecision === "rejected" && reviewReason.trim().length < 3)
-                  || (reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && !manualReceiptConfirmed)}
+                  || (reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && !reviewOrder.automated && !manualReceiptConfirmed)}
                 data-testid="button-submit-review"
                 className={`flex-1 py-3 rounded-xl font-bold text-white shadow-sm flex items-center justify-center gap-2 ${reviewDecision === "paid" ? "bg-[#16a34a] hover:bg-[#15803d]" : "bg-[#dc2626] hover:bg-[#b91c1c]"}`}
               >
