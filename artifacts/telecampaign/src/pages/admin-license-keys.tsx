@@ -38,8 +38,10 @@ import {
 } from "@/components/layout/AppLayout";
 import {
   useListAdminLicenseKeys,
+  useListAdminPurchaseOrders,
   useCreateAdminLicenseKey,
   useRevokeAdminLicenseKey,
+  useRevokePurchaseOrder,
   useGetAdminPurchaseSettings,
   useGetAdminPurchaseOrderSettings,
   useUpdateAdminPurchaseSettings,
@@ -51,6 +53,8 @@ import {
   getGetAdminPurchaseSettingsQueryKey,
   getGetAdminLicenseReminderSettingsQueryKey,
   getListAdminLicenseKeysQueryKey,
+  getListAdminPurchaseOrdersQueryKey,
+  getListPurchaseOrdersQueryKey,
   getListAdminUsersQueryKey,
   getListAdminLicenseKeyRecipientDetailsQueryKey,
   type CreateAdminLicenseKeyInput,
@@ -492,6 +496,16 @@ export function AdminLicenseKeysPage() {
     },
   });
   const {
+    data: adminPurchaseOrders,
+    isLoading: areAdminPurchaseOrdersLoading,
+  } = useListAdminPurchaseOrders({
+    query: {
+      queryKey: getListAdminPurchaseOrdersQueryKey(),
+      enabled: Boolean(selectedKeyId),
+      staleTime: 30_000,
+    },
+  });
+  const {
     data: recipientDetails,
     error: recipientDetailsError,
     isLoading: isRecipientDetailsLoading,
@@ -516,6 +530,8 @@ export function AdminLicenseKeysPage() {
   // Modals & UI State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
+  const [revokePurchaseOrderId, setRevokePurchaseOrderId] = useState<string | null>(null);
+  const [revokePurchaseOrderReason, setRevokePurchaseOrderReason] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // New License Key State
@@ -549,6 +565,7 @@ export function AdminLicenseKeysPage() {
   // Mutations
   const createMutation = useCreateAdminLicenseKey();
   const revokeMutation = useRevokeAdminLicenseKey();
+  const revokePurchaseOrderMutation = useRevokePurchaseOrder();
   const purchaseSettingsMutation = useUpdateAdminPurchaseSettings();
   const reminderMutation = useUpdateAdminLicenseReminderSettings();
   const resetRenewalTestMutation = useResetAdminRenewalTestAccount();
@@ -697,6 +714,39 @@ export function AdminLicenseKeysPage() {
     );
   };
 
+  const handleRevokePurchaseOrder = () => {
+    if (!revokePurchaseOrderId) return;
+    const reason = revokePurchaseOrderReason.trim();
+    if (reason.length < 3) {
+      setToastMessage(language === "vi" ? "Nhập lý do thu hồi (ít nhất 3 ký tự)." : "Enter a revocation reason (at least 3 characters).");
+      return;
+    }
+
+    revokePurchaseOrderMutation.mutate(
+      { orderId: revokePurchaseOrderId, data: { reason } },
+      {
+        onSuccess: () => {
+          setToastMessage(language === "vi"
+            ? "Đã thu hồi đơn, tắt gói hiện tại và thu hồi license."
+            : "Order revoked, current plan disabled, and license revoked.");
+          setRevokePurchaseOrderId(null);
+          setRevokePurchaseOrderReason("");
+          queryClient.invalidateQueries({ queryKey: getListAdminPurchaseOrdersQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListAdminLicenseKeysQueryKey(queryParams) });
+          queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey(usersQueryParams) });
+        },
+        onError: (mutationError) => {
+          setToastMessage(localizedErrorMessage(
+            mutationError,
+            language,
+            language === "vi" ? "Không thể thu hồi đơn này." : "Could not revoke this order.",
+          ));
+        },
+      },
+    );
+  };
+
   const copyToClipboard = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -783,6 +833,12 @@ export function AdminLicenseKeysPage() {
     .filter((reminder) => reminder.status === "pending" || reminder.status === "sending")
     .length, [recipientDetails]);
   const selectedRow = selectedKeyId ? licenseRows.find((row) => row.key.id === selectedKeyId) : undefined;
+  const linkedPaidOrder = selectedRow
+    ? adminPurchaseOrders?.find((order) => order.activatedLicenseKeyId === selectedRow.key.id && order.status === "paid")
+    : undefined;
+  const orderToRevoke = revokePurchaseOrderId
+    ? adminPurchaseOrders?.find((order) => order.id === revokePurchaseOrderId && order.status === "paid")
+    : undefined;
 
   if (error) {
     return (
@@ -1413,6 +1469,42 @@ export function AdminLicenseKeysPage() {
                 <p className="license-key-page__timeline-empty">{language === "vi" ? "Không áp dụng cho key chưa được nhận." : "Not applicable until a key is claimed."}</p>
               )}
             </section>
+            {selectedRow.key.status === "claimed" && selectedRow.subscriptionState === "active" && (
+              <section className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-4" data-testid="license-revoke-order-section">
+                <h3 className="font-bold text-rose-900">
+                  {language === "vi" ? "Thu hồi gói đã kích hoạt" : "Revoke activated plan"}
+                </h3>
+                {areAdminPurchaseOrdersLoading ? (
+                  <p className="mt-2 text-sm text-rose-800">{language === "vi" ? "Đang tìm đơn liên kết…" : "Finding linked order…"}</p>
+                ) : linkedPaidOrder ? (
+                  <>
+                    <p className="mt-2 text-sm text-rose-800">
+                      {language === "vi"
+                        ? `Đơn ${linkedPaidOrder.reference} · ${linkedPaidOrder.plan.toUpperCase()} · thao tác sẽ tắt gói hiện tại ngay.`
+                        : `Order ${linkedPaidOrder.reference} · ${linkedPaidOrder.plan.toUpperCase()} · this will disable the current plan immediately.`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRevokePurchaseOrderReason("");
+                        setRevokePurchaseOrderId(linkedPaidOrder.id);
+                      }}
+                      className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-rose-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-700 focus-visible:ring-offset-2"
+                      data-testid={`button-revoke-activated-license-${selectedRow.key.id}`}
+                    >
+                      <X size={16} aria-hidden="true" />
+                      {language === "vi" ? "Thu hồi và tắt gói ngay" : "Revoke and disable plan now"}
+                    </button>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-rose-800">
+                    {language === "vi"
+                      ? "Không tìm thấy đơn đã thanh toán liên kết với license này. Hãy kiểm tra trang Thanh toán & đơn mua gói để tránh thu hồi nhầm."
+                      : "No paid order is linked to this license. Check Payments & Package Orders to avoid revoking the wrong purchase."}
+                  </p>
+                )}
+              </section>
+            )}
           </aside>
         </div>
       )}
@@ -1602,6 +1694,58 @@ export function AdminLicenseKeysPage() {
             >
               {revokeMutation.isPending ? text.revoking : text.revokeConfirm}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {orderToRevoke && (
+        <Modal
+          title={language === "vi" ? "Xác nhận thu hồi license" : "Confirm license revocation"}
+          description={language === "vi"
+            ? "Đơn sẽ được đánh dấu đã thu hồi, license bị thu hồi và gói hiện tại của khách bị tắt ngay. Thao tác không tự hoàn tiền."
+            : "The order will be marked revoked, the license revoked, and the customer's current plan disabled immediately. No refund is issued automatically."}
+          onClose={() => {
+            setRevokePurchaseOrderId(null);
+            setRevokePurchaseOrderReason("");
+          }}
+        >
+          <div className="mt-4 space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <strong>{orderToRevoke.reference}</strong>
+              <span className="ml-2">{orderToRevoke.plan.toUpperCase()} · {orderToRevoke.amount} {orderToRevoke.currency}</span>
+            </div>
+            <label className="block text-sm font-bold text-slate-700">
+              {language === "vi" ? "Lý do thu hồi" : "Reason for revocation"}
+              <textarea
+                value={revokePurchaseOrderReason}
+                onChange={(event) => setRevokePurchaseOrderReason(event.target.value)}
+                rows={3}
+                maxLength={1000}
+                className="mt-2 w-full resize-y rounded-xl border border-slate-300 px-3 py-2 font-medium outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-600/15"
+                placeholder={language === "vi" ? "Nhập lý do (ít nhất 3 ký tự)" : "Enter a reason (at least 3 characters)"}
+                data-testid="input-license-order-revoke-reason"
+              />
+            </label>
+            <div className="flex justify-end gap-3">
+              <QuietButton
+                onClick={() => {
+                  setRevokePurchaseOrderId(null);
+                  setRevokePurchaseOrderReason("");
+                }}
+              >
+                {text.cancel}
+              </QuietButton>
+              <button
+                type="button"
+                onClick={handleRevokePurchaseOrder}
+                disabled={revokePurchaseOrderMutation.isPending || revokePurchaseOrderReason.trim().length < 3}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-rose-800 disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="button-confirm-license-order-revoke"
+              >
+                {revokePurchaseOrderMutation.isPending && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {language === "vi" ? "Thu hồi và tắt gói" : "Revoke and disable plan"}
+              </button>
+            </div>
           </div>
         </Modal>
       )}
