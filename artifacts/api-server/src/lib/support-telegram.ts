@@ -1051,6 +1051,11 @@ export async function pollTelegram(): Promise<void> {
     await withOperationalLock(1, async client => {
       const cursor = await readOperationalState("telegram_bridge_cursor",
         { offset: 0, retryAfter: 0, failedUpdateId: null as number | null, failures: 0 }, client);
+      const retry = await readOperationalState("telegram_bridge_retry_requested", { at: 0 }, client);
+      if (retry.at) {
+        cursor.retryAfter = 0;
+        await writeOperationalState("telegram_bridge_retry_requested", { at: 0 }, client);
+      }
       if (cursor.retryAfter > Date.now()) return;
       offset = cursor.offset;
       const updates = await telegramCall<TelegramUpdate[]>("getUpdates", {

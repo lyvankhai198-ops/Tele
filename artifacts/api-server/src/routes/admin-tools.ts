@@ -7,19 +7,24 @@ import { getSystemSettings } from "../lib/system-settings";
 import { getAdminCashReport } from "../lib/telegram-admin-tools";
 import { getWorkerHealth } from "../lib/worker-health";
 import { csvDocument } from "../lib/admin-tools-core";
-import { readOperationalState, writeOperationalState, withOperationalLock } from "../lib/operational-state";
+import { readOperationalState, writeOperationalState } from "../lib/operational-state";
 import { recordAdminAudit } from "../lib/admin-audit";
 import { localQuotaDate } from "../lib/user-daily-quota";
 
 const router: IRouter = Router();
 router.use("/admin/tools", requireAdmin);
 router.use("/auth/mfa", requireAdmin);
-router.use((req, res, next) => {
+router.use(async (req, res, next) => {
   if (!req.path.startsWith("/admin/tools") && !req.path.startsWith("/auth/mfa")) { next(); return; }
   res.setHeader("Cache-Control", "no-store");
   const origin = req.get("origin");
   if (req.method !== "GET" && origin) {
-    try { if (new URL(origin).host !== req.get("host")) { res.status(403).json({ error: "Origin không hợp lệ" }); return; } }
+    try {
+      const settings = await getSystemSettings();
+      const allowed = [new URL(`${req.protocol}://${req.get("host")}`).origin];
+      if (settings.publicAppUrl) allowed.push(new URL(settings.publicAppUrl).origin);
+      if (!allowed.includes(new URL(origin).origin)) { res.status(403).json({ error: "Origin không hợp lệ" }); return; }
+    }
     catch { res.status(403).json({ error: "Origin không hợp lệ" }); return; }
   }
   next();
@@ -72,14 +77,10 @@ router.put("/admin/tools/daily-report", async (req, res) => {
   res.json(next);
 });
 router.post("/admin/tools/telegram/retry", async (req, res) => {
-  const result = await withOperationalLock(1, async client => {
-    const state = await readOperationalState<Record<string, unknown>>("telegram_bridge_cursor", { offset: 0 }, client);
-    await writeOperationalState("telegram_bridge_cursor", { ...state, retryAfter: 0 }, client);
-    return true;
-  });
-  if (!result) { res.status(409).json({ error: "Bot đang xử lý. Thử lại sau vài giây." }); return; }
+  // Queue a retry without competing with the long-poll advisory lock.
+  await writeOperationalState("telegram_bridge_retry_requested", { at: Date.now() });
   await recordAdminAudit(req.userId!, "telegram.retry", "bot", null, { requested: true });
-  res.json({ ok: true });
+  res.status(202).json({ ok: true, queued: true });
 });
 router.get("/admin/tools/audit", async (_req, res) => {
   const result = await pool.query(`SELECT s.key AS id,s.value::jsonb AS metadata,s.updated_at AS created_at,u.username AS actor

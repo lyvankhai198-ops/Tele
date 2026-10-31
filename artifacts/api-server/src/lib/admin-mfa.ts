@@ -67,11 +67,11 @@ export async function changeAdminMfa(input: { id: string; password: string; acti
       const recoveryCodes = Array.from({ length: 8 }, () => randomBytes(10).toString("hex").toUpperCase());
       await setState(tx, input.id, { enabled: true, secret: state.pending, lastCounter: counter, recoveryHashes: recoveryCodes.map(code => recoveryHash(input.id, code)) });
       // Existing sessions cannot silently bypass newly enabled MFA.
-      await tx.execute(sql`UPDATE auth_sessions SET revoked_at=now() WHERE user_id=${input.id}
-        AND token_hash<>${hashSessionToken(input.sessionToken)} AND revoked_at IS NULL`);
+      await tx.execute(sql`UPDATE auth_sessions SET invalidated_at=now() WHERE user_id=${input.id}
+        AND token_hash<>${hashSessionToken(input.sessionToken)} AND invalidated_at IS NULL`);
       return { recoveryCodes };
     }
-    await tx.update(authSessionsTable).set({ revokedAt: new Date() }).where(eq(authSessionsTable.userId, input.id));
+    await tx.update(authSessionsTable).set({ invalidatedAt: new Date() }).where(eq(authSessionsTable.userId, input.id));
     return { enabled: false, signedOut: true };
   });
 }

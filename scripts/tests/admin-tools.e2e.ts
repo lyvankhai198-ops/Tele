@@ -113,7 +113,15 @@ try {
     const text = await exported.text();
     check(!text.includes(rawKey) && !text.includes(passwordHash), "E2E_EXPORT_NO_SECRETS");
   }
-  const schedule = await request("/admin/tools/daily-report", adminCookie, { enabled: false, hour: 20, minute: 30 }, "PUT");
+  const blockedOrigin = await fetch(base + "/api/admin/tools/daily-report", {
+    method: "PUT", headers: { Cookie: adminCookie, Origin: "https://untrusted.invalid", "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled: false, hour: 20, minute: 30 }),
+  });
+  check(blockedOrigin.status === 403, "E2E_CROSS_ORIGIN_DENIED");
+  const schedule = await fetch(base + "/api/admin/tools/daily-report", {
+    method: "PUT", headers: { Cookie: adminCookie, Origin: "https://fixture.invalid", "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled: false, hour: 20, minute: 30 }),
+  });
   check(schedule.ok, "E2E_SCHEDULE");
   const audit = await (await request("/admin/tools/audit", adminCookie)).json() as any[];
   check(audit.some(row => row.metadata.action === "daily_report.update"), "E2E_AUDIT_ACTOR");
