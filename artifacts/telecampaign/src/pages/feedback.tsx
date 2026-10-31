@@ -9,6 +9,7 @@ type Kind = "bug" | "feature" | "interface";
 type Status = "received" | "reviewing" | "completed";
 type Item = { id: string; username: string; kind: Kind; content: string; source: string; status: Status; createdAt: string; updatedAt: string; hasImage: boolean };
 const kinds: Record<Kind, string> = { bug: "Report a bug", feature: "Suggest a feature", interface: "Interface feedback" };
+const submissionKinds: Kind[] = ["feature"];
 const statuses: Record<Status, string> = { received: "Received", reviewing: "Under review", completed: "Completed" };
 const inputStyle = "w-full rounded-xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-indigo-500";
 async function compactImage(file: File): Promise<string> {
@@ -92,11 +93,11 @@ export default function FeedbackPage() {
     {error && <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{t(error)}</div>}
     {notice && <div role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">{t(notice)}</div>}
     <div className="grid gap-3 sm:grid-cols-2">
-      {(Object.keys(kinds) as Kind[]).map((value, index) => <button key={value} type="button" onClick={() => setKind(value)}
+      {submissionKinds.map(value => <button key={value} type="button" onClick={() => setKind(value)}
         className={`rounded-2xl border p-5 text-left shadow-sm ${kind === value ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white"}`}>
-        <span className="text-2xl">{["🐞", "💡", "🎨"][index]}</span>
+        <span className="text-2xl">💡</span>
         <h2 className="mt-2 font-extrabold text-slate-900">{t(kinds[value])}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t(["Describe the issue and the steps to reproduce it.", "What would you like TeleCamp to add?", "What is hard to use or could be presented more clearly?"][index])}</p>
+        <p className="mt-1 text-sm text-slate-500">{t("What would you like TeleCamp to add?")}</p>
       </button>)}
       {groupUrl ? <a href={groupUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-900">{t("Join the discussion group")} ↗</h2><p className="mt-1 text-sm text-slate-500">{t("Share ideas and experience with the community.")}</p>
@@ -108,6 +109,7 @@ export default function FeedbackPage() {
       <h2 className="mb-4 text-lg font-extrabold">{t(kinds[kind])}</h2>
       <div className="space-y-3">
         <p className="text-sm text-slate-500">{t("Your username is added automatically. Do not send passwords, OTPs or secret keys.")}</p>
+        <p className="text-sm text-indigo-700">{t("You will receive a website notification when your suggestion is completed. Attachments are also sent to the admin's private Telegram bot.")}</p>
         <textarea className={inputStyle} rows={6} maxLength={4000} value={content} onChange={e => setContent(e.target.value)} placeholder={t("Describe your feedback in at least 10 characters...")} />
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"><span>{content.trim().length}/4000 {t("characters")}</span><span>{t("Up to 5 submissions per 24 hours, at least 1 minute apart")}</span></div>
         <label className="block text-sm font-semibold">{t("Screenshot (optional)")}

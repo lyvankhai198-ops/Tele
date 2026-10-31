@@ -6,6 +6,8 @@ import { pool } from "@workspace/db";
 import { recordAdminAudit } from "./admin-audit";
 
 export const FEEDBACK_KINDS = ["bug", "feature", "interface"] as const;
+/** Legacy categories remain readable; new submissions are feature proposals only. */
+export const ACTIVE_FEEDBACK_KINDS = ["feature"] as const;
 export const FEEDBACK_STATUSES = ["received", "reviewing", "completed"] as const;
 export type FeedbackRecord = {
   id: string; ownerId: string; username: string; kind: typeof FEEDBACK_KINDS[number];
@@ -40,7 +42,7 @@ export async function listFeedback(ownerId?: string): Promise<FeedbackRecord[]> 
 }
 export async function createFeedback(ownerId: string, username: string, input: unknown): Promise<FeedbackRecord> {
   const value = input as Record<string, unknown> | null;
-  if (!value || !FEEDBACK_KINDS.includes(value.kind as any) || typeof value.content !== "string" ||
+  if (!value || !ACTIVE_FEEDBACK_KINDS.includes(value.kind as any) || typeof value.content !== "string" ||
     value.content.trim().length < 10 || value.content.length > 4000 ||
     (value.image !== undefined && (typeof value.image !== "string" || value.image.length > 65536)) ||
     (value.source !== undefined && (typeof value.source !== "string" || value.source.length > 256))) throw Error("INVALID_FEEDBACK");
@@ -100,6 +102,12 @@ export async function updateFeedbackStatus(id: string, status: unknown, actor: s
         next!.status = status as FeedbackRecord["status"]; next!.updatedAt = new Date().toISOString();
         await client.query("UPDATE system_settings SET value=$1,updated_by=$2,updated_at=now() WHERE key=$3",
           [JSON.stringify(next), actor, `feedback:item:${id}`]);
+        if (status === "completed") {
+          // Same transaction as completion; stable key prevents duplicate alerts on retries/reopening.
+          await client.query(`INSERT INTO system_settings(key,value,updated_by) VALUES($1,$2,$3)
+            ON CONFLICT(key) DO NOTHING`, [`feedback:completion:${id}`,
+            JSON.stringify({ id, ownerId: next!.ownerId, createdAt: next!.updatedAt }), actor]);
+        }
       }
     }
     await client.query("COMMIT");
@@ -107,4 +115,9 @@ export async function updateFeedbackStatus(id: string, status: unknown, actor: s
   finally { client.release(); }
   if (next && before !== status) await recordAdminAudit(actor, "feedback.status", id, { status: before }, { status });
   return next;
+}
+export async function listFeedbackCompletions(ownerId: string): Promise<Array<{ id: string; ownerId: string; createdAt: string }>> {
+  const result = await pool.query(`SELECT value FROM system_settings WHERE key LIKE 'feedback:completion:%'
+    AND value::jsonb->>'ownerId'=$1 ORDER BY updated_at DESC LIMIT 100`, [ownerId]);
+  return result.rows.map(row => JSON.parse(row.value));
 }

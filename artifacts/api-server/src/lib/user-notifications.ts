@@ -8,6 +8,7 @@ import {
   userNotificationReadsTable,
 } from "@workspace/db";
 import { getSubscription } from "./subscriptions";
+import { listFeedbackCompletions } from "./feedback";
 
 const RENEWAL_REMINDER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -69,6 +70,7 @@ export async function listUserNotifications(input: {
   limit?: number;
 }): Promise<{ notifications: UserNotification[]; unreadCount: number }> {
   const now = new Date();
+  const feedbackCompletions = await listFeedbackCompletions(input.userId);
   const adminRows = await db
     .select()
     .from(adminNotificationsTable)
@@ -117,6 +119,18 @@ export async function listUserNotifications(input: {
     ? subscriptionReminder(await getSubscription(input.userId), now)
     : null;
   const candidates: UserNotification[] = [
+    ...feedbackCompletions.map(item => ({
+      id: `feedback-completed:${item.id}`,
+      kind: "admin" as const,
+      level: "success" as const,
+      title: "Đề xuất của bạn đã hoàn thành",
+      body: "Quản trị viên đã đánh dấu đề xuất của bạn là hoàn thành. Bấm để xem chi tiết và trạng thái mới nhất.",
+      titleEn: "Your suggestion has been completed",
+      bodyEn: "An administrator marked your suggestion as completed. Open it to view details and the latest status.",
+      href: `/dashboard/feedback#${item.id}`,
+      isRead: false,
+      createdAt: new Date(item.createdAt),
+    })),
     ...adminRows.map((notification) => ({
       id: notification.id,
       kind: "admin" as const,

@@ -4,6 +4,7 @@ export const feedbackTranslations: Record<string, string> = {
   "Help improve TeleCamp. Support chat remains available separately.": "Cùng hoàn thiện TeleCamp. Chat hỗ trợ vẫn hoạt động riêng.",
   "Report a bug": "Báo lỗi",
   "Suggest a feature": "Đề xuất tính năng",
+  "You will receive a website notification when your suggestion is completed. Attachments are also sent to the admin's private Telegram bot.": "Bạn sẽ nhận thông báo trên web khi đề xuất hoàn thành. Ảnh đính kèm cũng được gửi vào bot Telegram riêng của admin.",
   "Interface feedback": "Góp ý giao diện",
   "Describe the issue and the steps to reproduce it.": "Mô tả lỗi và các bước để gặp lại lỗi.",
   "What would you like TeleCamp to add?": "Bạn muốn TeleCamp bổ sung điều gì?",

@@ -30,6 +30,15 @@ test("Feedback uses the real shared VI/EN catalog without untranslated labels", 
   for (const match of page.matchAll(/\b(?:t|setError|setNotice|Error)\("([^"]+)"/g))
     assert.ok(Object.hasOwn(feedbackTranslations, match[1]), `missing VI translation: ${match[1]}`);
 });
+test("New submissions expose only feature proposals while retaining historical categories", async () => {
+  const page = await readFile(new URL("../../artifacts/telecampaign/src/pages/feedback.tsx", import.meta.url), "utf8");
+  const service = await readFile(new URL("../../artifacts/api-server/src/lib/feedback.ts", import.meta.url), "utf8");
+  assert.match(page, /const submissionKinds: Kind\[\] = \["feature"\]/);
+  assert.match(page, /submissionKinds\.map/);
+  assert.match(service, /ACTIVE_FEEDBACK_KINDS = \["feature"\]/);
+  assert.match(service, /!ACTIVE_FEEDBACK_KINDS\.includes/);
+  assert.match(service, /FEEDBACK_KINDS = \["bug", "feature", "interface"\]/);
+});
 test("Feedback alerts remain bilingual when language changes, including server errors", () => {
   const key = feedbackErrorKey(new Error("Tối đa 5 góp ý trong 24 giờ, cách nhau ít nhất 1 phút."));
   assert.equal(key, "Up to 5 submissions in 24 hours, at least 1 minute apart.");
