@@ -101,7 +101,8 @@ export default function FeedbackPage() {
         <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-600">Tham gia nhóm thảo luận</h2><p className="mt-1 text-sm text-slate-500">Chưa có link nhóm.</p>
       </div>}
     </div>
-    {kind && <div className="mt-5"><Panel title={kinds[kind]}>
+    {kind && <div className="mt-5"><Panel className="p-5">
+      <h2 className="mb-4 text-lg font-extrabold">{kinds[kind]}</h2>
       <div className="space-y-3">
         <p className="text-sm text-slate-500">Username được gắn tự động. Không gửi mật khẩu, mã OTP hay khóa bí mật.</p>
         <textarea className={inputStyle} rows={6} maxLength={4000} value={content} onChange={e => setContent(e.target.value)} placeholder="Mô tả cụ thể, tối thiểu 10 ký tự…" />
@@ -126,7 +127,8 @@ export default function FeedbackPage() {
         </button>
       </div>
     </Panel></div>}
-    {admin && <div className="mt-5"><Panel title="Cài đặt quản trị · Link nhóm thảo luận">
+    {admin && <div className="mt-5"><Panel className="p-5">
+      <h2 className="mb-4 text-lg font-extrabold">Cài đặt quản trị · Link nhóm thảo luận</h2>
       <div className="space-y-3">
         <p className="text-sm text-slate-500">Dán link HTTPS của nhóm. Để trống nếu chưa muốn mở nhóm.</p>
         <input className={inputStyle} type="url" maxLength={500} placeholder="https://t.me/…" value={groupDraft} onChange={e => setGroupDraft(e.target.value)} />
@@ -140,7 +142,8 @@ export default function FeedbackPage() {
         }}>{savingGroup ? "Đang lưu…" : "Lưu link nhóm"}</button>
       </div>
     </Panel></div>}
-    <div className="mt-5"><Panel title={admin ? "Quản lý góp ý · 100 mục gần nhất" : "Góp ý của bạn · 100 mục gần nhất"}>
+    <div className="mt-5"><Panel className="p-5">
+      <h2 className="mb-4 text-lg font-extrabold">{admin ? "Quản lý góp ý · 100 mục gần nhất" : "Góp ý của bạn · 100 mục gần nhất"}</h2>
       <div className="mb-4 flex flex-wrap gap-2">
         <select aria-label="Lọc trạng thái góp ý" className="rounded-xl border p-2 text-sm" value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="all">Tất cả trạng thái</option>{(Object.keys(statuses) as Status[]).map(status => <option key={status} value={status}>{statuses[status]}</option>)}
