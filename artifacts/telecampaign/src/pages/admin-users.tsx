@@ -32,6 +32,7 @@ import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { Users, Search, Filter, ShieldAlert, CheckCircle2, ChevronRight, Activity, AlertTriangle, Copy, KeyRound, LoaderCircle } from "lucide-react";
 import { useLocation } from "wouter";
+import { AdminUserLicenseHistory } from "@/components/admin/AdminUserLicenseHistory";
 
 const copy = {
   en: {
@@ -505,6 +506,7 @@ export default function AdminUsersPage() {
           onClose={() => setEditingUser(null)}
         >
           <div className="space-y-6">
+            <AdminUserLicenseHistory userId={modalUser.id} />
             <div className="rounded-xl border border-[#ffe4e6] bg-[#fff1f2] p-4 text-[#9f1239]">
               <div className="flex gap-2">
                 <AlertTriangle className="h-5 w-5 shrink-0" />

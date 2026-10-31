@@ -69,6 +69,7 @@ import {
   type AdminLicenseKeyReminderDelivery,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { AdminLicenseKeySecret } from "@/components/admin/AdminLicenseKeySecret";
 
 type LicenseKeyPlan = CreateAdminLicenseKeyInput["plan"];
 
@@ -96,7 +97,7 @@ const copy = {
     noUpcoming: "No linked subscriptions are expiring in the next 7 days.",
     openQueue: "Show expiring",
     inventoryTitle: "Key inventory",
-    inventoryDetail: "Subscription and key states are shown separately. Key values are never listed here.",
+    inventoryDetail: "Subscription and key states are separate. A stored key is fetched only when an administrator requests it.",
     searchPlaceholder: "Username, Telegram handle, label, or key ID",
     searchLabel: "Search key inventory",
     subscriptionFilterLabel: "Subscription",
@@ -111,7 +112,7 @@ const copy = {
     quickAvailable: "Available keys",
     tableRecipient: "Recipient",
     tableSubscription: "Current subscription",
-    tableIdentifier: "Key reference",
+    tableIdentifier: "License key",
     tableKeyState: "Key state",
     tableReminder: "Latest reminder",
     noRecipient: "Unclaimed key",
@@ -132,12 +133,12 @@ const copy = {
     reminderDeliveryTo: "Telegram recipient",
     reminderAttempts: "Attempts",
     detailTitle: "License details",
-    detailKeyLabel: "Masked key reference",
+    detailKeyLabel: "Stored license key",
     detailPlanDuration: "Key plan and duration",
     detailCreated: "Created",
     detailClaimed: "Claimed",
     detailPool: "Inventory pool",
-    keyReferenceNote: "This is an internal record ID, not the license key.",
+    keyReferenceNote: "The internal record ID is shown separately in technical details.",
     contextLoadError: "Recipient or reminder details are temporarily unavailable.",
     noMatch: "No keys match the current search and filters.",
     closeDetails: "Close details",
@@ -226,7 +227,7 @@ const copy = {
     successModalCreated: (n: number, plan: string, label: string | null) =>
       `Created ${n} ${plan.toUpperCase()} key${n === 1 ? "" : "s"}${label ? ` for "${label}"` : ""}.`,
     importantNoticeLabel: "Important notice",
-    importantNoticeText: "These keys are shown only once. Copy and store them safely right now.",
+    importantNoticeText: "Newly created keys are returned at creation. Existing keys can be retrieved securely by an administrator when needed.",
     keyListTitle: "Newly created keys",
     copyAll: "Copy all",
     copyKey: (n: number) => `Copy key ${n}`,
@@ -263,7 +264,7 @@ const copy = {
     noUpcoming: "Không có thuê bao đã liên kết nào hết hạn trong 7 ngày tới.",
     openQueue: "Xem sắp hết hạn",
     inventoryTitle: "Danh mục key",
-    inventoryDetail: "Trạng thái thuê bao và trạng thái key được hiển thị riêng. Không hiển thị giá trị key.",
+    inventoryDetail: "Trạng thái thuê bao và key được tách biệt. Key chỉ được tải khi quản trị viên chủ động yêu cầu.",
     searchPlaceholder: "Username, Telegram, nhãn hoặc ID key",
     searchLabel: "Tìm trong danh mục key",
     subscriptionFilterLabel: "Thuê bao",
@@ -278,7 +279,7 @@ const copy = {
     quickAvailable: "Key khả dụng",
     tableRecipient: "Người nhận",
     tableSubscription: "Thuê bao hiện tại",
-    tableIdentifier: "Mã tham chiếu",
+    tableIdentifier: "License key",
     tableKeyState: "Trạng thái key",
     tableReminder: "Nhắc gần nhất",
     noRecipient: "Key chưa được nhận",
@@ -299,12 +300,12 @@ const copy = {
     reminderDeliveryTo: "Tài khoản Telegram nhận",
     reminderAttempts: "Số lần thử",
     detailTitle: "Chi tiết license",
-    detailKeyLabel: "Mã tham chiếu đã che",
+    detailKeyLabel: "License key đã lưu",
     detailPlanDuration: "Gói và thời hạn key",
     detailCreated: "Ngày tạo",
     detailClaimed: "Ngày nhận",
     detailPool: "Kho key",
-    keyReferenceNote: "Đây là ID nội bộ của bản ghi, không phải license key.",
+    keyReferenceNote: "ID nội bộ được hiển thị riêng trong phần chi tiết kỹ thuật.",
     contextLoadError: "Tạm thời không tải được thông tin người nhận hoặc lịch sử nhắc.",
     noMatch: "Không tìm thấy key phù hợp với từ khóa và bộ lọc hiện tại.",
     closeDetails: "Đóng chi tiết",
@@ -393,7 +394,7 @@ const copy = {
     successModalCreated: (n: number, plan: string, label: string | null) =>
       `Đã tạo ${n} mã ${plan.toUpperCase()}${label ? ` cho "${label}"` : ""}.`,
     importantNoticeLabel: "Lưu ý quan trọng",
-    importantNoticeText: "Mã này chỉ được hiển thị một lần duy nhất. Vui lòng sao chép và lưu trữ an toàn ngay bây giờ.",
+    importantNoticeText: "Key mới được trả về sau khi tạo. Quản trị viên có thể truy xuất an toàn key hiện có khi cần.",
     keyListTitle: "Danh sách mã vừa tạo",
     copyAll: "Sao chép tất cả",
     copyKey: (n: number) => `Sao chép mã ${n}`,
@@ -471,7 +472,9 @@ export function AdminLicenseKeysPage() {
   const [quickFilter, setQuickFilter] = useState<"all" | "soon" | "active" | "available">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null);
+  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("keyId"));
+  const [linkedUserId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("userId"));
+  const [linkedKeyId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("keyId"));
 
   // Queries
   const queryParams = {
@@ -788,6 +791,8 @@ export function AdminLicenseKeysPage() {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase(language === "vi" ? "vi" : "en");
     return licenseRows.filter((row) => {
       const { key, user, details, subscriptionState } = row;
+      if (linkedUserId && key.claimedByUserId !== linkedUserId) return false;
+      if (linkedKeyId && key.id !== linkedKeyId) return false;
       if (statusFilter !== "all" && key.status !== statusFilter) return false;
       if (planFilter !== "all" && key.plan !== planFilter) return false;
       if (poolFilter !== "all" && key.pool !== poolFilter) return false;
@@ -810,13 +815,14 @@ export function AdminLicenseKeysPage() {
           key.pool,
           key.claimedByUsername ?? "",
           user?.username ?? "",
+          key.claimedByUserId ?? "",
           ...(details?.telegramAccounts.map((account) => account.username ?? "") ?? []),
         ].join(" ").toLocaleLowerCase(language === "vi" ? "vi" : "en");
         if (!searchable.includes(normalizedSearch)) return false;
       }
       return true;
     });
-  }, [licenseRows, statusFilter, planFilter, poolFilter, subscriptionFilter, quickFilter, searchTerm, language]);
+  }, [licenseRows, statusFilter, planFilter, poolFilter, subscriptionFilter, quickFilter, searchTerm, language, linkedUserId, linkedKeyId]);
 
   const subscriberRows = useMemo(() => {
     const byUserId = new Map<string, (typeof licenseRows)[number]>();
@@ -1320,6 +1326,13 @@ export function AdminLicenseKeysPage() {
                           <span className="license-key-page__avatar">{(user?.username ?? key.claimedByUsername ?? "—").slice(0, 2).toUpperCase()}</span>
                           <span>
                             <strong>{user?.username ?? (key.status === "claimed" ? key.claimedByUsername ?? text.recipientUnavailable : text.noRecipient)}</strong>
+                            {key.claimedByUserId && <button type="button"
+                              onClick={(event) => { event.stopPropagation(); navigate(`/admin/users/${encodeURIComponent(key.claimedByUserId!)}/support`); }}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              className="mt-1 block text-left text-[11px] font-bold text-[#167b91] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#167b91]"
+                              data-testid={`link-key-user-${key.id}`}>
+                              {language === "vi" ? "Mở hồ sơ người dùng" : "Open user profile"}
+                            </button>}
                             <small>{linkedAccount?.username
                               ? `@${linkedAccount.username.replace(/^@+/, "")}${linkedAccount.status !== "connected" ? ` · ${linkedAccount.status}` : ""}`
                               : user ? text.noTelegramAccount : text.appUsername}</small>
@@ -1340,8 +1353,10 @@ export function AdminLicenseKeysPage() {
                         )}
                       </td>
                       <td>
-                        <span className="license-key-page__masked-id" title={text.keyReferenceNote}>••••{key.id.slice(-6)}</span>
-                        <small className="license-key-page__subtext">{key.label || `#${key.id.slice(0, 8)}`}</small>
+                        <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="space-y-1">
+                          <AdminLicenseKeySecret key={key.id} licenseKeyId={key.id} />
+                          <small className="license-key-page__subtext">{key.label || (language === "vi" ? "Không có nhãn" : "No label")}</small>
+                        </div>
                       </td>
                       <td>
                         <span className={`license-key-page__badge license-key-page__badge--${subscriptionState}`}>
@@ -1391,7 +1406,7 @@ export function AdminLicenseKeysPage() {
         </div>
         <div className="license-key-page__table-foot">
           <span>{language === "vi" ? "Đang hiển thị" : "Showing"} <strong>{filteredKeys.length}</strong> {language === "vi" ? "trong" : "of"} {licenseRows.length}</span>
-          <span>{language === "vi" ? "Mã key gốc chỉ hiển thị một lần khi tạo." : "Plaintext keys are shown only once at creation."}</span>
+          <span>{language === "vi" ? "Key đã lưu có thể được quản trị viên truy xuất theo yêu cầu." : "Stored keys can be retrieved by an administrator when needed."}</span>
         </div>
       </section>
 
@@ -1399,13 +1414,19 @@ export function AdminLicenseKeysPage() {
         <div className="license-key-page__drawer-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setSelectedKeyId(null)}>
           <aside className="license-key-page__drawer" role="dialog" aria-modal="true" aria-label={text.detailTitle}>
             <div className="license-key-page__drawer-head">
-              <div><small>{text.tableIdentifier} · #{selectedRow.key.id.slice(0, 8)}</small><h2>{text.detailTitle}</h2></div>
+              <div><small>{language === "vi" ? "ID bản ghi kỹ thuật" : "Technical record ID"} · #{selectedRow.key.id.slice(0, 8)}</small><h2>{text.detailTitle}</h2></div>
               <button type="button" aria-label={text.closeDetails} onClick={() => setSelectedKeyId(null)}><X size={17} /></button>
             </div>
             <div className="license-key-page__detail-person">
               <span className="license-key-page__detail-avatar"><UserRound size={20} /></span>
               <div>
                 <strong>{selectedRow.user?.username ?? selectedRow.key.claimedByUsername ?? text.noRecipient}</strong>
+                {selectedRow.key.claimedByUserId && <button type="button"
+                  onClick={() => navigate(`/admin/users/${encodeURIComponent(selectedRow.key.claimedByUserId!)}/support`)}
+                  className="mt-1 inline-flex text-xs font-bold text-[#167b91] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#167b91]"
+                  data-testid={`link-key-detail-user-${selectedRow.key.id}`}>
+                  {language === "vi" ? "Mở hồ sơ và lịch sử key" : "Open profile and key history"}
+                </button>}
                 <small>{selectedRow.details?.telegramAccounts.length
                   ? selectedRow.details.telegramAccounts.map((account) => account.username ? `@${account.username.replace(/^@+/, "")}` : account.status).join(" · ")
                   : text.noTelegramAccount}</small>
@@ -1426,7 +1447,7 @@ export function AdminLicenseKeysPage() {
             </div>
             <section className="license-key-page__key-detail">
               <small>{text.detailKeyLabel}</small>
-              <strong>••••{selectedRow.key.id.slice(-6)}</strong>
+              <AdminLicenseKeySecret key={selectedRow.key.id} licenseKeyId={selectedRow.key.id} />
               <p>{text.keyReferenceNote}</p>
             </section>
             <div className="license-key-page__detail-grid license-key-page__detail-grid--secondary">
@@ -1434,6 +1455,7 @@ export function AdminLicenseKeysPage() {
               <div><small>{text.detailPool}</small><strong>{selectedRow.key.pool === "external" ? (language === "vi" ? "Bán ngoài" : "External") : (language === "vi" ? "Website" : "Website")}</strong></div>
               <div><small>{text.detailCreated}</small><strong>{formatKeyDate(selectedRow.key.createdAt, language, true)}</strong></div>
               <div><small>{text.detailClaimed}</small><strong>{selectedRow.key.claimedAt ? formatKeyDate(selectedRow.key.claimedAt, language, true) : "—"}</strong></div>
+              <div className="col-span-full"><small>{language === "vi" ? "ID bản ghi kỹ thuật" : "Technical record ID"}</small><strong className="break-all font-mono text-xs">{selectedRow.key.id}</strong></div>
               <div><small>{text.tableSalePrice}</small><strong>{selectedRow.key.salePriceVnd === null ? "—" : formatVnd(selectedRow.key.salePriceVnd)}</strong></div>
               <div><small>{text.createdBy}</small><strong>{selectedRow.key.createdByUsername ?? text.bySystem}</strong></div>
             </div>

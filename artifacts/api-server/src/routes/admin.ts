@@ -192,6 +192,14 @@ function sendError(res: any, status: number, error: string): void {
   res.status(status).json({ error });
 }
 
+// Secret responses, including rejected requests, must never enter browser/proxy caches.
+router.use("/admin/license-keys/:licenseKeyId/secret", (_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.vary("Cookie");
+  next();
+});
 router.use("/admin", requireAdmin);
 router.use("/admin", adminAuditMiddleware);
 
@@ -1910,7 +1918,7 @@ router.get("/admin/license-keys/:licenseKeyId/secret", async (req, res): Promise
     return void sendError(res, 404, "Không tìm thấy license key.");
   }
   if (!outcome.ok) {
-    return void sendError(res, 409, "License key này được tạo trước khi hỗ trợ sao chép lại.");
+    return void sendError(res, 409, "Không thể lấy lại mã key gốc của bản ghi này.");
   }
   res.json(GetAdminLicenseKeySecretResponse.parse(outcome));
 });
