@@ -129,6 +129,36 @@ jobs:
             }
           }
           DIAGNOSTIC
+          (
+            set -a
+            source /etc/telecampaign/api.env
+            set +a
+            cd /opt/telecampaign
+            node --input-type=module <<'DATABASE_DIAGNOSTIC'
+          import { createRequire } from "node:module";
+          const require = createRequire(process.cwd()+"/artifacts/api-server/package.json");
+          const { Client } = require("pg");
+          const client = new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:5000,statement_timeout:5000});
+          try {
+            await client.connect();
+            const indexes=await client.query(`SELECT t.relname AS table_name,a.attname AS column_name,
+              bool_or(i.indisvalid AND i.indisready AND i.indkey[0]=a.attnum AND i.indpred IS NULL) AS indexed
+              FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace
+              JOIN pg_attribute a ON a.attrelid=t.oid LEFT JOIN pg_index i ON i.indrelid=t.oid
+              WHERE n.nspname='public' AND ((t.relname='activity_logs' AND a.attname IN ('campaign_id','target_id'))
+                OR (t.relname='admin_group_join_jobs' AND a.attname='auto_campaign_id')
+                OR (t.relname='campaign_targets' AND a.attname='campaign_id'))
+              GROUP BY t.relname,a.attname ORDER BY t.relname,a.attname`);
+            for(const row of indexes.rows) console.log("delete_fk_index_"+row.table_name+"_"+row.column_name+"="+Boolean(row.indexed));
+            const stats=await client.query(`SELECT count(*) FILTER (WHERE state='active')::int active,
+              count(*) FILTER (WHERE wait_event_type='Lock')::int lock_waiters,
+              count(*) FILTER (WHERE state='active' AND query ~* '^delete from "campaigns"')::int active_campaign_deletes
+              FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()`);
+            for(const [key,value] of Object.entries(stats.rows[0])) console.log("delete_diagnostic_"+key+"="+value);
+          } catch {console.log("delete_database_diagnostic=failed");process.exitCode=1;}
+          finally {await client.end();}
+          DATABASE_DIAGNOSTIC
+          )
           for binary in /usr/lib/postgresql/*/bin/pg_dump; do
             if test -x "$binary"; then "$binary" --version; fi
           done
