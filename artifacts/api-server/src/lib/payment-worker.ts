@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, inArray, isNotNull } from "drizzle-orm";
+import { registerWorker, workerHeartbeat } from "./worker-health";
 import { db, purchaseOrdersTable } from "@workspace/db";
 import { expireUnpaidOrders, settleVerifiedOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { verifyUsdtTransfer } from "./verify-usdt";
@@ -64,7 +65,9 @@ async function checkPayments() {
           .where(and(eq(purchaseOrdersTable.id, order.id), eq(purchaseOrdersTable.txHash, order.txHash)));
       }
     }
+    workerHeartbeat("payments", true);
   } catch (error) {
+    workerHeartbeat("payments", false);
     logger.error({ err: error }, "payment verification worker failed; orders remain unactivated");
   } finally {
     running = false;
@@ -73,6 +76,7 @@ async function checkPayments() {
 
 export function startPaymentWorker() {
   if (process.env.TELECAMPAIGN_DISABLE_PAYMENT_WORKER === "true") return;
+  registerWorker("payments");
   void checkPayments();
   setInterval(() => { void checkPayments(); }, 30_000).unref();
 }

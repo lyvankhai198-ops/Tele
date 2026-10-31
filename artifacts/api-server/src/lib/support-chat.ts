@@ -165,12 +165,25 @@ export async function appendSupportMessage(input: {
   mediaContentType?: string;
   translatedBody?: string;
   visibleToUser?: boolean;
+  telegramChatId?: string;
+  telegramMessageId?: number;
 }): Promise<{ conversation: SupportConversationDto; message: SupportMessageDto; telegramMessageId?: number | null }> {
   const body = input.body.trim();
   if ((!body && !input.mediaPath) || body.length > SUPPORT_MESSAGE_MAX_LENGTH) {
     throw new Error("Support message must contain text or an image, with up to 2000 characters");
   }
   const result = await db.transaction(async (tx) => {
+    if (input.source === "telegram" && input.telegramChatId && input.telegramMessageId) {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`support:${input.telegramChatId}:${input.telegramMessageId}`}))`);
+      const [existing] = await tx.select().from(supportMessagesTable).where(and(
+        eq(supportMessagesTable.telegramChatId, input.telegramChatId),
+        eq(supportMessagesTable.telegramMessageId, input.telegramMessageId),
+      )).limit(1);
+      if (existing) {
+        const [conversation] = await tx.select().from(supportConversationsTable).where(eq(supportConversationsTable.id, existing.conversationId)).limit(1);
+        return { conversation, message: existing };
+      }
+    }
     const [conversation] = await tx.select().from(supportConversationsTable)
       .where(eq(supportConversationsTable.id, input.conversationId))
       .limit(1);
@@ -186,6 +199,8 @@ export async function appendSupportMessage(input: {
       mediaPath: input.mediaPath ?? null,
       mediaContentType: input.mediaContentType ?? null,
       visibleToUser: input.visibleToUser ?? true,
+      telegramChatId: input.telegramChatId ?? null,
+      telegramMessageId: input.telegramMessageId ?? null,
       createdAt: now,
     }).returning();
     const unreadColumn = input.senderType === "user"

@@ -1,5 +1,6 @@
 import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { registerWorker, workerHeartbeat } from "./worker-health";
 import {
   campaignTargetsTable,
   campaignsTable,
@@ -1283,6 +1284,7 @@ async function reconcileRecordedPostingPermissionFailures() {
 
 export function startCampaignWorker() {
   if (interval) return;
+  registerWorker("campaign");
   let tickRunning = false;
   let postingPermissionFailuresReconciled = false;
   const tick = async () => {
@@ -1305,7 +1307,6 @@ export function startCampaignWorker() {
       await Promise.all([...new Set(stalled.map((target) => target.campaignId))].map(finalizeCampaignIfTerminal));
       await resumeDailyQuotaPausedCampaigns();
        await resumeSubscriptionExpiryPausedCampaigns();
-       await resumeDailyQuotaPausedCampaigns();
       const readyAccountIds = await findReadyCampaignAccountIds();
       for (const accountId of readyAccountIds) {
         if (accountQueues.has(accountId)) continue;
@@ -1318,7 +1319,9 @@ export function startCampaignWorker() {
           });
         accountQueues.set(accountId, queue);
       }
+      workerHeartbeat("campaign", true);
     } catch (err) {
+      workerHeartbeat("campaign", false);
       logger.error({ err }, "Campaign worker failed");
     } finally {
       tickRunning = false;

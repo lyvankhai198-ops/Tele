@@ -349,6 +349,13 @@ export async function revokePurchaseOrder(id: string, adminUserId: string, reaso
       .where(eq(purchaseOrdersTable.id, id)).for("update");
     if (!order) return null;
     if (order.status !== "paid") throw new Error("ORDER_NOT_REVOCABLE");
+    // Preserve the original paid date before reviewedAt is replaced by revoke.
+    // Revoking access is not a refund and must not erase confirmed revenue.
+    await tx.insert(systemSettingsTable).values({
+      key: `order_receipt:${order.id}`,
+      value: JSON.stringify({ paidAt: (order.reviewedAt ?? order.updatedAt).toISOString() }),
+      updatedBy: adminUserId,
+    }).onConflictDoNothing();
 
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${order.ownerUserId}))`);
     const now = new Date();
