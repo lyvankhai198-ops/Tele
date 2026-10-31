@@ -24,6 +24,7 @@ import {
 } from "@workspace/api-client-react";
 import { useLanguage, localizedErrorMessage } from "@/lib/i18n";
 import { format } from "date-fns";
+import { getPurchaseOrderActions } from "@/lib/purchase-order-actions";
 
 const planCodes = ["PLUS", "PRO", "UNLIMITED"] as const;
 type PlanCode = typeof planCodes[number];
@@ -136,6 +137,7 @@ export function AdminPurchaseOrders() {
   };
 
   const startReview = (order: PurchaseOrder, decision: "paid" | "rejected") => {
+    if (reviewMutation.isPending) return;
     setReviewOrder(order);
     setReviewDecision(decision);
     setReviewReason("");
@@ -143,11 +145,9 @@ export function AdminPurchaseOrders() {
   };
 
   const handleReview = () => {
-    if (!reviewOrder || !reviewDecision) return;
+    if (!reviewOrder || !reviewDecision || reviewMutation.isPending) return;
     const needsManualConfirmation = reviewDecision === "paid"
-      && (reviewOrder.status === "pending" || reviewOrder.status === "expired")
-      && reviewOrder.currency === "VND"
-      && !reviewOrder.automated;
+      && getPurchaseOrderActions(reviewOrder).canVerifyManually;
     if (reviewDecision === "rejected" && reviewReason.trim().length < 3) {
       setToast({ title: language === "vi" ? "Nhập lý do từ chối (ít nhất 3 ký tự)." : "Enter a rejection reason (at least 3 characters).", type: "error" });
       return;
@@ -372,7 +372,7 @@ export function AdminPurchaseOrders() {
                   <td className="px-6 py-4 max-w-[200px] truncate text-[13px] text-[#64748b]">
                     {order.txHash || order.proofInfo || "-"}
                   </td>
-                  <td className="px-6 py-4">
+                   <td className="min-w-44 px-6 py-4">
                     <StatusBadge
                        status={order.status === "paid" ? "success" : order.status === "rejected" || order.status === "expired" || order.status === "cancelled" || order.status === "revoked" ? "failed" : "warning"}
                       label={order.status === "paid" ? (language === "vi" ? "Đã kích hoạt" : "Activated")
@@ -402,24 +402,27 @@ export function AdminPurchaseOrders() {
                       <div className="mt-1 max-w-56 text-[11px] text-rose-700">{order.rejectionReason}</div>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex min-w-32 flex-wrap gap-2">
+                   <td className="min-w-52 px-6 py-4">
+                     <div className="flex min-w-40 flex-wrap gap-2">
                       {order.status === "pending" && order.automated && order.currency === "VND" && (
                         <span className="max-w-44 text-xs font-medium text-amber-800">
-                          {language === "vi" ? "Chờ cổng thanh toán xác minh" : "Waiting for payment-provider verification"}
+                           {language === "vi" ? "Đang chờ cổng thanh toán; có thể đối chiếu và xác minh thủ công." : "Awaiting payment provider; manual verification is available after checking the bank receipt."}
                         </span>
                       )}
-                      {(order.status === "pending" || order.status === "expired") && order.currency === "VND" && !order.automated && (
+                       {getPurchaseOrderActions(order).canVerifyManually && (
                         <button
+                           type="button"
                           onClick={() => startReview(order, "paid")}
-                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-800 hover:bg-emerald-100"
+                           disabled={reviewMutation.isPending}
+                           className="whitespace-nowrap rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[13px] font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
                           data-testid={`button-verify-order-${order.id}`}
                         >
-                          {language === "vi" ? "Xác minh" : "Verify"}
+                           {language === "vi" ? "Xác minh thủ công" : "Verify manually"}
                         </button>
                       )}
                       {order.status === "received" && (
                         <button
+                          disabled={reviewMutation.isPending}
                           onClick={() => startReview(order, "paid")}
                           className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-[13px] font-bold text-[#0f172a] hover:bg-[#f8fafc]"
                           data-testid={`button-retry-fulfillment-${order.id}`}
@@ -427,10 +430,12 @@ export function AdminPurchaseOrders() {
                           {language === "vi" ? "Thử cấp lại" : "Retry fulfillment"}
                         </button>
                       )}
-                      {order.status === "pending" && (
+                       {getPurchaseOrderActions(order).canReject && (
                         <button
+                           type="button"
                           onClick={() => startReview(order, "rejected")}
-                          className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[13px] font-bold text-rose-700 hover:bg-rose-50"
+                           disabled={reviewMutation.isPending}
+                           className="whitespace-nowrap rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[13px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                           data-testid={`button-reject-order-${order.id}`}
                         >
                           {language === "vi" ? "Từ chối" : "Reject"}
@@ -438,6 +443,7 @@ export function AdminPurchaseOrders() {
                       )}
                       {order.status === "paid" && (
                         <button
+                          disabled={reviewMutation.isPending}
                           onClick={() => { setRevokeOrder(order); setRevokeReason(""); }}
                           className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-[13px] font-bold text-rose-800 hover:bg-rose-100"
                           data-testid={`button-revoke-order-${order.id}`}
@@ -459,9 +465,9 @@ export function AdminPurchaseOrders() {
           title={reviewDecision === "paid"
             ? (reviewOrder.status === "received"
               ? (language === "vi" ? "Thử cấp gói/key lại" : "Retry plan/key fulfillment")
-              : (language === "vi" ? "Xác minh thanh toán" : "Verify payment"))
+               : (language === "vi" ? "Xác minh thanh toán thủ công" : "Verify payment manually"))
             : (language === "vi" ? "Từ chối đơn hàng" : "Reject order")}
-          onClose={() => setReviewOrder(null)}
+          onClose={() => { if (!reviewMutation.isPending) setReviewOrder(null); }}
         >
           <div className="flex flex-col gap-6 py-2">
             <div className={`p-4 rounded-xl border-2 flex items-start gap-3 ${reviewDecision === "paid" ? "bg-[#f0fdf4] border-[#bbf7d0] text-[#166534]" : "bg-[#fef2f2] border-[#fecdd3] text-[#991b1b]"}`}>
@@ -476,13 +482,19 @@ export function AdminPurchaseOrders() {
                   {reviewDecision === "paid"
                     ? (reviewOrder.status === "received"
                       ? (language === "vi" ? "Hệ thống sẽ thử cấp gói hoặc key lại từ khoản tiền đã xác minh." : "The system will retry assigning a plan or key for the verified payment.")
-                      : (language === "vi" ? "Đối chiếu đúng tài khoản nhận, số tiền và nội dung chuyển khoản. Xác nhận sẽ cấp gói/key ngay. Đơn USDT phải được xác minh trên blockchain." : "Match the receiving account, amount, and transfer reference. Confirmation grants the plan/key immediately. USDT orders must be verified on-chain."))
+                       : (language === "vi" ? "Hãy kiểm tra giao dịch thực nhận tại ngân hàng, đúng tài khoản nhận, số tiền và nội dung chuyển khoản; không chỉ dựa vào ảnh chuyển tiền. Xác nhận sẽ cấp gói/key nếu đủ điều kiện, hoặc chuyển sang chờ key/xử lý gói. Đơn USDT vẫn phải xác minh trên blockchain." : "Check the actual incoming bank transaction, receiving account, amount and transfer reference, not just a payment screenshot. Confirmation grants an eligible plan/key or queues fulfillment. USDT still requires on-chain verification."))
                     : (language === "vi" ? "Đơn bị từ chối sẽ không nhận được gói/key. Nếu khách đã chuyển tiền, hãy xác minh thay vì từ chối hoặc tự xử lý hoàn tiền." : "A rejected order will not receive a plan/key. If the customer paid, verify it instead or arrange a refund.")}
                 </p>
               </div>
             </div>
 
-            {reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && !reviewOrder.automated && (
+            <div className="rounded-xl bg-slate-50 p-4 text-sm" data-testid="review-order-summary">
+              <div className="break-all font-mono">{reviewOrder.reference}</div>
+              <div className="mt-1 font-bold">{reviewOrder.username?.trim() || reviewOrder.ownerUserId} · {reviewOrder.plan.toUpperCase()}</div>
+              <div className="mt-1 font-bold">{reviewOrder.currency === "VND" ? `${formatVnd(reviewOrder.amount)} đ` : `${formatUsdt(reviewOrder.amount)} USDT`}</div>
+            </div>
+
+            {reviewDecision === "paid" && getPurchaseOrderActions(reviewOrder).canVerifyManually && (
               <label className="flex items-start gap-3 rounded-xl border border-[#cbd5e1] p-4 text-[13px] font-semibold text-[#334155]">
                 <input
                   type="checkbox"
@@ -515,12 +527,12 @@ export function AdminPurchaseOrders() {
             )}
 
             <div className="flex gap-3">
-              <button onClick={() => setReviewOrder(null)} className="flex-1 py-3 rounded-xl border border-[#cbd5e1] font-bold hover:bg-[#f8fafc]" data-testid="button-cancel-review">{t("Cancel")}</button>
+              <button disabled={reviewMutation.isPending} onClick={() => setReviewOrder(null)} className="flex-1 py-3 rounded-xl border border-[#cbd5e1] font-bold hover:bg-[#f8fafc] disabled:opacity-50" data-testid="button-cancel-review">{t("Cancel")}</button>
               <button
                 onClick={handleReview}
                 disabled={reviewMutation.isPending
                   || (reviewDecision === "rejected" && reviewReason.trim().length < 3)
-                  || (reviewDecision === "paid" && (reviewOrder.status === "pending" || reviewOrder.status === "expired") && reviewOrder.currency === "VND" && !reviewOrder.automated && !manualReceiptConfirmed)}
+                  || (reviewDecision === "paid" && getPurchaseOrderActions(reviewOrder).canVerifyManually && !manualReceiptConfirmed)}
                 data-testid="button-submit-review"
                 className={`flex-1 py-3 rounded-xl font-bold text-white shadow-sm flex items-center justify-center gap-2 ${reviewDecision === "paid" ? "bg-[#16a34a] hover:bg-[#15803d]" : "bg-[#dc2626] hover:bg-[#b91c1c]"}`}
               >
