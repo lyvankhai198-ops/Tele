@@ -26,6 +26,7 @@ class ReleaseSafetyTests(unittest.TestCase):
         self.log = self.base / "commands.log"
         self.mode = self.base / "failure-mode"
         self.env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}",
+                    "TELECAMPAIGN_DEPLOY_BACKUP": "1",
                     "TEST_ROOT": str(self.root), "TEST_LOG": str(self.log),
                     "TEST_MODE": str(self.mode), "GIT_CONFIG_NOSYSTEM": "1",
                     "GIT_CONFIG_GLOBAL": os.devnull}
@@ -415,6 +416,23 @@ exec /usr/bin/mktemp "$@"
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Notification media storage is ready.", result.stdout)
         self.assertEqual(list(media.iterdir()), [])
+
+    def test_default_fast_deploy_creates_no_backup_or_checkpoint(self):
+        self.env.pop("TELECAMPAIGN_DEPLOY_BACKUP", None)
+        result = self.script("deploy-telecampaign.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("backup", self.log.read_text())
+        self.assertFalse(self.releases.exists())
+        self.assertEqual(self.git("rev-parse", "HEAD").stdout.strip(), self.new)
+
+    def test_default_fast_deploy_failure_does_not_automatically_rollback(self):
+        self.env.pop("TELECAMPAIGN_DEPLOY_BACKUP", None)
+        self.mode.write_text("install")
+        result = self.script("deploy-telecampaign.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("backup", self.log.read_text())
+        self.assertFalse(self.releases.exists())
+        self.assertEqual(self.git("rev-parse", "HEAD").stdout.strip(), self.new)
 
 
 if __name__ == "__main__":

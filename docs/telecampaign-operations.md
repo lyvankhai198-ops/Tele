@@ -1,5 +1,16 @@
 # TeleCampaign Operations
 
+## Current deployment policy
+
+Routine deployments skip database/media backup, runtime checkpoint creation and
+automatic rollback by default. Failures are reported and may leave the new
+source/assets partially installed or the API stopped; the operator must repair
+the release. Existing backups are retained, not deleted or automatically used.
+The GitHub deployment workflow also performs no recovery after health, public
+asset or bot checks fail. Validation, checksums, locking and health checks remain.
+The historical protected scripts are retained for manual use only; explicitly
+setting `TELECAMPAIGN_DEPLOY_BACKUP=1` opts into the older protected mode.
+
 ## Scope
 
 These commands apply only to TeleCampaign. They must run from `/opt/telecampaign` and may only restart `telecampaign-api`. Never restart PM2 globally, edit shared Nginx configuration, or operate on any other project.
