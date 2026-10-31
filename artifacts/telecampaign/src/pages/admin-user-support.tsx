@@ -25,6 +25,7 @@ import {
   type AdminUserSupportCampaign,
 } from "@workspace/api-client-react";
 import { useLanguage } from "@/lib/i18n";
+import { useAdminBack } from "@/components/admin/AdminNavigationProvider";
 import { AdminUserLicenseHistory } from "@/components/admin/AdminUserLicenseHistory";
 import {
   ArrowLeft,
@@ -54,7 +55,7 @@ import {
 
 const copy = {
   en: {
-    back: "Back to Directory",
+    back: "Back",
     eyebrow: "Support Workspace",
     pageDetail: "Live snapshot of user operations and configuration.",
     loadError: "Could not load support data",
@@ -137,7 +138,7 @@ const copy = {
     cloneSuccess: "Draft clone created. Continue in Campaigns to select the Saved Message and run it.",
   },
   vi: {
-    back: "Quay lại danh sách",
+    back: "Quay lại",
     eyebrow: "Không gian Hỗ trợ",
     pageDetail: "Ảnh chụp trực tiếp hoạt động và cấu hình của người dùng.",
     loadError: "Không thể tải dữ liệu hỗ trợ",
@@ -375,6 +376,7 @@ function CampaignDetails({
 }
 
 export default function AdminUserSupportPage({ userId }: { userId: string }) {
+  const { goBack } = useAdminBack();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { language } = useLanguage();
@@ -405,8 +407,8 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
       <AppLayout activePage="admin-users" title="User Support">
         <div className="mb-4">
           <button
-            onClick={() => setLocation("/admin/users")}
-            className="inline-flex items-center gap-2 text-[13px] font-bold text-[#64748b] hover:text-[#0f172a] transition-colors"
+            onClick={goBack}
+            className="hidden items-center gap-2 text-[13px] font-bold text-[#64748b] hover:text-[#0f172a] transition-colors lg:inline-flex"
           >
             <ArrowLeft className="h-4 w-4" />
             {text.back}
@@ -508,8 +510,8 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <button
-            onClick={() => setLocation("/admin/users")}
-            className="inline-flex items-center gap-1.5 text-[12px] font-extrabold uppercase tracking-widest text-[#64748b] hover:text-[#0f766e] transition-colors mb-2"
+            onClick={goBack}
+            className="hidden items-center gap-1.5 text-[12px] font-extrabold uppercase tracking-widest text-[#64748b] hover:text-[#0f766e] transition-colors mb-2 lg:inline-flex"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             {text.back}
