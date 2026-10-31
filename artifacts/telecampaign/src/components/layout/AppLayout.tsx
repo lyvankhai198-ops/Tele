@@ -64,7 +64,6 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "proxy", label: "Proxy", icon: Network, path: "/dashboard/proxy" },
   { key: "group-library", label: "Group library", icon: Users, path: "/group-library", groupLibraryOnly: true },
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
-  { key: "support", label: "Support", icon: LifeBuoy, path: "/dashboard/support" },
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
   { key: "admin-tools", label: "Công cụ quản trị", icon: Settings2, path: "/admin/tools", adminOnly: true },
   { key: "admin-support-chat", label: "Hỗ trợ khách hàng", icon: LifeBuoy, path: "/admin/support-chat", adminOnly: true },
