@@ -1,0 +1,162 @@
+name: TeleCampaign resume validated staged rollout
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telecampaign-vps-operations
+  cancel-in-progress: false
+jobs:
+  resume:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Validate and package fixed control scripts only
+        env:
+          TARGET: ${{ github.sha }}
+          CONTROL_SHA: 979e21f8de88fa42a1e4132ffd6191e40864185c
+        run: |
+          set -euo pipefail
+          git init controls
+          cd controls
+          git remote add origin https://github.com/lyvankhai198-ops/Tele.git
+          git fetch --depth=1 origin "$TARGET"
+          git checkout --detach FETCH_HEAD
+          bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
+          python3 scripts/tests/test_release_safety.py
+          node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
+          git fetch --depth=1 origin "$CONTROL_SHA"
+          git archive --format=tar.gz --output=../telecampaign-controls.tar.gz FETCH_HEAD \
+            scripts/lib/telecampaign-release.sh scripts/deploy-telecampaign.sh \
+            scripts/checkpoint-telecampaign.sh scripts/rollback-telecampaign.sh \
+            scripts/backup-telecampaign.sh scripts/restore-telecampaign.sh \
+            scripts/prepare-notification-media-storage.sh
+      - name: Install SSH password helper
+        run: |
+          if ! command -v sshpass >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+          fi
+      - name: Resume only if compiled application inputs are unchanged
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          TARGET: ${{ github.sha }}
+          CONTROL_SHA: 979e21f8de88fa42a1e4132ffd6191e40864185c
+          BUILT_FROM: 0e585f50f4552548c6737e4afee9301baffcf228
+          HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          umask 077
+          known_hosts="$(mktemp)"
+          trap 'rm -f "$known_hosts"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known_hosts" 2>/dev/null
+          test "$(ssh-keygen -lf "$known_hosts" -E sha256 | awk '{print $2}')" = "$HOST_FINGERPRINT"
+          archive_sha="$(sha256sum telecampaign-controls.tar.gz | awk '{print $1}')"
+          remote_archive="/tmp/telecampaign-resume-${CONTROL_SHA}-${GITHUB_RUN_ID}.tar.gz"
+          sshpass -e scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 telecampaign-controls.tar.gz "ubuntu@15.235.142.30:$remote_archive"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
+            ubuntu@15.235.142.30 "bash -s -- '$TARGET' '$CONTROL_SHA' '$BUILT_FROM' '$archive_sha' '$remote_archive'" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          TARGET="$1"; CONTROL_SHA="$2"; BUILT_FROM="$3"; ARCHIVE_SHA="$4"; ARCHIVE="$5"
+          ROOT=/opt/telecampaign
+          BACKUPS=/var/backups/telecampaign
+          CONTROL="/var/lib/telecampaign/control/$CONTROL_SHA"
+          OLD_STAGE="/var/lib/telecampaign/staging/$BUILT_FROM"
+          STAGE="/var/lib/telecampaign/staging/$TARGET"
+          test "$(hostname)" = vps-cd243267
+          test "$(id -un)" = ubuntu
+          [[ "$TARGET" =~ ^[0-9a-f]{40}$ && "$CONTROL_SHA" =~ ^[0-9a-f]{40}$ && "$BUILT_FROM" =~ ^[0-9a-f]{40}$ && "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ARCHIVE" == /tmp/telecampaign-resume-"$CONTROL_SHA"-*.tar.gz ]]
+          test "$(sha256sum "$ARCHIVE" | awk '{print $1}')" = "$ARCHIVE_SHA"
+          # Confirm the actual private failure without disclosing raw log lines.
+          node <<'JS'
+          const fs=require("node:fs");
+          const text=fs.readFileSync("/var/backups/telecampaign/deploy-20261031T052306Z.log","utf8");
+          const confirmed=text.split("\n").some(l=>l.includes(".telecampaign-media-query")&&/permission denied/i.test(l));
+          console.log("confirmed_media_temp_permission_failure="+confirmed);
+          if(!confirmed)process.exit(1);
+          JS
+          git -c safe.directory="$ROOT" -C "$ROOT" fetch origin main --quiet
+          # Reuse the already validated runtime only for these non-build inputs.
+          # Any application, dependency, build configuration or schema change
+          # requires a fresh build; never silently relabel a different binary.
+          git -c safe.directory="$ROOT" -C "$ROOT" cat-file -e "${BUILT_FROM}^{commit}"
+          git -c safe.directory="$ROOT" -C "$ROOT" cat-file -e "${TARGET}^{commit}"
+          changed_paths="$(git -c safe.directory="$ROOT" -C "$ROOT" diff --name-only "$BUILT_FROM" "$TARGET")"
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              .github/workflows/telecampaign-preflight.yml|.github/workflows/telecampaign-deploy.yml|.github/workflows/telecampaign-resume-staged.yml|scripts/deploy-telecampaign.sh|scripts/prepare-notification-media-storage.sh|scripts/tests/test_release_safety.py) ;;
+              *) echo "compiled_input_changed_fresh_build_required"; exit 1 ;;
+            esac
+          done <<< "$changed_paths"
+          test -z "$(git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal)"
+          test ! -L /var/lib/telecampaign/control
+          test ! -L "$CONTROL"
+          sudo -n install -d -o ubuntu -g ubuntu -m 0700 "$CONTROL"
+          tar --extract --gzip --no-same-owner --file="$ARCHIVE" --directory="$CONTROL"
+          rm -f "$ARCHIVE"
+          # Source validation helpers but do not touch the live runtime yet.
+          source "$CONTROL/scripts/lib/telecampaign-release.sh"
+          release_validate_prebuilt "$OLD_STAGE" "$BUILT_FROM"
+          if ! test -d "$STAGE"; then
+            test ! -L /var/lib/telecampaign/staging
+            test ! -L "$STAGE"
+            sudo -n install -d -o ubuntu -g ubuntu -m 0700 "$STAGE"
+            ln "$OLD_STAGE/runtime.tar.gz" "$STAGE/runtime.tar.gz"
+            cp "$OLD_STAGE/PLATFORM" "$OLD_STAGE/RUNTIME_PATHS" "$STAGE/"
+            printf '%s\n' "$TARGET" > "$STAGE/COMMIT"
+            printf '%s\n' "$BUILT_FROM" > "$STAGE/BUILT_FROM_COMMIT"
+            (cd "$STAGE" && sha256sum COMMIT BUILT_FROM_COMMIT PLATFORM RUNTIME_PATHS runtime.tar.gz > SHA256SUMS)
+            printf 'telecampaign-runtime-v1\n' > "$STAGE/COMPLETE"
+          fi
+          release_validate_prebuilt "$STAGE" "$TARGET"
+          echo "reused_validated_runtime=$BUILT_FROM"
+          echo "operation_only_source_update=$TARGET"
+          baseline="$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)"
+          log="$BACKUPS/deploy-resume-$(date -u +%Y%m%dT%H%M%SZ).log"
+          if nice -n 10 bash "$CONTROL/scripts/deploy-telecampaign.sh" "$TARGET" \
+            --prebuilt "$STAGE" >"$log" 2>&1; then
+            echo "deployment_command=passed"
+          else
+            code=$?
+            echo "deployment_command=failed"
+            echo "source_after_failure=$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)"
+            if bash "$ROOT/scripts/telecampaign-healthcheck.sh" >/dev/null 2>&1; then echo "recovered_health=ok"; fi
+            echo "private_diagnostic_log=$log"
+            exit "$code"
+          fi
+          verify_public_release() {
+            test "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)" = "$TARGET" || return 1
+            bash "$ROOT/scripts/telecampaign-healthcheck.sh" >/dev/null 2>&1 || return 1
+            local index="$ROOT/artifacts/telecampaign/dist/public/index.html" expected actual asset
+            expected="$(sha256sum "$index" | awk '{print $1}')"
+            actual="$(curl --fail --silent --show-error --max-time 20 "https://tele.khaimmo.shop/?deploy=$TARGET" | sha256sum | awk '{print $1}')" || return 1
+            test "$actual" = "$expected" || return 1
+            asset="$(python3 -c 'import re,sys;s=open(sys.argv[1]).read();m=re.search(r"<script[^>]+src=\"(/assets/[A-Za-z0-9_.-]+\.js)\"",s);print(m.group(1) if m else "")' "$index")"
+            [[ "$asset" =~ ^/assets/[A-Za-z0-9_.-]+\.js$ ]] || return 1
+            expected="$(sha256sum "$ROOT/artifacts/telecampaign/dist/public$asset" | awk '{print $1}')"
+            actual="$(curl --fail --silent --show-error --max-time 20 "https://tele.khaimmo.shop$asset" | sha256sum | awk '{print $1}')" || return 1
+            test "$actual" = "$expected" || return 1
+            grep -q 'Verify manually' "$ROOT/artifacts/telecampaign/dist/public$asset" || return 1
+          }
+          if ! verify_public_release >>"$log" 2>&1; then
+            echo "public_release_check=failed"
+            if bash "$CONTROL/scripts/rollback-telecampaign.sh" --previous >>"$log" 2>&1; then echo "public_check_rollback=passed"; else echo "public_check_rollback=failed"; fi
+            exit 1
+          fi
+          echo "deployed_commit=$TARGET"
+          echo "public_release_check=passed"
+          echo "rollback_checkpoint=$(cat "$BACKUPS/releases/PREVIOUS")"
+          echo "private_diagnostic_log=$log"
+          REMOTE

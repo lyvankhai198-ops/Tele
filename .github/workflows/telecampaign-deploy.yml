@@ -125,7 +125,7 @@ jobs:
           path: runtime
       - name: Package pinned recovery controls
         env:
-          CONTROL_SHA: e9dd4273a746877084fbeeab5b6a1a08b1cf12bc
+          CONTROL_SHA: 979e21f8de88fa42a1e4132ffd6191e40864185c
         run: |
           git init controls
           cd controls
@@ -134,7 +134,8 @@ jobs:
           git archive --format=tar.gz --output=../telecampaign-controls.tar.gz FETCH_HEAD \
             scripts/lib/telecampaign-release.sh scripts/deploy-telecampaign.sh \
             scripts/checkpoint-telecampaign.sh scripts/rollback-telecampaign.sh \
-            scripts/backup-telecampaign.sh scripts/restore-telecampaign.sh
+            scripts/backup-telecampaign.sh scripts/restore-telecampaign.sh \
+            scripts/prepare-notification-media-storage.sh
       - name: Install SSH password helper
         run: |
           if ! command -v sshpass >/dev/null; then
@@ -145,7 +146,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
           TARGET: ${{ github.sha }}
-          CONTROL_SHA: e9dd4273a746877084fbeeab5b6a1a08b1cf12bc
+          CONTROL_SHA: 979e21f8de88fa42a1e4132ffd6191e40864185c
           HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
         shell: bash
         run: |
