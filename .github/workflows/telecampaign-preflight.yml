@@ -129,6 +129,51 @@ jobs:
             }
           }
           DIAGNOSTIC
+          (
+            set -a
+            source /etc/telecampaign/api.env
+            set +a
+            cd /opt/telecampaign
+            node --input-type=module <<'DATABASE_DIAGNOSTIC'
+          import { createRequire } from "node:module";
+          const require = createRequire(process.cwd()+"/lib/db/package.json");
+          const { Client } = require("pg");
+          const client = new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:5000,statement_timeout:5000});
+          try {
+            await client.connect();
+            const indexes=await client.query(`SELECT t.relname AS table_name,a.attname AS column_name,
+              bool_or(i.indisvalid AND i.indisready AND i.indkey[0]=a.attnum AND i.indpred IS NULL) AS indexed
+              FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace
+              JOIN pg_attribute a ON a.attrelid=t.oid LEFT JOIN pg_index i ON i.indrelid=t.oid
+              WHERE n.nspname='public' AND ((t.relname='activity_logs' AND a.attname IN ('campaign_id','target_id'))
+                OR (t.relname='admin_group_join_jobs' AND a.attname='auto_campaign_id')
+                OR (t.relname='campaign_targets' AND a.attname='campaign_id'))
+              GROUP BY t.relname,a.attname ORDER BY t.relname,a.attname`);
+            for(const row of indexes.rows) console.log("delete_fk_index_"+row.table_name+"_"+row.column_name+"="+Boolean(row.indexed));
+            const stats=await client.query(`SELECT count(*) FILTER (WHERE state='active')::int active,
+              count(*) FILTER (WHERE wait_event_type='Lock')::int lock_waiters,
+              count(*) FILTER (WHERE state='active' AND query ~* '^delete from "campaigns"')::int active_campaign_deletes
+              FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()`);
+            for(const [key,value] of Object.entries(stats.rows[0])) console.log("delete_diagnostic_"+key+"="+value);
+            const owners=await client.query(`SELECT c.relname, pg_get_userbyid(c.relowner)=current_user AS is_owner
+              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+              WHERE n.nspname='public' AND c.relname IN ('activity_logs','admin_group_join_jobs','campaign_targets')`);
+            for(const row of owners.rows) console.log("delete_table_owner_"+row.relname+"="+row.is_owner);
+            const fs = await import("node:fs");
+            const text = fs.readFileSync("/var/backups/telecampaign/deploy-20261031T152343Z.log","utf8");
+            for(const [name,pattern] of Object.entries({
+              module_missing:/Cannot find module/,
+              root_missing:/Cannot find module.*lib\/db/,
+              cancellation_reached:/stalled_campaign_deletes_cancelled=/,
+              generic_failure:/campaign_delete_indexes=failed/,
+              permission:/permission denied/,
+            })) console.log("delete_failure_"+name+"="+pattern.test(text));
+            const match=text.match(/stalled_campaign_deletes_cancelled=(\d+)/);
+            if(match) console.log("delete_cancelled_count="+match[1]);
+          } catch {console.log("delete_database_diagnostic=failed");process.exitCode=1;}
+          finally {await client.end();}
+          DATABASE_DIAGNOSTIC
+          )
           for binary in /usr/lib/postgresql/*/bin/pg_dump; do
             if test -x "$binary"; then "$binary" --version; fi
           done
