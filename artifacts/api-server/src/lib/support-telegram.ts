@@ -1224,19 +1224,8 @@ async function runAdminOperationalJobs(): Promise<void> {
           logger.warn("Daily admin report delivery uncertain; manual report remains available");
         }
       }
-      const health = await getWorkerHealth();
-      const cursor = await readOperationalState("telegram_bridge_cursor", { failedUpdateId: null, failures: 0 }, client);
-      const problems = health.workers.filter(w => w.status === "stale").map(w => `${w.name}: stale`);
-      const stalled = await pool.query("SELECT count(*)::int AS count FROM campaign_targets WHERE status='requires_review'");
-      if (Number(stalled.rows[0]?.count) > 0) problems.push("Có đích gửi cần xác minh kết quả để tránh gửi trùng");
-      if (health.disk?.status === "low") problems.push("Ổ đĩa trống dưới 10%");
-      if (cursor.failures >= 3) problems.push(`Tin bot ${cursor.failedUpdateId} đang chờ xử lý lại`);
-      const fingerprint = problems.join("; ");
-      const last = await readOperationalState("admin_health_alert", { fingerprint: "", at: 0 }, client);
-      if ((fingerprint && (fingerprint !== last.fingerprint || Date.now() - last.at > 3600_000)) || (!fingerprint && last.fingerprint)) {
-        const sent = await sendAdminMenu(fingerprint ? `⚠️ TELECAMP CẦN KIỂM TRA\n${fingerprint}\nMở 🛠 Vận hành để xem chi tiết.` : "✅ Worker/ổ đĩa TeleCamp đã trở lại trạng thái bình thường.");
-        if (sent) await writeOperationalState("admin_health_alert", { fingerprint, at: Date.now() }, client);
-      }
+      // Automatic operational warnings are intentionally muted. Manual operations
+      // checks and campaign processing/review protections remain unchanged.
     });
   } catch { logger.warn("Admin operational checks failed"); }
   finally { operationalJobsRunning = false; }
