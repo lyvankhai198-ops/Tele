@@ -279,6 +279,7 @@ export const adminGroupJoinJobsTable = pgTable("admin_group_join_jobs", {
   uniqueIndex("admin_group_join_jobs_account_group_idx").on(table.telegramAccountId, table.groupLibraryEntryId),
   index("admin_group_join_jobs_due_idx").on(table.status, table.nextAttemptAt),
   index("admin_group_join_jobs_account_idx").on(table.telegramAccountId, table.status),
+  index("admin_group_join_jobs_auto_campaign_idx").on(table.autoCampaignId),
 ]);
 
 export const activityLogsTable = pgTable("activity_logs", {
@@ -292,7 +293,10 @@ export const activityLogsTable = pgTable("activity_logs", {
   targetId: uuid("target_id").references(() => campaignTargetsTable.id, { onDelete: "set null" }),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("activity_logs_campaign_idx").on(table.campaignId),
+  index("activity_logs_target_idx").on(table.targetId),
+]);
 
 export const messageTemplatesTable = pgTable("message_templates", {
   id: uuid("id").primaryKey().defaultRandom(),

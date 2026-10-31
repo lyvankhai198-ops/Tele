@@ -2599,26 +2599,34 @@ router.post("/campaigns/bulk-delete", async (req, res): Promise<void> => {
   const deletableIds = matching
     .filter((campaign) => !["queued", "running"].includes(campaign.status))
     .map((campaign) => campaign.id);
-  const deleted = deletableIds.length
-    ? await db.delete(campaignsTable).where(and(
-      eq(campaignsTable.ownerUserId, ownerUserId),
-      inArray(campaignsTable.id, deletableIds),
-      notInArray(campaignsTable.status, ["queued", "running"]),
-    )).returning({ id: campaignsTable.id, name: campaignsTable.name })
-    : [];
-  if (deleted.length) {
-    await recordActivity({
-      ownerUserId,
-      event: "campaign.bulk_deleted",
-      level: "info",
-      message: `Deleted ${deleted.length} campaigns in bulk.`,
-      metadata: {
-        status: parsed.data.status,
-        search: search || null,
-        deletedCount: deleted.length,
-        skippedCount: skipped.length,
-      },
-    });
+  let deleted: { id: string; name: string }[];
+  try {
+    deleted = deletableIds.length ? await db.transaction(async (tx) => {
+      // Fail before the proxy's timeout instead of leaving an unbounded DELETE
+      // running after the browser has already received a 504.
+      await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
+      await tx.execute(sql`SET LOCAL statement_timeout = '20s'`);
+      const removed = await tx.delete(campaignsTable).where(and(
+        eq(campaignsTable.ownerUserId, ownerUserId),
+        inArray(campaignsTable.id, deletableIds),
+        notInArray(campaignsTable.status, ["queued", "running"]),
+      )).returning({ id: campaignsTable.id, name: campaignsTable.name });
+      if (removed.length) await tx.insert(activityLogsTable).values({
+        ownerUserId,
+        event: "campaign.bulk_deleted",
+        level: "info",
+        message: `Deleted ${removed.length} campaigns in bulk.`,
+        metadata: { status: parsed.data.status, search: search || null,
+          deletedCount: removed.length, skippedCount: skipped.length },
+      });
+      return removed;
+    }) : [];
+  } catch (error) {
+    const pgError = error as { code?: string; cause?: { code?: string } };
+    if (["55P03", "57014", "40P01"].includes(pgError.cause?.code ?? pgError.code ?? "")) {
+      return void sendError(res, 503, "CAMPAIGN_DELETE_BUSY");
+    }
+    throw error;
   }
   res.json(BulkDeleteCampaignsResponse.parse({
     deletedCount: deleted.length,
