@@ -1,0 +1,101 @@
+name: TeleCampaign preflight (no deployment)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telecampaign-vps-operations
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Install SSH password helper
+        run: |
+          if ! command -v sshpass >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+          fi
+      - name: Verify pinned server and inspect TeleCampaign only
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo "SSH secret is missing"; exit 1; }
+          umask 077
+          known_hosts="$(mktemp)"
+          trap 'rm -f "$known_hosts"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known_hosts" 2>/dev/null
+          actual="$(ssh-keygen -lf "$known_hosts" -E sha256 | awk '{print $2}')"
+          test "$actual" = "$HOST_FINGERPRINT" || { echo "SSH server identity changed; refusing connection"; exit 1; }
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 -o NumberOfPasswordPrompts=1 \
+            -p 22 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          test "$(hostname)" = "vps-cd243267" || { echo "Unexpected hostname"; exit 1; }
+          printf 'host=%s\nssh_user=%s\n' "$(hostname)" "$(id -un)"
+          if sudo -n true 2>/dev/null; then echo "sudo_without_prompt=yes"; else echo "sudo_without_prompt=no"; fi
+          ROOT=/opt/telecampaign
+          test -d "$ROOT/.git"
+          test "$(realpath "$ROOT")" = "$ROOT"
+          printf 'repository_owner='; stat -c '%U:%G' "$ROOT"
+          printf 'source_commit='; git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD
+          printf 'tracked_changes='; git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal | wc -l
+          for tool in node pnpm pm2 pg_dump pg_restore flock tar; do
+            if command -v "$tool" >/dev/null; then printf '%s=available\n' "$tool"; else printf '%s=missing_in_ssh_path\n' "$tool"; fi
+          done
+          if command -v node >/dev/null; then node --version; fi
+          for file in artifacts/api-server/dist/index.mjs artifacts/telecampaign/dist/public/index.html; do
+            if test -s "$ROOT/$file"; then printf 'built_asset=%s\n' "$file"; else printf 'missing_asset=%s\n' "$file"; fi
+          done
+          df -h "$ROOT" /var/backups /var/lib
+          if test -f "$HOME/.pm2/pm2.pid" && command -v pm2 >/dev/null; then
+            pm2 jlist | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s).find(p=>p.name==="telecampaign-api"); console.log(JSON.stringify({pm2Owner:"ubuntu",found:!!p,status:p?.pm2_env?.status,cwd:p?.pm2_env?.pm_cwd,script:p?.pm2_env?.pm_exec_path}));});'
+          fi
+          if sudo -n true 2>/dev/null; then
+            sudo -n bash -lc 'if test -f /root/.pm2/pm2.pid && command -v pm2 >/dev/null; then pm2 jlist | node -e '"'"'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s).find(p=>p.name==="telecampaign-api");console.log(JSON.stringify({pm2Owner:"root",found:!!p,status:p?.pm2_env?.status,cwd:p?.pm2_env?.pm_cwd,script:p?.pm2_env?.pm_exec_path}));});'"'"'; fi'
+            if sudo -n test -r /etc/telecampaign/api.env; then echo 'dedicated_environment=readable_by_sudo'; fi
+          fi
+          if curl --fail --silent --max-time 10 http://127.0.0.1:3004/api/healthz | python3 -c 'import json,sys;x=json.load(sys.stdin);print("local_health="+str(x.get("status")));sys.exit(0 if x.get("status")=="ok" else 1)'; then
+            echo 'local_health_check=passed'
+          else
+            echo 'local_health_check=failed'
+          fi
+          REMOTE
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Fetch exact candidate without production credentials
+        env:
+          CANDIDATE_SHA: 95ece98c51dc4345ad974f78e0ba250faaf27ad4
+        run: |
+          git init candidate
+          cd candidate
+          git remote add origin https://github.com/lyvankhai198-ops/Tele.git
+          git fetch --depth=1 origin "$CANDIDATE_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Install locked dependencies
+        working-directory: candidate
+        run: npx --yes pnpm@10.26.1 install --frozen-lockfile
+      - name: Test manual order review
+        working-directory: candidate
+        run: node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
+      - name: Typecheck and build TeleCampaign
+        working-directory: candidate
+        env:
+          PORT: "3004"
+          BASE_PATH: /
+        run: |
+          npx --yes pnpm@10.26.1 run typecheck:libs
+          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
+          npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck
+          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run build
+          npx --yes pnpm@10.26.1 --filter @workspace/api-server run build
