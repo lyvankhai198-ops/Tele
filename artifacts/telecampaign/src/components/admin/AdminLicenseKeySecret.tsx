@@ -102,12 +102,15 @@ export function AdminLicenseKeySecret({ licenseKeyId }: Props) {
   });
 
   function beginClipboardWrite(blobPromise: Promise<Blob>): Promise<void> {
-    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
-      throw new Error("clipboard-unsupported");
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+      return navigator.clipboard.write([
+        new ClipboardItem({ "text/plain": blobPromise }),
+      ]);
     }
-    return navigator.clipboard.write([
-      new ClipboardItem({ "text/plain": blobPromise }),
-    ]);
+    if (navigator.clipboard?.writeText) {
+      return blobPromise.then(blob => blob.text()).then(text => navigator.clipboard.writeText(text));
+    }
+    throw new Error("clipboard-unsupported");
   }
 
   function beginClipboardWriteText(text: string): Promise<void> {

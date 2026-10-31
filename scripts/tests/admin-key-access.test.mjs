@@ -2,16 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import ts from "typescript";
+import { stripTypeScriptTypes } from "node:module";
 import { licenseKeyHash } from "../../artifacts/api-server/src/lib/license-key-identity.ts";
 
 const source = fs.readFileSync(new URL("../../artifacts/api-server/src/lib/subscriptions.ts", import.meta.url), "utf8");
 const start = source.indexOf("export async function revealAdminLicenseKey(");
 const end = source.indexOf("\nfunction generateLicenseKey(", start);
 assert.ok(start >= 0 && end > start);
-const compiled = ts.transpileModule(source.slice(start, end), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
+const compiled = stripTypeScriptTypes(source.slice(start, end).replace("export async function", "async function"), {
+  mode: "strip",
+}) + "\nexports.revealAdminLicenseKey = revealAdminLicenseKey;";
 
 function reader(record, decrypt = () => "TC-FIXTURE-ORIGINAL") {
   let decryptCalls = 0;

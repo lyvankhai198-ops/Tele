@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Key,
@@ -472,9 +472,13 @@ export function AdminLicenseKeysPage() {
   const [quickFilter, setQuickFilter] = useState<"all" | "soon" | "active" | "available">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("keyId"));
-  const [linkedUserId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("userId"));
-  const [linkedKeyId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("keyId"));
+  const linkedSearch = useSearch();
+  const linkedUserId = new URLSearchParams(linkedSearch).get("userId");
+  const linkedKeyId = new URLSearchParams(linkedSearch).get("keyId");
+  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(linkedKeyId);
+  useEffect(() => {
+    setSelectedKeyId(linkedKeyId);
+  }, [linkedKeyId, linkedUserId]);
 
   // Queries
   const queryParams = {
@@ -1204,6 +1208,13 @@ export function AdminLicenseKeysPage() {
           <div>
             <h2>{text.inventoryTitle}</h2>
             <p>{text.inventoryDetail}</p>
+            {(linkedUserId || linkedKeyId) && <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span>{language === "vi" ? "Đang xem key được liên kết từ hồ sơ." : "Showing keys linked from a profile."}</span>
+              <button type="button" className="font-bold text-[#126f86] underline underline-offset-2"
+                onClick={() => navigate("/admin/license-keys")} data-testid="button-clear-linked-key-filter">
+                {language === "vi" ? "Xem tất cả key" : "Show all keys"}
+              </button>
+            </div>}
           </div>
           <label className="license-key-page__search">
             <Search size={16} />
