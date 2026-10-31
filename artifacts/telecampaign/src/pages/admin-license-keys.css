@@ -476,6 +476,156 @@
   border-top: 1px solid #edf1ed;
 }
 
+.license-key-page__mobile-cards {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #edf1ed;
+}
+
+.license-key-page__mobile-card {
+  display: grid;
+  min-width: 0;
+  gap: 13px;
+  overflow: hidden;
+  padding: 14px;
+  border: 1px solid var(--license-line);
+  border-radius: 14px;
+  background: var(--license-surface);
+  box-shadow: 0 4px 12px rgb(24 54 57 / 4%);
+}
+
+.license-key-page__mobile-recipient {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #e8efeb;
+}
+
+.license-key-page__mobile-recipient-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.license-key-page__mobile-recipient-copy > small,
+.license-key-page__mobile-facts small,
+.license-key-page__mobile-key > small,
+.license-key-page__mobile-reminder > small {
+  color: #788b85;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-recipient-copy > strong {
+  color: var(--license-ink);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-recipient-copy > span {
+  color: var(--license-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-profile-link {
+  justify-self: start;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--license-teal-dark);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-facts {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.license-key-page__mobile-facts > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.license-key-page__mobile-facts > div > strong {
+  color: var(--license-ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-key,
+.license-key-page__mobile-reminder {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #e8efeb;
+}
+
+.license-key-page__mobile-key > div {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.license-key-page__mobile-key .license-key-page__subtext,
+.license-key-page__mobile-reminder .license-key-page__subtext {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #e8efeb;
+}
+
+.license-key-page__mobile-actions button {
+  display: inline-flex;
+  min-height: 38px;
+  min-width: 0;
+  flex: 1 1 130px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #d5e3dc;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--license-teal-dark);
+  font-size: 10px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.license-key-page__mobile-actions button:hover {
+  background: #f1f7f3;
+}
+
 .license-key-page__table {
   width: 100%;
   min-width: 850px;

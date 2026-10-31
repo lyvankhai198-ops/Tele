@@ -114,6 +114,49 @@ try {
   check(approved.ok, "E2E_APPROVAL");
   const claimed = await pool.query("SELECT claimed_by FROM license_keys WHERE id=$1", [keyId]);
   check(claimed.rows[0]?.claimed_by === userId, "E2E_KEY_ACTIVATED");
+  phase = "E2E_ADMIN_KEY_ACCESS";
+  const secretPath = `/admin/license-keys/${keyId}/secret`;
+  const anonymousSecret = await request(secretPath);
+  check(anonymousSecret.status === 401 && anonymousSecret.headers.get("cache-control")?.includes("no-store"), "E2E_ANON_KEY_DENIED_NO_STORE");
+  const customerSecret = await request(secretPath, userCookie);
+  check(customerSecret.status === 403 && customerSecret.headers.get("cache-control")?.includes("no-store"), "E2E_CUSTOMER_KEY_DENIED_NO_STORE");
+  const revealed = await request(secretPath, adminCookie);
+  check(revealed.ok && revealed.headers.get("cache-control")?.includes("no-store"), "E2E_ADMIN_KEY_NO_STORE");
+  check((await revealed.json() as any).licenseKey === rawKey, "E2E_REVEAL_EXACT_ACTIVATED_KEY");
+  const historyFixtures = [
+    { id: randomUUID(), secret: null, hash: createHash("sha256").update(randomBytes(24)).digest("hex"), revoked: false },
+    { id: randomUUID(), secret: encryptSecret("MISMATCH-" + randomBytes(18).toString("hex")), hash: createHash("sha256").update(randomBytes(24)).digest("hex"), revoked: false },
+    { id: randomUUID(), secret: encryptSecret(rawKey), hash: createHash("sha256").update(rawKey).digest("hex"), revoked: true },
+  ];
+  // The revoked fixture needs a unique hash and a matching encrypted value.
+  const revokedOriginal = "REVOKED-" + randomBytes(18).toString("hex").toUpperCase();
+  historyFixtures[2].secret = encryptSecret(revokedOriginal);
+  historyFixtures[2].hash = createHash("sha256").update(revokedOriginal).digest("hex");
+  for (const item of historyFixtures) {
+    await pool.query(`INSERT INTO license_keys(id,key_hash,key_encrypted,plan,duration_days,pool,claimed_by,claimed_at,revoked_at)
+      VALUES($1,$2,$3,'plus',30,'external',$4,now(),CASE WHEN $5::boolean THEN now() ELSE NULL END)`,
+      [item.id,item.hash,item.secret,userId,item.revoked]);
+    const response = await request(`/admin/license-keys/${item.id}/secret`, adminCookie);
+    check(response.headers.get("cache-control")?.includes("no-store"), "E2E_LEGACY_AND_REVOKED_NO_STORE");
+    if (item.revoked) {
+      check(response.ok && (await response.json() as any).licenseKey === revokedOriginal, "E2E_REVOKED_ORIGINAL_STILL_RETRIEVABLE");
+    } else {
+      check(response.status === 409 && !(await response.text()).includes(rawKey), "E2E_LEGACY_OR_HASH_MISMATCH_UNAVAILABLE");
+    }
+  }
+  const missingSecret = await request(`/admin/license-keys/${randomUUID()}/secret`, adminCookie);
+  check(missingSecret.status === 404 && missingSecret.headers.get("cache-control")?.includes("no-store"), "E2E_MISSING_KEY_NO_STORE");
+  const inventoryResponse = await request("/admin/license-keys", adminCookie);
+  const inventoryText = await inventoryResponse.text();
+  const inventory = JSON.parse(inventoryText) as any[];
+  const received = inventory.filter(k => k.claimedByUserId === userId);
+  check(received.length >= 4 && received.some(k => k.id === keyId) &&
+    received.some(k => k.id === historyFixtures[2].id && k.status === "revoked"), "E2E_EXACT_USER_MULTIPLE_KEY_HISTORY");
+  check(!inventoryText.includes(rawKey) && !inventoryText.includes(revokedOriginal) &&
+    !inventoryText.includes("keyEncrypted") && !inventoryText.includes("keyHash"), "E2E_LIST_NEVER_CONTAINS_KEY_SECRETS");
+  const unchanged = await pool.query("SELECT claimed_by,key_hash FROM license_keys WHERE id=$1", [keyId]);
+  check(unchanged.rows[0]?.claimed_by === userId &&
+    unchanged.rows[0]?.key_hash === createHash("sha256").update(rawKey).digest("hex"), "E2E_KEY_ACCESS_PRESERVES_OWNER_AND_KEY");
   phase = "E2E_BOT_LOOKUPS";
   const message = (id: number, text: string) => ({ update_id: id, message: { message_id: id, chat: { id: 123456789, type: "private" }, from: { id: 123456789 }, text } });
   updates = [message(1, "⏳ Sắp hết hạn"), message(2, "🧾 Key hôm nay"), message(3, `/findkey ${rawKey}`),

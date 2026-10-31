@@ -213,14 +213,17 @@ export async function listAdminLicenseKeys(filters: { status?: AdminLicenseStatu
 }
 
 export async function revealAdminLicenseKey(licenseKeyId: string): Promise<AdminLicenseRevealResult> {
-  const [license] = await db.select({ keyEncrypted: licenseKeysTable.keyEncrypted })
+  const [license] = await db.select({ keyEncrypted: licenseKeysTable.keyEncrypted, keyHash: licenseKeysTable.keyHash })
     .from(licenseKeysTable)
     .where(eq(licenseKeysTable.id, licenseKeyId))
     .limit(1);
   if (!license) return { ok: false, reason: "not_found" };
   if (!license.keyEncrypted) return { ok: false, reason: "unavailable" };
   try {
-    return { ok: true, licenseKey: decryptSecret(license.keyEncrypted) };
+    const licenseKey = decryptSecret(license.keyEncrypted);
+    // A decryptable value alone is not sufficient: it must be this exact key.
+    if (licenseKeyHash(licenseKey) !== license.keyHash) return { ok: false, reason: "unavailable" };
+    return { ok: true, licenseKey };
   } catch {
     return { ok: false, reason: "unavailable" };
   }

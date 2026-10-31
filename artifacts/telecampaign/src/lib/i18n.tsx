@@ -817,17 +817,18 @@ export function LanguageProvider({
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
-export function LanguageOverride({ language, children }: { language: Language; children: ReactNode }) {
+export function LanguageOverride({ language, setLanguage, children }: { language: Language; setLanguage?: (language: Language) => void; children: ReactNode }) {
   const parent = useLanguage();
   const value = useMemo<LanguageContextValue>(() => ({
     ...parent,
     language,
+    setLanguage: setLanguage ?? parent.setLanguage,
     t: (text: string) => language === "vi" ? (translations[text] ?? text) : text,
     ti: (text: string, vars: Record<string, string | number>) => {
       const translated = language === "vi" ? (translations[text] ?? text) : text;
       return interpolate(translated, vars);
     },
-  }), [language, parent]);
+  }), [language, parent, setLanguage]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }

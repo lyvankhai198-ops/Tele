@@ -25,6 +25,7 @@ import {
   type AdminUserSupportCampaign,
 } from "@workspace/api-client-react";
 import { useLanguage } from "@/lib/i18n";
+import { AdminUserLicenseHistory } from "@/components/admin/AdminUserLicenseHistory";
 import {
   ArrowLeft,
   ShieldAlert,
@@ -540,6 +541,10 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
             {user.lastActiveAt ? formatDate(user.lastActiveAt, language) : "—"}
           </div>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <AdminUserLicenseHistory userId={user.id} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

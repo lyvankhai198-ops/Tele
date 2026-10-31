@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   Activity,
@@ -93,13 +93,15 @@ export function AppLayout({
   hideUpgrade?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [adminGroupOpen, setAdminGroupOpen] = useState<Record<string, boolean>>({});
   const [location, setLocation] = useLocation();
   const { language, setLanguage, t } = useLanguage();
   const { user, logout, exitSupport } = useAuth();
   const isSupportMode = Boolean(user?.support);
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const systemDefaults = useGetSystemDefaults();
-  const isAdminSection = location === "/admin" || location.startsWith("/admin/");
+  const isAdminSection = location === "/admin" || location.startsWith("/admin/")
+    || (user?.role === "admin" && activePage === "feedback");
   const systemEvents = useListAdminSystemEvents(
     { range: "all", limit: 1 },
     {
@@ -121,12 +123,58 @@ export function AppLayout({
     && ((nationalDayMonth === 8 && nationalDayDay >= 25) || (nationalDayMonth === 9 && nationalDayDay <= 3));
   const nationalDayThemeActive = showNationalDayRibbon;
   const showAdminMenu = user?.role === "admin" && !isSupportMode;
+  useEffect(() => {
+    setAdminGroupOpen({});
+  }, [location]);
   const visibleNavigation = navigation.filter((item) => (
     (!item.adminOnly || showAdminMenu)
     && (!item.groupLibraryOnly || groupLibraryAccess.data?.visible)
     && (item.key !== "feedback" || !isSupportMode)
   ));
   const dedicatedAdminPage = navigation.some((item) => item.adminOnly && item.key !== "admin" && item.key === activePage);
+  const adminGroups = [
+    {
+      id: "users-keys",
+      title: language === "vi" ? "Người dùng & Key" : "Users & keys",
+      icon: UsersRound,
+      entries: [
+        { key: "admin-users" as PageKey, label: language === "vi" ? "Người dùng" : "Users", path: "/admin/users" },
+        { key: "license-keys" as PageKey, label: language === "vi" ? "License key & gia hạn" : "License keys & renewals", path: "/admin/license-keys" },
+      ],
+    },
+    {
+      id: "orders-revenue",
+      title: language === "vi" ? "Đơn hàng & Doanh thu" : "Orders & revenue",
+      icon: Activity,
+      entries: [
+        { key: "admin-revenue" as PageKey, label: language === "vi" ? "Doanh thu & định giá key" : "Revenue & key valuation", path: "/admin/revenue" },
+        { key: "admin" as PageKey, label: language === "vi" ? "Đơn mua & thanh toán" : "Purchase orders & payments", path: "/admin/purchase-orders" },
+      ],
+    },
+    {
+      id: "notifications-care",
+      title: language === "vi" ? "Thông báo & Chăm sóc" : "Notifications & care",
+      icon: LifeBuoy,
+      entries: [
+        { key: "admin-notifications" as PageKey, label: language === "vi" ? "Thông báo người dùng" : "User notifications", path: "/admin/notifications" },
+        { key: "admin-popups" as PageKey, label: language === "vi" ? "Popup thông báo" : "Announcement popups", path: "/admin/popups" },
+        { key: "admin-support-chat" as PageKey, label: language === "vi" ? "Hỗ trợ chat" : "Support chat", path: "/admin/support-chat" },
+        { key: "feedback" as PageKey, label: language === "vi" ? "Góp ý & thảo luận" : "Feedback & discussion", path: "/dashboard/feedback" },
+      ],
+    },
+    {
+      id: "system",
+      title: language === "vi" ? "Hệ thống" : "System",
+      icon: Settings2,
+      entries: [
+        { key: "admin-system-settings" as PageKey, label: language === "vi" ? "Cài đặt hệ thống" : "System settings", path: "/admin/system-settings" },
+        { key: "admin-active-groups" as PageKey, label: language === "vi" ? "Nhóm đang hoạt động" : "Active groups", path: "/admin/active-groups" },
+        { key: "admin-system-events" as PageKey, label: language === "vi" ? "Sự kiện hệ thống" : "System events", path: "/admin/system-events" },
+        { key: "admin-tools" as PageKey, label: language === "vi" ? "Công cụ nâng cao & báo cáo" : "Advanced tools & reports", path: "/admin/tools" },
+        { key: "admin-operations" as PageKey, label: language === "vi" ? "Giám sát vận hành" : "Operations monitor", path: "/admin/operations" },
+      ],
+    },
+  ];
 
   function renderNavigation(items: typeof navigation, highlighted = false) {
     return items.map((item) => {
@@ -206,7 +254,55 @@ export function AppLayout({
                 <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
                 {language === "vi" ? "Khu vực quản trị" : "Admin workspace"}
               </div>
-              {renderNavigation(visibleNavigation.filter((item) => item.adminOnly || item.key === "feedback"), true)}
+              <button type="button" onClick={() => navigate("/admin")}
+                aria-current={location === "/admin" ? "page" : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-extrabold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] ${
+                  location === "/admin" ? "bg-[#e5f0f2] text-[#145b6c]" : "text-[#3e626f] hover:bg-white"
+                }`}
+                data-testid="nav-admin-overview">
+                <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                {language === "vi" ? "Tổng quan quản trị" : "Admin overview"}
+              </button>
+              {adminGroups.map((group) => {
+                const GroupIcon = group.icon;
+                const hasCurrentEntry = group.entries.some((entry) => location === entry.path || (entry.key !== "admin" && activePage === entry.key));
+                const isOpen = adminGroupOpen[group.id] ?? hasCurrentEntry;
+                const panelId = `admin-nav-items-${group.id}`;
+                return (
+                  <div key={group.id} className="border-t border-[#dce6e9] pt-1">
+                    <button
+                      type="button"
+                      id={`toggle-admin-group-${group.id}`}
+                      aria-expanded={isOpen}
+                      aria-controls={panelId}
+                      onClick={() => setAdminGroupOpen((current) => ({ ...current, [group.id]: !isOpen }))}
+                      className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-2 text-left text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#607580] outline-none hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#197a91]"
+                      data-testid={`toggle-admin-group-${group.id}`}
+                    >
+                      <GroupIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                      <span className="min-w-0 flex-1">{group.title}</span>
+                      <ChevronRight aria-hidden="true" className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+                    </button>
+                    <div id={panelId} role="group" aria-labelledby={`toggle-admin-group-${group.id}`} hidden={!isOpen} className="space-y-1 pb-1 pl-1 pt-1">
+                      {group.entries.map((entry) => {
+                        const selected = location === entry.path || (entry.key !== "admin" && activePage === entry.key);
+                        return (
+                          <button key={entry.path} type="button" onClick={() => navigate(entry.path)}
+                            aria-current={selected ? "page" : undefined}
+                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] ${
+                              selected ? "bg-[#e5f0f2] text-[#145b6c]" : "text-[#4e6470] hover:bg-white hover:text-[#17394e]"
+                            }`}
+                            data-testid={`nav-admin-${entry.key}`}>
+                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-[#167b91]" : "bg-[#a8bbc3]"}`} />
+                            <span className="min-w-0 flex-1">{entry.label}</span>
+                            {selected && <span className="h-1.5 w-1.5 rounded-full bg-[#167b91]" aria-hidden="true" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </section>
           )}
         </div>
@@ -216,33 +312,28 @@ export function AppLayout({
             <div className="flex items-center gap-2 px-2 pb-2.5 text-[11px] font-extrabold text-[#64748b] uppercase tracking-wider">
               NGÔN NGỮ / LANGUAGE
             </div>
-            {isAdminSection ? (
-              <div className="flex items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white py-2 text-xs font-extrabold text-[#1a2b88]" data-testid="admin-language-vi">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Tiếng Việt
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setLanguage("vi")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                    language === "vi" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
-                  }`}
-                  data-testid="language-vi"
-                >
-                  VI
-                </button>
-                <button
-                  onClick={() => setLanguage("en")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                    language === "en" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
-                  }`}
-                  data-testid="language-en"
-                >
-                  EN
-                </button>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setLanguage("vi")}
+                aria-pressed={language === "vi"}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                  language === "vi" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
+                }`}
+                data-testid="language-vi"
+              >
+                VI
+              </button>
+              <button
+                onClick={() => setLanguage("en")}
+                aria-pressed={language === "en"}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
+                  language === "en" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
+                }`}
+                data-testid="language-en"
+              >
+                EN
+              </button>
+            </div>
           </div>
           <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Telegram Campaign Manager v2.0</div>
         </div>
@@ -257,8 +348,8 @@ export function AppLayout({
               <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#475569] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Open menu')}>
                 <Menu className="h-6 w-6" />
               </button>
-                <h1 className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
-               <h1 className="text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight">{t(title)}</h1>
+                <h1 aria-label={t(title)} title={t(title)} className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
+               <h1 aria-label={t(title)} title={t(title)} className={`text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight ${isAdminSection ? "min-w-0 max-w-[190px] break-words leading-tight line-clamp-2" : ""}`}>{t(title)}</h1>
             </div>
             
              <div className="flex items-center gap-3 sm:gap-4">
@@ -370,8 +461,8 @@ export function AppLayout({
   );
 }
 
-export function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-3xl border border-[#eef2f6] bg-white shadow-sm ${className}`}>{children}</section>;
+export function Panel({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
+  return <section id={id} className={`rounded-3xl border border-[#eef2f6] bg-white shadow-sm ${className}`}>{children}</section>;
 }
 
 export function SectionHeader({ eyebrow, title, detail, action }: { eyebrow?: string; title: string; detail?: string; action?: ReactNode }) {

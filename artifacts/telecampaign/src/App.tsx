@@ -6,7 +6,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
-import { LanguageOverride, LanguageProvider, localizedErrorMessage, useLanguage } from '@/lib/i18n';
+import { LanguageOverride, LanguageProvider, localizedErrorMessage, useLanguage, type Language } from '@/lib/i18n';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import {
   Route,
@@ -899,7 +899,21 @@ function AdminRoute({ children }: { children: ReactNode }) {
     return <Redirect to="/dashboard/settings" replace />;
   }
   if (user?.support) return <Redirect to="/dashboard" replace />;
-  return user?.role === 'admin' ? <LanguageOverride language="vi">{children}</LanguageOverride> : <Redirect to="/dashboard" replace />;
+  return user?.role === 'admin' ? children : <Redirect to="/dashboard" replace />;
+}
+
+function AdminLanguageScope({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const [location] = useLocation();
+  const [adminLanguage, setAdminLanguage] = useState<Language>(user?.preferredLanguage ?? "vi");
+  useEffect(() => {
+    if (user?.role === "admin") setAdminLanguage(user.preferredLanguage ?? "vi");
+  }, [user?.id]);
+  const adminSurface = location === "/admin" || location.startsWith("/admin/")
+    || location === "/dashboard/feedback";
+  return user?.role === "admin" && adminSurface
+    ? <LanguageOverride language={adminLanguage} setLanguage={setAdminLanguage}>{children}</LanguageOverride>
+    : children;
 }
 
 function GroupLibraryRoute({ children }: { children: ReactNode }) {
@@ -996,12 +1010,14 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <UserLanguageProvider>
-            <TooltipProvider>
-              <Router />
-              <SupportChatWidget />
-              <AnnouncementPopup />
-              <Toaster />
-            </TooltipProvider>
+            <AdminLanguageScope>
+              <TooltipProvider>
+                <Router />
+                <SupportChatWidget />
+                <AnnouncementPopup />
+                <Toaster />
+              </TooltipProvider>
+            </AdminLanguageScope>
           </UserLanguageProvider>
         </AuthProvider>
       </QueryClientProvider>
