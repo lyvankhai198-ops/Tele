@@ -30,6 +30,7 @@ jobs:
           bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
           python3 scripts/tests/test_release_safety.py
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
+          node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs
       - name: Install and typecheck exact target
         working-directory: candidate
         env:
@@ -292,5 +293,19 @@ jobs:
           echo "private_diagnostic_log=$log"
           if test -f "$BACKUPS/releases/PREVIOUS"; then
             echo "rollback_checkpoint=$(cat "$BACKUPS/releases/PREVIOUS")"
+          fi
+          # Refresh only the configured private admin's keyboard, never customer
+          # chats. Credentials stay on VPS; failures are reported without values.
+          if [[ -f "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs" ]]; then
+            if (
+              set -a
+              source /etc/telecampaign/api.env
+              set +a
+              node "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs"
+            ) >>"$log" 2>&1; then
+              echo "admin_menu_refresh=passed"
+            else
+              echo "admin_menu_refresh=failed"
+            fi
           fi
           REMOTE

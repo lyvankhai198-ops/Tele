@@ -34,6 +34,9 @@ import { supportMediaStorage } from "./supportMediaStorage";
 import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { logger } from "./logger";
 import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-admin-access";
+import { findLicenseForTelegram } from "./telegram-license-lookup";
+import { createAdminLicenseLookupFlow } from "./telegram-license-lookup-flow";
+import { TELEGRAM_ADMIN_MENU as ADMIN_MENU } from "./telegram-admin-menu";
 import {
   translateAdminReplyForCustomer,
   translateCustomerMessageForAdmin,
@@ -62,17 +65,6 @@ const usernameRecoveryContacts = new Map<string, { count: number; resetAt: numbe
 const pendingUsernameRecoveryChats = new Map<string, number>();
 const pendingPasswordRecoveryChats = new Map<string, number>();
 const TELEGRAM_RECOVERY_WINDOW_MS = 15 * 60_000;
-
-const ADMIN_MENU = {
-  keyboard: [
-    [{ text: "📊 Tổng quan" }, { text: "💰 Doanh thu" }],
-    [{ text: "👥 Người dùng" }, { text: "🔑 License keys" }],
-    [{ text: "⏳ Sắp hết hạn" }, { text: "🧾 Key hôm nay" }],
-    [{ text: "🔄 Làm mới" }, { text: "🏠 Menu" }],
-  ],
-  resize_keyboard: true,
-  is_persistent: true,
-};
 
 async function telegramCall<T>(method: string, payload: Record<string, unknown>): Promise<T | null> {
   const token = botToken();
@@ -130,6 +122,12 @@ async function sendAdminMenu(text = "Chọn một thao tác:", parseMode?: "HTML
     reply_markup: ADMIN_MENU,
   });
 }
+
+const handleAdminLicenseLookup = createAdminLicenseLookupFlow({
+  lookup: findLicenseForTelegram,
+  respond: sendAdminMenu,
+  onError: () => logger.warn("Admin Telegram license lookup failed"),
+});
 
 export async function notifyPurchaseOrder(text: string, orderId?: string): Promise<void> {
   try {
@@ -939,6 +937,7 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
     (!text && !caption && !hasPhoto)
   ) return;
 
+  if (await handleAdminLicenseLookup(message, configuredChatId, settings.defaultTimezone)) return;
   if (text === "/chatid") {
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
