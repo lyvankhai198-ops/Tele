@@ -303,8 +303,20 @@ jobs:
               set +a
               node "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs"
             ) >>"$log" 2>&1; then
+              echo "license_lookup_database_check=passed"
               echo "admin_menu_refresh=passed"
             else
+              bot_check_code=$?
+              if [[ "$bot_check_code" -ne 3 ]]; then
+                echo "license_lookup_database_check=failed"
+                if bash "$CONTROL/scripts/rollback-telecampaign.sh" --previous >>"$log" 2>&1; then
+                  echo "bot_check_rollback=passed"
+                else
+                  echo "bot_check_rollback=failed"
+                fi
+                exit 1
+              fi
+              echo "license_lookup_database_check=passed"
               echo "admin_menu_refresh=failed"
             fi
           fi

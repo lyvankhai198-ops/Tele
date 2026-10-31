@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TELEGRAM_ADMIN_MENU } from "../artifacts/api-server/src/lib/telegram-admin-menu.ts";
+let databaseCheckPassed = false;
 
 export async function refreshAdminMenu(settings, call) {
   const support = settings?.supportChat;
@@ -35,6 +36,17 @@ async function main() {
   let settings;
   try {
     await client.connect();
+    // Exercise PostgreSQL's real column/operator types without real keys, user
+    // data output or writes. In particular UUID ids join historical text ids.
+    await client.query(`
+      SELECT k.id, u.id AS user_id, s.id AS subscription_id
+      FROM license_keys k
+      LEFT JOIN app_users u ON u.id::text = k.claimed_by
+      LEFT JOIN subscriptions s ON s.owner_user_id = k.claimed_by
+      WHERE k.key_hash = $1 LIMIT 1
+    `, ["0".repeat(64)]);
+    databaseCheckPassed = true;
+    console.log("license_lookup_database_check=passed");
     const result = await client.query("SELECT value FROM system_settings WHERE key = $1 LIMIT 1", ["admin_system_settings"]);
     settings = JSON.parse(result.rows[0]?.value ?? "{}");
   } finally {
@@ -55,6 +67,6 @@ async function main() {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(() => {
     console.error("admin_menu_refresh=failed");
-    process.exitCode = 1;
+    process.exitCode = databaseCheckPassed ? 3 : 2;
   });
 }

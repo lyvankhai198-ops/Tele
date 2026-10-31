@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { appUsersTable, db, licenseKeysTable, subscriptionsTable } from "@workspace/db";
 import { licenseKeyHash, normalizedLicenseKey } from "./license-key-identity";
 
@@ -42,7 +42,9 @@ export async function findLicenseForTelegram(rawKey: string): Promise<LicenseLoo
     currentPlan: subscriptionsTable.plan,
     expiresAt: subscriptionsTable.expiresAt,
   }).from(licenseKeysTable)
-    .leftJoin(appUsersTable, eq(appUsersTable.id, licenseKeysTable.claimedBy))
+    // app_users.id is UUID, while historical claimed_by is text. Cast the UUID
+    // side so legacy/non-UUID claimant values cannot make lookup throw.
+    .leftJoin(appUsersTable, eq(sql`${appUsersTable.id}::text`, licenseKeysTable.claimedBy))
     .leftJoin(subscriptionsTable, eq(subscriptionsTable.ownerUserId, licenseKeysTable.claimedBy))
     .where(eq(licenseKeysTable.keyHash, licenseKeyHash(rawKey)))
     .limit(1);

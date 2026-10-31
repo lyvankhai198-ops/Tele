@@ -43,7 +43,10 @@ async function fixture(row = { ...base }) {
     for (const [name, value] of Object.entries(exports)) this.setExport(name, value);
   }, { context });
   const modules = {
-    "drizzle-orm": synthetic({ eq: (column, value) => ({ column, value }) }),
+    "drizzle-orm": synthetic({
+      eq: (column, value) => ({ column, value }),
+      sql: (strings, ...values) => ({ template: [...strings], values }),
+    }),
     "@workspace/db": synthetic({ db, ...tables }),
     "./license-key-identity": synthetic(identity),
     "./telegram-admin-access": synthetic(access),
@@ -92,6 +95,8 @@ test("button prompts, then exact key uses one read-only hashed query and left jo
   assert.equal(q.limit, 1);
   assert.equal(q.joins.length, 2);
   assert.equal(q.joins[0].predicate.value, "licenseKeysTable.claimedBy");
+  assert.equal(q.joins[0].predicate.column.template.join(""), "::text");
+  assert.equal(q.joins[0].predicate.column.values[0], "appUsersTable.id");
   assert.equal(q.joins[1].predicate.value, "licenseKeysTable.claimedBy");
   for (const field of Object.values(q.projection)) assert.doesNotMatch(field, /password|keyEncrypted|keyHash|phone|session/i);
   const result = f.sent.at(-1);
