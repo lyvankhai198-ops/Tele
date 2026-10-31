@@ -2738,7 +2738,10 @@ components:
       properties:
         decision: { type: string, enum: [paid, rejected] }
         reason: { type: string, minLength: 3, maxLength: 1000 }
-        manualVerification: { type: boolean, default: false }
+        manualVerification:
+          type: boolean
+          default: false
+          description: Admin confirmation of an actual VND bank receipt for a pending or expired order, including automated orders. Does not bypass USDT on-chain verification. Rejection of pending/expired orders requires a reason.
     PurchaseOrderRevokeInput:
       type: object
       required: [reason]

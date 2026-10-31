@@ -4,6 +4,7 @@ import { logger } from "./logger";
 import { PLAN_ORDER } from "./subscriptions";
 import { randomUUID } from "node:crypto";
 import { isValidTronAddress } from "./verify-usdt";
+import { assertManualApprovalAllowed, canRejectPurchaseOrder } from "./purchase-order-review-policy";
 
 export type OrderSettings = {
   pricesVnd: Record<"PLUS" | "PRO" | "UNLIMITED", number>;
@@ -181,10 +182,21 @@ export async function updateOrderProof(id: string, ownerUserId: string, txHash?:
   return order;
 }
 
-/** Settle orders after gateway/on-chain verification or an admin's explicit bank-receipt confirmation. */
-export async function settleVerifiedOrder(id: string, paymentEventId: string, reviewedBy = "automatic") {
+/** Settle provider-verified payments or explicitly confirmed admin bank receipts. */
+export async function settleVerifiedOrder(
+  id: string,
+  paymentEventId: string,
+  reviewedBy = "automatic",
+  adminReview?: { manualVerification?: boolean },
+) {
   return db.transaction(async (tx) => {
     const [order] = await tx.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).for("update");
+    if (!order) return null;
+    if (adminReview) {
+      assertManualApprovalAllowed(order, adminReview.manualVerification === true);
+      // Preserve a provider event when retrying fulfillment; never verify USDT by hand.
+      paymentEventId = order.paymentEventId ?? `manual:vnd:${id}`;
+    }
     if (!order || (order.status !== "pending" && order.status !== "received" && order.status !== "expired")
       || (order.paymentEventId && order.paymentEventId !== paymentEventId)) return order ?? null;
     const [other] = await tx.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
@@ -195,13 +207,18 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
       .where(eq(appUsersTable.id, order.ownerUserId)).limit(1);
     if (!owner) throw new Error("ORDER_USER_NOT_FOUND");
     const now = new Date();
+    // An automatic fulfillment retry must not erase the manual bank review.
+    const reviewAudit = {
+      reviewedBy: reviewedBy === "automatic" && order.reviewedBy ? order.reviewedBy : reviewedBy,
+      reviewedAt: reviewedBy === "automatic" && order.reviewedAt ? order.reviewedAt : now,
+    };
     const [current] = await tx.select().from(subscriptionsTable)
       .where(eq(subscriptionsTable.ownerUserId, order.ownerUserId)).for("update");
 
     if (order.orderType === "renewal") {
       if (current && current.expiresAt && current.expiresAt > now &&
         PLAN_ORDER.indexOf(order.plan.toLowerCase() as typeof PLAN_ORDER[number]) < PLAN_ORDER.indexOf(current.plan as typeof PLAN_ORDER[number])) {
-        const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "PLAN_DOWNGRADE_NOT_ALLOWED", updatedAt: now })
+        const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "PLAN_DOWNGRADE_NOT_ALLOWED", ...reviewAudit, updatedAt: now })
           .where(eq(purchaseOrdersTable.id, id)).returning();
         return received;
       }
@@ -217,7 +234,7 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
       else await tx.insert(subscriptionsTable).values({ ownerUserId: order.ownerUserId, ...values });
       const [paid] = await tx.update(purchaseOrdersTable).set({
         status: "paid", paymentEventId, activatedLicenseKeyId: null, rejectionReason: null,
-        reviewedBy, reviewedAt: now, updatedAt: now,
+        ...reviewAudit, updatedAt: now,
       }).where(eq(purchaseOrdersTable.id, id)).returning();
       logger.info({ orderId: id, paymentType: order.currency }, "verified payment renewed subscription");
       return paid;
@@ -233,7 +250,7 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
         ? eq(licenseKeysTable.reservedOrderId, order.id)
         : or(isNull(licenseKeysTable.reservedUntil), lte(licenseKeysTable.reservedUntil, new Date())),
     )).limit(1).for("update", { skipLocked: true });
-    if (!key && order.automated && order.status === "received" && order.rejectionReason === "NO_MATCHING_KEY") {
+    if (!key && order.automated && (adminReview || (order.status === "received" && order.rejectionReason === "NO_MATCHING_KEY"))) {
       [key] = await tx.select({ id: licenseKeysTable.id }).from(licenseKeysTable).where(and(
         eq(licenseKeysTable.pool, "normal"),
         eq(licenseKeysTable.plan, order.plan.toLowerCase()),
@@ -244,13 +261,13 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
       )).limit(1).for("update", { skipLocked: true });
     }
     if (!key) {
-      const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "NO_MATCHING_KEY", updatedAt: now })
+      const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "NO_MATCHING_KEY", ...reviewAudit, updatedAt: now })
         .where(eq(purchaseOrdersTable.id, id)).returning();
       return received;
     }
     if (current && current.expiresAt && current.expiresAt > now &&
       PLAN_ORDER.indexOf(order.plan.toLowerCase() as typeof PLAN_ORDER[number]) < PLAN_ORDER.indexOf(current.plan as typeof PLAN_ORDER[number])) {
-      const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "PLAN_DOWNGRADE_NOT_ALLOWED", updatedAt: now })
+      const [received] = await tx.update(purchaseOrdersTable).set({ status: "received", paymentEventId, rejectionReason: "PLAN_DOWNGRADE_NOT_ALLOWED", ...reviewAudit, updatedAt: now })
         .where(eq(purchaseOrdersTable.id, id)).returning();
       return received;
     }
@@ -276,7 +293,7 @@ export async function settleVerifiedOrder(id: string, paymentEventId: string, re
     else await tx.insert(subscriptionsTable).values({ ownerUserId: order.ownerUserId, ...values });
     const [paid] = await tx.update(purchaseOrdersTable).set({
       status: "paid", paymentEventId, activatedLicenseKeyId: key.id, rejectionReason: null,
-      reviewedBy, reviewedAt: now, updatedAt: now,
+      ...reviewAudit, updatedAt: now,
     }).where(eq(purchaseOrdersTable.id, id)).returning();
     logger.info({ orderId: id, paymentType: order.currency }, "verified payment activated license");
     return paid;
@@ -302,28 +319,15 @@ export async function reviewOrder(
   options: { reason?: string; manualVerification?: boolean } = {},
 ) {
   if (decision === "paid") {
-    const [order] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).limit(1);
-    if (!order) return null;
-    if (order.status === "pending" || order.status === "expired") {
-      if (order.automated) {
-        throw new Error("AUTOMATED_PAYMENT_REQUIRES_PROVIDER_VERIFICATION");
-      }
-      if (order.currency !== "VND" || options.manualVerification !== true) {
-        throw new Error(order.currency === "USDT" ? "CRYPTO_REQUIRES_CHAIN_VERIFICATION" : "MANUAL_RECEIPT_CONFIRMATION_REQUIRED");
-      }
-      return settleVerifiedOrder(id, order.paymentEventId ?? `manual:vnd:${id}`, adminUserId);
-    }
-    if (order.status === "received") {
-      return settleVerifiedOrder(id, order.paymentEventId ?? `manual:received:${id}`, adminUserId);
-    }
-    throw new Error("ORDER_NOT_REVIEWABLE");
+    // Validation and settlement share the same row lock as webhooks/rejections.
+    return settleVerifiedOrder(id, `manual:vnd:${id}`, adminUserId, options);
   }
   const rejectionReason = options.reason?.trim();
   if (!rejectionReason || rejectionReason.length < 3) throw new Error("ORDER_REVIEW_REASON_REQUIRED");
   return db.transaction(async (tx) => {
     const [order] = await tx.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, id)).for("update");
     if (!order) return null;
-    if (order.status !== "pending") throw new Error("ORDER_NOT_REVIEWABLE");
+    if (!canRejectPurchaseOrder(order.status)) throw new Error("ORDER_NOT_REVIEWABLE");
     const now = new Date();
     const [updated] = await tx.update(purchaseOrdersTable).set({
       status: "rejected",
@@ -331,7 +335,7 @@ export async function reviewOrder(
       reviewedAt: now,
       rejectionReason,
       updatedAt: now,
-    }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.status, "pending"))).returning();
+    }).where(and(eq(purchaseOrdersTable.id, id), inArray(purchaseOrdersTable.status, ["pending", "expired"]))).returning();
     if (!updated) throw new Error("ORDER_NOT_REVIEWABLE");
     await tx.update(licenseKeysTable).set({ reservedOrderId: null, reservedUntil: null })
       .where(eq(licenseKeysTable.reservedOrderId, id));
