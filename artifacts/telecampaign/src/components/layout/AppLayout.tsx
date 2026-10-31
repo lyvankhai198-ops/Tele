@@ -21,6 +21,7 @@ import {
   LifeBuoy,
   Lightbulb,
   Star,
+  ChevronRight,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -119,6 +120,50 @@ export function AppLayout({
   const showNationalDayRibbon = systemDefaults.data?.nationalDayThemeEnabled === true
     && ((nationalDayMonth === 8 && nationalDayDay >= 25) || (nationalDayMonth === 9 && nationalDayDay <= 3));
   const nationalDayThemeActive = showNationalDayRibbon;
+  const showAdminMenu = user?.role === "admin" && !isSupportMode;
+  const visibleNavigation = navigation.filter((item) => (
+    (!item.adminOnly || showAdminMenu)
+    && (!item.groupLibraryOnly || groupLibraryAccess.data?.visible)
+    && (item.key !== "feedback" || !isSupportMode)
+  ));
+  const dedicatedAdminPage = navigation.some((item) => item.adminOnly && item.key !== "admin" && item.key === activePage);
+
+  function renderNavigation(items: typeof navigation, highlighted = false) {
+    return items.map((item) => {
+      const Icon = item.icon;
+      const selected = item.key === "admin"
+        ? !dedicatedAdminPage && (activePage === "admin" || activePage.startsWith("admin") || activePage === "license-keys")
+        : activePage === item.key;
+      return (
+        <button
+          key={item.key}
+          onClick={() => {
+            if (item.key === "feedback" && window.location.pathname !== "/dashboard/feedback") {
+              try { sessionStorage.setItem("telecamp-feedback-source", JSON.stringify({ path: window.location.pathname, at: Date.now() })); } catch { /* Storage is optional. */ }
+            }
+            navigate(item.path);
+          }}
+          aria-current={selected ? "page" : undefined}
+          className={`group flex w-full items-center text-left text-[14px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+            highlighted
+              ? `gap-3 rounded-xl border px-3 py-2.5 ${selected
+                ? "border-indigo-700 bg-indigo-700 text-white shadow-md shadow-indigo-200/60"
+                : "border-indigo-100 bg-white/90 text-indigo-950 shadow-sm hover:border-indigo-300 hover:bg-indigo-50"}`
+              : `gap-3.5 rounded-xl px-4 py-3.5 ${selected
+                ? (nationalDayThemeActive ? "national-day-nav-selected" : "bg-[#eef2fa] text-[#1a2b88]")
+                : (nationalDayThemeActive ? "national-day-nav-item" : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]")}`
+          }`}
+          data-testid={`nav-${item.key}`}
+        >
+          <span className={highlighted ? `flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${selected ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700 group-hover:bg-indigo-200"}` : "shrink-0"}>
+            <Icon className={`h-[18px] w-[18px] ${highlighted ? "" : selected ? (nationalDayThemeActive ? "national-day-nav-icon-selected" : "text-[#1a2b88]") : (nationalDayThemeActive ? "national-day-nav-icon" : "text-[#64748b] group-hover:text-[#1a2b88]")}`} strokeWidth={selected ? 2.5 : 2} />
+          </span>
+          <span className="min-w-0 flex-1">{t(item.label)}</span>
+          {highlighted && <ChevronRight aria-hidden="true" className={`h-4 w-4 shrink-0 ${selected ? "text-indigo-200" : "text-indigo-400"}`} />}
+        </button>
+      );
+    });
+  }
 
   function navigate(path: string) {
     setLocation(path);
@@ -154,36 +199,16 @@ export function AppLayout({
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1.5">
-          {navigation.filter((item) => (
-            (!item.adminOnly || (user?.role === "admin" && !isSupportMode))
-            && (!item.groupLibraryOnly || groupLibraryAccess.data?.visible)
-            && (item.key !== "feedback" || !isSupportMode)
-          )).map((item) => {
-            const Icon = item.icon;
-            const selected = item.key === "admin"
-              ? activePage === "admin" || activePage.startsWith("admin") || activePage === "license-keys"
-              : activePage === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => {
-                  if (item.key === "feedback" && window.location.pathname !== "/dashboard/feedback") {
-                    try { sessionStorage.setItem("telecamp-feedback-source", JSON.stringify({ path: window.location.pathname, at: Date.now() })); } catch { /* Storage is optional. */ }
-                  }
-                  navigate(item.path);
-                }}
-                className={`group flex w-full items-center gap-3.5 rounded-xl px-4 py-3.5 text-left text-[14px] font-bold transition-all ${
-                  selected
-                    ? (nationalDayThemeActive ? "national-day-nav-selected" : "bg-[#eef2fa] text-[#1a2b88]")
-                    : (nationalDayThemeActive ? "national-day-nav-item" : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]")
-                }`}
-                data-testid={`nav-${item.key}`}
-              >
-                <Icon className={`h-[18px] w-[18px] ${selected ? (nationalDayThemeActive ? "national-day-nav-icon-selected" : "text-[#1a2b88]") : (nationalDayThemeActive ? "national-day-nav-icon" : "text-[#64748b] group-hover:text-[#1a2b88]")}`} strokeWidth={selected ? 2.5 : 2} />
-                <span>{t(item.label)}</span>
-              </button>
-            );
-          })}
+          {renderNavigation(visibleNavigation.filter((item) => !showAdminMenu || (!item.adminOnly && item.key !== "feedback")))}
+          {showAdminMenu && (
+            <section className="!mt-5 space-y-2 rounded-2xl border border-indigo-200 bg-gradient-to-b from-indigo-50 to-slate-50 p-2.5 shadow-sm" data-testid="admin-navigation">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-indigo-700">
+                <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
+                {language === "vi" ? "Khu vực quản trị" : "Admin workspace"}
+              </div>
+              {renderNavigation(visibleNavigation.filter((item) => item.adminOnly || item.key === "feedback"), true)}
+            </section>
+          )}
         </div>
 
         <div className="p-4 border-t border-[#eef2f6]">
