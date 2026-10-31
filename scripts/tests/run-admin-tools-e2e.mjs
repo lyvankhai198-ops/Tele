@@ -14,6 +14,7 @@ try {
   await build({
     entryPoints: [path.join(root, "scripts/tests/admin-tools.e2e.ts")],
     outfile: path.join(dir, "suite.mjs"), bundle: true, platform: "node", format: "esm",
+    alias: { "@workspace/db": path.join(root, "lib/db/src/index.ts") },
     external: ["pg", "pg-native", "sharp", "pino", "pino-http", "express", "cookie-parser",
       "telegram", "bufferutil", "utf-8-validate", "@clerk/*"],
     banner: { js: 'import {createRequire as __e2eRequire} from "node:module";const require=__e2eRequire(import.meta.url);' },
