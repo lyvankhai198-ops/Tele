@@ -2,6 +2,9 @@
 set -euo pipefail
 umask 077
 
+source "$(dirname "$(realpath "$0")")/lib/telecampaign-release.sh"
+release_lock
+
 if [[ "${CONFIRM_TELECAMPAIGN_RESTORE:-}" != "YES" ]]; then
   echo "Refusing destructive restore. Re-run with CONFIRM_TELECAMPAIGN_RESTORE=YES." >&2
   exit 2

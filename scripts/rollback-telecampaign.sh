@@ -1,41 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
+source "$(dirname "$(realpath "$0")")/lib/telecampaign-release.sh"
+release_lock
+release_require_repository
+release_require_clean
 
-ROOT="/opt/telecampaign"
-MEDIA_ROOT="/var/lib/telecampaign/media"
-UUID_PATTERN='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-TARGET_SHA="${1:-}"
-
-if [[ -z "$TARGET_SHA" ]]; then
-  echo "Usage: $0 <known-good-commit-sha>" >&2
+if (( $# > 1 )); then
+  echo "Usage: $0 [--previous|/var/backups/telecampaign/releases/<checkpoint>]" >&2
   exit 2
 fi
-if [[ ! -d "$ROOT/.git" ]]; then
-  echo "TeleCampaign repository was not found at $ROOT." >&2
+snapshot="${1:---previous}"
+if [[ "$snapshot" == "--previous" ]]; then
+  [[ -f "$PREVIOUS" ]] || { echo "No saved release. Create a checkpoint before deploying." >&2; exit 1; }
+  snapshot="$(cat "$PREVIOUS")"
+fi
+if ! release_restore "$snapshot"; then
+  echo "Rollback did not complete. Check telecampaign-api; do not restart other services." >&2
   exit 1
 fi
-if [[ ! -f "$ROOT/artifacts/telecampaign/package.json" || ! -f "$ROOT/artifacts/api-server/package.json" ]]; then
-  echo "Refusing rollback because $ROOT is not a TeleCampaign deployment." >&2
-  exit 1
-fi
-
-cd "$ROOT"
-git -c safe.directory="$ROOT" diff --quiet
-git -c safe.directory="$ROOT" diff --cached --quiet
-git -c safe.directory="$ROOT" fetch origin main --quiet
-git -c safe.directory="$ROOT" cat-file -e "${TARGET_SHA}^{commit}"
-if ! git -c safe.directory="$ROOT" cat-file -e "${TARGET_SHA}:artifacts/api-server/src/lib/notificationMediaStorage.ts" 2>/dev/null \
-  && [[ -d "$MEDIA_ROOT" ]] \
-  && find "$MEDIA_ROOT" -maxdepth 1 -type f -regextype posix-extended -regex ".*/${UUID_PATTERN}" -print -quit | grep -q .; then
-  echo "Refusing rollback: the target release cannot serve existing filesystem notification media." >&2
-  exit 1
-fi
-
-git -c safe.directory="$ROOT" reset --hard "$TARGET_SHA"
-pnpm install --frozen-lockfile
-PORT="${TELECAMPAIGN_PORT:-3004}" BASE_PATH=/ pnpm --filter @workspace/telecampaign run build
-pnpm --filter @workspace/api-server run build
-pm2 restart telecampaign-api --update-env
-"$ROOT/scripts/telecampaign-healthcheck.sh"
-
-echo "TeleCampaign rollback completed at $TARGET_SHA."

@@ -2,6 +2,10 @@
 set -euo pipefail
 umask 077
 
+# Serialize backups with deploy/rollback and destructive restores.
+source "$(dirname "$(realpath "$0")")/lib/telecampaign-release.sh"
+release_lock
+
 ENV_FILE="/etc/telecampaign/api.env"
 BACKUP_ROOT="/var/backups/telecampaign"
 BACKUP_DIR="$BACKUP_ROOT"

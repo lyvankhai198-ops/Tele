@@ -60,21 +60,117 @@ The restore script requires every part of a new-format backup directory and rest
 
 ## Rollback application code
 
-Use a known-good TeleCampaign commit SHA. The rollback script refuses a dirty repository, rebuilds only TeleCampaign, restarts only `telecampaign-api`, and runs its health check:
+Use a **ready-to-run checkpoint**, not a fresh install/build of an old commit.
+Each checkpoint saves the source commit, installed workspace dependencies
+(including native modules), and built web/API/library artifacts. Checksums are
+verified before any change. Git refs keep checkpoint commits reachable during GC.
+Production credentials in `/etc/telecampaign/api.env`, database rows and media
+are not changed by code rollback.
 
 ```bash
-/opt/telecampaign/scripts/rollback-telecampaign.sh <known-good-commit-sha>
+bash /opt/telecampaign/scripts/rollback-telecampaign.sh --previous
 ```
 
-Application rollback does not roll back the database schema. It also refuses to roll back to a release that cannot read filesystem notification media while such media exists; restore a paired backup first if that rollback is required. Keep schema changes backward-compatible until a verified backup/restore plan is available.
+For a specific older checkpoint, pass its full directory instead of `--previous`:
 
-## Safe deploy checklist
+```bash
+bash /opt/telecampaign/scripts/rollback-telecampaign.sh \
+  /var/backups/telecampaign/releases/<checkpoint-directory>
+```
 
-1. Publish validated code to GitHub `main`.
-2. In `/opt/telecampaign`, fast-forward to that commit.
-3. Run the TeleCampaign database schema update with the TeleCampaign environment loaded.
-4. Build the TeleCampaign web artifact and API artifact.
-5. Stop only `telecampaign-api`, run `bash scripts/prepare-notification-media-storage.sh`, and correct any missing historical media before continuing.
-6. Restart only `telecampaign-api`.
-7. Run `scripts/telecampaign-healthcheck.sh`.
-8. Verify the public HTTPS health URL and an authenticated notification-media upload.
+The old arbitrary-commit rollback interface is intentionally no longer supported:
+an old SHA alone does not preserve a working build or dependencies. If no
+checkpoint exists, the command refuses without replacing code. Manual rollback
+does not require a working API or access to GitHub/npm. It refuses dirty source,
+corrupt/incomplete snapshots, and differences in `lib/db` that require a reviewed
+compatibility plan. If the restored API fails health validation, it stays stopped
+for inspection rather than continuing an unhealthy worker.
+
+### Initial setup (once)
+
+Install these scripts together from the reviewed GitHub change, using the same
+Unix account and `PM2_HOME` as `telecampaign-api`. Verify that the currently running
+web/API build matches the checked-out commit and that the repository is clean.
+Then create a baseline **before any application changes**:
+
+```bash
+bash /opt/telecampaign/scripts/checkpoint-telecampaign.sh
+```
+
+This baseline only works for a currently healthy release that already has built
+assets and installed dependencies. It cannot reconstruct a previously working
+version from an already broken installation. Initial installation of the scripts
+does not itself deploy new application code. Keep access to a trusted copy of the
+release scripts: restoring a checkpoint from before their introduction also
+restores the source from before these scripts existed.
+
+For the first protected rollout, keep the reviewed release scripts together in
+an owner-only control directory outside the live checkout, for example
+`/var/lib/telecampaign/control/<reviewed-commit>/scripts`. Invoke that copy for
+deploy and rollback. Its helper still pins all application operations to
+`/opt/telecampaign`; its backup command comes from the same trusted control copy.
+Provision `/var/lib/telecampaign/operation.lock` for the TeleCampaign PM2 owner
+without replacing an existing lock inode. Preserve any local source changes
+before making the checkout clean; do not discard them with a blanket reset.
+
+### Safe deploy
+
+Publish reviewed and tested changes to GitHub `main`, but **do not run `git pull`,
+reset, install or build on VPS first**. Invoke the installed wrapper:
+
+```bash
+bash /opt/telecampaign/scripts/deploy-telecampaign.sh
+# Or deploy a reviewed commit:
+bash /opt/telecampaign/scripts/deploy-telecampaign.sh <commit-sha>
+```
+
+It fetches the target without changing the live checkout, rejects changes in
+`lib/db`, takes a paired database/media backup, and saves a checksummed
+ready-to-run release checkpoint. Only then does it stop `telecampaign-api`,
+switch code, install/build, run media preflight, restart that process, and check
+API/database health. Build, install, restart, preflight or health failure triggers
+automatic **code/dependency/asset** recovery from that exact checkpoint. The
+deploy still exits nonzero so failure cannot be mistaken for success.
+
+If a later functional check reveals a bug, use `rollback-telecampaign.sh --previous`.
+Basic health checks do not prove login, campaigns, payments or Telegram actions
+are correct: verify those separately and check the public HTTPS page after deploy.
+Recovery is not zero downtime: the API is stopped during replacement, and Nginx
+may briefly serve unavailable/mixed frontend assets. No shared Nginx configuration
+or other project's PM2 processes are changed.
+
+Deploy, checkpoint, backup, restore and rollback share a nonblocking operation
+lock. Use the same Unix account for all of them. Checkpoints live only under
+`/var/backups/telecampaign/releases`, with owner-only permissions; they are **not**
+deleted by the seven-day database backup cleanup. Monitor disk space and retain
+the required known-good checkpoints. The checkpoint process must finish before
+any source replacement; disk-full/archive failures therefore abort the deploy.
+
+### Database and external side effects
+
+Code rollback is deliberately separate from destructive data restore. It must
+not erase orders, users, campaign progress or media created after deployment.
+The wrapper never runs schema push/migration commands; any `lib/db` change
+requires a separately reviewed, backward-compatible schema/recovery plan.
+For a necessary full data restore, use the explicit confirmation and paired
+backup procedure above, understanding that newer database/media changes are
+lost. No rollback can unsend Telegram messages or undo external payments.
+
+SIGINT/SIGTERM and ordinary command failures attempt code recovery. A power loss,
+SIGKILL, failed disk or corrupt checkpoint cannot guarantee automatic recovery.
+After a hard interruption, inspect the saved checkpoint and run the manual
+rollback command; if recovery cannot pass health checks, keep the API stopped.
+
+### Offline release-safety tests
+
+```bash
+bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
+python3 scripts/tests/test_release_safety.py
+```
+
+These tests use temporary Git repositories and fake PM2/pnpm/health/database-backup
+commands. They exercise checkpoint validation, successful deploy, install/build/
+media-preflight/restart/health failure recovery, late manual rollback, dirty
+source, schema-change refusal, and operation locking without accessing a VPS.
+They do not replace a controlled VPS rollback rehearsal or a real database
+restore drill.
