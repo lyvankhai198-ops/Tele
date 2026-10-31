@@ -9,6 +9,48 @@ import * as core from "../../artifacts/api-server/src/lib/admin-tools-core.ts";
 import * as access from "../../artifacts/api-server/src/lib/telegram-admin-access.ts";
 import * as menu from "../../artifacts/api-server/src/lib/telegram-admin-menu.ts";
 import { purchaseReviewNotification } from "../../artifacts/api-server/src/lib/purchase-review-notification.ts";
+import { choosePopup, popupActive, safePopupLink, popupDay } from "../../artifacts/api-server/src/lib/popup-core.ts";
+import { popupCopy } from "../../artifacts/telecampaign/src/lib/popup-client.ts";
+
+const popupFixture = (fields = {}) => ({ id: "fixture", version: "v1", title: "Fixture", body: "Fixture",
+  titleEn: "Fixture", bodyEn: "Fixture", button: "", buttonEn: "", linkUrl: "", imageId: null,
+  status: "published", enabled: true, frequency: "daily", audience: "all", template: "offer",
+  accent: "#4f46e5", priority: 50, startsAt: null, expiresAt: null,
+  createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", ...fields });
+test("Popups enforce publication, audience, start and strict expiry boundaries", () => {
+  const now = new Date("2026-10-31T00:00:00Z"), p = popupFixture();
+  assert.equal(popupActive(p, true, now), true);
+  for (const patch of [{ status: "draft" }, { enabled: false }, { startsAt: "2026-11-01T00:00:00Z" }, { expiresAt: now.toISOString() }, { audience: "unpaid" }])
+    assert.equal(popupActive({ ...p, ...patch }, true, now), false);
+  assert.equal(popupActive({ ...p, audience: "unpaid" }, false, now), true);
+  assert.equal(popupActive({ ...p, audience: "paid" }, false, now), false);
+});
+test("Popup daily/once/visit frequencies use account state and system timezone", () => {
+  const now = new Date("2026-10-31T17:01:00Z");
+  const state = { visits: [], seen: { fixture: { firstAt: "2026-10-31T16:59:00Z", lastAt: "2026-10-31T16:59:00Z" } } };
+  const p = popupFixture();
+  assert.ok(choosePopup([p], state, "new", true, "Asia/Ho_Chi_Minh", now));
+  assert.equal(choosePopup([p], state, "new", true, "UTC", now), null);
+  assert.equal(choosePopup([{ ...p, frequency: "once" }], state, "new", true, "UTC", now), null);
+  assert.ok(choosePopup([{ ...p, frequency: "visit" }], state, "new", true, "UTC", now));
+  assert.equal(choosePopup([p], { ...state, visits: ["new"] }, "new", true, "Asia/Ho_Chi_Minh", now), null);
+  assert.notEqual(popupDay(state.seen.fixture.lastAt, "Asia/Ho_Chi_Minh"), popupDay(now.toISOString(), "Asia/Ho_Chi_Minh"));
+});
+test("Popups choose one highest-priority eligible item and reject unsafe links", () => {
+  const p = popupFixture(), state = { visits: [], seen: {} };
+  assert.equal(choosePopup([p, { ...p, id: "high", priority: 90 }], state, "v", true, "UTC").id, "high");
+  for (const url of ["javascript:alert(1)", "data:text/html,test", "//evil.invalid", "/\\evil", "https://user:pass@example.invalid"])
+    assert.throws(() => safePopupLink(url));
+  assert.equal(safePopupLink("/upgrade?plan=plus"), "/upgrade?plan=plus");
+  assert.equal(safePopupLink("https://t.me/example"), "https://t.me/example");
+});
+test("Popup admin/customer chrome has matching VI and EN keys and accessible controls", async () => {
+  assert.deepEqual(Object.keys(popupCopy.vi).sort(), Object.keys(popupCopy.en).sort());
+  const component = await readFile(new URL("../../artifacts/telecampaign/src/components/AnnouncementPopup.tsx", import.meta.url), "utf8");
+  assert.match(component, /Dialog\.Title/); assert.match(component, /Dialog\.Description/);
+  assert.match(component, /aria-label=\{text.close\}/); assert.match(component, /motion-reduce:animate-none/);
+  assert.match(component, /previewControls/);
+});
 
 test("Feedback uses the real shared VI/EN catalog without untranslated labels", async () => {
   const i18n = await readFile(new URL("../../artifacts/telecampaign/src/lib/i18n.tsx", import.meta.url), "utf8");

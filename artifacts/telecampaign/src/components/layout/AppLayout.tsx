@@ -49,6 +49,7 @@ export type PageKey =
   | "admin-system-settings"
   | "admin-operations"
   | "admin-tools"
+  | "admin-popups"
   | "admin-active-groups"
   | "admin-system-events"
   | "admin-support-chat"
@@ -68,6 +69,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "logs", label: "Logs", icon: FileText, path: "/dashboard/logs" },
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
   { key: "admin-tools", label: "Công cụ quản trị", icon: Settings2, path: "/admin/tools", adminOnly: true },
+  { key: "admin-popups", label: "Announcement popups", icon: Megaphone, path: "/admin/popups", adminOnly: true },
   { key: "admin-support-chat", label: "Hỗ trợ khách hàng", icon: LifeBuoy, path: "/admin/support-chat", adminOnly: true },
   { key: "feedback", label: "Feedback & discussion", icon: Lightbulb, path: "/dashboard/feedback" },
 ];

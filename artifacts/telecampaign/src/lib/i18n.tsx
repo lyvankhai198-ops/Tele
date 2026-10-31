@@ -6,6 +6,7 @@ export type Language = "vi" | "en";
 /** Vietnamese translations keyed by the English source string. */
 const translations: Record<string, string> = {
   ...feedbackTranslations,
+  "Announcement popups": "Thông báo popup",
   "Groups": "Nhóm",
   "Account": "Tài khoản",
   "Telegram Accounts": "Tài khoản Telegram",
