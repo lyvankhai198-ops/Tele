@@ -115,6 +115,7 @@ import { getPurchaseSettings } from "../lib/purchase-settings";
 import { cancelOrder, createOrder, getOrderSettings, listOrders, settleVerifiedOrder, updateOrderProof, verifiedOrderNotification } from "../lib/telecampaign-orders";
 import { verifyUsdtTransfer } from "../lib/verify-usdt";
 import { notifyPurchaseOrder } from "../lib/support-telegram";
+import { purchaseReviewNotification } from "../lib/purchase-review-notification";
 import {
   confirmTelegramPhoneCode,
   confirmTelegramTwoFactorPassword,
@@ -747,6 +748,7 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
   if (!valid) { res.status(400).json({ error: "Invalid purchase order" }); return; }
   try {
     const order = await createOrder({ plan: value.plan, currency: value.currency, network: value.network, orderType: value.orderType, ownerUserId: currentUserId(req) });
+    void notifyPurchaseOrder(purchaseReviewNotification(order, req.authUser?.username), order.id);
     res.status(201).json(order);
   } catch (error) {
     if (error instanceof Error && ["PLAN_PRICE_NOT_CONFIGURED", "INVALID_PAYMENT_AMOUNT", "PAYMENT_DESTINATION_NOT_CONFIGURED", "INVALID_PLAN_DURATION", "PLAN_DOWNGRADE_NOT_ALLOWED", "LICENSE_STOCK_EMPTY", "PAYMENT_AUTOMATION_NOT_CONFIGURED", "INVALID_ORDER_TYPE"].includes(error.message)) { res.status(400).json({ error: error.message }); return; }
@@ -776,6 +778,7 @@ router.patch("/purchase-orders/:orderId/proof", async (req, res): Promise<void> 
   try { order = await updateOrderProof(req.params.orderId, currentUserId(req), value.txHash, value.proofInfo); }
   catch (error) { if (error instanceof Error && error.message === "TX_HASH_ALREADY_SUBMITTED") { res.status(409).json({ error: "Transaction hash already submitted" }); return; } throw error; }
   if (!order) { res.status(409).json({ error: "Order is expired or cannot accept a transaction hash" }); return; }
+  void notifyPurchaseOrder(purchaseReviewNotification(order, req.authUser?.username, true), order.id);
   if (order.automated && order.currency === "USDT" && order.network && order.txHash) {
     const verification = await verifyUsdtTransfer({
       network: order.network as "BEP20" | "TRC20",

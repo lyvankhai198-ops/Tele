@@ -482,7 +482,7 @@ export function AdminPurchaseOrders() {
                   {reviewDecision === "paid"
                     ? (reviewOrder.status === "received"
                       ? (language === "vi" ? "Hệ thống sẽ thử cấp gói hoặc key lại từ khoản tiền đã xác minh." : "The system will retry assigning a plan or key for the verified payment.")
-                       : (language === "vi" ? "Hãy kiểm tra giao dịch thực nhận tại ngân hàng, đúng tài khoản nhận, số tiền và nội dung chuyển khoản; không chỉ dựa vào ảnh chuyển tiền. Xác nhận sẽ cấp gói/key nếu đủ điều kiện, hoặc chuyển sang chờ key/xử lý gói. Đơn USDT vẫn phải xác minh trên blockchain." : "Check the actual incoming bank transaction, receiving account, amount and transfer reference, not just a payment screenshot. Confirmation grants an eligible plan/key or queues fulfillment. USDT still requires on-chain verification."))
+                       : (language === "vi" ? "Hãy đối chiếu tiền thực nhận tại ngân hàng hoặc ví USDT, đúng người nhận, số tiền, mạng và mã giao dịch; không chỉ dựa vào ảnh chuyển tiền. Admin có thể xác minh VND/USDT ngay, không chờ hệ thống tự động. Xác nhận sẽ kích hoạt/gia hạn nếu đủ điều kiện, hoặc chờ key/xử lý gói." : "Check actual receipt in the bank account or USDT wallet, recipient, amount, network and transaction reference; not just a screenshot. An admin may confirm VND/USDT immediately without waiting for automatic verification. Confirmation activates/renews an eligible plan/key or queues fulfillment."))
                     : (language === "vi" ? "Đơn bị từ chối sẽ không nhận được gói/key. Nếu khách đã chuyển tiền, hãy xác minh thay vì từ chối hoặc tự xử lý hoàn tiền." : "A rejected order will not receive a plan/key. If the customer paid, verify it instead or arrange a refund.")}
                 </p>
               </div>
@@ -505,8 +505,8 @@ export function AdminPurchaseOrders() {
                 />
                 <span>
                   {language === "vi"
-                    ? "Tôi đã đối chiếu tài khoản nhận, số tiền và nội dung chuyển khoản."
-                    : "I matched the receiving account, amount, and transfer reference."}
+                    ? "Tôi đã xác nhận nhận đủ tiền, đúng tài khoản/ví, mạng và mã giao dịch/nội dung chuyển khoản."
+                    : "I confirmed receipt of the full amount, correct account/wallet, network and transaction/reference."}
                 </span>
               </label>
             )}

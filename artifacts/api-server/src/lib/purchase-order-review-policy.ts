@@ -7,9 +7,7 @@ export function assertManualApprovalAllowed(order: ReviewableOrder, confirmed: b
   if (order.status !== "pending" && order.status !== "expired") {
     throw new Error("ORDER_NOT_REVIEWABLE");
   }
-  if (order.currency !== "VND") {
-    throw new Error("CRYPTO_REQUIRES_CHAIN_VERIFICATION");
-  }
+  if (!["VND", "USDT"].includes(order.currency)) throw new Error("UNSUPPORTED_PAYMENT_CURRENCY");
   if (!confirmed) throw new Error("MANUAL_RECEIPT_CONFIRMATION_REQUIRED");
 }
 

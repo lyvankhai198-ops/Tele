@@ -20,7 +20,7 @@ type Dependencies = {
 const OTHER_MENU_ACTIONS = new Set([
   "/start", "/menu", "/chatid", "🏠 Menu", "📊 Tổng quan", "🔄 Làm mới",
   "💰 Doanh thu", "👥 Người dùng", "🔑 License keys", "⏳ Sắp hết hạn", "🧾 Key hôm nay",
-  "🔎 Tìm người dùng", "📋 Báo cáo ngày", "🛠 Vận hành",
+  "🔎 Tìm người dùng", "📋 Báo cáo ngày", "🛠 Vận hành", "💳 Đơn chờ", "/orders",
 ]);
 const LOOKUP_WINDOW_MS = 5 * 60_000;
 

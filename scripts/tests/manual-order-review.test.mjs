@@ -182,13 +182,16 @@ test("manual approval requires explicit bank receipt confirmation", async () => 
   assert.equal(f.state.subscriptionsTable.length, 0);
 });
 
-test("USDT cannot be manually marked paid, even with the confirmation flag", async () => {
+test("USDT can be manually confirmed only with explicit admin confirmation", async () => {
   for (const status of ["pending", "expired"]) {
     const f = await fixture({ currency: "USDT", status });
-    assert.equal(getPurchaseOrderActions(f.state.purchaseOrdersTable[0]).canVerifyManually, false);
-    await assert.rejects(f.api.reviewOrder("order-1", "admin-1", "paid", { manualVerification: true }),
-      /CRYPTO_REQUIRES_CHAIN_VERIFICATION/);
-    assert.equal(f.state.subscriptionsTable.length, 0);
+    assert.equal(getPurchaseOrderActions(f.state.purchaseOrdersTable[0]).canVerifyManually, true);
+    await assert.rejects(f.api.reviewOrder("order-1", "admin-1", "paid"),
+      /MANUAL_RECEIPT_CONFIRMATION_REQUIRED/);
+    const paid = await f.api.reviewOrder("order-1", "admin-1", "paid", { manualVerification: true });
+    assert.equal(paid.status, "paid");
+    assert.equal(paid.paymentEventId, "manual:usdt:order-1");
+    assert.equal(f.state.subscriptionsTable.length, 1);
   }
 });
 
