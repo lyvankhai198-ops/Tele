@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import sharp from "sharp";
 import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, or, sql, sum } from "drizzle-orm";
 import {
   appUsersTable,
@@ -34,7 +35,7 @@ import {
 import { supportMediaStorage } from "./supportMediaStorage";
 import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { purchaseReviewNotification } from "./purchase-review-notification";
-import { updateFeedbackStatus, validFeedbackId, FEEDBACK_STATUSES, type FeedbackRecord } from "./feedback";
+import { updateFeedbackStatus, validFeedbackId, FEEDBACK_STATUSES, feedbackImage, type FeedbackRecord } from "./feedback";
 import { logger } from "./logger";
 import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-admin-access";
 import { findLicenseForTelegram } from "./telegram-license-lookup";
@@ -193,8 +194,30 @@ export async function notifyFeedback(record: FeedbackRecord): Promise<void> {
       if (["https:", "http:"].includes(base.protocol) && !base.username && !base.password)
         keyboard.push([{ text: "Mở chi tiết / ảnh", url: `${base.origin}/dashboard/feedback#${record.id}` }]);
     }
+    if (record.hasImage && validFeedbackId(record.id) && botToken()) {
+      try {
+        const source = sharp(await feedbackImage(record.id), { limitInputPixels: 2_000_000 });
+        const dimensions = await source.metadata();
+        // Telegram photos need usable dimensions/aspect ratio; pad tiny/narrow screenshots.
+        const image = await source.flatten({ background: "#ffffff" }).resize({
+          width: Math.max(64, dimensions.width ?? 64), height: Math.max(64, dimensions.height ?? 64),
+          fit: "contain", background: "#ffffff",
+        }).jpeg({ quality: 85 }).toBuffer();
+        const form = new FormData();
+        form.set("chat_id", chatId);
+        form.set("caption", `💡 GÓP Ý TELECAMP · ${labels[record.kind]}\nKhách: ${record.username.slice(0, 80)}\nTrang: ${record.source}\n\n${record.content.slice(0, 450)}\n\nMã: ${record.id}`);
+        form.set("reply_markup", JSON.stringify({ inline_keyboard: keyboard }));
+        form.set("photo", new Blob([new Uint8Array(image)], { type: "image/jpeg" }), "feedback.jpg");
+        const response = await fetch(`https://api.telegram.org/bot${botToken()}/sendPhoto`, {
+          method: "POST", body: form, signal: AbortSignal.timeout(25_000),
+        });
+        const result = await response.json() as { ok?: boolean };
+        if (!response.ok || !result.ok) throw Error("FEEDBACK_PHOTO_DELIVERY_FAILED");
+        return;
+      } catch { logger.warn("Feedback photo delivery failed; sending text with private web fallback"); }
+    }
     await telegramCall("sendMessage", { chat_id: chatId,
-      text: `💡 GÓP Ý TELECAMP · ${labels[record.kind]}\nKhách: ${record.username}\nTrang: ${record.source}\n\n${record.content.slice(0, 1600)}\n\n${record.hasImage ? "Có ảnh đính kèm: mở chi tiết trên web.\n" : ""}Mã: ${record.id}`,
+      text: `💡 GÓP Ý TELECAMP · ${labels[record.kind]}\nKhách: ${record.username}\nTrang: ${record.source}\n\n${record.content.slice(0, 1600)}\n\n${record.hasImage ? "Ảnh chưa gửi được qua Telegram; xem ảnh trong chi tiết trên web.\n" : ""}Mã: ${record.id}`,
       link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: keyboard } });
   } catch { logger.warn("Feedback admin notification not delivered; stored feedback remains available"); }
 }

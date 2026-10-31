@@ -17,7 +17,7 @@ export async function refreshAdminMenu(settings, call) {
   if (chat?.type !== "private" || String(chat.id) !== chatId) throw Error("Private admin chat was not verified");
   const sent = await call("sendMessage", {
     chat_id: chatId,
-    text: "💡 TeleCamp đã cập nhật Góp ý & thảo luận ở cuối menu website.\n\nKhách có thể báo lỗi, đề xuất tính năng hoặc góp ý giao diện, kèm ảnh. Góp ý mới báo về đây; admin chọn Đã nhận / Đang xem xét / Hoàn thành ngay trong thông báo.\n\nĐăng nhập admin → Góp ý & thảo luận → Cài đặt quản trị để gắn link nhóm thảo luận. Chưa gắn link thì mục nhóm chưa mở.\n\nKhung chat hỗ trợ, 🔎 Tìm key / Tìm người dùng và 💳 Đơn chờ vẫn giữ nguyên.",
+    text: "💡 TeleCamp đã cập nhật Góp ý & thảo luận.\n\nChỉ còn Đề xuất tính năng và Tham gia nhóm thảo luận. Khách có thể gửi kèm ảnh; ảnh được gửi trực tiếp vào bot riêng này cùng nút cập nhật trạng thái.\n\nKhi admin chọn Hoàn thành trên bot hoặc website, khách nhận một thông báo riêng tại chuông thông báo trên web (VI/EN), kể cả khi đăng nhập lại sau đó. Bấm lại không tạo thông báo trùng.\n\nLink nhóm vẫn chỉnh trong Cài đặt quản trị của trang Góp ý. Khung chat hỗ trợ, 🔎 Tìm key / Tìm người dùng và 💳 Đơn chờ giữ nguyên.",
     reply_markup: TELEGRAM_ADMIN_MENU,
   });
   if (!sent?.message_id || String(sent.chat?.id) !== chatId) throw Error("Admin menu delivery was not confirmed");
