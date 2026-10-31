@@ -1,6 +1,11 @@
 name: TeleCampaign preflight (no deployment)
 on:
   workflow_dispatch:
+    inputs:
+      validate_candidate:
+        description: Run full candidate build validation
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -44,6 +49,25 @@ jobs:
           printf 'repository_owner='; stat -c '%U:%G' "$ROOT"
           printf 'source_commit='; git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD
           printf 'tracked_changes='; git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal | wc -l
+          echo 'source_change_paths_begin'
+          git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal
+          git -c safe.directory="$ROOT" -C "$ROOT" diff --stat
+          echo 'source_change_paths_end'
+          for path in /etc/telecampaign/api.env /var/backups/telecampaign /var/lib/telecampaign /var/lib/telecampaign/media; do
+            if test -e "$path"; then
+              printf 'dedicated_path=%s ' "$path"; stat -c '%U:%G %a' "$path"
+              if test -r "$path"; then echo 'readable_by_ubuntu=yes'; fi
+              if test -w "$path"; then echo 'writable_by_ubuntu=yes'; fi
+            fi
+          done
+          for file in /etc/nginx/sites-enabled/telecampaign /etc/nginx/sites-available/telecampaign; do
+            if sudo -n test -f "$file"; then
+              echo 'telecampaign_nginx_routing_begin'
+              sudo -n awk '/^[[:space:]]*(server_name|root|proxy_pass|listen)[[:space:]]/{print}' "$file"
+              echo 'telecampaign_nginx_routing_end'
+              break
+            fi
+          done
           for tool in node pnpm pm2 pg_dump pg_restore flock tar; do
             if command -v "$tool" >/dev/null; then printf '%s=available\n' "$tool"; else printf '%s=missing_in_ssh_path\n' "$tool"; fi
           done
@@ -66,6 +90,7 @@ jobs:
           fi
           REMOTE
   validate:
+    if: ${{ inputs.validate_candidate }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
