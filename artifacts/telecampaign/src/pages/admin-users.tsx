@@ -387,7 +387,14 @@ export default function AdminUsersPage() {
         </div>
       </Panel>
 
-      <Panel className="overflow-x-auto">
+      <Panel className="min-w-0 max-w-full">
+        <div
+          className="max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1a2b88]"
+          role="region"
+          aria-label={text.tableUser}
+          tabIndex={0}
+          data-testid="admin-users-table-scroll"
+        >
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#eef2f6] border-t-[#1a2b88]" />
@@ -497,6 +504,7 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         )}
+        </div>
       </Panel>
 
       {editingUser && modalUser && (

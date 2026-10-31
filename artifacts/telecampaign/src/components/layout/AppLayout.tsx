@@ -267,21 +267,23 @@ export function AppLayout({
                 const GroupIcon = group.icon;
                 const hasCurrentEntry = group.entries.some((entry) => location === entry.path || (entry.key !== "admin" && activePage === entry.key));
                 const isOpen = adminGroupOpen[group.id] ?? hasCurrentEntry;
+                const panelId = `admin-nav-items-${group.id}`;
                 return (
-                  <details key={group.id} open={isOpen} className="group/admin-nav border-t border-[#dce6e9] pt-1">
-                    <summary
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setAdminGroupOpen((current) => ({ ...current, [group.id]: !isOpen }));
-                      }}
-                      className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#607580] outline-none hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#197a91]"
+                  <div key={group.id} className="border-t border-[#dce6e9] pt-1">
+                    <button
+                      type="button"
+                      id={`toggle-admin-group-${group.id}`}
+                      aria-expanded={isOpen}
+                      aria-controls={panelId}
+                      onClick={() => setAdminGroupOpen((current) => ({ ...current, [group.id]: !isOpen }))}
+                      className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-2 text-left text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#607580] outline-none hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[#197a91]"
                       data-testid={`toggle-admin-group-${group.id}`}
                     >
                       <GroupIcon aria-hidden="true" className="h-3.5 w-3.5" />
                       <span className="min-w-0 flex-1">{group.title}</span>
                       <ChevronRight aria-hidden="true" className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-90" : ""}`} />
-                    </summary>
-                    {isOpen && <div className="space-y-1 pb-1 pl-1 pt-1">
+                    </button>
+                    <div id={panelId} role="group" aria-labelledby={`toggle-admin-group-${group.id}`} hidden={!isOpen} className="space-y-1 pb-1 pl-1 pt-1">
                       {group.entries.map((entry) => {
                         const selected = location === entry.path || (entry.key !== "admin" && activePage === entry.key);
                         return (
@@ -297,8 +299,8 @@ export function AppLayout({
                           </button>
                         );
                       })}
-                    </div>}
-                  </details>
+                    </div>
+                  </div>
                 );
               })}
             </section>
@@ -346,8 +348,8 @@ export function AppLayout({
               <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#475569] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Open menu')}>
                 <Menu className="h-6 w-6" />
               </button>
-                <h1 className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
-               <h1 className="text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight">{t(title)}</h1>
+                <h1 aria-label={t(title)} title={t(title)} className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
+               <h1 aria-label={t(title)} title={t(title)} className={`text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight ${isAdminSection ? "min-w-0 max-w-[190px] break-words leading-tight line-clamp-2" : ""}`}>{t(title)}</h1>
             </div>
             
              <div className="flex items-center gap-3 sm:gap-4">

@@ -463,6 +463,19 @@ export function AdminLicenseKeysPage() {
   const queryClient = useQueryClient();
   const { language } = useLanguage();
   const text = copy[language];
+  const [isCompactInventory, setIsCompactInventory] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsCompactInventory(media.matches);
+    update();
+    if (media.addEventListener) {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<LicenseKeyStatus | "all">("all");
@@ -1281,6 +1294,111 @@ export function AdminLicenseKeysPage() {
           </div>
         </div>
 
+        {isCompactInventory ? (
+          <div className="license-key-page__mobile-cards" role="list" aria-label={text.inventoryTitle}>
+            {isLoading ? (
+              <div className="license-key-page__loading"><span />{language === "vi" ? "Đang tải danh mục key…" : "Loading license inventory…"}</div>
+            ) : filteredKeys.length === 0 ? (
+              <div className="license-key-page__empty-state">
+                <Key size={24} />
+                <strong>{text.noMatch}</strong>
+              </div>
+            ) : filteredKeys.map((row) => {
+              const { key, user, details, expiresAt, daysLeft, subscriptionState } = row;
+              const linkedAccount = details?.telegramAccounts.find((account) => account.username && account.status === "connected")
+                ?? details?.telegramAccounts.find((account) => account.username);
+              const latestReminder = details?.reminders[0];
+              const subLabel = subscriptionState === "active"
+                ? text.subscriptionActive
+                : subscriptionState === "expiring"
+                  ? text.subscriptionSoon
+                  : subscriptionState === "expired"
+                    ? text.subscriptionExpired
+                    : text.subscriptionUnavailable;
+              const keyLabel = key.status === "available"
+                ? text.statusAvailable
+                : key.status === "claimed"
+                  ? text.statusClaimed
+                  : text.statusRevoked;
+              return (
+                <article className="license-key-page__mobile-card" role="listitem" key={key.id} data-testid={`license-card-${key.id}`}>
+                  <div className="license-key-page__mobile-recipient">
+                    <span className="license-key-page__avatar">{(user?.username ?? key.claimedByUsername ?? "—").slice(0, 2).toUpperCase()}</span>
+                    <div className="license-key-page__mobile-recipient-copy">
+                      <small>{text.tableRecipient}</small>
+                      <strong>{user?.username ?? (key.status === "claimed" ? key.claimedByUsername ?? text.recipientUnavailable : text.noRecipient)}</strong>
+                      <span>{linkedAccount?.username
+                        ? `@${linkedAccount.username.replace(/^@+/, "")}${linkedAccount.status !== "connected" ? ` · ${linkedAccount.status}` : ""}`
+                        : user ? text.noTelegramAccount : text.appUsername}</span>
+                      {key.claimedByUserId && <button type="button"
+                        onClick={() => navigate(`/admin/users/${encodeURIComponent(key.claimedByUserId!)}/support`)}
+                        className="license-key-page__mobile-profile-link"
+                        data-testid={`link-key-user-mobile-${key.id}`}>
+                        {language === "vi" ? "Mở hồ sơ người dùng" : "Open user profile"}
+                      </button>}
+                    </div>
+                  </div>
+
+                  <div className="license-key-page__mobile-facts">
+                    <div>
+                      <small>{text.tableSubscription}</small>
+                      {user ? <>
+                        <strong>{user.subscription.plan.toUpperCase()}</strong>
+                        <span className={`license-key-page__expiry ${subscriptionState === "expiring" ? "is-soon" : subscriptionState === "expired" ? "is-expired" : ""}`}>
+                          {expiresAt ? formatKeyDate(expiresAt, language) : text.noExpiry}
+                          {daysLeft !== null && subscriptionState === "expiring" && <small> · {daysLeft} {language === "vi" ? "ngày" : "days"}</small>}
+                        </span>
+                      </> : <strong>{key.status === "claimed" && isUsersLoading ? (language === "vi" ? "Đang tải…" : "Loading…") : text.notAvailable}</strong>}
+                    </div>
+                    <div>
+                      <small>{text.tableKeyState}</small>
+                      <span className={`license-key-page__badge license-key-page__badge--${subscriptionState}`}>{subLabel}</span>
+                      <span className={`license-key-page__key-state license-key-page__key-state--${key.status}`}>{keyLabel}</span>
+                    </div>
+                  </div>
+
+                  <div className="license-key-page__mobile-key">
+                    <small>{text.tableIdentifier}</small>
+                    <AdminLicenseKeySecret key={key.id} licenseKeyId={key.id} />
+                    <span className="license-key-page__subtext">{key.label || (language === "vi" ? "Không có nhãn" : "No label")}</span>
+                  </div>
+
+                  <div className="license-key-page__mobile-reminder">
+                    <small>{text.tableReminder}</small>
+                    {recipientDetailsError ? (
+                      <span className="license-key-page__muted">{text.notAvailable}</span>
+                    ) : isRecipientDetailsLoading ? (
+                      <span className="license-key-page__muted">{language === "vi" ? "Đang tải…" : "Loading…"}</span>
+                    ) : latestReminder ? (
+                      <>
+                        <span className={`license-key-page__reminder-state license-key-page__reminder-state--${latestReminder.status}`}>
+                          {reminderStatusLabel(latestReminder.status, language)}
+                        </span>
+                        <span className="license-key-page__subtext">
+                          {formatKeyDate(latestReminder.sentAt ?? latestReminder.updatedAt, language, true)}
+                        </span>
+                      </>
+                    ) : <span className="license-key-page__muted">{key.status === "claimed" ? text.noReminderRecord : "—"}</span>}
+                  </div>
+
+                  <div className="license-key-page__mobile-actions">
+                    {key.status === "available" && <button type="button"
+                      aria-label={`${text.revokeAction}: ${key.label ?? key.id.slice(-6)}`}
+                      onClick={() => setRevokeConfirmId(key.id)}
+                      data-testid={`revoke-license-mobile-${key.id}`}>
+                      <Trash2 size={15} />{text.revokeAction}
+                    </button>}
+                    <button type="button" onClick={() => setSelectedKeyId(key.id)}
+                      aria-label={`${text.detailTitle}: ${key.id.slice(0, 8)}`}
+                      data-testid={`open-license-details-${key.id}`}>
+                      {text.detailTitle}<ChevronRight size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
         <div className="license-key-page__table-scroll">
           {isLoading ? (
             <div className="license-key-page__loading"><span />{language === "vi" ? "Đang tải danh mục key…" : "Loading license inventory…"}</div>
@@ -1332,7 +1450,7 @@ export function AdminLicenseKeysPage() {
                       }}
                       data-testid={`license-row-${key.id}`}
                     >
-                      <td>
+                  <td data-label={text.tableRecipient}>
                         <span className="license-key-page__recipient">
                           <span className="license-key-page__avatar">{(user?.username ?? key.claimedByUsername ?? "—").slice(0, 2).toUpperCase()}</span>
                           <span>
@@ -1350,7 +1468,7 @@ export function AdminLicenseKeysPage() {
                           </span>
                         </span>
                       </td>
-                      <td>
+                      <td data-label={text.tableSubscription}>
                         {user ? (
                           <>
                             <span className="license-key-page__plan">{user.subscription.plan.toUpperCase()}</span>
@@ -1363,13 +1481,13 @@ export function AdminLicenseKeysPage() {
                           <span className="license-key-page__muted">{key.status === "claimed" && isUsersLoading ? (language === "vi" ? "Đang tải…" : "Loading…") : text.notAvailable}</span>
                         )}
                       </td>
-                      <td>
+                      <td data-label={text.tableIdentifier}>
                         <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="space-y-1">
                           <AdminLicenseKeySecret key={key.id} licenseKeyId={key.id} />
                           <small className="license-key-page__subtext">{key.label || (language === "vi" ? "Không có nhãn" : "No label")}</small>
                         </div>
                       </td>
-                      <td>
+                      <td data-label={text.tableKeyState}>
                         <span className={`license-key-page__badge license-key-page__badge--${subscriptionState}`}>
                           {subLabel}
                         </span>
@@ -1377,7 +1495,7 @@ export function AdminLicenseKeysPage() {
                           {keyLabel}
                         </span>
                       </td>
-                      <td>
+                      <td data-label={text.tableReminder}>
                         {recipientDetailsError ? (
                           <span className="license-key-page__muted">{text.notAvailable}</span>
                         ) : isRecipientDetailsLoading ? (
@@ -1395,7 +1513,7 @@ export function AdminLicenseKeysPage() {
                           <span className="license-key-page__muted">{key.status === "claimed" ? text.noReminderRecord : "—"}</span>
                         )}
                       </td>
-                      <td className="license-key-page__row-actions">
+                      <td className="license-key-page__row-actions" data-label={text.tableActions}>
                         {key.status === "available" && (
                           <button
                             type="button"
@@ -1415,6 +1533,7 @@ export function AdminLicenseKeysPage() {
             </table>
           )}
         </div>
+        )}
         <div className="license-key-page__table-foot">
           <span>{language === "vi" ? "Đang hiển thị" : "Showing"} <strong>{filteredKeys.length}</strong> {language === "vi" ? "trong" : "of"} {licenseRows.length}</span>
           <span>{language === "vi" ? "Key đã lưu có thể được quản trị viên truy xuất theo yêu cầu." : "Stored keys can be retrieved by an administrator when needed."}</span>
