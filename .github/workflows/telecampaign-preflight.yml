@@ -88,6 +88,50 @@ jobs:
           else
             echo 'local_health_check=failed'
           fi
+          node <<'DIAGNOSTIC'
+          const fs=require("node:fs");
+          const log="/var/backups/telecampaign/deploy-20261031T052306Z.log";
+          const text=fs.existsSync(log)?fs.readFileSync(log,"utf8"):"";
+          const patterns={
+            postgres_version_mismatch:/server version mismatch/i,
+            postgres_authentication_failure:/password authentication failed|no password supplied/i,
+            postgres_connection_failure:/could not connect|connection.*(failed|refused)|could not translate host|connection timed out/i,
+            postgres_invalid_parameter:/invalid URI query parameter|unrecognized configuration parameter/i,
+            permission_denied:/permission denied/i,
+            no_space:/no space left on device/i,
+            file_changed_during_archive:/file changed as we read it/i,
+            backup_success:/TeleCampaign backup completed:/,
+            checkpoint_success:/Ready-to-run TeleCampaign checkpoint:/,
+            prebuilt_invalid:/Prebuilt runtime is incomplete/,
+            restart_failed:/restart.*failed|could not safely restart/i,
+            lock_busy:/Another TeleCampaign operation/,
+            health_failed:/health.*failed|health.*timed out/i,
+            archive_error:/tar:.*(Error|failed|Cannot)/,
+            media_limit:/media exceeds/,
+            database_url_missing:/DATABASE_URL must be configured/,
+            media_directory_mismatch:/TELECAMPAIGN_MEDIA_DIR must be/,
+            postgres_error:/pg_dump: error:/,
+            dump_was_executed:/pg_dump:/,
+            signal_abort:/killed|terminated|signal/i
+          };
+          for(const [key,re] of Object.entries(patterns)) console.log("diagnostic_"+key+"="+re.test(text));
+          for(const [key,re] of Object.entries({
+            server_version:/server version: ([0-9.]+)/i,
+            dump_version:/pg_dump version: ([0-9.]+)/i,
+            shell_line:/\.sh: line ([0-9]+):/
+          })){const m=text.match(re);if(m)console.log("diagnostic_"+key+"="+m[1]);}
+          for(const dir of ["/var/backups/telecampaign","/var/backups/telecampaign/releases"]){
+            if(fs.existsSync(dir))for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
+              if(entry.isDirectory() && /^(telecampaign-|\.incomplete\.|[0-9]{8}T)/.test(entry.name)){
+                const p=dir+"/"+entry.name;
+                console.log(JSON.stringify({backupMetadata:p,complete:fs.existsSync(p+"/COMPLETE"),database:fs.existsSync(p+"/database.dump"),runtime:fs.existsSync(p+"/runtime.tar.gz")}));
+              }
+            }
+          }
+          DIAGNOSTIC
+          for binary in /usr/lib/postgresql/*/bin/pg_dump; do
+            if test -x "$binary"; then "$binary" --version; fi
+          done
           REMOTE
   validate:
     if: ${{ inputs.validate_candidate }}
