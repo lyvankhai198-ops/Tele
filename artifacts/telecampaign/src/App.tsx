@@ -8,6 +8,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { LanguageOverride, LanguageProvider, localizedErrorMessage, useLanguage, type Language } from '@/lib/i18n';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { AdminNavigationProvider } from '@/components/admin/AdminNavigationProvider';
 import {
   Route,
   Switch,
@@ -1009,6 +1010,7 @@ function App() {
     <WouterRouter base={basePath}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <AdminNavigationProvider>
           <UserLanguageProvider>
             <AdminLanguageScope>
               <TooltipProvider>
@@ -1019,6 +1021,7 @@ function App() {
               </TooltipProvider>
             </AdminLanguageScope>
           </UserLanguageProvider>
+          </AdminNavigationProvider>
         </AuthProvider>
       </QueryClientProvider>
     </WouterRouter>

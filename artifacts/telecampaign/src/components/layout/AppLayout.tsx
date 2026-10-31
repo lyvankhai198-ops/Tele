@@ -22,9 +22,11 @@ import {
   Lightbulb,
   Star,
   ChevronRight,
+  ArrowLeft,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { useAdminBack } from "@/components/admin/AdminNavigationProvider";
 import { getListAdminSystemEventsQueryKey, useGetGroupLibraryAccess, useGetSystemDefaults, useListAdminSystemEvents } from "@workspace/api-client-react";
 import { UserNotificationBell } from "@/components/UserNotificationBell";
 
@@ -97,6 +99,7 @@ export function AppLayout({
   const [location, setLocation] = useLocation();
   const { language, setLanguage, t } = useLanguage();
   const { user, logout, exitSupport } = useAuth();
+  const { canGoBack, goBack } = useAdminBack();
   const isSupportMode = Boolean(user?.support);
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const systemDefaults = useGetSystemDefaults();
@@ -388,6 +391,13 @@ export function AppLayout({
               </button>
             </div>
           </div>
+        {showAdminMenu && canGoBack && <div className="border-b border-[#e5edf1] bg-white px-4 py-1.5 lg:hidden">
+          <button type="button" onClick={goBack} data-testid="button-admin-back"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-bold text-[#24536a] hover:bg-[#f0f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147da3]">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {language === "vi" ? "Quay lại" : "Back"}
+          </button>
+        </div>}
         </header>
 
         {showNationalDayRibbon && (
