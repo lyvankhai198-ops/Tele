@@ -1,4 +1,4 @@
-name: TeleCampaign protected deployment
+name: TeleCampaign fast deployment
 on:
   workflow_dispatch:
 permissions:
@@ -126,7 +126,7 @@ jobs:
           path: runtime
       - name: Package pinned recovery controls
         env:
-          CONTROL_SHA: 979e21f8de88fa42a1e4132ffd6191e40864185c
+          CONTROL_SHA: 090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a
         run: |
           git init controls
           cd controls
@@ -143,11 +143,11 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y -qq sshpass
           fi
-      - name: Back up and deploy TeleCampaign only
+      - name: Deploy TeleCampaign without backup or automatic rollback
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
           TARGET: ${{ github.sha }}
-          CONTROL_SHA: 979e21f8de88fa42a1e4132ffd6191e40864185c
+          CONTROL_SHA: 090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a
           HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
         shell: bash
         run: |
@@ -234,34 +234,17 @@ jobs:
             git -c safe.directory="$ROOT" -C "$ROOT" checkout -- "$generated"
             echo "generated_mockup_change_preserved=$preservation"
           fi
-          baseline="$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)"
           log="$BACKUPS/deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
           # No install or build runs on VPS. Environment values are never
           # installed from the artifact or printed to public Actions logs.
-          if nice -n 10 bash "$CONTROL/scripts/deploy-telecampaign.sh" "$TARGET" \
+          if nice -n 10 env TELECAMPAIGN_DEPLOY_BACKUP=0 bash "$CONTROL/scripts/deploy-telecampaign.sh" "$TARGET" \
             --prebuilt "$STAGE" >"$log" 2>&1; then
             echo "deployment_command=passed"
           else
             code=$?
             echo "deployment_command=failed"
             echo "private_diagnostic_log=$log"
-            # Ordinary failures already trigger the wrapper's recovery. If a
-            # hard failure bypassed it, retry only this run's baseline snapshot.
-            pointer="$BACKUPS/releases/PREVIOUS"
-            if test -f "$pointer"; then
-              snapshot="$(cat "$pointer")"
-              if [[ "$snapshot" == "$BACKUPS/releases/"* ]] && test -f "$snapshot/COMMIT" \
-                && [[ "$(cat "$snapshot/COMMIT")" == "$baseline" ]]; then
-                if ! bash "$ROOT/scripts/telecampaign-healthcheck.sh" >/dev/null 2>&1 \
-                  || [[ "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)" != "$baseline" ]]; then
-                  if bash "$CONTROL/scripts/rollback-telecampaign.sh" "$snapshot" >>"$log" 2>&1; then
-                    echo "outer_recovery=passed"
-                  else
-                    echo "outer_recovery=failed"
-                  fi
-                fi
-              fi
-            fi
+            echo "automatic_rollback=disabled"
             exit "$code"
           fi
           verify_public_release() {
@@ -281,19 +264,13 @@ jobs:
           }
           if ! verify_public_release >>"$log" 2>&1; then
             echo "public_release_check=failed"
-            if bash "$CONTROL/scripts/rollback-telecampaign.sh" --previous >>"$log" 2>&1; then
-              echo "public_check_rollback=passed"
-            else
-              echo "public_check_rollback=failed"
-            fi
+            echo "automatic_rollback=disabled"
             exit 1
           fi
           echo "deployed_commit=$TARGET"
           echo "public_release_check=passed"
           echo "private_diagnostic_log=$log"
-          if test -f "$BACKUPS/releases/PREVIOUS"; then
-            echo "rollback_checkpoint=$(cat "$BACKUPS/releases/PREVIOUS")"
-          fi
+          echo "backup_and_automatic_rollback=disabled"
           # Refresh only the configured private admin's keyboard, never customer
           # chats. Credentials stay on VPS; failures are reported without values.
           if [[ -f "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs" ]]; then
@@ -309,11 +286,7 @@ jobs:
               bot_check_code=$?
               if [[ "$bot_check_code" -ne 3 ]]; then
                 echo "license_lookup_database_check=failed"
-                if bash "$CONTROL/scripts/rollback-telecampaign.sh" --previous >>"$log" 2>&1; then
-                  echo "bot_check_rollback=passed"
-                else
-                  echo "bot_check_rollback=failed"
-                fi
+                echo "automatic_rollback=disabled"
                 exit 1
               fi
               echo "license_lookup_database_check=passed"

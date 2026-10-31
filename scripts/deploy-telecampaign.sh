@@ -6,6 +6,8 @@ source "$CONTROL_SCRIPTS/lib/telecampaign-release.sh"
 release_lock
 release_require_repository
 release_require_clean
+# Fast updates are the default. Protected mode is manual opt-in only.
+backup_enabled="${TELECAMPAIGN_DEPLOY_BACKUP:-0}"
 ENV_FILE="/etc/telecampaign/api.env"
 [[ -r "$ENV_FILE" ]] || { echo "TeleCampaign environment file is not readable." >&2; exit 1; }
 set -a
@@ -43,9 +45,14 @@ fi
 
 # Existing backup creates a consistent database/media pair. It briefly stops
 # only this API, restarts it and validates health. Never auto-restore this data.
-bash "$CONTROL_SCRIPTS/backup-telecampaign.sh"
-release_checkpoint
-recovery_armed=1
+recovery_armed=0
+if [[ "$backup_enabled" == "1" ]]; then
+  bash "$CONTROL_SCRIPTS/backup-telecampaign.sh"
+  release_checkpoint
+  recovery_armed=1
+else
+  echo "Backup and automatic rollback are disabled for this deployment."
+fi
 on_deploy_exit() {
   local status="$1"
   trap - EXIT INT TERM
@@ -92,4 +99,4 @@ bash "$CONTROL_SCRIPTS/prepare-notification-media-storage.sh"
 pm2 restart telecampaign-api --update-env
 bash "$ROOT/scripts/telecampaign-healthcheck.sh"
 recovery_armed=0
-echo "TeleCampaign deployed at $target. Use rollback-telecampaign.sh --previous if a later functional check fails."
+echo "TeleCampaign deployed at $target."
