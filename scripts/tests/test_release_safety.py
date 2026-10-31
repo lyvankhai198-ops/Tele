@@ -396,6 +396,26 @@ echo stopped > "$TEST_ROOT/process-state"
         self.assertFalse(self.log.exists())
         self.assert_old_restored()
 
+    def test_real_media_preflight_uses_owned_private_temp_directory(self):
+        source = (SCRIPTS / "prepare-notification-media-storage.sh").read_text()
+        media = self.base / "owned-media"
+        media.mkdir(mode=0o700)
+        envfile = self.base / "media-test.env"
+        envfile.write_text("DATABASE_URL=test-fixture\n")
+        source = source.replace('ENV_FILE="/etc/telecampaign/api.env"', f'ENV_FILE="{envfile}"')
+        source = source.replace('MEDIA_ROOT="/var/lib/telecampaign/media"', f'MEDIA_ROOT="{media}"')
+        script = self.base / "real-media-preflight.sh"
+        script.write_text(source)
+        self.executable("psql", "#!/bin/bash\nexit 0\n")
+        self.executable("mktemp", f'''#!/bin/bash
+[[ "$1" == "{media}/.telecampaign-media-query.XXXXXX" ]] || exit 97
+exec /usr/bin/mktemp "$@"
+''')
+        result = self.cmd(["bash", str(script)], check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Notification media storage is ready.", result.stdout)
+        self.assertEqual(list(media.iterdir()), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -26,7 +26,8 @@ fi
 mkdir -p "$MEDIA_ROOT"
 chmod 700 "$MEDIA_ROOT"
 
-query_output="$(mktemp "$(dirname "$MEDIA_ROOT")/.telecampaign-media-query.XXXXXX")"
+# Use the application-owned private media directory, not its root-owned parent.
+query_output="$(mktemp "$MEDIA_ROOT/.telecampaign-media-query.XXXXXX")"
 cleanup_query_output() {
   rm -f "$query_output"
 }

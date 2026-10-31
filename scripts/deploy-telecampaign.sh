@@ -88,7 +88,7 @@ NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
 fi
 [[ -s "$ROOT/artifacts/telecampaign/dist/public/index.html" \
   && -s "$ROOT/artifacts/api-server/dist/index.mjs" ]]
-bash "$ROOT/scripts/prepare-notification-media-storage.sh"
+bash "$CONTROL_SCRIPTS/prepare-notification-media-storage.sh"
 pm2 restart telecampaign-api --update-env
 bash "$ROOT/scripts/telecampaign-healthcheck.sh"
 recovery_armed=0
