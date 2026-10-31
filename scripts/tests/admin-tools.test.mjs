@@ -7,6 +7,17 @@ import { readFile } from "node:fs/promises";
 import * as core from "../../artifacts/api-server/src/lib/admin-tools-core.ts";
 import * as access from "../../artifacts/api-server/src/lib/telegram-admin-access.ts";
 import * as menu from "../../artifacts/api-server/src/lib/telegram-admin-menu.ts";
+import { purchaseReviewNotification } from "../../artifacts/api-server/src/lib/purchase-review-notification.ts";
+
+test("Payment notices distinguish key/renewal, currency and reported versus verified money", () => {
+  for (const currency of ["VND", "USDT"]) for (const orderType of ["license", "renewal"]) {
+    const text = purchaseReviewNotification({ id: "fixture", ownerUserId: "user", reference: "TCFIXTURE",
+      plan: "plus", durationDays: 30, amount: "1000", currency, orderType, network: currency === "USDT" ? "BEP20" : null }, "fixture_user", true);
+    assert.ok(text.includes("CHƯA XÁC MINH") && text.includes(currency));
+    assert.ok(text.includes(orderType === "license" ? "Mua key" : "Gia hạn"));
+    assert.ok(text.includes("tự đối chiếu"));
+  }
+});
 
 const fixtureSecret = core.base32Encode(Buffer.from("12345678901234567890"));
 test("RFC HOTP/TOTP vector, base32 encoding and 6 digit output", () => {

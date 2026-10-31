@@ -8,6 +8,7 @@ import { issueCaptcha } from "../../artifacts/api-server/src/lib/captcha";
 import { totpCode } from "../../artifacts/api-server/src/lib/admin-tools-core";
 import { pollTelegram } from "../../artifacts/api-server/src/lib/support-telegram";
 import { encryptSecret } from "../../artifacts/api-server/src/lib/crypto";
+import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecampaign-orders";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
@@ -147,6 +148,56 @@ try {
   check(revoked.ok, "E2E_REVOKE");
   const after = await (await request("/admin/tools/summary", adminCookie)).json() as any;
   check(after.report.cash.some((r: any) => r.currency === "VND" && Number(r.amount) === 1000), "E2E_REVENUE_RETAINED");
+  phase = "E2E_TELEGRAM_MANUAL_PAYMENTS";
+  const orderConfigRow = await pool.query("SELECT value FROM system_settings WHERE key='telecampaign_order_settings'");
+  const orderConfig = JSON.parse(orderConfigRow.rows[0].value);
+  orderConfig.usdtBep20Address = "0x" + "1".repeat(40);
+  await pool.query("UPDATE system_settings SET value=$1 WHERE key='telecampaign_order_settings'", [JSON.stringify(orderConfig)]);
+  let callbackUpdate = 100;
+  async function callback(orderId: string, sender = 123456789, type = "private") {
+    const id = callbackUpdate++;
+    updates = [{ update_id: id, callback_query: { id: `fixture-${id}`, from: { id: sender },
+      data: `purchase:paid:${orderId}`, message: { message_id: id, chat: { id: 123456789, type } } } }];
+    await pollTelegram();
+  }
+  for (const currency of ["VND", "USDT"]) {
+    for (const orderType of ["license", "renewal"]) {
+      let allocatedKey: string | undefined;
+      if (orderType === "license") {
+        allocatedKey = randomUUID();
+        const fixtureLicense = "FIXTURE-" + randomBytes(12).toString("hex").toUpperCase();
+        await pool.query(`INSERT INTO license_keys(id,key_hash,key_encrypted,plan,duration_days,pool)
+          VALUES($1,$2,$3,'plus',30,'normal')`,
+          [allocatedKey, createHash("sha256").update(fixtureLicense).digest("hex"), encryptSecret(fixtureLicense)]);
+      }
+      const made = await request("/purchase-orders", userCookie,
+        { plan: "PLUS", currency, orderType, ...(currency === "USDT" ? { network: "BEP20" } : {}) });
+      check(made.ok, "E2E_BOT_ORDER_CREATE");
+      const target = await made.json() as any;
+      await callback(target.id, 888);
+      await callback(target.id, 123456789, "supergroup");
+      const unchanged = await pool.query("SELECT status FROM purchase_orders WHERE id=$1", [target.id]);
+      check(unchanged.rows[0].status === "pending", "E2E_BOT_ADMIN_AUTHORIZATION");
+      await callback(target.id);
+      const paid = await pool.query("SELECT status,payment_event_id,reviewed_by FROM purchase_orders WHERE id=$1", [target.id]);
+      check(paid.rows[0].status === "paid" && paid.rows[0].reviewed_by === "123456789", "E2E_BOT_MANUAL_PAID");
+      check(paid.rows[0].payment_event_id === `manual:${currency.toLowerCase()}:${target.id}`, "E2E_BOT_MANUAL_AUDIT");
+      if (allocatedKey) {
+        const key = await pool.query("SELECT claimed_by FROM license_keys WHERE id=$1", [allocatedKey]);
+        check(key.rows[0].claimed_by === userId, "E2E_BOT_LICENSE_ACTIVATION");
+      }
+      const beforeRetry = await pool.query("SELECT expires_at FROM subscriptions WHERE owner_user_id=$1", [userId]);
+      await callback(target.id);
+      await settleVerifiedOrder(target.id, `fixture-automatic:${target.id}`);
+      const afterRetry = await pool.query("SELECT expires_at FROM subscriptions WHERE owner_user_id=$1", [userId]);
+      check(beforeRetry.rows[0].expires_at.getTime() === afterRetry.rows[0].expires_at.getTime(), "E2E_BOT_NO_DOUBLE_EXTENSION");
+      check(replies.some((r: any) => r.reply_markup?.inline_keyboard?.flat().some((b: any) =>
+        b.callback_data === `purchase:paid:${target.id}` && b.text.includes("Xác minh"))), "E2E_BOT_REVIEW_BUTTON");
+    }
+  }
+  const paymentReport = await (await request("/admin/tools/summary", adminCookie)).json() as any;
+  check(paymentReport.report.cash.some((r: any) => r.currency === "VND" && Number(r.amount) === 3000), "E2E_BOT_VND_REPORT");
+  check(paymentReport.report.cash.some((r: any) => r.currency === "USDT" && Number(r.amount) === 2), "E2E_BOT_USDT_REPORT");
   phase = "E2E_MFA_DISABLE";
   const disabled = await request("/auth/mfa/disable", adminCookie, { password, code: codes.recoveryCodes[1] });
   check(disabled.ok, "E2E_MFA_DISABLE");

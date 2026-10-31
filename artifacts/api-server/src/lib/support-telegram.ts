@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { and, count, desc, eq, gt, isNotNull, isNull, lte, ne, or, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, or, sql, sum } from "drizzle-orm";
 import {
   appUsersTable,
   db,
@@ -33,6 +33,7 @@ import {
 } from "./support-chat";
 import { supportMediaStorage } from "./supportMediaStorage";
 import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
+import { purchaseReviewNotification } from "./purchase-review-notification";
 import { logger } from "./logger";
 import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-admin-access";
 import { findLicenseForTelegram } from "./telegram-license-lookup";
@@ -165,13 +166,13 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
     text,
     reply_markup: orderId ? {
       inline_keyboard: [[
-        { text: "✅ Duyệt", callback_data: `purchase:paid:${orderId}` },
+        { text: "✅ Xác minh thanh toán", callback_data: `purchase:paid:${orderId}` },
         { text: "❌ Từ chối", callback_data: `purchase:rejected:${orderId}` },
       ]],
     } : undefined,
   });
   } catch (error) {
-    logger.warn({ err: error }, "Purchase order Telegram notification failed");
+    logger.warn("Purchase order Telegram notification failed");
   }
 }
 
@@ -583,10 +584,12 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
   const configured = settings.supportChat.adminTelegramChatId;
   const message = query.message;
   const parts = query.data?.split(":") ?? [];
-  const authorized = Boolean(configured && message?.chat.type === "private"
+  const authorized = Boolean(settings.supportChat.enabled && settings.supportChat.telegramBridgeEnabled
+    && configured && message?.chat.type === "private"
     && String(message.chat.id) === String(configured)
     && String(query.from?.id) === String(configured)
-    && parts.length === 3 && parts[0] === "purchase" && ["paid", "rejected"].includes(parts[1]));
+    && parts.length === 3 && parts[0] === "purchase" && ["paid", "rejected"].includes(parts[1])
+    && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(parts[2]));
   if (!authorized) {
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không được phép", show_alert: true });
     return;
@@ -594,16 +597,24 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
   try {
     const decision = parts[1] as "paid" | "rejected";
     const order = await reviewOrder(parts[2], String(query.from!.id), decision, {
+      manualVerification: decision === "paid",
       reason: decision === "rejected" ? "Admin rejected via Telegram after reviewing payment." : undefined,
     });
-    await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: order?.status === "paid" ? "Đã duyệt" : "Đã từ chối" });
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id,
+      text: order?.status === "paid" ? "Đã xác minh và kích hoạt/gia hạn" :
+        order?.status === "received" ? "Đã nhận tiền, đang chờ xử lý cấp key" :
+        order?.status === "rejected" ? "Đã từ chối" : "Đơn không còn chờ xử lý", show_alert: true });
     if (order) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
     if (order?.status === "paid") {
       await notifyPurchaseOrder(verifiedOrderNotification(order));
     }
   } catch (error) {
-    await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không thể xử lý đơn", show_alert: true });
-    logger.warn({ err: error, callbackId: query.id }, "Purchase callback review failed");
+    const processed = error instanceof Error && error.message === "ORDER_NOT_REVIEWABLE";
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id,
+      text: processed ? "Đơn đã được xử lý trước đó; không kích hoạt/gia hạn lần nữa." : "Không thể xử lý đơn. Kiểm tra lại trên web.", show_alert: true });
+    if (processed) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id,
+      message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
+    logger.warn("Purchase callback review failed or order already processed");
   }
 }
 
@@ -956,6 +967,25 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
 
   if (await handleAdminLicenseLookup(message, configuredChatId, settings.defaultTimezone)) return;
   if (await handleAdminUserLookup(message, configuredChatId)) return;
+  if (text === "💳 Đơn chờ" || text === "/orders") {
+    const orders = await db.select({
+      id: purchaseOrdersTable.id, ownerUserId: purchaseOrdersTable.ownerUserId,
+      reference: purchaseOrdersTable.reference, orderType: purchaseOrdersTable.orderType,
+      plan: purchaseOrdersTable.plan, durationDays: purchaseOrdersTable.durationDays,
+      amount: purchaseOrdersTable.amount, currency: purchaseOrdersTable.currency,
+      network: purchaseOrdersTable.network, txHash: purchaseOrdersTable.txHash,
+      username: appUsersTable.username,
+    }).from(purchaseOrdersTable)
+      .leftJoin(appUsersTable, sql`${appUsersTable.id}::text=${purchaseOrdersTable.ownerUserId}`)
+      .where(inArray(purchaseOrdersTable.status, ["pending", "expired", "received"]))
+      .orderBy(desc(purchaseOrdersTable.updatedAt)).limit(10);
+    if (!orders.length) await sendAdminMenu("Không có đơn chờ xác minh.");
+    else {
+      await sendAdminMenu("10 đơn chờ gần nhất (gồm đơn hết hạn/chờ cấp key). Chỉ xác minh sau khi đối chiếu đã nhận tiền.");
+      for (const order of orders) await notifyPurchaseOrder(purchaseReviewNotification(order, order.username), order.id);
+    }
+    return;
+  }
   if (text === "📋 Báo cáo ngày" || text === "/report") {
     await sendAdminMenu(await dailyReportText(), "HTML");
     return;

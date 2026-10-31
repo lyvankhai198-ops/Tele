@@ -182,7 +182,7 @@ export async function updateOrderProof(id: string, ownerUserId: string, txHash?:
   return order;
 }
 
-/** Settle provider-verified payments or explicitly confirmed admin bank receipts. */
+/** Settle provider-verified payments or explicitly confirmed VND/USDT receipts. */
 export async function settleVerifiedOrder(
   id: string,
   paymentEventId: string,
@@ -194,8 +194,8 @@ export async function settleVerifiedOrder(
     if (!order) return null;
     if (adminReview) {
       assertManualApprovalAllowed(order, adminReview.manualVerification === true);
-      // Preserve a provider event when retrying fulfillment; never verify USDT by hand.
-      paymentEventId = order.paymentEventId ?? `manual:vnd:${id}`;
+      // Keep verified provider events on retries; manual receipts use their own namespace.
+      paymentEventId = order.paymentEventId ?? `manual:${order.currency.toLowerCase()}:${id}`;
     }
     if (!order || (order.status !== "pending" && order.status !== "received" && order.status !== "expired")
       || (order.paymentEventId && order.paymentEventId !== paymentEventId)) return order ?? null;
@@ -207,7 +207,7 @@ export async function settleVerifiedOrder(
       .where(eq(appUsersTable.id, order.ownerUserId)).limit(1);
     if (!owner) throw new Error("ORDER_USER_NOT_FOUND");
     const now = new Date();
-    // An automatic fulfillment retry must not erase the manual bank review.
+    // An automatic fulfillment retry must not erase a manual review.
     const reviewAudit = {
       reviewedBy: reviewedBy === "automatic" && order.reviewedBy ? order.reviewedBy : reviewedBy,
       reviewedAt: reviewedBy === "automatic" && order.reviewedAt ? order.reviewedAt : now,
