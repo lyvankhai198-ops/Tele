@@ -60,6 +60,7 @@ echo preflight >> "$TEST_LOG"
 set -e
 [[ "$2" == telecampaign-api ]] || exit 99
 echo "pm2 $*" >> "$TEST_LOG"
+echo "pm2_node_options=${NODE_OPTIONS:-}" >> "$TEST_LOG"
 case "$1" in
  stop) echo stopped > "$TEST_ROOT/process-state";;
  restart)
@@ -71,6 +72,7 @@ esac
         self.executable("pnpm", """#!/usr/bin/env bash
 set -e
 echo "pnpm $*" >> "$TEST_LOG"
+echo "build_node_options=${NODE_OPTIONS:-}" >> "$TEST_LOG"
 mode="$(cat "$TEST_MODE")"
 if [[ "$*" == *install* ]]; then
   echo new > "$TEST_ROOT/node_modules/native.node"
@@ -308,6 +310,16 @@ echo stopped > "$TEST_ROOT/process-state"
         result = self.cmd(["bash", str(control / "rollback-telecampaign.sh"), "--previous"], check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_old_restored()
+
+    def test_build_heap_limit_does_not_change_api_node_options(self):
+        self.env["NODE_OPTIONS"] = "--no-warnings"
+        self.env["TELECAMPAIGN_BUILD_NODE_OPTIONS"] = "--max-old-space-size=128"
+        result = self.script("deploy-telecampaign.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        log = self.log.read_text()
+        self.assertIn("build_node_options=--max-old-space-size=128", log)
+        self.assertIn("pm2_node_options=--no-warnings", log)
+        self.assertNotIn("pm2_node_options=--max-old-space-size", log)
 
 
 if __name__ == "__main__":

@@ -62,9 +62,12 @@ pm2 stop telecampaign-api
 # readable by the dedicated Nginx worker after a successful deployment.
 umask 022
 release_git reset --hard "$target"
-pnpm --dir "$ROOT" install --frozen-lockfile --prod=false
-PORT="${TELECAMPAIGN_PORT:-3004}" BASE_PATH=/ pnpm --dir "$ROOT" --filter @workspace/telecampaign run build
-pnpm --dir "$ROOT" --filter @workspace/api-server run build
+NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
+  pnpm --dir "$ROOT" install --frozen-lockfile --prod=false
+NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
+  PORT="${TELECAMPAIGN_PORT:-3004}" BASE_PATH=/ pnpm --dir "$ROOT" --filter @workspace/telecampaign run build
+NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
+  pnpm --dir "$ROOT" --filter @workspace/api-server run build
 [[ -s "$ROOT/artifacts/telecampaign/dist/public/index.html" \
   && -s "$ROOT/artifacts/api-server/dist/index.mjs" ]]
 bash "$ROOT/scripts/prepare-notification-media-storage.sh"
