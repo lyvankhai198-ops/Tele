@@ -1,0 +1,71 @@
+name: Correct admin update note only
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telecampaign-vps-operations
+  cancel-in-progress: false
+jobs:
+  correct-note:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fetch exact notification helper
+        env:
+          TARGET: ${{ github.sha }}
+        run: |
+          git init source
+          git -C source remote add origin https://github.com/lyvankhai198-ops/Tele.git
+          git -C source fetch --depth=1 origin "$TARGET"
+          git -C source checkout --detach FETCH_HEAD
+      - name: Install SSH helper
+        run: |
+          if ! command -v sshpass >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+          fi
+      - name: Send accurate update note without restarting any service
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          known_hosts="$(mktemp)"
+          trap 'rm -f "$known_hosts"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known_hosts" 2>/dev/null
+          test "$(ssh-keygen -lf "$known_hosts" -E sha256 | awk '{print $2}')" = "$HOST_FINGERPRINT"
+          script="/opt/telecampaign/scripts/.refresh-note-${GITHUB_RUN_ID}.mjs"
+          sha="$(sha256sum source/scripts/refresh-telecampaign-bot-menu.mjs | awk '{print $1}')"
+          sshpass -e scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 source/scripts/refresh-telecampaign-bot-menu.mjs "ubuntu@15.235.142.30:$script"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 ubuntu@15.235.142.30 "bash -s -- '$script' '$sha'" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          script="$1"; sha="$2"
+          [[ "$script" =~ ^/opt/telecampaign/scripts/\.refresh-note-[0-9]+\.mjs$ ]]
+          trap 'rm -f -- "$script"' EXIT
+          test "$(hostname)" = vps-cd243267
+          test "$(id -un)" = ubuntu
+          test "$(sha256sum "$script" | awk '{print $1}')" = "$sha"
+          test "$(git -c safe.directory=/opt/telecampaign -C /opt/telecampaign rev-parse HEAD)" = 6c95f80a0391a15c1f0af93869e6a1fe93b09455
+          ! grep -q 'TELECAMP CẦN KIỂM TRA' /opt/telecampaign/artifacts/api-server/src/lib/support-telegram.ts
+          log="/var/backups/telecampaign/update-note-$(date -u +%Y%m%dT%H%M%SZ).log"
+          if (
+            set -a
+            source /etc/telecampaign/api.env
+            set +a
+            export TELECAMPAIGN_UPDATE_NOTE='Đã tắt tin cảnh báo vận hành tự động và tin phục hồi đi kèm. Không thay đổi chiến dịch, lịch gửi, trạng thái hay cơ chế chống gửi trùng. Thông báo thanh toán, hỗ trợ và báo cáo ngày giữ nguyên. Tin trước về Góp ý là ghi chú cũ bị gửi nhầm, không phải nội dung cập nhật lần này.'
+            node "$script"
+          ) >"$log" 2>&1; then
+            echo "accurate_admin_update_note=delivered"
+            echo "service_restart=not_performed"
+          else
+            echo "accurate_admin_update_note=failed"
+            echo "private_diagnostic_log=$log"
+            exit 1
+          fi
+          REMOTE

@@ -1,12 +1,30 @@
 // Run only on the dedicated VPS with its protected environment already sourced.
 // No configuration values, token, chat ID or raw network errors are printed.
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TELEGRAM_ADMIN_MENU } from "../artifacts/api-server/src/lib/telegram-admin-menu.ts";
 let databaseCheckPassed = false;
 
-export async function refreshAdminMenu(settings, call) {
+export function adminUpdateText(note = "") {
+  const detail = typeof note === "string" ? note.trim().slice(0, 3500) : "";
+  return detail ? `TeleCamp — nội dung cập nhật:\n\n${detail}` : "Menu quản trị đã được làm mới.";
+}
+
+function deployedUpdateNote() {
+  const configured = process.env.TELECAMPAIGN_UPDATE_NOTE?.trim();
+  if (configured) return configured;
+  try {
+    return execFileSync("git", ["log", "-1", "--format=%B"], {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      encoding: "utf8", timeout: 5_000, maxBuffer: 16_384,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch { return ""; }
+}
+
+export async function refreshAdminMenu(settings, call, updateNote = "") {
   const support = settings?.supportChat;
   if (support?.telegramBridgeEnabled === false) throw Error("Bridge is disabled");
   const chatId = typeof support?.adminTelegramChatId === "string" ? support.adminTelegramChatId.trim() : "";
@@ -17,7 +35,7 @@ export async function refreshAdminMenu(settings, call) {
   if (chat?.type !== "private" || String(chat.id) !== chatId) throw Error("Private admin chat was not verified");
   const sent = await call("sendMessage", {
     chat_id: chatId,
-    text: "💡 TeleCamp đã cập nhật Góp ý & thảo luận.\n\nChỉ còn Đề xuất tính năng và Tham gia nhóm thảo luận. Khách có thể gửi kèm ảnh; ảnh được gửi trực tiếp vào bot riêng này cùng nút cập nhật trạng thái.\n\nKhi admin chọn Hoàn thành trên bot hoặc website, khách nhận một thông báo riêng tại chuông thông báo trên web (VI/EN), kể cả khi đăng nhập lại sau đó. Bấm lại không tạo thông báo trùng.\n\nLink nhóm vẫn chỉnh trong Cài đặt quản trị của trang Góp ý. Khung chat hỗ trợ, 🔎 Tìm key / Tìm người dùng và 💳 Đơn chờ giữ nguyên.",
+    text: adminUpdateText(updateNote),
     reply_markup: TELEGRAM_ADMIN_MENU,
   });
   if (!sent?.message_id || String(sent.chat?.id) !== chatId) throw Error("Admin menu delivery was not confirmed");
@@ -69,7 +87,7 @@ async function main() {
     const body = await response.json();
     if (!response.ok || !body.ok) throw Error("Telegram operation failed");
     return body.result;
-  });
+  }, deployedUpdateNote());
   console.log("admin_menu_refresh=passed");
 }
 
