@@ -2,6 +2,7 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { pool, db, systemSettingsTable } from "@workspace/db";
+import { prepareCampaignDeleteIndexes } from "../prepare-campaign-delete-indexes.mjs";
 import app from "../../artifacts/api-server/src/app";
 import { hashPassword } from "../../artifacts/api-server/src/lib/auth";
 import { issueCaptcha } from "../../artifacts/api-server/src/lib/captcha";
@@ -103,6 +104,48 @@ try {
   const userCookie = userLogin.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
   check((await request("/admin/tools/summary")).status === 401, "E2E_ANONYMOUS_DENIED");
   check((await request("/admin/tools/summary", userCookie)).status === 403, "E2E_USER_ADMIN_DENIED");
+  phase = "E2E_CAMPAIGN_BULK_DELETE";
+  const deleteIndexClient = await pool.connect();
+  try { await prepareCampaignDeleteIndexes(deleteIndexClient); }
+  finally { deleteIndexClient.release(); }
+  const deletePrefix = "fixture-delete-" + randomUUID();
+  const deleteIds = Array.from({ length: 6 }, () => randomUUID());
+  const accountId = randomUUID(), destinationId = randomUUID(), groupId = randomUUID();
+  await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name) VALUES($1,$2,'Fixture delete account')", [accountId, userId]);
+  await pool.query("INSERT INTO destinations(id,owner_user_id,telegram_account_id,telegram_id,title) VALUES($1,$2,$3,'fixture-delete-group','Fixture delete group')", [destinationId,userId,accountId]);
+  for (let i = 0; i < deleteIds.length; i++) {
+    await pool.query("INSERT INTO campaigns(id,owner_user_id,name,status) VALUES($1,$2,$3,$4)",
+      [deleteIds[i], i === 5 ? adminId : userId, deletePrefix + (i === 4 ? "-other-filter" : ""),
+        ["completed", "completed_with_errors", "running", "queued", "paused", "completed"][i]]);
+  }
+  await pool.query(`INSERT INTO campaign_targets(campaign_id,destination_id,status)
+    SELECT $1,$2,'sent' FROM generate_series(1,300)`, [deleteIds[0], destinationId]);
+  await pool.query(`INSERT INTO activity_logs(owner_user_id,event,message,campaign_id,target_id)
+    SELECT $1,'fixture.delete','Retained fixture history',campaign_id,id FROM campaign_targets WHERE campaign_id=$2`, [userId,deleteIds[0]]);
+  await pool.query("INSERT INTO group_library_entries(id,telegram_id,title) VALUES($1,$2,'Fixture delete library')", [groupId, "fixture-delete-"+randomUUID()]);
+  await pool.query("INSERT INTO admin_group_join_jobs(telegram_account_id,group_library_entry_id,auto_campaign_id) VALUES($1,$2,$3)", [accountId,groupId,deleteIds[0]]);
+  // Real lock contention must roll back ALL deletes and return before Nginx.
+  const deleteLock = await pool.connect();
+  try {
+    await deleteLock.query("BEGIN");
+    await deleteLock.query("SELECT id FROM campaigns WHERE id=$1 FOR UPDATE", [deleteIds[0]]);
+    const blocked = await request("/campaigns/bulk-delete", userCookie, {status:"completed",search:deletePrefix});
+    check(blocked.status === 503 && (await blocked.text()).includes("CAMPAIGN_DELETE_BUSY"), "E2E_DELETE_LOCK_TIMEOUT");
+    check((await pool.query("SELECT count(*)::int count FROM campaigns WHERE id=ANY($1::uuid[])", [deleteIds.slice(0,2)])).rows[0].count === 2, "E2E_DELETE_TIMEOUT_ATOMIC");
+  } finally { await deleteLock.query("ROLLBACK"); deleteLock.release(); }
+  const bulkDeleted = await request("/campaigns/bulk-delete", userCookie, {status:"completed",search:deletePrefix});
+  const bulkResult = await bulkDeleted.json() as any;
+  check(bulkDeleted.ok && bulkResult.deletedCount === 2, "E2E_DELETE_COMPLETED_AND_ERRORS");
+  check((await pool.query("SELECT count(*)::int count FROM campaign_targets WHERE campaign_id=$1", [deleteIds[0]])).rows[0].count === 0, "E2E_DELETE_TARGET_CASCADE");
+  check((await pool.query("SELECT count(*)::int count FROM activity_logs WHERE owner_user_id=$1 AND event='fixture.delete' AND campaign_id IS NULL AND target_id IS NULL", [userId])).rows[0].count === 300, "E2E_DELETE_HISTORY_RETAINED");
+  check((await pool.query("SELECT auto_campaign_id FROM admin_group_join_jobs WHERE telegram_account_id=$1 AND group_library_entry_id=$2", [accountId,groupId])).rows[0].auto_campaign_id === null, "E2E_DELETE_JOIN_REFERENCE_CLEARED");
+  const preserved = (await pool.query("SELECT id,status FROM campaigns WHERE id=ANY($1::uuid[])", [deleteIds.slice(2)])).rows;
+  check(preserved.length === 4 && preserved.some(row => row.status === "running") && preserved.some(row => row.status === "queued"), "E2E_DELETE_OWNER_FILTER_ACTIVE_PRESERVED");
+  const repeated = await request("/campaigns/bulk-delete", userCookie, {status:"completed",search:deletePrefix});
+  check(repeated.ok && (await repeated.json() as any).deletedCount === 0, "E2E_DELETE_IDEMPOTENT");
+  const activeOnly = await request("/campaigns/bulk-delete", userCookie, {status:"all",search:deletePrefix});
+  const activeResult = await activeOnly.json() as any;
+  check(activeOnly.ok && activeResult.deletedCount === 1 && activeResult.skippedCount === 2, "E2E_DELETE_RUNNING_QUEUED_SKIPPED");
   phase = "E2E_ORDER_PROOF_APPROVAL";
   const created = await request("/purchase-orders", userCookie, { plan: "PLUS", currency: "VND", orderType: "license" });
   check(created.status === 201 || created.status === 200, "E2E_ORDER_CREATE");

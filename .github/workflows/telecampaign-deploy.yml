@@ -40,6 +40,7 @@ jobs:
         working-directory: candidate
         run: |
           bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
+          node --test scripts/tests/campaign-bulk-delete.test.mjs
           python3 scripts/tests/test_release_safety.py
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
           node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs
@@ -193,6 +194,8 @@ jobs:
             scripts/checkpoint-telecampaign.sh scripts/rollback-telecampaign.sh \
             scripts/backup-telecampaign.sh scripts/restore-telecampaign.sh \
             scripts/prepare-notification-media-storage.sh
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git show FETCH_HEAD:scripts/prepare-campaign-delete-indexes.mjs > ../prepare-campaign-delete-indexes.mjs
       - name: Install SSH password helper
         run: |
           if ! command -v sshpass >/dev/null; then
@@ -225,6 +228,8 @@ jobs:
             -o ConnectTimeout=15 telecampaign-controls.tar.gz "ubuntu@15.235.142.30:$remote_archive"
           sshpass -e scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
             -o ConnectTimeout=15 runtime/* "ubuntu@15.235.142.30:$incoming/"
+          sshpass -e scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 prepare-campaign-delete-indexes.mjs "ubuntu@15.235.142.30:$incoming/"
           sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
             -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
             ubuntu@15.235.142.30 "bash -s -- '$TARGET' '$CONTROL_SHA' '$archive_sha' '$remote_archive' '$incoming'" <<'REMOTE'
@@ -291,6 +296,21 @@ jobs:
             echo "generated_mockup_change_preserved=$preservation"
           fi
           log="$BACKUPS/deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          # Use the existing runtime's pg package before changing source/process.
+          # No table rows are removed; cancel only abandoned protected DELETEs.
+          if (
+            set -a
+            source /etc/telecampaign/api.env
+            set +a
+            node "$STAGE/prepare-campaign-delete-indexes.mjs"
+          ) >>"$log" 2>&1; then
+            echo "campaign_delete_indexes=passed"
+            rm -f "$STAGE/prepare-campaign-delete-indexes.mjs"
+          else
+            echo "campaign_delete_indexes=failed"
+            echo "private_diagnostic_log=$log"
+            exit 1
+          fi
           # No install or build runs on VPS. Environment values are never
           # installed from the artifact or printed to public Actions logs.
           if nice -n 10 env TELECAMPAIGN_DEPLOY_BACKUP=0 bash "$CONTROL/scripts/deploy-telecampaign.sh" "$TARGET" \

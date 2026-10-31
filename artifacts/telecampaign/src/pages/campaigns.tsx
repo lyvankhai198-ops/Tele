@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { campaignDeleteError } from "@/lib/campaign-delete-error";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
@@ -794,7 +795,7 @@ export default function Campaigns() {
       if (details && result.deletedCount > 0) setDetails(null);
       setToast(c.bulkDeleteResult(result.deletedCount, result.skippedCount));
     } catch (error) {
-      setToast(localizedErrorMessage(error, language, c.genericError));
+      setToast(campaignDeleteError(error, language));
     }
   }
 
