@@ -1,6 +1,7 @@
 // Synthetic fixtures only. No database, credentials, network or live bot.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { feedbackTranslations, feedbackErrorKey } from "../../artifacts/telecampaign/src/lib/feedback-i18n.ts";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
 import { readFile } from "node:fs/promises";
@@ -9,6 +10,34 @@ import * as access from "../../artifacts/api-server/src/lib/telegram-admin-acces
 import * as menu from "../../artifacts/api-server/src/lib/telegram-admin-menu.ts";
 import { purchaseReviewNotification } from "../../artifacts/api-server/src/lib/purchase-review-notification.ts";
 
+test("Feedback uses the real shared VI/EN catalog without untranslated labels", async () => {
+  const i18n = await readFile(new URL("../../artifacts/telecampaign/src/lib/i18n.tsx", import.meta.url), "utf8");
+  const literal = i18n.match(/const translations:\s*Record<string, string>\s*=\s*(\{[\s\S]*?\n\});/);
+  assert.ok(literal, "shared translation catalog found");
+  const catalog = vm.runInNewContext(`(${literal[1]})`, { feedbackTranslations });
+  const translate = (language, key) => language === "vi" ? catalog[key] ?? key : key;
+  for (const [key, vi] of Object.entries(feedbackTranslations)) {
+    assert.equal(translate("en", key), key);
+    assert.equal(translate("vi", key), vi);
+    assert.notEqual(key, vi);
+  }
+  const page = await readFile(new URL("../../artifacts/telecampaign/src/pages/feedback.tsx", import.meta.url), "utf8");
+  const layout = await readFile(new URL("../../artifacts/telecampaign/src/components/layout/AppLayout.tsx", import.meta.url), "utf8");
+  assert.match(page, /useLanguage\(\)/);
+  assert.match(page, /language === "vi" \? "vi-VN" : "en-US"/);
+  assert.doesNotMatch(page, /[À-ỹ]/u, "no hardcoded Vietnamese UI in the feedback page");
+  assert.match(layout, /key: "feedback", label: "Feedback & discussion"/);
+  for (const match of page.matchAll(/\b(?:t|setError|setNotice|Error)\("([^"]+)"/g))
+    assert.ok(Object.hasOwn(feedbackTranslations, match[1]), `missing VI translation: ${match[1]}`);
+});
+test("Feedback alerts remain bilingual when language changes, including server errors", () => {
+  const key = feedbackErrorKey(new Error("Tối đa 5 góp ý trong 24 giờ, cách nhau ít nhất 1 phút."));
+  assert.equal(key, "Up to 5 submissions in 24 hours, at least 1 minute apart.");
+  assert.equal(feedbackTranslations[key], "Tối đa 5 góp ý trong 24 giờ, cách nhau ít nhất 1 phút.");
+  assert.equal(feedbackErrorKey(new Error("Chưa lưu được góp ý. Vui lòng thử lại.")), "Could not save feedback. Please try again.");
+  assert.equal(feedbackErrorKey(new Error("Select a PNG/JPG/WebP image up to 4 MB.")), "Select a PNG/JPG/WebP image up to 4 MB.");
+  assert.equal(feedbackErrorKey(new Error("Unknown internal detail")), "Could not complete this action. Please try again.");
+});
 test("Payment notices distinguish key/renewal, currency and reported versus verified money", () => {
   for (const currency of ["VND", "USDT"]) for (const orderType of ["license", "renewal"]) {
     const text = purchaseReviewNotification({ id: "fixture", ownerUserId: "user", reference: "TCFIXTURE",
