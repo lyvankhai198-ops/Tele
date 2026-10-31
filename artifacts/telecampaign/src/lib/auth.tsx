@@ -24,7 +24,7 @@ type AuthContextValue = {
   refresh: () => Promise<void>;
   getCaptcha: () => Promise<AuthCaptcha>;
   register: (username: string, password: string, confirmPassword: string, captchaChallengeId: string, captchaCode: string, preferredLanguage: Language) => Promise<void>;
-  login: (username: string, password: string, captchaChallengeId: string, captchaCode: string) => Promise<void>;
+  login: (username: string, password: string, captchaChallengeId: string, captchaCode: string, otp?: string) => Promise<void>;
   requestPasswordReset: (input: PasswordResetRequestInput) => Promise<PasswordResetRequestResult>;
   requestUsernameRecovery: () => Promise<{ telegramStartUrl: string | null }>;
   completePasswordReset: (input: PasswordResetCompletionInput) => Promise<void>;
@@ -106,10 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     captchaChallengeId: string,
     captchaCode: string,
+    otp?: string,
   ) => {
     const currentUser = await authRequest<AuthUser>("/login", currentLanguage(), {
       method: "POST",
-      body: JSON.stringify({ username, password, captchaChallengeId, captchaCode }),
+      body: JSON.stringify({ username, password, captchaChallengeId, captchaCode, otp }),
     });
     queryClient.clear();
     setUser(currentUser);

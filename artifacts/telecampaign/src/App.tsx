@@ -37,6 +37,7 @@ import AdminPurchaseOrdersPage from '@/pages/admin-purchase-orders';
 import AdminRevenuePage from '@/pages/admin-revenue';
 import AdminSystemSettingsPage from '@/pages/admin-system-settings';
 import AdminOperationsPage from '@/pages/admin-operations';
+import AdminToolsPage from '@/pages/admin-tools';
 import AdminActiveGroupsPage from '@/pages/admin-active-groups';
 import AdminSystemEventsPage from '@/pages/admin-system-events';
 import AdminSupportChatPage from '@/pages/admin-support-chat';
@@ -274,6 +275,7 @@ function LoginPage() {
   const [password, setPassword] = useState(typeof window !== 'undefined' && window.location.search.includes('step=2') ? "••••••••••" : "");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [otp, setOtp] = useState("");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -285,7 +287,7 @@ function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(username, password, captcha.challenge.challengeId, captcha.code);
+      await login(username, password, captcha.challenge.challengeId, captcha.code, otp);
       setPassword('');
       setLocation('/dashboard', { replace: true });
     } catch (cause) {
@@ -344,6 +346,9 @@ function LoginPage() {
           loadError={captcha.loadError}
           onRefresh={() => void captcha.refresh()}
         />
+        <label className="block text-sm font-semibold">Mã 2FA / mã khôi phục (nếu đã bật)
+          <input className="mt-2 w-full rounded-xl border p-3" autoComplete="one-time-code" value={otp} maxLength={80} onChange={event => setOtp(event.target.value)} />
+        </label>
         <AuthError message={error} />
         <button
           disabled={submitting || captcha.loading || !captcha.challenge}
@@ -940,6 +945,7 @@ function Router() {
         <Route path="/admin/revenue" component={() => <AdminRoute><AdminRevenuePage /></AdminRoute>} />
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />
+        <Route path="/admin/tools" component={() => <AdminRoute><AdminToolsPage /></AdminRoute>} />
         <Route path="/admin/active-groups" component={() => <AdminRoute><AdminActiveGroupsPage mode="admin" /></AdminRoute>} />
         <Route path="/admin/system-events" component={() => <AdminRoute><AdminSystemEventsPage /></AdminRoute>} />
         <Route path="/admin/support-chat" component={() => <AdminRoute><AdminSupportChatPage /></AdminRoute>} />

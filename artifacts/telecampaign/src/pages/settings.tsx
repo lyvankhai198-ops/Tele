@@ -4,6 +4,7 @@ import { useChangeAuthPassword, useRevokeOtherAuthSessions } from "@workspace/ap
 import { AppLayout, Input, Modal, PageIntro, Panel, PrimaryButton, QuietButton, SectionHeader, Toast } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { AdminMfaPanel } from "@/components/admin-mfa-panel";
 
 function ErrorNotice({ message }: { message: string | null }) {
   if (!message) return null;
@@ -71,6 +72,7 @@ export default function Settings() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
+          {user?.role === "admin" && <AdminMfaPanel />}
           <Panel className="p-5 sm:p-7">
             <SectionHeader
               eyebrow={t("Account information")}

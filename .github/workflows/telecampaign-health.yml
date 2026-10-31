@@ -1,0 +1,30 @@
+name: TeleCamp public availability monitor
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check public web and API without credentials or AI
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json,time
+          for path in ["/","/api/healthz"]:
+            passed=False
+            for attempt in range(3):
+              try:
+                with urllib.request.urlopen("https://tele.khaimmo.shop"+path,timeout=15) as r:
+                  assert r.status==200
+                  if path.endswith("healthz"): assert json.loads(r.read(4096)).get("status")=="ok"
+                passed=True
+                break
+              except Exception:
+                if attempt<2: time.sleep(3)
+            print(("web" if path=="/" else "api")+"_available="+str(passed).lower())
+            if not passed: raise SystemExit(1)
+          PY

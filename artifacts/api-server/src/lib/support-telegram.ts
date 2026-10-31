@@ -3,6 +3,7 @@ import { and, count, desc, eq, gt, isNotNull, isNull, lte, ne, or, sql, sum } fr
 import {
   appUsersTable,
   db,
+  pool,
   licenseKeysTable,
   purchaseOrdersTable,
   subscriptionsTable,
@@ -37,6 +38,11 @@ import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-adm
 import { findLicenseForTelegram } from "./telegram-license-lookup";
 import { createAdminLicenseLookupFlow } from "./telegram-license-lookup-flow";
 import { TELEGRAM_ADMIN_MENU as ADMIN_MENU } from "./telegram-admin-menu";
+import { createAdminUserLookupFlow } from "./telegram-user-lookup-flow";
+import { getAdminCashReport, formatAdminCashReport, findTelegramAdminUser, formatTelegramAdminUser, userProfileLinks } from "./telegram-admin-tools";
+import { processTelegramBatch, adminProfileLink } from "./admin-tools-core";
+import { readOperationalState, writeOperationalState, withOperationalLock } from "./operational-state";
+import { getWorkerHealth, registerWorker, workerHeartbeat } from "./worker-health";
 import {
   translateAdminReplyForCustomer,
   translateCustomerMessageForAdmin,
@@ -111,7 +117,7 @@ async function sendSupportMessage(text: string, replyToMessageId?: number): Prom
   });
 }
 
-async function sendAdminMenu(text = "Chọn một thao tác:", parseMode?: "HTML"): Promise<TelegramMessage | null> {
+async function sendAdminMenu(text = "Chọn một thao tác:", parseMode?: "HTML", links?: Array<{ text: string; url: string }>): Promise<TelegramMessage | null> {
   const settings = await getSystemSettings();
   const chatId = settings.supportChat.adminTelegramChatId;
   if (!settings.supportChat.telegramBridgeEnabled || !chatId || !(await isPrivateAdminChat(chatId))) return null;
@@ -119,7 +125,7 @@ async function sendAdminMenu(text = "Chọn một thao tác:", parseMode?: "HTML
     chat_id: chatId,
     text,
     parse_mode: parseMode,
-    reply_markup: ADMIN_MENU,
+    reply_markup: links?.length ? { inline_keyboard: [links] } : ADMIN_MENU,
   });
 }
 
@@ -127,6 +133,25 @@ const handleAdminLicenseLookup = createAdminLicenseLookupFlow({
   lookup: findLicenseForTelegram,
   respond: sendAdminMenu,
   onError: () => logger.warn("Admin Telegram license lookup failed"),
+  onStart: () => handleAdminUserLookup.cancel(),
+  afterLookup: async record => {
+    if (record.userId) {
+      const links = await userProfileLinks(record.userId);
+      if (links.length) await sendAdminMenu("Mở hồ sơ để xem chi tiết và quản lý trên web:", undefined, links);
+    }
+  },
+});
+const handleAdminUserLookup = createAdminUserLookupFlow({
+  lookup: async query => {
+    const record = await findTelegramAdminUser(query);
+    if (!record) return false;
+    const sent = await sendAdminMenu(formatTelegramAdminUser(record), "HTML", await userProfileLinks(record.user.id));
+    if (!sent) throw new Error("Admin response not delivered");
+    return true;
+  },
+  respond: sendAdminMenu,
+  onStart: () => handleAdminLicenseLookup.cancel(),
+  onError: () => logger.warn("Admin Telegram user lookup failed"),
 });
 
 export async function notifyPurchaseOrder(text: string, orderId?: string): Promise<void> {
@@ -637,7 +662,7 @@ async function getAdminOverview() {
     active: Number(activeCount?.value ?? 0),
     expiring: Number(expiringCount?.value ?? 0),
     soldToday: Number(soldToday?.value ?? 0),
-    revenueToday: Number(revenueToday?.value ?? 0) + Number(renewalRevenueToday?.value ?? 0),
+    revenueToday: Number((await getAdminCashReport(settings.defaultTimezone, today)).cash.find(row => row.currency === "VND")?.amount ?? 0),
     soldTotal: Number(soldTotal?.value ?? 0),
     inventory: Number(inventory?.value ?? 0),
   };
@@ -665,16 +690,8 @@ async function sendOverview(): Promise<void> {
 }
 
 async function sendRevenue(): Promise<void> {
-  const stats = await getAdminOverview();
-  await sendAdminMenu(
-    `💰 <b>DOANH THU & LICENSE</b>\n\n` +
-    `• Doanh thu hôm nay: <b>${money(stats.revenueToday)}</b>\n` +
-    `• Key kích hoạt hôm nay: <b>${stats.soldToday}</b>\n` +
-    `• Tổng key đã kích hoạt: <b>${stats.soldTotal}</b>\n` +
-    `• Key còn trong kho: <b>${stats.inventory}</b>\n\n` +
-    `⏳ Tài khoản sắp hết hạn: <b>${stats.expiring}</b>`,
-    "HTML",
-  );
+  const settings = await getSystemSettings();
+  await sendAdminMenu(formatAdminCashReport(await getAdminCashReport(settings.defaultTimezone)), "HTML");
 }
 
 async function sendUsers(): Promise<void> {
@@ -710,7 +727,7 @@ async function sendExpiringUsers(): Promise<void> {
     expiresAt: subscriptionsTable.expiresAt,
   })
     .from(subscriptionsTable)
-    .innerJoin(appUsersTable, eq(appUsersTable.id, subscriptionsTable.ownerUserId))
+    .innerJoin(appUsersTable, eq(sql`${appUsersTable.id}::text`, subscriptionsTable.ownerUserId))
     .where(and(
       ne(appUsersTable.role, "admin"),
       gt(subscriptionsTable.expiresAt, now),
@@ -738,7 +755,7 @@ async function sendTodayKeys(): Promise<void> {
     claimedAt: licenseKeysTable.claimedAt,
   })
     .from(licenseKeysTable)
-    .leftJoin(appUsersTable, eq(appUsersTable.id, licenseKeysTable.claimedBy))
+    .leftJoin(appUsersTable, eq(sql`${appUsersTable.id}::text`, licenseKeysTable.claimedBy))
     .where(and(
       isNotNull(licenseKeysTable.claimedAt),
       isNull(licenseKeysTable.revokedAt),
@@ -938,6 +955,19 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   ) return;
 
   if (await handleAdminLicenseLookup(message, configuredChatId, settings.defaultTimezone)) return;
+  if (await handleAdminUserLookup(message, configuredChatId)) return;
+  if (text === "📋 Báo cáo ngày" || text === "/report") {
+    await sendAdminMenu(await dailyReportText(), "HTML");
+    return;
+  }
+  if (text === "🛠 Vận hành" || text === "/health") {
+    const health = await getWorkerHealth();
+    const url = adminProfileLink(settings.publicAppUrl, "unused");
+    const links = url ? [{ text: "🛠 Mở công cụ quản trị", url: new URL("/admin/tools", url).toString() }] : [];
+    await sendAdminMenu(health.workers.map(w => `${w.status === "ok" ? "✅" : w.status === "disabled" ? "⏸" : "⚠️"} ${w.name}: ${w.status}`).join("\n") +
+      `\nỔ đĩa trống: ${health.disk?.availablePercent ?? "—"}%`, undefined, links);
+    return;
+  }
   if (text === "/chatid") {
     await telegramCall("sendMessage", {
       chat_id: message.chat.id,
@@ -986,6 +1016,7 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   }
   const mapped = await findSupportMessageByTelegramReply(String(message.chat.id), replyId);
   if (!mapped) return;
+  if (await findSupportMessageByTelegramReply(String(message.chat.id), message.message_id)) return;
   const conversation = await getSupportConversationForAdmin(mapped.conversationId);
   if (!conversation) return;
   const media = hasPhoto ? await downloadTelegramPhoto(message) : null;
@@ -1001,35 +1032,51 @@ async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
     conversationId: mapped.conversationId,
     senderType: "admin",
     source: "telegram",
+    telegramChatId: String(message.chat.id),
+    telegramMessageId: message.message_id,
     body,
     translatedBody: translation?.translatedText,
     mediaPath: media?.objectPath,
     mediaContentType: media?.contentType,
   });
-  await setSupportMessageTelegramId(result.message.id, String(message.chat.id), message.message_id);
   logger.info({ conversationId: conversation.id, messageId: result.message.id }, "Support reply received from Telegram");
 }
 
-async function pollTelegram(): Promise<void> {
+export async function pollTelegram(): Promise<void> {
   if (polling) return;
   const settings = await getSystemSettings();
   if (!botToken() || !settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
   polling = true;
   try {
-    const updates = await telegramCall<TelegramUpdate[]>("getUpdates", {
-      offset,
-      timeout: 20,
-      allowed_updates: ["message", "callback_query"],
+    await withOperationalLock(1, async client => {
+      const cursor = await readOperationalState("telegram_bridge_cursor",
+        { offset: 0, retryAfter: 0, failedUpdateId: null as number | null, failures: 0 }, client);
+      if (cursor.retryAfter > Date.now()) return;
+      offset = cursor.offset;
+      const updates = await telegramCall<TelegramUpdate[]>("getUpdates", {
+        offset, timeout: 20, allowed_updates: ["message", "callback_query"],
+      });
+      const result = await processTelegramBatch(updates ?? [], offset, async update => {
+        if (update.message) await handleTelegramMessage(update.message);
+        if (update.callback_query) await handlePurchaseCallback(update.callback_query);
+      }, async nextOffset => {
+        await writeOperationalState("telegram_bridge_cursor",
+          { offset: nextOffset, retryAfter: 0, failedUpdateId: null, failures: 0 }, client);
+      });
+      offset = result.offset;
+      if (result.failedUpdateId !== null) {
+        await writeOperationalState("telegram_bridge_cursor", { offset, retryAfter: Date.now() + 30_000,
+          failedUpdateId: result.failedUpdateId,
+          failures: cursor.failedUpdateId === result.failedUpdateId ? cursor.failures + 1 : 1 }, client);
+        workerHeartbeat("telegram", false);
+        logger.warn({ updateId: result.failedUpdateId }, "Telegram update retained for retry; cursor not advanced");
+      } else workerHeartbeat("telegram", true);
     });
-    for (const update of updates ?? []) {
-      offset = Math.max(offset, update.update_id + 1);
-      if (update.message) await handleTelegramMessage(update.message);
-      if (update.callback_query) await handlePurchaseCallback(update.callback_query);
-    }
     await deliverPendingTemporaryPasswords();
     await notifyPendingPasswordResetRequests();
   } catch (error) {
-    logger.warn({ err: error }, "Support Telegram polling failed");
+    workerHeartbeat("telegram", false);
+    logger.warn("Support Telegram polling failed");
   } finally {
     polling = false;
   }
@@ -1040,6 +1087,60 @@ export function startSupportTelegramBridge(): void {
     logger.info("Support Telegram bridge disabled: no support bot token configured");
     return;
   }
+  registerWorker("telegram");
   setInterval(() => void pollTelegram(), 1_000);
+  setInterval(() => void runAdminOperationalJobs(), 60_000).unref();
   void pollTelegram();
+}
+
+async function dailyReportText(): Promise<string> {
+  const settings = await getSystemSettings();
+  const [report, numbers] = await Promise.all([
+    getAdminCashReport(settings.defaultTimezone),
+    pool.query(`SELECT (SELECT count(*) FROM purchase_orders WHERE status='pending')::int AS pending,
+      (SELECT count(*) FROM campaign_targets WHERE status='requires_review')::int AS review`),
+  ]);
+  return formatAdminCashReport(report) + `\n\n📥 Đơn chờ: ${numbers.rows[0].pending}\n⚠️ Đích gửi cần kiểm tra: ${numbers.rows[0].review}`;
+}
+let operationalJobsRunning = false;
+async function runAdminOperationalJobs(): Promise<void> {
+  if (operationalJobsRunning) return;
+  operationalJobsRunning = true;
+  try {
+    const settings = await getSystemSettings();
+    if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
+    await withOperationalLock(2, async client => {
+      const schedule = await readOperationalState("admin_daily_report", { enabled: true, hour: 21, minute: 0 }, client);
+      const day = localQuotaDate(settings.defaultTimezone, new Date());
+      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: settings.defaultTimezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+      const minutes = Number(parts.find(p => p.type === "hour")?.value) * 60 + Number(parts.find(p => p.type === "minute")?.value);
+      const delivered = await readOperationalState("admin_daily_report_delivery", { day: "", status: "" }, client);
+      if (schedule.enabled && minutes >= schedule.hour * 60 + schedule.minute && delivered.day !== day) {
+        // An uncertain external send is not automatically repeated after restart.
+        await writeOperationalState("admin_daily_report_delivery", { day, status: "sending" }, client);
+        try {
+          const sent = await sendAdminMenu(await dailyReportText(), "HTML");
+          if (!sent) throw new Error("Not delivered");
+          await writeOperationalState("admin_daily_report_delivery", { day, status: "delivered" }, client);
+        } catch {
+          await writeOperationalState("admin_daily_report_delivery", { day, status: "uncertain" }, client);
+          logger.warn("Daily admin report delivery uncertain; manual report remains available");
+        }
+      }
+      const health = await getWorkerHealth();
+      const cursor = await readOperationalState("telegram_bridge_cursor", { failedUpdateId: null, failures: 0 }, client);
+      const problems = health.workers.filter(w => w.status === "stale").map(w => `${w.name}: stale`);
+      const stalled = await pool.query("SELECT count(*)::int AS count FROM campaign_targets WHERE status='requires_review'");
+      if (Number(stalled.rows[0]?.count) > 0) problems.push("Có đích gửi cần xác minh kết quả để tránh gửi trùng");
+      if (health.disk?.status === "low") problems.push("Ổ đĩa trống dưới 10%");
+      if (cursor.failures >= 3) problems.push(`Tin bot ${cursor.failedUpdateId} đang chờ xử lý lại`);
+      const fingerprint = problems.join("; ");
+      const last = await readOperationalState("admin_health_alert", { fingerprint: "", at: 0 }, client);
+      if ((fingerprint && (fingerprint !== last.fingerprint || Date.now() - last.at > 3600_000)) || (!fingerprint && last.fingerprint)) {
+        const sent = await sendAdminMenu(fingerprint ? `⚠️ TELECAMP CẦN KIỂM TRA\n${fingerprint}\nMở 🛠 Vận hành để xem chi tiết.` : "✅ Worker/ổ đĩa TeleCamp đã trở lại trạng thái bình thường.");
+        if (sent) await writeOperationalState("admin_health_alert", { fingerprint, at: Date.now() }, client);
+      }
+    });
+  } catch { logger.warn("Admin operational checks failed"); }
+  finally { operationalJobsRunning = false; }
 }

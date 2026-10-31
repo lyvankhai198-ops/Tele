@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { timingSafeEqual } from "node:crypto";
+import { verifyAdminMfa } from "../lib/admin-mfa";
 import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import {
   GetAuthUserResponse,
@@ -467,6 +468,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const token = createSessionToken();
+  let mfaRequired = false;
   const user = await db.transaction(async (tx) => {
     const [candidate] = await tx
       .select({ id: appUsersTable.id })
@@ -482,6 +484,11 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       .where(eq(appUsersTable.id, candidate.id))
       .limit(1);
     if (!lockedUser || !(await verifyPassword(parsed.data.password, lockedUser.passwordHash))) return null;
+    if (lockedUser.role === "admin" && !(await verifyAdminMfa(tx, lockedUser.id,
+      typeof req.body.otp === "string" ? req.body.otp : ""))) {
+      mfaRequired = true;
+      return null;
+    }
 
     await tx.insert(authSessionsTable).values({
       userId: lockedUser.id,
@@ -493,7 +500,9 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   if (!user) {
     registerAttempt(credentialAttempts, credentialKey);
     registerAttempt(loginIpAttempts, loginIp);
-    res.status(401).json({ error: "Tên đăng nhập hoặc mật khẩu không đúng" });
+    res.status(401).json(mfaRequired
+      ? { error: "Cần mã 2FA hoặc mã khôi phục hợp lệ.", code: "MFA_REQUIRED" }
+      : { error: "Tên đăng nhập hoặc mật khẩu không đúng" });
     return;
   }
 

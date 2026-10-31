@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { adminAuditMiddleware } from "../lib/admin-audit";
 import {
   CreateAdminLicenseKeyBody,
   CreateAdminLicenseKeyResponse,
@@ -192,6 +193,7 @@ function sendError(res: any, status: number, error: string): void {
 }
 
 router.use("/admin", requireAdmin);
+router.use("/admin", adminAuditMiddleware);
 
 router.get("/admin/purchase-orders/settings", async (_req, res): Promise<void> => {
   res.json(await getOrderSettings());

@@ -17,7 +17,7 @@ export async function refreshAdminMenu(settings, call) {
   if (chat?.type !== "private" || String(chat.id) !== chatId) throw Error("Private admin chat was not verified");
   const sent = await call("sendMessage", {
     chat_id: chatId,
-    text: "🔎 Menu quản trị đã được cập nhật.\n\nBấm 🔎 Tìm key rồi gửi key cần đối chiếu. Bot sẽ báo trạng thái kích hoạt và thông tin tài khoản gắn với key.\n\nĐây chỉ là tra cứu, không kích hoạt hoặc thu hồi key.",
+    text: "🛠 Menu quản trị TeleCamp đã được cập nhật.\n\n🔎 Tìm key / Tìm người dùng: tra cứu và mở hồ sơ trên web.\n📋 Báo cáo ngày: tiền đơn xác nhận, key và đơn chờ.\n🛠 Vận hành: trạng thái bot/worker và công cụ CSV, lịch báo cáo, audit.\n\nCác nút tra cứu không kích hoạt hay thu hồi key. Có thể thiết lập 2FA admin trong Cài đặt website.",
     reply_markup: TELEGRAM_ADMIN_MENU,
   });
   if (!sent?.message_id || String(sent.chat?.id) !== chatId) throw Error("Admin menu delivery was not confirmed");
@@ -45,8 +45,17 @@ async function main() {
       LEFT JOIN subscriptions s ON s.owner_user_id = k.claimed_by
       WHERE k.key_hash = $1 LIMIT 1
     `, ["0".repeat(64)]);
+    await client.query(`SELECT u.id FROM subscriptions s JOIN app_users u ON u.id::text=s.owner_user_id LIMIT 0`);
+    await client.query(`SELECT u.id FROM license_keys k LEFT JOIN app_users u ON u.id::text=k.claimed_by LIMIT 0`);
+    await client.query(`SELECT o.currency,sum(o.amount) FROM purchase_orders o
+      LEFT JOIN system_settings r ON r.key='order_receipt:'||o.id::text
+      WHERE o.status IN ('paid','revoked') AND
+      (COALESCE((r.value::jsonb->>'paidAt')::timestamptz,CASE WHEN o.status='paid' THEN o.reviewed_at END)
+        AT TIME ZONE 'Asia/Ho_Chi_Minh')::date=current_date GROUP BY o.currency`);
+    await client.query(`SELECT key FROM system_settings WHERE key LIKE 'admin_audit:%' LIMIT 0`);
     databaseCheckPassed = true;
     console.log("license_lookup_database_check=passed");
+    console.log("admin_tools_database_check=passed");
     const result = await client.query("SELECT value FROM system_settings WHERE key = $1 LIMIT 1", ["admin_system_settings"]);
     settings = JSON.parse(result.rows[0]?.value ?? "{}");
   } finally {

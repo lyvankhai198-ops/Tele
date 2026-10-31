@@ -10,6 +10,18 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    services:
+      test-postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: telecamp_test
+          POSTGRES_DB: telecamp_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U telecamp_test -d telecamp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - name: Use Node.js 24
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
@@ -31,22 +43,36 @@ jobs:
           python3 scripts/tests/test_release_safety.py
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
           node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs
+          node --experimental-vm-modules --test scripts/tests/admin-tools.test.mjs
+      - name: Restore dependency download cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/pnpm-store
+          key: telecamp-pnpm24-${{ runner.os }}-${{ hashFiles('candidate/pnpm-lock.yaml') }}
       - name: Install and typecheck exact target
         working-directory: candidate
         env:
           PORT: "3004"
           BASE_PATH: /
         run: |
-          npx --yes pnpm@10.26.1 install --frozen-lockfile
+          npx --yes pnpm@10.26.1 install --frozen-lockfile --store-dir "$RUNNER_TEMP/pnpm-store"
           npx --yes pnpm@10.26.1 run typecheck:libs
           npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
           npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck
       - name: Install SSH password helper for private frontend environment
+        # The fixture database and test runner never receive production secrets.
         run: |
           if ! command -v sshpass >/dev/null; then
             sudo apt-get update -qq
             sudo apt-get install -y -qq sshpass
           fi
+      - name: Integration test web API, payments, bot lookups and admin MFA on disposable data
+        working-directory: candidate
+        env:
+          DATABASE_URL: postgres://telecamp_test@127.0.0.1:5432/telecamp_test
+        run: |
+          npx --yes pnpm@10.26.1 --filter @workspace/db run push-force
+          node scripts/tests/run-admin-tools-e2e.mjs
       - name: Read frontend build environment without logging values
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
@@ -76,12 +102,28 @@ jobs:
           assert isinstance(values,dict) and all(k.startswith("VITE_") and isinstance(v,str) for k,v in values.items())
           print("Frontend build environment received privately; values are not logged.")
           PY
+      - name: Fingerprint frontend environment without exposing values
+        id: frontend-env
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,os
+          with open(os.environ["RUNNER_TEMP"]+"/telecampaign-frontend-env.json") as f: values=json.load(f)
+          digest=hashlib.sha256(json.dumps(values,sort_keys=True).encode()).hexdigest()
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f: f.write("hash="+digest+"\n")
+          PY
+      - name: Reuse frontend when build inputs are unchanged
+        id: frontend-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: candidate/artifacts/telecampaign/dist
+          key: telecamp-ui24-v1-${{ runner.os }}-${{ steps.frontend-env.outputs.hash }}-${{ hashFiles('candidate/artifacts/telecampaign/**', 'candidate/lib/api-client-react/**', 'candidate/lib/api-zod/**', 'candidate/pnpm-lock.yaml', 'candidate/pnpm-workspace.yaml', 'candidate/tsconfig.base.json', '!candidate/**/node_modules/**', '!candidate/**/dist/**', '!candidate/**/.vite/**') }}
       - name: Build and package ready-to-run runtime on GitHub
         working-directory: candidate
         env:
           TARGET: ${{ github.sha }}
           PORT: "3004"
           BASE_PATH: /
+          FRONTEND_CACHE_HIT: ${{ steps.frontend-cache.outputs.cache-hit }}
         shell: bash
         run: |
           set -euo pipefail
@@ -91,7 +133,10 @@ jobs:
           path=os.environ["RUNNER_TEMP"]+"/telecampaign-frontend-env.json"
           values=json.load(open(path))
           env={**os.environ,**values}
-          subprocess.run(["npx","--yes","pnpm@10.26.1","--filter","@workspace/telecampaign","run","build"],env=env,check=True)
+          if os.environ.get("FRONTEND_CACHE_HIT")!="true" or not os.path.isfile("artifacts/telecampaign/dist/public/index.html"):
+            subprocess.run(["npx","--yes","pnpm@10.26.1","--filter","@workspace/telecampaign","run","build"],env=env,check=True)
+          else:
+            print("Reusing frontend: source, dependencies and build environment are unchanged.")
           subprocess.run(["npx","--yes","pnpm@10.26.1","--filter","@workspace/api-server","run","build"],check=True)
           os.remove(path)
           PY

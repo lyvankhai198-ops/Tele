@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { registerWorker, workerHeartbeat } from "./worker-health";
 import { and, asc, eq, isNull, isNotNull, lte, lt, or, sql } from "drizzle-orm";
 import {
   appUsersTable,
@@ -352,15 +353,19 @@ async function processJob(
 export async function startSubscriptionReminderWorker(): Promise<() => void> {
   let ticking = false;
   const tick = async () => {
+    registerWorker("reminders");
     if (ticking) return;
     ticking = true;
     try {
       const settings = await getSystemSettings();
-      if (!settings.subscriptionReminder.enabled || !settings.subscriptionReminder.senderAccountId) return;
+      if (!settings.subscriptionReminder.enabled || !settings.subscriptionReminder.senderAccountId) {
+        workerHeartbeat("reminders", true);
+        return;
+      }
       const now = new Date();
       await createDueJobs(settings.subscriptionReminder, now);
       const jobs = await claimDueJobs(now);
-      if (!jobs.length) return;
+      if (!jobs.length) { workerHeartbeat("reminders", true); return; }
       const { telegramPurchaseUrl } = await getPurchaseSettings();
       for (const [index, job] of jobs.entries()) {
         await processJob(
@@ -374,7 +379,9 @@ export async function startSubscriptionReminderWorker(): Promise<() => void> {
         );
         if (index < jobs.length - 1) await new Promise((resolve) => setTimeout(resolve, SEND_DELAY_MS));
       }
+      workerHeartbeat("reminders", true);
     } catch (error) {
+      workerHeartbeat("reminders", false);
       logger.error({ err: error }, "Subscription reminder worker tick failed");
     } finally {
       ticking = false;
