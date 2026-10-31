@@ -19,6 +19,7 @@ import {
   Megaphone,
   UserCircle,
   LifeBuoy,
+  Lightbulb,
   Star,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
@@ -51,6 +52,7 @@ export type PageKey =
   | "admin-active-groups"
   | "admin-system-events"
   | "admin-support-chat"
+  | "feedback"
   | "support";
 
 const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboard; path: string; adminOnly?: boolean; groupLibraryOnly?: boolean }> = [
@@ -67,6 +69,7 @@ const navigation: Array<{ key: PageKey; label: string; icon: typeof LayoutDashbo
   { key: "admin", label: "Quản trị", icon: ShieldCheck, path: "/admin", adminOnly: true },
   { key: "admin-tools", label: "Công cụ quản trị", icon: Settings2, path: "/admin/tools", adminOnly: true },
   { key: "admin-support-chat", label: "Hỗ trợ khách hàng", icon: LifeBuoy, path: "/admin/support-chat", adminOnly: true },
+  { key: "feedback", label: "Góp ý & thảo luận", icon: Lightbulb, path: "/dashboard/feedback" },
 ];
 
 export function AppLayout({
@@ -152,6 +155,7 @@ export function AppLayout({
           {navigation.filter((item) => (
             (!item.adminOnly || (user?.role === "admin" && !isSupportMode))
             && (!item.groupLibraryOnly || groupLibraryAccess.data?.visible)
+            && (item.key !== "feedback" || !isSupportMode)
           )).map((item) => {
             const Icon = item.icon;
             const selected = item.key === "admin"
@@ -160,7 +164,12 @@ export function AppLayout({
             return (
               <button
                 key={item.key}
-                onClick={() => navigate(item.path)}
+                onClick={() => {
+                  if (item.key === "feedback" && window.location.pathname !== "/dashboard/feedback") {
+                    try { sessionStorage.setItem("telecamp-feedback-source", JSON.stringify({ path: window.location.pathname, at: Date.now() })); } catch { /* Storage is optional. */ }
+                  }
+                  navigate(item.path);
+                }}
                 className={`group flex w-full items-center gap-3.5 rounded-xl px-4 py-3.5 text-left text-[14px] font-bold transition-all ${
                   selected
                     ? (nationalDayThemeActive ? "national-day-nav-selected" : "bg-[#eef2fa] text-[#1a2b88]")

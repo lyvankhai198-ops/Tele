@@ -34,6 +34,7 @@ import {
 import { supportMediaStorage } from "./supportMediaStorage";
 import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { purchaseReviewNotification } from "./purchase-review-notification";
+import { updateFeedbackStatus, validFeedbackId, FEEDBACK_STATUSES, type FeedbackRecord } from "./feedback";
 import { logger } from "./logger";
 import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-admin-access";
 import { findLicenseForTelegram } from "./telegram-license-lookup";
@@ -174,6 +175,43 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
   } catch (error) {
     logger.warn("Purchase order Telegram notification failed");
   }
+}
+
+export async function notifyFeedback(record: FeedbackRecord): Promise<void> {
+  try {
+    const settings = await getSystemSettings(), chatId = settings.supportChat.adminTelegramChatId;
+    if (!settings.supportChat.enabled || !settings.supportChat.telegramBridgeEnabled || !chatId) return;
+    if ((await telegramCall<{ type?: string }>("getChat", { chat_id: chatId }))?.type !== "private") return;
+    const labels = { bug: "Báo lỗi", feature: "Đề xuất tính năng", interface: "Góp ý giao diện" };
+    const keyboard: Array<Array<{ text: string; callback_data?: string; url?: string }>> = [[
+      { text: "📥 Đã nhận", callback_data: `feedback:received:${record.id}` },
+      { text: "🔍 Đang xem xét", callback_data: `feedback:reviewing:${record.id}` },
+      { text: "✅ Hoàn thành", callback_data: `feedback:completed:${record.id}` },
+    ]];
+    if (settings.publicAppUrl) {
+      const base = new URL(settings.publicAppUrl);
+      if (["https:", "http:"].includes(base.protocol) && !base.username && !base.password)
+        keyboard.push([{ text: "Mở chi tiết / ảnh", url: `${base.origin}/dashboard/feedback#${record.id}` }]);
+    }
+    await telegramCall("sendMessage", { chat_id: chatId,
+      text: `💡 GÓP Ý TELECAMP · ${labels[record.kind]}\nKhách: ${record.username}\nTrang: ${record.source}\n\n${record.content.slice(0, 1600)}\n\n${record.hasImage ? "Có ảnh đính kèm: mở chi tiết trên web.\n" : ""}Mã: ${record.id}`,
+      link_preview_options: { is_disabled: true }, reply_markup: { inline_keyboard: keyboard } });
+  } catch { logger.warn("Feedback admin notification not delivered; stored feedback remains available"); }
+}
+
+async function handleFeedbackCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+  const settings = await getSystemSettings(), configured = settings.supportChat.adminTelegramChatId;
+  const [prefix, status, id] = query.data?.split(":") ?? [];
+  const authorized = settings.supportChat.enabled && settings.supportChat.telegramBridgeEnabled && configured
+    && query.message?.chat.type === "private" && String(query.message.chat.id) === String(configured)
+    && String(query.from?.id) === String(configured) && prefix === "feedback"
+    && FEEDBACK_STATUSES.includes(status as any) && validFeedbackId(id ?? "") && query.data?.split(":").length === 3;
+  if (!authorized) { await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Không được phép", show_alert: true }); return; }
+  try {
+    const changed = await updateFeedbackStatus(id, status, `telegram:${query.from!.id}`);
+    await telegramCall("answerCallbackQuery", { callback_query_id: query.id,
+      text: changed ? "Đã cập nhật trạng thái góp ý" : "Không tìm thấy góp ý", show_alert: true });
+  } catch { await telegramCall("answerCallbackQuery", { callback_query_id: query.id, text: "Chưa cập nhật được. Thử lại trên web.", show_alert: true }); }
 }
 
 async function getRecoveryBotStartUrl(startParameter: string): Promise<string | null> {
@@ -576,6 +614,7 @@ async function handlePasswordResetCallback(query: NonNullable<TelegramUpdate["ca
 }
 
 async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+  if (query.data?.startsWith("feedback:")) { await handleFeedbackCallback(query); return; }
   if (query.data?.startsWith("password_reset:")) {
     await handlePasswordResetCallback(query);
     return;
