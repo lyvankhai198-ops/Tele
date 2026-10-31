@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { feedbackTranslations } from "./feedback-i18n";
 
 export type Language = "vi" | "en";
 
 /** Vietnamese translations keyed by the English source string. */
 const translations: Record<string, string> = {
+  ...feedbackTranslations,
   "Groups": "Nhóm",
   "Account": "Tài khoản",
   "Telegram Accounts": "Tài khoản Telegram",

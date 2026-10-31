@@ -2,15 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { AppLayout, Panel } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
 import { adminToolRequest } from "@/lib/admin-tools-client";
+import { useLanguage } from "@/lib/i18n";
+import { feedbackErrorKey } from "@/lib/feedback-i18n";
 
 type Kind = "bug" | "feature" | "interface";
 type Status = "received" | "reviewing" | "completed";
 type Item = { id: string; username: string; kind: Kind; content: string; source: string; status: Status; createdAt: string; updatedAt: string; hasImage: boolean };
-const kinds: Record<Kind, string> = { bug: "Báo lỗi", feature: "Đề xuất tính năng", interface: "Góp ý giao diện" };
-const statuses: Record<Status, string> = { received: "Đã nhận", reviewing: "Đang xem xét", completed: "Đã hoàn thành" };
+const kinds: Record<Kind, string> = { bug: "Report a bug", feature: "Suggest a feature", interface: "Interface feedback" };
+const statuses: Record<Status, string> = { received: "Received", reviewing: "Under review", completed: "Completed" };
 const inputStyle = "w-full rounded-xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-indigo-500";
 async function compactImage(file: File): Promise<string> {
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 4 * 1024 * 1024) throw Error("Chọn ảnh PNG/JPG/WebP tối đa 4 MB.");
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 4 * 1024 * 1024) throw Error("Select a PNG/JPG/WebP image up to 4 MB.");
   const bitmap = await createImageBitmap(file);
   try {
     for (const edge of [1000, 750, 500]) {
@@ -19,7 +21,7 @@ async function compactImage(file: File): Promise<string> {
       canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
       canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
       const ctx = canvas.getContext("2d");
-      if (!ctx) throw Error("Không xử lý được ảnh trên thiết bị này.");
+      if (!ctx) throw Error("This device could not process the image.");
       ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
       for (const quality of [0.8, 0.5, 0.2]) {
         const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/webp", quality));
@@ -27,17 +29,18 @@ async function compactImage(file: File): Promise<string> {
           return await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result).split(",")[1]);
-            reader.onerror = () => reject(Error("Không đọc được ảnh."));
+            reader.onerror = () => reject(Error("Could not read the image."));
             reader.readAsDataURL(blob);
           });
         }
       }
     }
-    throw Error("Ảnh quá nhiều chi tiết. Hãy cắt vùng cần góp ý rồi chọn lại.");
+    throw Error("The image has too much detail. Crop the relevant area and try again.");
   } finally { bitmap.close(); }
 }
 export default function FeedbackPage() {
   const { user } = useAuth();
+  const { language, t } = useLanguage();
   const admin = user?.role === "admin";
   const [kind, setKind] = useState<Kind | null>(null), [content, setContent] = useState("");
   const [image, setImage] = useState(""), [imageName, setImageName] = useState("");
@@ -57,7 +60,7 @@ export default function FeedbackPage() {
     setGroupUrl(config.groupUrl); setItems(records);
   }, [admin]);
   useEffect(() => {
-    void load().catch(() => setError("Chưa tải được góp ý. Vui lòng thử lại."));
+    void load().catch(() => setError("Could not load feedback. Please try again."));
     const timer = setInterval(() => void load().catch(() => {}), 30_000);
     return () => clearInterval(timer);
   }, [load]);
@@ -73,9 +76,9 @@ export default function FeedbackPage() {
       } catch { /* Optional navigation metadata only. */ }
       await adminToolRequest("/feedback", { kind, content, source, ...(image ? { image } : {}) });
       setContent(""); setImage(""); setImageName(""); setKind(null);
-      setNotice("Đã nhận góp ý. Bạn có thể theo dõi trạng thái bên dưới. Cảm ơn bạn!");
+      setNotice("Feedback received. You can track its status below. Thank you!");
       await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Chưa gửi được góp ý."); }
+    } catch (e) { setError(feedbackErrorKey(e, "Could not submit feedback. Please try again.")); }
     finally { setBusy(false); }
   }
   async function changeStatus(id: string, status: Status) {
@@ -83,85 +86,86 @@ export default function FeedbackPage() {
     try {
       await adminToolRequest(`/admin/feedback/${id}/status`, { status }, "PATCH");
       await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Chưa lưu được."); }
+    } catch (e) { setError(feedbackErrorKey(e, "Could not save changes. Please try again.")); }
   }
-  return <AppLayout activePage="feedback" title="Góp ý & thảo luận" subtitle="Cùng hoàn thiện TeleCamp. Chat hỗ trợ vẫn hoạt động riêng." hideUpgrade>
-    {error && <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-    {notice && <div role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">{notice}</div>}
+  return <AppLayout activePage="feedback" title={t("Feedback & discussion")} subtitle={t("Help improve TeleCamp. Support chat remains available separately.")} hideUpgrade>
+    {error && <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{t(error)}</div>}
+    {notice && <div role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">{t(notice)}</div>}
     <div className="grid gap-3 sm:grid-cols-2">
       {(Object.keys(kinds) as Kind[]).map((value, index) => <button key={value} type="button" onClick={() => setKind(value)}
         className={`rounded-2xl border p-5 text-left shadow-sm ${kind === value ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white"}`}>
         <span className="text-2xl">{["🐞", "💡", "🎨"][index]}</span>
-        <h2 className="mt-2 font-extrabold text-slate-900">{kinds[value]}</h2>
-        <p className="mt-1 text-sm text-slate-500">{["Mô tả lỗi và các bước để gặp lại lỗi.", "Bạn muốn TeleCamp bổ sung điều gì?", "Điểm nào khó dùng hoặc cần trình bày rõ hơn?"][index]}</p>
+        <h2 className="mt-2 font-extrabold text-slate-900">{t(kinds[value])}</h2>
+        <p className="mt-1 text-sm text-slate-500">{t(["Describe the issue and the steps to reproduce it.", "What would you like TeleCamp to add?", "What is hard to use or could be presented more clearly?"][index])}</p>
       </button>)}
       {groupUrl ? <a href={groupUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-900">Tham gia nhóm thảo luận ↗</h2><p className="mt-1 text-sm text-slate-500">Trao đổi kinh nghiệm và ý tưởng cùng cộng đồng.</p>
+        <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-900">{t("Join the discussion group")} ↗</h2><p className="mt-1 text-sm text-slate-500">{t("Share ideas and experience with the community.")}</p>
       </a> : <div aria-disabled="true" className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5">
-        <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-600">Tham gia nhóm thảo luận</h2><p className="mt-1 text-sm text-slate-500">Chưa có link nhóm.</p>
+        <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-600">{t("Join the discussion group")}</h2><p className="mt-1 text-sm text-slate-500">{t("No group link yet.")}</p>
       </div>}
     </div>
     {kind && <div className="mt-5"><Panel className="p-5">
-      <h2 className="mb-4 text-lg font-extrabold">{kinds[kind]}</h2>
+      <h2 className="mb-4 text-lg font-extrabold">{t(kinds[kind])}</h2>
       <div className="space-y-3">
-        <p className="text-sm text-slate-500">Username được gắn tự động. Không gửi mật khẩu, mã OTP hay khóa bí mật.</p>
-        <textarea className={inputStyle} rows={6} maxLength={4000} value={content} onChange={e => setContent(e.target.value)} placeholder="Mô tả cụ thể, tối thiểu 10 ký tự…" />
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"><span>{content.trim().length}/4000 ký tự</span><span>Tối đa 5 góp ý/24 giờ, cách nhau 1 phút</span></div>
-        <label className="block text-sm font-semibold">Ảnh đính kèm (không bắt buộc)
-          <input className="mt-2 block w-full text-sm" type="file" accept="image/png,image/jpeg,image/webp" disabled={imageBusy || busy}
+        <p className="text-sm text-slate-500">{t("Your username is added automatically. Do not send passwords, OTPs or secret keys.")}</p>
+        <textarea className={inputStyle} rows={6} maxLength={4000} value={content} onChange={e => setContent(e.target.value)} placeholder={t("Describe your feedback in at least 10 characters...")} />
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"><span>{content.trim().length}/4000 {t("characters")}</span><span>{t("Up to 5 submissions per 24 hours, at least 1 minute apart")}</span></div>
+        <label className="block text-sm font-semibold">{t("Screenshot (optional)")}
+          <span className="mt-2 block w-fit rounded-lg border px-3 py-2 text-sm font-normal">{t("Choose image")}</span>
+          <input aria-label={t("Choose image")} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" disabled={imageBusy || busy}
             onChange={async e => {
               const file = e.target.files?.[0]; e.target.value = "";
               if (!file) return;
               setImageBusy(true); setError(""); setImage(""); setImageName("");
               try { setImage(await compactImage(file)); setImageName(file.name); }
-              catch (err) { setError(err instanceof Error ? err.message : "Không xử lý được ảnh."); }
+              catch (err) { setError(feedbackErrorKey(err, "Could not process the image. Try another PNG/JPG/WebP image.")); }
               finally { setImageBusy(false); }
             }} />
         </label>
-        <p className="text-xs text-slate-500">PNG/JPG/WebP tối đa 4 MB; ảnh được nén tự động. Chỉ bạn và quản trị viên xem được.</p>
-        {imageBusy && <p className="text-sm">Đang nén ảnh…</p>}
-        {image && <div className="space-y-2"><img alt="Ảnh sẽ gửi" src={`data:image/webp;base64,${image}`} className="max-h-64 max-w-full rounded-xl border" />
-          <button type="button" className="text-sm text-red-600" onClick={() => { setImage(""); setImageName(""); }}>Bỏ ảnh {imageName}</button></div>}
+        <p className="text-xs text-slate-500">{t("PNG/JPG/WebP up to 4 MB; compressed automatically. Only you and admins can view it.")}</p>
+        {imageBusy && <p className="text-sm">{t("Compressing image...")}</p>}
+        {image && <div className="space-y-2"><img alt={t("Image to submit")} src={`data:image/webp;base64,${image}`} className="max-h-64 max-w-full rounded-xl border" />
+          <button type="button" className="text-sm text-red-600" onClick={() => { setImage(""); setImageName(""); }}>{t("Remove image")} {imageName}</button></div>}
         <button type="button" disabled={busy || imageBusy || content.trim().length < 10} onClick={() => void submit()} className="rounded-xl bg-indigo-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
-          {busy ? "Đang gửi…" : "Gửi góp ý"}
+          {t(busy ? "Submitting..." : "Submit feedback")}
         </button>
       </div>
     </Panel></div>}
     {admin && <div className="mt-5"><Panel className="p-5">
-      <h2 className="mb-4 text-lg font-extrabold">Cài đặt quản trị · Link nhóm thảo luận</h2>
+      <h2 className="mb-4 text-lg font-extrabold">{t("Admin settings - Discussion group link")}</h2>
       <div className="space-y-3">
-        <p className="text-sm text-slate-500">Dán link HTTPS của nhóm. Để trống nếu chưa muốn mở nhóm.</p>
+        <p className="text-sm text-slate-500">{t("Paste the group's HTTPS link. Leave it blank to keep the group closed.")}</p>
         <input className={inputStyle} type="url" maxLength={500} placeholder="https://t.me/…" value={groupDraft} onChange={e => setGroupDraft(e.target.value)} />
         <button type="button" disabled={savingGroup} className="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50" onClick={async () => {
           setSavingGroup(true); setError("");
           try {
             const result = await adminToolRequest<{ groupUrl: string }>("/admin/feedback/config", { groupUrl: groupDraft.trim() }, "PUT");
-            setGroupUrl(result.groupUrl); setGroupDraft(result.groupUrl); setNotice("Đã lưu link nhóm.");
-          } catch (e) { setError(e instanceof Error ? e.message : "Chưa lưu được link."); }
+            setGroupUrl(result.groupUrl); setGroupDraft(result.groupUrl); setNotice("Group link saved.");
+          } catch (e) { setError(feedbackErrorKey(e, "Could not save changes. Please try again.")); }
           finally { setSavingGroup(false); }
-        }}>{savingGroup ? "Đang lưu…" : "Lưu link nhóm"}</button>
+        }}>{t(savingGroup ? "Saving..." : "Save group link")}</button>
       </div>
     </Panel></div>}
     <div className="mt-5"><Panel className="p-5">
-      <h2 className="mb-4 text-lg font-extrabold">{admin ? "Quản lý góp ý · 100 mục gần nhất" : "Góp ý của bạn · 100 mục gần nhất"}</h2>
+      <h2 className="mb-4 text-lg font-extrabold">{t(admin ? "Manage feedback - Latest 100 items" : "Your feedback - Latest 100 items")}</h2>
       <div className="mb-4 flex flex-wrap gap-2">
-        <select aria-label="Lọc trạng thái góp ý" className="rounded-xl border p-2 text-sm" value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="all">Tất cả trạng thái</option>{(Object.keys(statuses) as Status[]).map(status => <option key={status} value={status}>{statuses[status]}</option>)}
+        <select aria-label={t("Filter feedback by status")} className="rounded-xl border p-2 text-sm" value={filter} onChange={e => setFilter(e.target.value)}>
+          <option value="all">{t("All statuses")}</option>{(Object.keys(statuses) as Status[]).map(status => <option key={status} value={status}>{t(statuses[status])}</option>)}
         </select>
-        <button type="button" onClick={() => void load().catch(() => setError("Chưa tải được."))} className="rounded-xl border px-3 py-2 text-sm">Làm mới</button>
+        <button type="button" onClick={() => void load().catch(() => setError("Could not load feedback. Please try again."))} className="rounded-xl border px-3 py-2 text-sm">{t("Refresh feedback")}</button>
       </div>
       <div className="space-y-4">
-        {!items.filter(row => filter === "all" || row.status === filter).length && <p className="text-sm text-slate-500">Chưa có góp ý ở mục này.</p>}
+        {!items.filter(row => filter === "all" || row.status === filter).length && <p className="text-sm text-slate-500">{t("No feedback in this category yet.")}</p>}
         {items.filter(row => filter === "all" || row.status === filter).map(row => <article id={row.id} key={row.id} className="rounded-xl border border-slate-200 p-4 target:border-indigo-500">
-          <div className="flex flex-wrap items-center justify-between gap-2"><strong>{kinds[row.kind]}</strong><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{statuses[row.status]}</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><strong>{t(kinds[row.kind])}</strong><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">{t(statuses[row.status])}</span></div>
           <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">{row.content}</p>
-          <p className="mt-3 break-all text-xs text-slate-500">{admin ? `${row.username} · ` : ""}{new Date(row.createdAt).toLocaleString("vi-VN")} · {row.source}</p>
+          <p className="mt-3 break-all text-xs text-slate-500">{admin ? `${row.username} · ` : ""}{new Date(row.createdAt).toLocaleString(language === "vi" ? "vi-VN" : "en-US")} · {row.source}</p>
           {row.hasImage && <a href={`/api/feedback/${row.id}/image`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block">
-            <img loading="lazy" alt="Ảnh đính kèm góp ý" src={`/api/feedback/${row.id}/image`} className="max-h-64 max-w-full rounded-lg border" />
+            <img loading="lazy" alt={t("Feedback attachment")} src={`/api/feedback/${row.id}/image`} className="max-h-64 max-w-full rounded-lg border" />
           </a>}
-          {admin && <label className="mt-3 block text-sm">Cập nhật trạng thái
+          {admin && <label className="mt-3 block text-sm">{t("Update status")}
             <select value={row.status} onChange={e => void changeStatus(row.id, e.target.value as Status)} className="ml-2 rounded-lg border p-2">
-              {(Object.keys(statuses) as Status[]).map(status => <option key={status} value={status}>{statuses[status]}</option>)}
+              {(Object.keys(statuses) as Status[]).map(status => <option key={status} value={status}>{t(statuses[status])}</option>)}
             </select>
           </label>}
         </article>)}
