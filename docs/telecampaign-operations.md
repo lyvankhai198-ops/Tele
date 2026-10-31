@@ -104,6 +104,15 @@ does not itself deploy new application code. Keep access to a trusted copy of th
 release scripts: restoring a checkpoint from before their introduction also
 restores the source from before these scripts existed.
 
+For the first protected rollout, keep the reviewed release scripts together in
+an owner-only control directory outside the live checkout, for example
+`/var/lib/telecampaign/control/<reviewed-commit>/scripts`. Invoke that copy for
+deploy and rollback. Its helper still pins all application operations to
+`/opt/telecampaign`; its backup command comes from the same trusted control copy.
+Provision `/var/lib/telecampaign/operation.lock` for the TeleCampaign PM2 owner
+without replacing an existing lock inode. Preserve any local source changes
+before making the checkout clean; do not discard them with a blanket reset.
+
 ### Safe deploy
 
 Publish reviewed and tested changes to GitHub `main`, but **do not run `git pull`,

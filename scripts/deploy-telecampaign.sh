@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-source "$(dirname "$(realpath "$0")")/lib/telecampaign-release.sh"
+CONTROL_SCRIPTS="$(dirname "$(realpath "$0")")"
+source "$CONTROL_SCRIPTS/lib/telecampaign-release.sh"
 release_lock
 release_require_repository
 release_require_clean
@@ -35,7 +36,7 @@ fi
 
 # Existing backup creates a consistent database/media pair. It briefly stops
 # only this API, restarts it and validates health. Never auto-restore this data.
-bash "$ROOT/scripts/backup-telecampaign.sh"
+bash "$CONTROL_SCRIPTS/backup-telecampaign.sh"
 release_checkpoint
 recovery_armed=1
 on_deploy_exit() {

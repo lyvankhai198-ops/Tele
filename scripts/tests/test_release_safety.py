@@ -299,6 +299,16 @@ echo stopped > "$TEST_ROOT/process-state"
         self.assertNotEqual(result.returncode, 0)
         self.assert_old_restored()
 
+    def test_deploy_can_run_from_protected_control_copy(self):
+        control = self.base / "control"
+        shutil.copytree(self.root / "scripts", control)
+        result = self.cmd(["bash", str(control / "deploy-telecampaign.sh")], check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.git("rev-parse", "HEAD").stdout.strip(), self.new)
+        result = self.cmd(["bash", str(control / "rollback-telecampaign.sh"), "--previous"], check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_old_restored()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
