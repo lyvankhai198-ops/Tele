@@ -25,7 +25,9 @@ export async function prepareCampaignDeleteIndexes(client, { cancelStalledDelete
         AND pid<>pg_backend_pid() AND state='active' AND backend_type='client backend'
         AND query_start < now()-interval '90 seconds'
         AND query ~* '^delete from "campaigns"'
-        AND query LIKE '%"owner_user_id"%' AND query LIKE '%"status" not in%'`);
+        AND query LIKE '%"owner_user_id"%' AND query LIKE '%"id" in (%'
+        AND (query LIKE '%"status" not in%' OR
+          octet_length(query)>=pg_size_bytes(current_setting('track_activity_query_size'))-4)`);
     console.log("stalled_campaign_deletes_cancelled=" + result.rows.filter(row => row.cancelled).length);
   }
   for (const [name, table, ...columns] of DELETE_INDEXES) {
@@ -78,7 +80,9 @@ export async function prepareAsLocalTableOwner(client, run = spawnSync) {
         AND state='active' AND backend_type='client backend'
         AND query_start < now()-interval '90 seconds'
         AND query ~* '^delete from "campaigns"'
-        AND query LIKE '%"owner_user_id"%' AND query LIKE '%"status" not in%';
+        AND query LIKE '%"owner_user_id"%' AND query LIKE '%"id" in (%'
+        AND (query LIKE '%"status" not in%' OR
+          octet_length(query)>=pg_size_bytes(current_setting('track_activity_query_size'))-4);
     ${statements.join("\n")}
   `;
   // -X ignores local psql startup files; all values remain in the private VPS

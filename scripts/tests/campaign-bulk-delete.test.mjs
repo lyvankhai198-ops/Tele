@@ -30,7 +30,7 @@ test("owner maintenance is local, identity-checked and limited to known indexes"
   assert.equal(command,"sudo");
   assert.deepEqual(args.slice(0,4),["-n","-u","postgres","psql"]);
   for (const marker of ["Maintenance identity mismatch","CONCURRENTLY", "90 seconds",
-    '"owner_user_id"', '"status" not in', "usesysid IN (320,"])
+    '"owner_user_id"', '"status" not in', "usesysid IN (320,", '"id" in (', "track_activity_query_size"])
     assert.ok(options.input.includes(marker));
   assert.ok(!/ALTER TABLE|UPDATE |DELETE FROM|GRANT |pg_terminate_backend/.test(options.input));
   assert.ok(!options.input.includes("password"));
@@ -59,7 +59,7 @@ test("optional cancellation is restricted to old, owned campaign deletion statem
     calls.push(sql); return { rows: sql.includes("pg_cancel_backend") ? [] : [{ valid: true }] };
   } }, { cancelStalledDeletes: true });
   const cancel = calls.find(c => c.includes("pg_cancel_backend"));
-  for (const guard of ["current_database()", "current_user", "90 seconds", '"owner_user_id"', '"status" not in', '^delete from "campaigns"'])
+  for (const guard of ["current_database()", "current_user", "90 seconds", '"owner_user_id"', '"status" not in', '^delete from "campaigns"', '"id" in (', "track_activity_query_size"])
     assert.ok(cancel.includes(guard));
   assert.ok(!calls.some(c => /pg_terminate_backend|UPDATE campaigns|DELETE FROM/.test(c)));
 });
