@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { and, count, desc, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import {
   adminSystemEventsTable,
@@ -18,6 +18,7 @@ import { decryptSecret, encryptSecret } from "./crypto";
 import { localQuotaDate } from "./user-daily-quota";
 import { getDatabaseNow } from "./database-clock";
 import { isSubscriptionActiveAt } from "./subscription-time";
+import { licenseKeyHash, normalizedLicenseKey } from "./license-key-identity";
 
 export const PLAN_ORDER = ["plus", "pro", "unlimited"] as const;
 export type PlanCode = SystemPlanCode;
@@ -143,14 +144,6 @@ function planLimits(plan: PlanCode, catalog: PlanCatalog = PLAN_CATALOG) {
 export async function getConfiguredPlanCatalog(): Promise<PlanCatalog> {
   const settings = await getSystemSettings();
   return PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planContent[plan.code], ...settings.planLimits[plan.code] }));
-}
-
-function normalizedLicenseKey(value: string): string {
-  return value.trim().toUpperCase().replace(/\s+/g, "");
-}
-
-function licenseKeyHash(value: string): string {
-  return createHash("sha256").update(normalizedLicenseKey(value)).digest("hex");
 }
 
 type AdminLicenseStatus = "available" | "claimed" | "revoked";
