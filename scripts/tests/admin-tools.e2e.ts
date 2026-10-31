@@ -112,7 +112,7 @@ try {
   const deleteIds = Array.from({ length: 6 }, () => randomUUID());
   const accountId = randomUUID(), destinationId = randomUUID(), groupId = randomUUID();
   await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name) VALUES($1,$2,'Fixture delete account')", [accountId, userId]);
-  await pool.query("INSERT INTO destinations(id,owner_user_id,telegram_account_id,telegram_id,title) VALUES($1,$2,$3,'fixture-delete-group','Fixture delete group')", [destinationId,userId,accountId]);
+  await pool.query("INSERT INTO destinations(id,account_id,telegram_id,title) VALUES($1,$2,'fixture-delete-group','Fixture delete group')", [destinationId,accountId]);
   for (let i = 0; i < deleteIds.length; i++) {
     await pool.query("INSERT INTO campaigns(id,owner_user_id,name,status) VALUES($1,$2,$3,$4)",
       [deleteIds[i], i === 5 ? adminId : userId, deletePrefix + (i === 4 ? "-other-filter" : ""),
