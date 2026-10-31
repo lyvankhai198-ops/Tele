@@ -13,10 +13,13 @@ set -a
 source "$ENV_FILE"
 set +a
 
-if (( $# > 1 )) || [[ -n "${1:-}" && ! "$1" =~ ^[0-9a-f]{7,40}$ ]]; then
-  echo "Usage: $0 [reviewed-commit-sha] (default: origin/main)" >&2
+PREBUILT=""
+if (( $# > 3 || $# == 2 )) || [[ -n "${1:-}" && ! "$1" =~ ^[0-9a-f]{7,40}$ ]] \
+  || { (( $# == 3 )) && [[ "$2" != "--prebuilt" ]]; }; then
+  echo "Usage: $0 [reviewed-commit-sha] [--prebuilt /var/lib/telecampaign/staging/<sha>]" >&2
   exit 2
 fi
+if (( $# == 3 )); then PREBUILT="$3"; fi
 release_git fetch origin main --quiet
 target="$(release_git rev-parse --verify "${1:-origin/main}^{commit}")"
 if [[ "$target" == "$(release_git rev-parse HEAD)" ]]; then
@@ -32,6 +35,10 @@ fi
 if ! release_git cat-file -e "${target}:artifacts/api-server/src/lib/notificationMediaStorage.ts" 2>/dev/null; then
   echo "Target lacks protected filesystem notification media support." >&2
   exit 1
+fi
+if [[ -n "$PREBUILT" ]]; then
+  release_validate_prebuilt "$PREBUILT" "$target" \
+    || { echo "Prebuilt runtime is incomplete, corrupt, unsafe, or ABI-incompatible; nothing changed." >&2; exit 1; }
 fi
 
 # Existing backup creates a consistent database/media pair. It briefly stops
@@ -62,12 +69,23 @@ pm2 stop telecampaign-api
 # readable by the dedicated Nginx worker after a successful deployment.
 umask 022
 release_git reset --hard "$target"
+if [[ -n "$PREBUILT" ]]; then
+  while IFS= read -r -d '' path; do
+    rm -rf -- "$ROOT/$path"
+  done < <(release_runtime_paths)
+  while IFS= read -r -d '' path; do
+    rm -rf -- "$ROOT/$path"
+  done < "$PREBUILT/RUNTIME_PATHS"
+  tar --extract --gzip --same-permissions --no-same-owner \
+    --file="$PREBUILT/runtime.tar.gz" --directory="$ROOT"
+else
 NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
   pnpm --dir "$ROOT" install --frozen-lockfile --prod=false
 NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
   PORT="${TELECAMPAIGN_PORT:-3004}" BASE_PATH=/ pnpm --dir "$ROOT" --filter @workspace/telecampaign run build
 NODE_OPTIONS="${TELECAMPAIGN_BUILD_NODE_OPTIONS:-${NODE_OPTIONS:-}}" \
   pnpm --dir "$ROOT" --filter @workspace/api-server run build
+fi
 [[ -s "$ROOT/artifacts/telecampaign/dist/public/index.html" \
   && -s "$ROOT/artifacts/api-server/dist/index.mjs" ]]
 bash "$ROOT/scripts/prepare-notification-media-storage.sh"

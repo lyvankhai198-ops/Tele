@@ -5,6 +5,7 @@ ROOT="/opt/telecampaign"
 RELEASES="/var/backups/telecampaign/releases"
 LOCK="/var/lib/telecampaign/operation.lock"
 PREVIOUS="$RELEASES/PREVIOUS"
+STAGING="/var/lib/telecampaign/staging"
 SAVED_RELEASE=""
 
 release_git() {
@@ -62,6 +63,29 @@ release_validate() {
     [[ "$path" =~ ^(node_modules|(artifacts|lib)/[^/]+/(node_modules|dist)|scripts/(node_modules|dist))$ ]] || return 1
   done < "$snapshot/RUNTIME_PATHS"
   tar -tzf "$snapshot/runtime.tar.gz" >/dev/null || return 1
+}
+
+release_validate_prebuilt() {
+  local stage="$1" expected_sha="$2" path member platform
+  [[ -d "$stage" && ! -L "$stage" ]] || return 1
+  stage="$(realpath -e "$stage")" || return 1
+  [[ "$stage" == "$STAGING/$expected_sha" ]] || return 1
+  for path in COMMIT PLATFORM RUNTIME_PATHS runtime.tar.gz SHA256SUMS COMPLETE; do
+    [[ -f "$stage/$path" && ! -L "$stage/$path" ]] || return 1
+  done
+  [[ "$(cat "$stage/COMPLETE")" == "telecampaign-runtime-v1" ]] || return 1
+  (cd "$stage" && sha256sum --status --check SHA256SUMS) || return 1
+  [[ "$(cat "$stage/COMMIT")" == "$expected_sha" ]] || return 1
+  platform="$(node -p 'process.platform+":"+process.arch+":"+process.versions.modules')" || return 1
+  [[ "$(cat "$stage/PLATFORM")" == "$platform" ]] || return 1
+  while IFS= read -r -d '' path; do
+    [[ "$path" =~ ^(node_modules|(artifacts|lib)/[^/]+/(node_modules|dist)|scripts/(node_modules|dist))$ ]] || return 1
+  done < "$stage/RUNTIME_PATHS"
+  tar -tzf "$stage/runtime.tar.gz" >/dev/null || return 1
+  while IFS= read -r member; do
+    [[ ! "$member" =~ (^|/)\.\.(/|$) ]] || return 1
+    [[ "$member" =~ ^(node_modules(/.*)?|(artifacts|lib)/[^/]+/(node_modules|dist)(/.*)?|scripts/(node_modules|dist)(/.*)?)$ ]] || return 1
+  done < <(tar -tzf "$stage/runtime.tar.gz")
 }
 
 release_checkpoint() {

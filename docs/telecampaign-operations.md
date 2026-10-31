@@ -132,6 +132,24 @@ API/database health. Build, install, restart, preflight or health failure trigge
 automatic **code/dependency/asset** recovery from that exact checkpoint. The
 deploy still exits nonzero so failure cannot be mistaken for success.
 
+On a memory-constrained shared VPS, use a prebuilt runtime instead of running
+pnpm/Vite/esbuild there:
+
+```bash
+bash /var/lib/telecampaign/control/<reviewed-control-commit>/scripts/deploy-telecampaign.sh \
+  <reviewed-app-commit> --prebuilt /var/lib/telecampaign/staging/<reviewed-app-commit>
+```
+
+The staged release must contain `COMMIT`, `PLATFORM` (OS/architecture/Node ABI),
+NUL-delimited `RUNTIME_PATHS`, `runtime.tar.gz`, `SHA256SUMS`, and a
+`telecampaign-runtime-v1` completion marker. Validation happens before backup or
+source replacement. Only workspace `node_modules` and `dist` paths are accepted;
+environment/configuration files and arbitrary paths cannot be installed this way.
+Build on the same OS/architecture and Node major, using only the necessary
+frontend build environment through a private temporary file, never a log or an
+uploaded environment file. The VPS still creates its own database/media backup
+and old-runtime checkpoint before activating the prebuilt dependencies/assets.
+
 If a later functional check reveals a bug, use `rollback-telecampaign.sh --previous`.
 Basic health checks do not prove login, campaigns, payments or Telegram actions
 are correct: verify those separately and check the public HTTPS page after deploy.

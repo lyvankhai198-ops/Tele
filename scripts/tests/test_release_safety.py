@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import hashlib
+import tarfile
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 
@@ -40,6 +42,8 @@ class ReleaseSafetyTests(unittest.TestCase):
                                     f'RELEASES="{self.releases}"')
                 text = text.replace('LOCK="/var/lib/telecampaign/operation.lock"',
                                     f'LOCK="{self.base}/operation.lock"')
+                text = text.replace('STAGING="/var/lib/telecampaign/staging"',
+                                    f'STAGING="{self.base}/staging"')
             target.write_text(text)
         self.write("scripts/backup-telecampaign.sh", """#!/usr/bin/env bash
 set -euo pipefail
@@ -320,6 +324,77 @@ echo stopped > "$TEST_ROOT/process-state"
         self.assertIn("build_node_options=--max-old-space-size=128", log)
         self.assertIn("pm2_node_options=--no-warnings", log)
         self.assertNotIn("pm2_node_options=--max-old-space-size", log)
+
+    def make_prebuilt(self):
+        stage = self.base / "staging" / self.new
+        stage.mkdir(parents=True)
+        built = self.base / "built"
+        paths = ["node_modules", "artifacts/api-server/dist", "artifacts/telecampaign/dist"]
+        for path, text in {
+            "node_modules/native.node": "prebuilt native\n",
+            "artifacts/api-server/dist/index.mjs": "new\n",
+            "artifacts/telecampaign/dist/public/index.html": "new\n",
+            "artifacts/telecampaign/dist/new-only.js": "new\n",
+        }.items():
+            file = built / path
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(text)
+        with tarfile.open(stage / "runtime.tar.gz", "w:gz") as archive:
+            for path in paths:
+                archive.add(built / path, arcname=path)
+        (stage / "RUNTIME_PATHS").write_bytes(b"".join(p.encode() + b"\0" for p in paths))
+        (stage / "COMMIT").write_text(self.new + "\n")
+        platform = self.cmd(["node", "-p", 'process.platform+":"+process.arch+":"+process.versions.modules']).stdout
+        (stage / "PLATFORM").write_text(platform)
+        (stage / "COMPLETE").write_text("telecampaign-runtime-v1\n")
+        self.checksum_stage(stage)
+        return stage
+
+    def checksum_stage(self, stage):
+        (stage / "SHA256SUMS").write_text("".join(
+            f"{hashlib.sha256((stage / p).read_bytes()).hexdigest()}  {p}\n"
+            for p in ["COMMIT", "PLATFORM", "RUNTIME_PATHS", "runtime.tar.gz"]
+        ))
+
+    def test_prebuilt_deploy_needs_no_package_install_or_build(self):
+        stage = self.make_prebuilt()
+        self.mode.write_text("install")
+        result = self.script("deploy-telecampaign.sh", self.new, "--prebuilt", str(stage))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "node_modules/native.node").read_text(), "prebuilt native\n")
+        self.assertNotIn("pnpm", self.log.read_text())
+        self.assertEqual(self.git("rev-parse", "HEAD").stdout.strip(), self.new)
+        self.assertEqual(self.script("rollback-telecampaign.sh").returncode, 0)
+        self.assert_old_restored()
+
+    def test_prebuilt_health_failure_restores_old_runtime(self):
+        stage = self.make_prebuilt()
+        self.mode.write_text("health")
+        result = self.script("deploy-telecampaign.sh", self.new, "--prebuilt", str(stage))
+        self.assertNotEqual(result.returncode, 0)
+        self.assert_old_restored()
+        self.assertNotIn("pnpm", self.log.read_text())
+
+    def test_corrupt_or_incompatible_prebuilt_is_rejected_before_backup(self):
+        stage = self.make_prebuilt()
+        (stage / "PLATFORM").write_text("wrong:platform:ABI\n")
+        self.checksum_stage(stage)
+        result = self.script("deploy-telecampaign.sh", self.new, "--prebuilt", str(stage))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.log.exists())
+        self.assert_old_restored()
+
+    def test_prebuilt_cannot_replace_env_or_other_non_runtime_paths(self):
+        stage = self.make_prebuilt()
+        bad = self.base / "not-runtime.txt"
+        bad.write_text("test fixture")
+        with tarfile.open(stage / "runtime.tar.gz", "w:gz") as archive:
+            archive.add(bad, arcname=".env")
+        self.checksum_stage(stage)
+        result = self.script("deploy-telecampaign.sh", self.new, "--prebuilt", str(stage))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.log.exists())
+        self.assert_old_restored()
 
 
 if __name__ == "__main__":
