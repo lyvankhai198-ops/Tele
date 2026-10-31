@@ -17,6 +17,25 @@ const popupFixture = (fields = {}) => ({ id: "fixture", version: "v1", title: "F
   status: "published", enabled: true, frequency: "daily", audience: "all", template: "offer",
   accent: "#4f46e5", priority: 50, startsAt: null, expiresAt: null,
   createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", ...fields });
+test("Campaign repeat defaults change only new forms and preserve edited values/delays", async () => {
+  const source = await readFile(new URL("../../artifacts/telecampaign/src/components/campaign-form-modal.tsx", import.meta.url), "utf8");
+  const empty = source.slice(source.indexOf("const emptyForm ="), source.indexOf("\nfunction destinationLabel"));
+  const initial = source.match(/function initialForm\([\s\S]*?\n\}/)?.[0];
+  assert.ok(initial);
+  const forms = vm.runInNewContext(stripTypeScriptTypes(empty + "\n" + initial + "\n({emptyForm,initialForm})"));
+  const fresh = forms.initialForm(null);
+  assert.equal(fresh.repeatCount, "300");
+  assert.equal(fresh.roundDelayMinSeconds, "1"); assert.equal(fresh.roundDelayMaxSeconds, "3");
+  for (const repeatCount of [1, 300, 301, 10000]) {
+    const result = forms.initialForm({ name: "Fixture", telegramAccountId: "a", templateId: "t", destinationIds: [],
+      repeatCount, roundDelayMinSeconds: 3600, roundDelayMaxSeconds: 3600, scheduledAt: null });
+    assert.equal(result.repeatCount, String(repeatCount)); assert.equal(result.roundDelayMinSeconds, "3600");
+  }
+  assert.match(source, /max=\{accountSummary\.data\?\.subscription\.plan === "plus" \? 300 : undefined\}/);
+  assert.match(source, /Number\(form\.repeatCount\) !== 300/);
+  assert.match(source, /Pro and higher plans have no repeat-count limit/);
+  assert.match(source, /Khuyến nghị đặt 300 lần/);
+});
 test("Popups enforce publication, audience, start and strict expiry boundaries", () => {
   const now = new Date("2026-10-31T00:00:00Z"), p = popupFixture();
   assert.equal(popupActive(p, true, now), true);

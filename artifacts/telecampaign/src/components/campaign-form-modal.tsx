@@ -12,6 +12,7 @@ import {
   getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   useGetSystemDefaults,
+  useGetAccountSummary,
   useListDestinations,
   useListCampaigns,
   useListMessageTemplates,
@@ -97,7 +98,9 @@ const copy = {
     generalTopic: "General",
     topicBadge: "Topic",
     fieldRepeatCount: "Repeat count",
-    repeatCountHint: "Max 300 (admin configured).",
+    repeatCountHint: "Recommended: set 300 repeats to reduce the chance of the campaign ending early because it runs out of rounds.",
+    repeatCountLimitHint: "PLUS allows up to 300 repeats.",
+    repeatCountUnlimitedHint: "Pro and higher plans have no repeat-count limit.",
     completedRerunHint: "This completed campaign will start a fresh run from 0 with the repeat count below.",
     delayBetweenRounds: "Delay between rounds",
     delayMinRoundLabel: "Min delay between rounds (sec)",
@@ -150,7 +153,9 @@ const copy = {
     generalTopic: "Chung",
     topicBadge: "Chủ đề",
     fieldRepeatCount: "Số lần lặp",
-    repeatCountHint: "Tối đa 300 (admin cấu hình).",
+    repeatCountHint: "Khuyến nghị đặt 300 lần để hạn chế chiến dịch kết thúc sớm do hết số vòng lặp.",
+    repeatCountLimitHint: "Gói PLUS tối đa 300 lần lặp.",
+    repeatCountUnlimitedHint: "Gói Pro trở lên không giới hạn số lần lặp.",
     completedRerunHint: "Chiến dịch đã hoàn thành sẽ bắt đầu một lượt chạy mới từ 0 theo số vòng lặp bên dưới.",
     delayBetweenRounds: "Delay giữa các vòng lặp",
     delayMinRoundLabel: "Delay min giữa mỗi vòng lặp (giây)",
@@ -173,7 +178,7 @@ const emptyForm = (prefill?: CampaignFormPrefill | null): CampaignForm => ({
   accountId: prefill?.preferredAccountId ?? "",
   templateId: "",
   destinationIds: [],
-  repeatCount: "1",
+  repeatCount: "300",
   roundDelayMinSeconds: prefill?.roundDelayMinSeconds !== undefined
     ? String(prefill.roundDelayMinSeconds)
     : "1",
@@ -241,6 +246,7 @@ export function CampaignFormModal({
   });
   const templates = useListMessageTemplates();
   const systemDefaults = useGetSystemDefaults();
+  const accountSummary = useGetAccountSummary();
   const createCampaign = useCreateCampaign();
   const syncDestinations = useSyncTelegramDestinations();
   const updateStatus = useUpdateCampaignStatus();
@@ -689,12 +695,12 @@ export function CampaignFormModal({
 
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldRepeatCount}</span>
-          <span className="mb-2 block text-[12px] font-medium text-[#64748b]">
-            {editingCampaign && ["completed", "completed_with_errors"].includes(editingCampaign.status)
-              ? c.completedRerunHint
-              : c.repeatCountHint}
+          <span id="campaign-repeat-count-hint" className={`mb-2 block rounded-lg text-[12px] font-medium ${Number(form.repeatCount) !== 300 ? "border border-amber-200 bg-amber-50 p-2.5 text-amber-800" : "text-[#64748b]"}`}>
+            {c.repeatCountHint}
+            {accountSummary.data && <span className="mt-1 block">{accountSummary.data.subscription.plan === "plus" ? c.repeatCountLimitHint : c.repeatCountUnlimitedHint}</span>}
           </span>
-          <input type="number" min="1" max="300" value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
+          {editingCampaign && ["completed", "completed_with_errors"].includes(editingCampaign.status) && <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{c.completedRerunHint}</span>}
+          <input type="number" min="1" max={accountSummary.data?.subscription.plan === "plus" ? 300 : undefined} aria-describedby="campaign-repeat-count-hint" value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
         </label>
 
         <div className="border-t border-[#eef2f6] pt-5">
