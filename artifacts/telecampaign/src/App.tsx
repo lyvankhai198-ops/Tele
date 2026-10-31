@@ -42,6 +42,7 @@ import AdminActiveGroupsPage from '@/pages/admin-active-groups';
 import AdminSystemEventsPage from '@/pages/admin-system-events';
 import AdminSupportChatPage from '@/pages/admin-support-chat';
 import SupportPage from '@/pages/support';
+import FeedbackPage from '@/pages/feedback';
 import { SupportChatWidget } from '@/components/support-chat-widget';
 
 const queryClient = new QueryClient();
@@ -933,6 +934,7 @@ function Router() {
         <Route path="/dashboard/account" component={() => <WorkspaceRoute><Account /></WorkspaceRoute>} />
         <Route path="/dashboard/settings" component={() => <ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/dashboard/support" component={() => <WorkspaceRoute><SupportPage /></WorkspaceRoute>} />
+        <Route path="/dashboard/feedback" component={() => <ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
         <Route path="/upgrade" component={() => <ProtectedRoute><Upgrade /></ProtectedRoute>} />
         <Route path="/admin" component={() => <AdminRoute><AdminDashboardPage /></AdminRoute>} />
         <Route path="/admin/notifications" component={() => <AdminRoute><AdminNotificationsPage /></AdminRoute>} />

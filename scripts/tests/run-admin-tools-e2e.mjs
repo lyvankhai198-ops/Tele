@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,7 @@ if (process.env.DATABASE_URL !== "postgres://telecamp_test@127.0.0.1:5432/teleca
 const require = createRequire(path.join(root, "artifacts/api-server/package.json"));
 const { build } = require("esbuild");
 const dir = path.join(root, "artifacts/api-server/.e2e");
+const feedbackMedia = await mkdtemp(path.join(tmpdir(), "telecamp-feedback-test-"));
 await mkdir(dir, { recursive: true });
 try {
   await build({
@@ -37,10 +39,14 @@ try {
     encoding: "utf8", timeout: 90000,
     env: { ...process.env, TELECAMPAIGN_E2E_ONLY: "1", NODE_ENV: "production", LOG_LEVEL: "silent",
       SESSION_SECRET: randomBytes(32).toString("hex"), TELECAMPAIGN_DISABLE_WORKER: "true",
+      TELECAMPAIGN_MEDIA_DIR: feedbackMedia,
       TELECAMPAIGN_DISABLE_PAYMENT_WORKER: "true" },
   });
   // Never publish request bodies, session cookies, recovery codes or DB errors.
   console.log((result.stdout + result.stderr).split("\n").filter(line => /^E2E_[A-Z0-9_]+$/.test(line)).join("\n"));
   if (result.signal || result.error) console.log("E2E_PROCESS_INTERRUPTED");
   if (result.status !== 0 || !result.stdout.includes("E2E_ALL_PASSED")) process.exitCode = 1;
-} finally { await rm(dir, { recursive: true, force: true }); }
+} finally {
+  await rm(dir, { recursive: true, force: true });
+  await rm(feedbackMedia, { recursive: true, force: true });
+}

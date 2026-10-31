@@ -9,6 +9,7 @@ import { totpCode } from "../../artifacts/api-server/src/lib/admin-tools-core";
 import { pollTelegram } from "../../artifacts/api-server/src/lib/support-telegram";
 import { encryptSecret } from "../../artifacts/api-server/src/lib/crypto";
 import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecampaign-orders";
+import sharp from "sharp";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
@@ -198,6 +199,57 @@ try {
   const paymentReport = await (await request("/admin/tools/summary", adminCookie)).json() as any;
   check(paymentReport.report.cash.some((r: any) => r.currency === "VND" && Number(r.amount) === 3000), "E2E_BOT_VND_REPORT");
   check(paymentReport.report.cash.some((r: any) => r.currency === "USDT" && Number(r.amount) === 2), "E2E_BOT_USDT_REPORT");
+  phase = "E2E_FEEDBACK_PRIVACY_AND_WORKFLOW";
+  check((await request("/feedback")).status === 401, "E2E_FEEDBACK_LOGIN_REQUIRED");
+  check((await request("/feedback", userCookie, { kind: "invalid", content: "Fixture feedback description" })).status === 400, "E2E_FEEDBACK_CATEGORY_VALIDATED");
+  check((await request("/feedback", userCookie, { kind: "bug", content: "Fixture unsupported image input",
+    image: Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>").toString("base64") })).status === 400, "E2E_FEEDBACK_SVG_REJECTED");
+  const png = await sharp({ create: { width: 10, height: 10, channels: 3, background: "#123456" } }).png().toBuffer();
+  const submitted = await request("/feedback", userCookie, {
+    kind: "interface", content: "Fixture feedback about the navigation layout.", source: "/dashboard/settings?private=removed",
+    image: png.toString("base64"),
+  });
+  check(submitted.status === 201, "E2E_FEEDBACK_CREATE");
+  const feedback = await submitted.json() as any;
+  check(feedback.hasImage && feedback.ownerId === userId && feedback.source === "/dashboard/settings", "E2E_FEEDBACK_OWNERSHIP_AND_IMAGE");
+  const ownerImage = await request(`/feedback/${feedback.id}/image`, userCookie);
+  check(ownerImage.ok && ownerImage.headers.get("content-type")?.startsWith("image/webp"), "E2E_FEEDBACK_PRIVATE_IMAGE");
+  check((await request(`/feedback/${feedback.id}/image`)).status === 401, "E2E_FEEDBACK_IMAGE_LOGIN_REQUIRED");
+  const limited = await request("/feedback", userCookie, { kind: "bug", content: "Fixture duplicate rapid submission" });
+  check(limited.status === 429, "E2E_FEEDBACK_SPAM_LIMIT");
+  check((await request("/admin/feedback", userCookie)).status === 403, "E2E_FEEDBACK_ADMIN_LIST_DENIED");
+  check((await request(`/admin/feedback/${feedback.id}/status`, userCookie, { status: "completed" }, "PATCH")).status === 403, "E2E_FEEDBACK_STATUS_ADMIN_ONLY");
+  const privateAdmin = await request("/feedback", adminCookie, {
+    kind: "feature", content: "Fixture private admin feedback with a screenshot.", image: png.toString("base64"),
+  });
+  check(privateAdmin.ok, "E2E_FEEDBACK_SECOND_OWNER");
+  const adminFeedback = await privateAdmin.json() as any;
+  check((await request(`/feedback/${adminFeedback.id}`, userCookie)).status === 404, "E2E_FEEDBACK_OTHER_OWNER_DENIED");
+  check((await request(`/feedback/${adminFeedback.id}/image`, userCookie)).status === 404, "E2E_FEEDBACK_OTHER_IMAGE_DENIED");
+  check((await request("/admin/feedback/config", userCookie, { groupUrl: "https://t.me/fixture" }, "PUT")).status === 403, "E2E_FEEDBACK_CONFIG_ADMIN_ONLY");
+  check((await request("/admin/feedback/config", adminCookie, { groupUrl: "javascript:alert(1)" }, "PUT")).status === 400, "E2E_FEEDBACK_GROUP_SCHEME");
+  const groupSaved = await request("/admin/feedback/config", adminCookie, { groupUrl: "https://t.me/fixture_discussion" }, "PUT");
+  check(groupSaved.ok, "E2E_FEEDBACK_GROUP_SAVED");
+  const visibleGroup = await (await request("/feedback/config", userCookie)).json() as any;
+  check(visibleGroup.groupUrl === "https://t.me/fixture_discussion", "E2E_FEEDBACK_GROUP_VISIBLE");
+  async function feedbackCallback(sender: number, type = "private") {
+    const id = callbackUpdate++;
+    updates = [{ update_id: id, callback_query: { id: `fixture-feedback-${id}`, from: { id: sender },
+      data: `feedback:reviewing:${feedback.id}`, message: { message_id: id, chat: { id: 123456789, type } } } }];
+    await pollTelegram();
+  }
+  await feedbackCallback(888);
+  await feedbackCallback(123456789, "supergroup");
+  check((await (await request(`/feedback/${feedback.id}`, userCookie)).json() as any).status === "received", "E2E_FEEDBACK_BOT_UNAUTHORIZED_DENIED");
+  await feedbackCallback(123456789);
+  check((await (await request(`/feedback/${feedback.id}`, userCookie)).json() as any).status === "reviewing", "E2E_FEEDBACK_BOT_STATUS");
+  const completedFeedback = await request(`/admin/feedback/${feedback.id}/status`, adminCookie, { status: "completed" }, "PATCH");
+  check(completedFeedback.ok, "E2E_FEEDBACK_WEB_ADMIN_STATUS");
+  const history = await (await request("/feedback", userCookie)).json() as any[];
+  check(history.some(row => row.id === feedback.id && row.status === "completed") &&
+    !history.some(row => row.id === adminFeedback.id), "E2E_FEEDBACK_CUSTOMER_HISTORY");
+  check(replies.some((r: any) => r.reply_markup?.inline_keyboard?.flat().some((b: any) =>
+    b.callback_data === `feedback:reviewing:${feedback.id}`)), "E2E_FEEDBACK_BOT_NOTICE");
   phase = "E2E_MFA_DISABLE";
   const disabled = await request("/auth/mfa/disable", adminCookie, { password, code: codes.recoveryCodes[1] });
   check(disabled.ok, "E2E_MFA_DISABLE");
