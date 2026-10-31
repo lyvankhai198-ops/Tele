@@ -1,4 +1,4 @@
-name: TeleCampaign preflight (no deployment)
+name: TeleCampaign reviewed index-only recovery
 on:
   workflow_dispatch:
     inputs:
@@ -150,6 +150,7 @@ jobs:
                 OR (t.relname='campaign_targets' AND a.attname='campaign_id'))
               GROUP BY t.relname,a.attname ORDER BY t.relname,a.attname`);
             for(const row of indexes.rows) console.log("delete_fk_index_"+row.table_name+"_"+row.column_name+"="+Boolean(row.indexed));
+            if(indexes.rows.length!==4 || indexes.rows.some(row=>!row.indexed)) throw Error("Required delete indexes not ready");
             const stats=await client.query(`SELECT count(*) FILTER (WHERE state='active')::int active,
               count(*) FILTER (WHERE wait_event_type='Lock')::int lock_waiters,
               count(*) FILTER (WHERE state='active' AND query ~* '^delete from "campaigns"')::int active_campaign_deletes,
@@ -187,6 +188,7 @@ jobs:
           import {createHash,randomUUID} from "node:crypto";
           import {spawnSync} from "node:child_process";
           const source="/var/lib/telecampaign/staging/9b676c763a48ed2ea5dfd8b140be25ca008c0740/prepare-campaign-delete-indexes.mjs";
+          if(!fs.existsSync(source)) { console.log("staged_index_helper_already_removed=true"); process.exit(0); }
           const text=fs.readFileSync(source,"utf8");
           if(createHash("sha256").update(text).digest("hex")!=="d6ce484248baa92fdc399665308b013ca74444107996e3a5a6d6d8652e82266c") throw Error("Maintenance source mismatch");
           const old=`AND query LIKE '%"owner_user_id"%' AND query LIKE '%"status" not in%'`;
@@ -204,6 +206,39 @@ jobs:
           } finally {fs.unlinkSync(file);}
           DELETE_MAINTENANCE
           )
+          node --input-type=module <<'REVIEWED_CONTROL'
+          import fs from "node:fs";
+          import {createHash} from "node:crypto";
+          import {spawnSync} from "node:child_process";
+          const original="/var/lib/telecampaign/control/090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a/scripts";
+          const destination="/var/lib/telecampaign/control/reviewed-index-only-9b676c763a48ed2ea5dfd8b140be25ca008c0740/scripts";
+          const source=fs.readFileSync(original+"/deploy-telecampaign.sh","utf8");
+          if(createHash("sha256").update(source).digest("hex")!=="ca42d3aafb4788b7aa0216297469416e2f7e2b43278bfc1f7c924c999f1cf71c") throw Error("Pinned control mismatch");
+          const old='if ! release_git diff --quiet HEAD "$target" -- lib/db; then';
+          const replacement=`approved_index_only=0
+          if [[ "$target" == "9b676c763a48ed2ea5dfd8b140be25ca008c0740" && "$(release_git rev-parse HEAD)" == "07ae3bea304339e061a10c8d09a7d36973736663" ]]; then
+            approved_diff="$(release_git diff --no-ext-diff --no-color HEAD "$target" -- lib/db | sha256sum | awk '{print $1}')"
+            if [[ "$approved_diff" == "841bb27044505dd52cb5593131e2335ab7d72b4ce8f2c6223830ef1564c39013" ]]; then approved_index_only=1; fi
+          fi
+          if [[ "$approved_index_only" -ne 1 ]] && ! release_git diff --quiet HEAD "$target" -- lib/db; then`;
+          if(source.split(old).length!==2) throw Error("Review guard mismatch");
+          fs.mkdirSync(destination,{recursive:true,mode:0o700});
+          fs.cpSync(original,destination,{recursive:true});
+          fs.writeFileSync(destination+"/deploy-telecampaign.sh",source.replace(old,replacement),{mode:0o700});
+          if(spawnSync("bash",["-n",destination+"/deploy-telecampaign.sh"]).status!==0) throw Error("Control syntax failed");
+          console.log("reviewed_index_only_control=ready");
+          REVIEWED_CONTROL
+          log="/var/backups/telecampaign/reviewed-index-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          if env TELECAMPAIGN_DEPLOY_BACKUP=0 bash \
+            /var/lib/telecampaign/control/reviewed-index-only-9b676c763a48ed2ea5dfd8b140be25ca008c0740/scripts/deploy-telecampaign.sh \
+            9b676c763a48ed2ea5dfd8b140be25ca008c0740 \
+            --prebuilt /var/lib/telecampaign/staging/9b676c763a48ed2ea5dfd8b140be25ca008c0740 >"$log" 2>&1; then
+            echo "reviewed_index_only_deployment=passed"
+          else
+            echo "reviewed_index_only_deployment=failed"
+            echo "private_diagnostic_log=$log"
+            exit 1
+          fi
           for binary in /usr/lib/postgresql/*/bin/pg_dump; do
             if test -x "$binary"; then "$binary" --version; fi
           done
