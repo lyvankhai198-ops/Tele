@@ -300,6 +300,69 @@ try {
     !history.some(row => row.id === adminFeedback.id), "E2E_FEEDBACK_CUSTOMER_HISTORY");
   check(replies.some((r: any) => r.reply_markup?.inline_keyboard?.flat().some((b: any) =>
     b.callback_data === `feedback:reviewing:${feedback.id}`)), "E2E_FEEDBACK_BOT_NOTICE");
+  phase = "E2E_POPUP_ADMIN_SCHEDULE_AUDIENCE_FREQUENCY";
+  check((await request("/admin/popups")).status === 401, "E2E_POPUP_LOGIN_REQUIRED");
+  check((await request("/admin/popups", userCookie)).status === 403, "E2E_POPUP_ADMIN_ONLY");
+  const popupInput = { title: "Ưu đãi mẫu", body: "Nội dung kiểm thử popup.", titleEn: "Fixture offer", bodyEn: "Fixture announcement content.",
+    button: "Xem ưu đãi", buttonEn: "View offer", linkUrl: "/upgrade", status: "draft", enabled: true,
+    frequency: "daily", audience: "all", template: "offer", accent: "#4f46e5", priority: 70, startsAt: null, expiresAt: null };
+  check((await request("/admin/popups", userCookie, popupInput)).status === 403, "E2E_POPUP_CUSTOMER_CANNOT_PUBLISH");
+  for (const bad of [{ linkUrl: "javascript:alert(1)" }, { accent: ["#123456"] }, { priority: 999 },
+    { startsAt: "2030-01-02T00:00:00Z", expiresAt: "2030-01-01T00:00:00Z" },
+    { image: Buffer.from("<svg/>").toString("base64") }]) {
+    check((await request("/admin/popups", adminCookie, { ...popupInput, ...bad })).status === 400, "E2E_POPUP_VALIDATION");
+  }
+  const madePopup = await request("/admin/popups", adminCookie, { ...popupInput, image: png.toString("base64") });
+  check(madePopup.status === 201, "E2E_POPUP_DRAFT_CREATED");
+  let popup = await madePopup.json() as any;
+  check(popup.imageUrl && popup.frequency === "daily", "E2E_POPUP_IMAGE_AND_DEFAULT");
+  check((await request(`/popups/${popup.id}`, userCookie)).status === 404, "E2E_POPUP_DRAFT_PRIVATE");
+  check((await request(`/popups/${popup.id}/image`)).status === 401, "E2E_POPUP_IMAGE_AUTH");
+  check((await request(`/popups/${popup.id}/image`, adminCookie)).ok, "E2E_POPUP_ADMIN_IMAGE_PREVIEW");
+  const claim = async (visitId = randomUUID()) => {
+    const response = await request("/popups/claim", userCookie, { visitId });
+    check(response.ok, "E2E_POPUP_CLAIM_HTTP");
+    return await response.json() as any;
+  };
+  check((await claim()).popup === null, "E2E_POPUP_DRAFT_NOT_CLAIMED");
+  const staleVersion = popup.version;
+  const publish = await request(`/admin/popups/${popup.id}`, adminCookie, { ...popup, status: "published" }, "PUT");
+  check(publish.ok, "E2E_POPUP_PUBLISH");
+  popup = await publish.json() as any;
+  check((await request(`/admin/popups/${popup.id}`, adminCookie, { ...popup, version: staleVersion }, "PUT")).status === 409, "E2E_POPUP_CONCURRENT_EDIT_DENIED");
+  const concurrent = await Promise.all([claim(), claim()]);
+  check(concurrent.filter(result => result.popup?.id === popup.id).length === 1, "E2E_POPUP_DAILY_CONCURRENT_DEDUP");
+  check((await claim()).popup === null, "E2E_POPUP_DAILY_NOT_REPEATED");
+  check((await request(`/popups/${popup.id}/image`, userCookie)).ok, "E2E_POPUP_CUSTOMER_IMAGE");
+  const popupState = await pool.query("SELECT value FROM system_settings WHERE key=$1", [`popup:user:${userId}`]);
+  const seenState = JSON.parse(popupState.rows[0].value);
+  seenState.seen[popup.id].lastAt = new Date(Date.now() - 25 * 60 * 60_000).toISOString();
+  await pool.query("UPDATE system_settings SET value=$1 WHERE key=$2", [JSON.stringify(seenState), `popup:user:${userId}`]);
+  check((await claim()).popup?.id === popup.id, "E2E_POPUP_NEXT_DAY");
+  async function editPopup(patch: any) {
+    const response = await request(`/admin/popups/${popup.id}`, adminCookie, { ...popup, ...patch }, "PUT");
+    check(response.ok, "E2E_POPUP_UPDATE"); popup = await response.json();
+  }
+  await editPopup({ audience: "unpaid", frequency: "visit" });
+  check((await claim()).popup === null && (await request(`/popups/${popup.id}/image`, userCookie)).status === 404, "E2E_POPUP_AUDIENCE_IMAGE_PROTECTED");
+  await editPopup({ audience: "paid" });
+  const visitId = randomUUID();
+  check((await claim(visitId)).popup?.id === popup.id && (await claim(visitId)).popup === null, "E2E_POPUP_ONE_PER_VISIT");
+  check((await claim()).popup?.id === popup.id, "E2E_POPUP_NEW_VISIT");
+  await editPopup({ enabled: false });
+  check((await claim()).popup === null && (await request(`/popups/${popup.id}`, userCookie)).status === 404, "E2E_POPUP_DISABLED");
+  await editPopup({ enabled: true, startsAt: new Date(Date.now() + 3600_000).toISOString() });
+  check((await claim()).popup === null, "E2E_POPUP_FUTURE_SCHEDULE");
+  await editPopup({ startsAt: null, expiresAt: new Date(Date.now() - 1000).toISOString() });
+  check((await claim()).popup === null, "E2E_POPUP_EXPIRED");
+  const onceResponse = await request("/admin/popups", adminCookie, { ...popupInput, status: "published", frequency: "once", priority: 99 });
+  const oncePopup = await onceResponse.json() as any;
+  check(onceResponse.ok && (await claim()).popup?.id === oncePopup.id && (await claim()).popup === null, "E2E_POPUP_ONCE");
+  const crossOriginPopup = await fetch(base + "/api/admin/popups", { method: "POST",
+    headers: { Cookie: adminCookie, Origin: "https://untrusted.invalid", "Content-Type": "application/json" }, body: JSON.stringify(popupInput) });
+  check(crossOriginPopup.status === 403, "E2E_POPUP_CROSS_ORIGIN_DENIED");
+  check((await request(`/admin/popups/${popup.id}`, adminCookie, { version: popup.version }, "DELETE")).ok, "E2E_POPUP_DELETE");
+  check((await request(`/popups/${popup.id}/image`, adminCookie)).status === 404, "E2E_POPUP_DELETE_IMAGE");
   phase = "E2E_MFA_DISABLE";
   const disabled = await request("/auth/mfa/disable", adminCookie, { password, code: codes.recoveryCodes[1] });
   check(disabled.ok, "E2E_MFA_DISABLE");

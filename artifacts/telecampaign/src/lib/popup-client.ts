@@ -1,0 +1,66 @@
+export type Popup = {
+  id: string; version: string; title: string; body: string; titleEn: string; bodyEn: string;
+  linkUrl: string; button: string; buttonEn: string; imageUrl: string | null;
+  status: "draft" | "published"; enabled: boolean; frequency: "visit" | "daily" | "once";
+  audience: "all" | "unpaid" | "paid"; template: "offer" | "news" | "community";
+  accent: string; priority: number; startsAt: string | null; expiresAt: string | null;
+  createdAt: string; updatedAt: string;
+};
+export const popupCopy = {
+  vi: {
+    page: "Thông báo popup", intro: "Tạo ưu đãi, tin mới hoặc lời mời vào cộng đồng. Chỉ hiện một popup mỗi lượt khách đăng nhập/vào lại web.",
+    create: "Tạo popup", edit: "Chỉnh sửa popup", title: "Tiêu đề VI", body: "Nội dung VI",
+    titleEn: "Tiêu đề EN", bodyEn: "Nội dung EN", english: "Bản EN không bắt buộc; nếu để trống sẽ dùng nội dung VI.",
+    link: "Link nút hành động", linkHint: "Link HTTPS hoặc đường dẫn nội bộ /upgrade",
+    button: "Tên nút VI", buttonEn: "Tên nút EN", image: "Ảnh banner", choose: "Chọn ảnh",
+    imageHint: "PNG/JPG/WebP tối đa 4 MB; tự nén, không hiển thị công khai.",
+    removeImage: "Gỡ ảnh", status: "Trạng thái", draft: "Nháp", published: "Đã phát",
+    enabled: "Cho phép tự bật popup", frequency: "Tần suất",
+    visit: "Mỗi lần vào lại web", daily: "Một lần mỗi ngày", once: "Chỉ một lần cho mỗi khách",
+    frequencyHint: "Ngày tính theo múi giờ hệ thống. Chuyển trang trong web không làm bật lại; tần suất được lưu theo tài khoản.",
+    audience: "Đối tượng", all: "Tất cả khách", unpaid: "Khách chưa có gói còn hạn", paid: "Khách đang có gói còn hạn",
+    template: "Mẫu thiết kế", offer: "Ưu đãi", news: "Thông báo mới", community: "Cộng đồng",
+    accent: "Màu nhấn", priority: "Độ ưu tiên (0–100)", priorityHint: "Số lớn hơn hiển thị trước; không chồng nhiều popup.",
+    starts: "Bắt đầu (không bắt buộc)", expires: "Hết hạn (không bắt buộc)",
+    timeHint: "Thời gian nhập theo thiết bị của bạn; đến hạn popup tự ngừng hiển thị.",
+    save: "Lưu popup", saving: "Đang lưu…", cancel: "Hủy", preview: "Xem trước",
+    desktop: "Máy tính", mobile: "Điện thoại", close: "Đóng", ends: "Kết thúc",
+    empty: "Chưa có popup. Tạo bản nháp để thử thiết kế trước.",
+    loadError: "Chưa tải được popup.", error: "Chưa lưu được. Kiểm tra nội dung, link HTTPS và thời gian rồi thử lại.",
+    imageError: "Không xử lý được ảnh. Chọn PNG/JPG/WebP tối đa 4 MB.",
+    conflict: "Popup đã thay đổi ở nơi khác. Tải lại danh sách rồi mở lại để chỉnh sửa.",
+    limit: "Tối đa 100 popup. Xóa popup cũ không dùng trước khi tạo thêm.",
+    saved: "Đã lưu popup.", deleted: "Đã xóa popup.", delete: "Xóa",
+    confirm: "Xóa popup này và ảnh đính kèm? Khách sẽ không còn thấy nội dung này.",
+    inactive: "Đang tắt", scheduled: "Đã hẹn giờ", expired: "Đã hết hạn", active: "Đang hoạt động",
+    previewHint: "Bản xem trước không phát cho khách và không ghi nhận lượt xem.",
+  },
+  en: {
+    page: "Announcement popups", intro: "Create offers, news or community invitations. Only one popup appears per customer login/website visit.",
+    create: "Create popup", edit: "Edit popup", title: "Vietnamese title", body: "Vietnamese content",
+    titleEn: "English title", bodyEn: "English content", english: "English copy is optional; blank fields fall back to Vietnamese.",
+    link: "Action button link", linkHint: "An HTTPS link or internal path /upgrade",
+    button: "Vietnamese button label", buttonEn: "English button label", image: "Banner image", choose: "Choose image",
+    imageHint: "PNG/JPG/WebP up to 4 MB; compressed automatically, not publicly accessible.",
+    removeImage: "Remove image", status: "Status", draft: "Draft", published: "Published",
+    enabled: "Allow automatic popup display", frequency: "Frequency",
+    visit: "Every website visit", daily: "Once per day", once: "Once per customer",
+    frequencyHint: "Days use the system timezone. In-app navigation does not reopen it; frequency is saved per account.",
+    audience: "Audience", all: "All customers", unpaid: "No currently active plan", paid: "Currently active plan",
+    template: "Design template", offer: "Offer", news: "News", community: "Community",
+    accent: "Accent color", priority: "Priority (0–100)", priorityHint: "Higher numbers appear first; popups never stack.",
+    starts: "Start time (optional)", expires: "Expiry time (optional)",
+    timeHint: "Enter times in your device timezone. Popups stop appearing automatically at expiry.",
+    save: "Save popup", saving: "Saving…", cancel: "Cancel", preview: "Preview",
+    desktop: "Desktop", mobile: "Mobile", close: "Close", ends: "Ends",
+    empty: "No popups yet. Create a draft to preview a design first.",
+    loadError: "Could not load popups.", error: "Could not save. Check the content, HTTPS link and dates, then try again.",
+    imageError: "Could not process the image. Choose a PNG/JPG/WebP file up to 4 MB.",
+    conflict: "This popup changed elsewhere. Reload the list and reopen it before editing.",
+    limit: "Up to 100 popups. Delete unused old popups before creating another.",
+    saved: "Popup saved.", deleted: "Popup deleted.", delete: "Delete",
+    confirm: "Delete this popup and its image? Customers will no longer see it.",
+    inactive: "Disabled", scheduled: "Scheduled", expired: "Expired", active: "Active",
+    previewHint: "Preview does not publish the popup or count as a customer view.",
+  },
+} as const;

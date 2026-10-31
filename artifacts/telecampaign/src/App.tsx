@@ -43,6 +43,8 @@ import AdminSystemEventsPage from '@/pages/admin-system-events';
 import AdminSupportChatPage from '@/pages/admin-support-chat';
 import SupportPage from '@/pages/support';
 import FeedbackPage from '@/pages/feedback';
+import AdminPopupsPage from '@/pages/admin-popups';
+import { AnnouncementPopup } from '@/components/AnnouncementPopup';
 import { SupportChatWidget } from '@/components/support-chat-widget';
 
 const queryClient = new QueryClient();
@@ -948,6 +950,7 @@ function Router() {
         <Route path="/admin/system-settings" component={() => <AdminRoute><AdminSystemSettingsPage /></AdminRoute>} />
         <Route path="/admin/operations" component={() => <AdminRoute><AdminOperationsPage /></AdminRoute>} />
         <Route path="/admin/tools" component={() => <AdminRoute><AdminToolsPage /></AdminRoute>} />
+        <Route path="/admin/popups" component={() => <AdminRoute><AdminPopupsPage /></AdminRoute>} />
         <Route path="/admin/active-groups" component={() => <AdminRoute><AdminActiveGroupsPage mode="admin" /></AdminRoute>} />
         <Route path="/admin/system-events" component={() => <AdminRoute><AdminSystemEventsPage /></AdminRoute>} />
         <Route path="/admin/support-chat" component={() => <AdminRoute><AdminSupportChatPage /></AdminRoute>} />
@@ -996,6 +999,7 @@ function App() {
             <TooltipProvider>
               <Router />
               <SupportChatWidget />
+              <AnnouncementPopup />
               <Toaster />
             </TooltipProvider>
           </UserLanguageProvider>
