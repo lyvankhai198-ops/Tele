@@ -1,0 +1,203 @@
+name: TeleCampaign protected deployment
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telecampaign-vps-operations
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Fetch exact reviewed source
+        env:
+          TARGET: ${{ github.sha }}
+        run: |
+          git init candidate
+          cd candidate
+          git remote add origin https://github.com/lyvankhai198-ops/Tele.git
+          git fetch --depth=1 origin "$TARGET"
+          git checkout --detach FETCH_HEAD
+      - name: Test both safety changes
+        working-directory: candidate
+        run: |
+          bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
+          python3 scripts/tests/test_release_safety.py
+          node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
+      - name: Install, typecheck and build exact target
+        working-directory: candidate
+        env:
+          PORT: "3004"
+          BASE_PATH: /
+        run: |
+          npx --yes pnpm@10.26.1 install --frozen-lockfile
+          npx --yes pnpm@10.26.1 run typecheck:libs
+          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
+          npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck
+          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run build
+          npx --yes pnpm@10.26.1 --filter @workspace/api-server run build
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Package pinned recovery controls
+        env:
+          CONTROL_SHA: f6e3bda41aa0f204748a83706354e349431df1d2
+        run: |
+          git init controls
+          cd controls
+          git remote add origin https://github.com/lyvankhai198-ops/Tele.git
+          git fetch --depth=1 origin "$CONTROL_SHA"
+          git archive --format=tar.gz --output=../telecampaign-controls.tar.gz FETCH_HEAD \
+            scripts/lib/telecampaign-release.sh scripts/deploy-telecampaign.sh \
+            scripts/checkpoint-telecampaign.sh scripts/rollback-telecampaign.sh \
+            scripts/backup-telecampaign.sh scripts/restore-telecampaign.sh
+      - name: Install SSH password helper
+        run: |
+          if ! command -v sshpass >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+          fi
+      - name: Back up and deploy TeleCampaign only
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          TARGET: ${{ github.sha }}
+          CONTROL_SHA: f6e3bda41aa0f204748a83706354e349431df1d2
+          HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET" =~ ^[0-9a-f]{40}$ && "$CONTROL_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$SSHPASS"
+          umask 077
+          known_hosts="$(mktemp)"
+          trap 'rm -f "$known_hosts"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known_hosts" 2>/dev/null
+          actual="$(ssh-keygen -lf "$known_hosts" -E sha256 | awk '{print $2}')"
+          test "$actual" = "$HOST_FINGERPRINT" || { echo "SSH server identity changed"; exit 1; }
+          archive_sha="$(sha256sum telecampaign-controls.tar.gz | awk '{print $1}')"
+          remote_archive="/tmp/telecampaign-controls-${CONTROL_SHA}-${GITHUB_RUN_ID}.tar.gz"
+          sshpass -e scp -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 telecampaign-controls.tar.gz "ubuntu@15.235.142.30:$remote_archive"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
+            -o ConnectTimeout=15 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 \
+            ubuntu@15.235.142.30 "bash -s -- '$TARGET' '$CONTROL_SHA' '$archive_sha' '$remote_archive'" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          TARGET="$1"; CONTROL_SHA="$2"; ARCHIVE_SHA="$3"; ARCHIVE="$4"
+          ROOT=/opt/telecampaign
+          BACKUPS=/var/backups/telecampaign
+          CONTROL="/var/lib/telecampaign/control/$CONTROL_SHA"
+          test "$(hostname)" = "vps-cd243267"
+          test "$(id -un)" = ubuntu
+          [[ "$TARGET" =~ ^[0-9a-f]{40}$ && "$CONTROL_SHA" =~ ^[0-9a-f]{40}$ && "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$ARCHIVE" == /tmp/telecampaign-controls-"$CONTROL_SHA"-*.tar.gz ]]
+          test "$(realpath "$ROOT")" = "$ROOT"
+          test -d "$ROOT/.git"
+          test -w "$BACKUPS"
+          test -r /etc/telecampaign/api.env
+          test "$(sha256sum "$ARCHIVE" | awk '{print $1}')" = "$ARCHIVE_SHA"
+          available_mb="$(awk '/MemAvailable:/{print int($2/1024)}' /proc/meminfo)"
+          echo "available_memory_mb=$available_mb"
+          if (( available_mb < 2048 )); then
+            echo "insufficient_build_headroom_no_application_changes"
+            exit 1
+          fi
+          # Never replace a lock inode: existing holders must remain effective.
+          if test -L /var/lib/telecampaign/operation.lock; then echo "unsafe_lock_path"; exit 1; fi
+          if ! test -e /var/lib/telecampaign/operation.lock; then
+            sudo -n install -o ubuntu -g ubuntu -m 0600 /dev/null /var/lib/telecampaign/operation.lock
+          fi
+          test -w /var/lib/telecampaign/operation.lock
+          test ! -L /var/lib/telecampaign/control
+          test ! -L "$CONTROL"
+          sudo -n install -d -o ubuntu -g ubuntu -m 0700 /var/lib/telecampaign/control "$CONTROL"
+          test ! -L "$CONTROL"
+          tar --extract --gzip --no-same-owner --file="$ARCHIVE" --directory="$CONTROL"
+          rm -f "$ARCHIVE"
+          # Preserve the one known generated mockup change. Abort for any other
+          # local work rather than discarding it or stashing production config.
+          changes="$(git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal)"
+          generated=artifacts/mockup-sandbox/src/.generated/mockup-components.ts
+          if [[ -n "$changes" ]]; then
+            if [[ "$changes" != " M $generated" ]]; then
+              echo "unexpected_local_source_changes_no_deployment"
+              exit 1
+            fi
+            preservation="$BACKUPS/bootstrap-$(date -u +%Y%m%dT%H%M%SZ)"
+            mkdir -m 0700 "$preservation"
+            git -c safe.directory="$ROOT" -C "$ROOT" diff --binary -- "$generated" > "$preservation/generated-mockup.patch"
+            git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD > "$preservation/SOURCE_COMMIT"
+            test -s "$preservation/generated-mockup.patch"
+            git -c safe.directory="$ROOT" -C "$ROOT" checkout -- "$generated"
+            echo "generated_mockup_change_preserved=$preservation"
+          fi
+          baseline="$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)"
+          log="$BACKUPS/deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          # Build output and production environment stay on VPS, never in public
+          # Actions logs. Apply memory limits to Node's heap and lower priority.
+          if nice -n 10 env TELECAMPAIGN_BUILD_NODE_OPTIONS=--max-old-space-size=1024 \
+            bash "$CONTROL/scripts/deploy-telecampaign.sh" "$TARGET" >"$log" 2>&1; then
+            echo "deployment_command=passed"
+          else
+            code=$?
+            echo "deployment_command=failed"
+            echo "private_diagnostic_log=$log"
+            # Ordinary failures already trigger the wrapper's recovery. If a
+            # hard failure bypassed it, retry only this run's baseline snapshot.
+            pointer="$BACKUPS/releases/PREVIOUS"
+            if test -f "$pointer"; then
+              snapshot="$(cat "$pointer")"
+              if [[ "$snapshot" == "$BACKUPS/releases/"* ]] && test -f "$snapshot/COMMIT" \
+                && [[ "$(cat "$snapshot/COMMIT")" == "$baseline" ]]; then
+                if ! bash "$ROOT/scripts/telecampaign-healthcheck.sh" >/dev/null 2>&1 \
+                  || [[ "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)" != "$baseline" ]]; then
+                  if bash "$CONTROL/scripts/rollback-telecampaign.sh" "$snapshot" >>"$log" 2>&1; then
+                    echo "outer_recovery=passed"
+                  else
+                    echo "outer_recovery=failed"
+                  fi
+                fi
+              fi
+            fi
+            exit "$code"
+          fi
+          verify_public_release() {
+            test "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD)" = "$TARGET" || return 1
+            bash "$ROOT/scripts/telecampaign-healthcheck.sh" >/dev/null 2>&1 || return 1
+            local index="$ROOT/artifacts/telecampaign/dist/public/index.html" expected actual asset
+            expected="$(sha256sum "$index" | awk '{print $1}')"
+            actual="$(curl --fail --silent --show-error --max-time 20 \
+              "https://tele.khaimmo.shop/?deploy=$TARGET" | sha256sum | awk '{print $1}')" || return 1
+            test "$actual" = "$expected" || return 1
+            asset="$(python3 -c 'import re,sys;s=open(sys.argv[1]).read();m=re.search(r"<script[^>]+src=\"(/assets/[A-Za-z0-9_.-]+\.js)\"",s);print(m.group(1) if m else "")' "$index")"
+            [[ "$asset" =~ ^/assets/[A-Za-z0-9_.-]+\.js$ ]] || return 1
+            expected="$(sha256sum "$ROOT/artifacts/telecampaign/dist/public$asset" | awk '{print $1}')"
+            actual="$(curl --fail --silent --show-error --max-time 20 "https://tele.khaimmo.shop$asset" | sha256sum | awk '{print $1}')" || return 1
+            test "$actual" = "$expected" || return 1
+            grep -q 'Verify manually' "$ROOT/artifacts/telecampaign/dist/public$asset" || return 1
+          }
+          if ! verify_public_release >>"$log" 2>&1; then
+            echo "public_release_check=failed"
+            if bash "$CONTROL/scripts/rollback-telecampaign.sh" --previous >>"$log" 2>&1; then
+              echo "public_check_rollback=passed"
+            else
+              echo "public_check_rollback=failed"
+            fi
+            exit 1
+          fi
+          echo "deployed_commit=$TARGET"
+          echo "public_release_check=passed"
+          echo "private_diagnostic_log=$log"
+          if test -f "$BACKUPS/releases/PREVIOUS"; then
+            echo "rollback_checkpoint=$(cat "$BACKUPS/releases/PREVIOUS")"
+          fi
+          REMOTE
