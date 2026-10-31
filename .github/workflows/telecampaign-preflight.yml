@@ -14,7 +14,7 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Install SSH password helper
         run: |
@@ -152,7 +152,10 @@ jobs:
             for(const row of indexes.rows) console.log("delete_fk_index_"+row.table_name+"_"+row.column_name+"="+Boolean(row.indexed));
             const stats=await client.query(`SELECT count(*) FILTER (WHERE state='active')::int active,
               count(*) FILTER (WHERE wait_event_type='Lock')::int lock_waiters,
-              count(*) FILTER (WHERE state='active' AND query ~* '^delete from "campaigns"')::int active_campaign_deletes
+              count(*) FILTER (WHERE state='active' AND query ~* '^delete from "campaigns"')::int active_campaign_deletes,
+              count(*) FILTER (WHERE state='active' AND query ~* '^delete from "campaigns"'
+                AND query LIKE '%"id" in (%'
+                AND octet_length(query)>=pg_size_bytes(current_setting('track_activity_query_size'))-4)::int truncated_bulk_deletes
               FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()`);
             for(const [key,value] of Object.entries(stats.rows[0])) console.log("delete_diagnostic_"+key+"="+value);
             const owners=await client.query(`SELECT c.relname, pg_get_userbyid(c.relowner)=current_user AS is_owner
@@ -173,6 +176,33 @@ jobs:
           } catch {console.log("delete_database_diagnostic=failed");process.exitCode=1;}
           finally {await client.end();}
           DATABASE_DIAGNOSTIC
+          )
+          (
+            set -a
+            source /etc/telecampaign/api.env
+            set +a
+            cd /opt/telecampaign
+            node --input-type=module <<'DELETE_MAINTENANCE'
+          import fs from "node:fs";
+          import {createHash,randomUUID} from "node:crypto";
+          import {spawnSync} from "node:child_process";
+          const source="/var/lib/telecampaign/staging/9b676c763a48ed2ea5dfd8b140be25ca008c0740/prepare-campaign-delete-indexes.mjs";
+          const text=fs.readFileSync(source,"utf8");
+          if(createHash("sha256").update(text).digest("hex")!=="d6ce484248baa92fdc399665308b013ca74444107996e3a5a6d6d8652e82266c") throw Error("Maintenance source mismatch");
+          const old=`AND query LIKE '%"owner_user_id"%' AND query LIKE '%"status" not in%'`;
+          const replacement=`AND query LIKE '%"owner_user_id"%' AND query LIKE '%"id" in (%'
+            AND (query LIKE '%"status" not in%' OR
+              octet_length(query)>=pg_size_bytes(current_setting('track_activity_query_size'))-4)`;
+          if(text.split(old).length!==3) throw Error("Maintenance patch mismatch");
+          const file="/tmp/telecampaign-delete-maintenance-"+randomUUID()+".mjs";
+          try {
+            fs.writeFileSync(file,text.split(old).join(replacement),{mode:0o600,flag:"wx"});
+            const run=spawnSync(process.execPath,[file],{encoding:"utf8",timeout:800000,maxBuffer:1024*1024});
+            const safe=(run.stdout+run.stderr).split("\n").filter(line=>/^(stalled_campaign_deletes_cancelled=[0-9]+|campaign_delete_owner_maintenance=passed|campaign_delete_indexes=(passed|failed)|campaign_delete_sqlstate=[0-9A-Z]{5})$/.test(line));
+            for(const line of safe) console.log(line);
+            if(run.status!==0 || !safe.includes("campaign_delete_indexes=passed")) process.exitCode=1;
+          } finally {fs.unlinkSync(file);}
+          DELETE_MAINTENANCE
           )
           for binary in /usr/lib/postgresql/*/bin/pg_dump; do
             if test -x "$binary"; then "$binary" --version; fi
