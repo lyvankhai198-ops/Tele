@@ -1,4 +1,4 @@
-name: Gift bot read-only source preflight
+name: Gift menu deployment read-only preflight
 on:
   workflow_dispatch:
 permissions:
@@ -8,10 +8,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Inspect only gift bot source and runtime
+      - name: Inspect gift deployment paths only
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
-        shell: bash
         run: |
           set -euo pipefail
           command -v sshpass >/dev/null || { sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq sshpass >/dev/null; }
@@ -20,23 +19,22 @@ jobs:
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 >"$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = 'SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM'
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
-          import pathlib,hashlib,subprocess,json
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
+          import pathlib,subprocess,json,re,hashlib
           root=pathlib.Path("/root/Bot-Qu-Tng")
-          for name in ["bot.py","data_manager.py"]:
-              print("GIFT_SOURCE_"+name.replace(".","_")+"="+hashlib.sha256((root/name).read_bytes()).hexdigest())
+          for p in ["bot.py","artifacts/admin-panel/dist/public/index.html","artifacts/api-server/dist/index.mjs"]:
+              path=root/p
+              print("GIFT_PATH="+json.dumps({"path":p,"exists":path.exists(),"sha256":hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None}))
+          text=pathlib.Path("/etc/nginx/sites-enabled/botadmin").read_text()
+          for line in text.splitlines():
+              if re.match(r"\s*(?:location|root|alias|server_name|listen)\s+",line):
+                  print("GIFT_NGINX="+line.strip())
+              elif re.match(r"\s*proxy_pass\s+http://(?:localhost|127\.0\.0\.1):\d+",line):
+                  print("GIFT_NGINX="+line.strip())
           for name in ["gift-bot.service","bot-api.service"]:
-              p=subprocess.run(["systemctl","show",name,"--property=ActiveState,MainPID,WorkingDirectory","--no-pager"],capture_output=True,text=True,check=True)
-              print("GIFT_SERVICE="+json.dumps({"name":name,"properties":p.stdout.splitlines()}))
-          p=subprocess.run(["git","-C",str(root),"rev-parse","HEAD"],capture_output=True,text=True)
-          print("GIFT_HEAD="+p.stdout.strip())
-          pid=subprocess.check_output(["systemctl","show","bot-api.service","--property=MainPID","--value"],text=True).strip()
-          print("GIFT_API_EXE="+str(pathlib.Path("/proc/"+pid+"/exe").resolve()))
-          arguments=pathlib.Path("/proc/"+pid+"/cmdline").read_bytes().split(bytes([0]))
-          print("GIFT_API_SCRIPTS="+json.dumps([x.decode() for x in arguments if x.endswith(b".py") or x.endswith(b".mjs")]))
-          print("GIFT_ROOT_PYTHON_FILES="+json.dumps([p.name for p in root.glob("*.py")]))
-          print("GIFT_PYTHON="+str((root/"venv/bin/python").exists()).lower())
-          settings=json.loads((root/"data/settings.json").read_text())
-          for name in ["gift_enabled","support_enabled","intro_enabled"]:
-              print("GIFT_FLAG_"+name+"="+str(settings.get(name,True)).lower())
+              raw=subprocess.check_output(["systemctl","show",name,"--property=WorkingDirectory,MainPID,ActiveState,ExecStart","--no-pager"],text=True)
+              for line in raw.splitlines():
+                  if not line.startswith("ExecStart="): print("GIFT_SERVICE="+name+" "+line)
+                  else:
+                      print("GIFT_SERVICE_EXEC="+name+" "+str(re.findall(r"(?:path=)([^ ;]+)|(/[^ ;{}]+index\.mjs)",line)))
           PY
