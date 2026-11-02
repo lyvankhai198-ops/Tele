@@ -26,6 +26,10 @@ jobs:
               p=subprocess.run(args,capture_output=True,text=True,timeout=20,env=env)
               return p.stdout if p.returncode==0 else ""
           print("INVENTORY_HOST="+os.uname().nodename)
+          for name in ["aicenter.service","autoorder-api.service","bot-api.service","gift-bot.service"]:
+              raw=run(["systemctl","show",name,"--property=WorkingDirectory,MainPID,ActiveState","--no-pager"])
+              data=dict(line.split("=",1) for line in raw.splitlines() if "=" in line)
+              print("INVENTORY_DETAIL="+json.dumps({"service":name,**data}))
           for u in pwd.getpwall():
               if not os.path.isfile(u.pw_dir+"/.pm2/pm2.pid"): continue
               command="command -v pm2 >/dev/null && pm2 jlist"
