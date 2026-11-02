@@ -1,170 +1,60 @@
-name: TeleCampaign preflight (no deployment)
+name: VPS read-only application inventory
 on:
   workflow_dispatch:
-    inputs:
-      validate_candidate:
-        description: Run full candidate build validation
-        type: boolean
-        default: true
 permissions:
   contents: read
-concurrency:
-  group: telecampaign-vps-operations
-  cancel-in-progress: false
 jobs:
   inspect:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Install SSH password helper
-        run: |
-          if ! command -v sshpass >/dev/null; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq sshpass
-          fi
-      - name: Verify pinned server and inspect TeleCampaign only
+      - name: Read running applications without environment or secrets
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
-          HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$SSHPASS" || { echo "SSH secret is missing"; exit 1; }
+          command -v sshpass >/dev/null || { sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq sshpass >/dev/null; }
           umask 077
-          known_hosts="$(mktemp)"
-          trap 'rm -f "$known_hosts"' EXIT
-          ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known_hosts" 2>/dev/null
-          actual="$(ssh-keygen -lf "$known_hosts" -E sha256 | awk '{print $2}')"
-          test "$actual" = "$HOST_FINGERPRINT" || { echo "SSH server identity changed; refusing connection"; exit 1; }
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known_hosts" \
-            -o ConnectTimeout=15 -o NumberOfPasswordPrompts=1 \
-            -p 22 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = "vps-cd243267" || { echo "Unexpected hostname"; exit 1; }
-          printf 'host=%s\nssh_user=%s\n' "$(hostname)" "$(id -un)"
-          if sudo -n true 2>/dev/null; then echo "sudo_without_prompt=yes"; else echo "sudo_without_prompt=no"; fi
-          ROOT=/opt/telecampaign
-          test -d "$ROOT/.git"
-          test "$(realpath "$ROOT")" = "$ROOT"
-          printf 'repository_owner='; stat -c '%U:%G' "$ROOT"
-          printf 'source_commit='; git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD
-          printf 'tracked_changes='; git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal | wc -l
-          echo 'source_change_paths_begin'
-          git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal
-          git -c safe.directory="$ROOT" -C "$ROOT" diff --stat
-          echo 'source_change_paths_end'
-          for path in /etc/telecampaign/api.env /var/backups/telecampaign /var/lib/telecampaign /var/lib/telecampaign/media; do
-            if test -e "$path"; then
-              printf 'dedicated_path=%s ' "$path"; stat -c '%U:%G %a' "$path"
-              if test -r "$path"; then echo 'readable_by_ubuntu=yes'; fi
-              if test -w "$path"; then echo 'writable_by_ubuntu=yes'; fi
-            fi
-          done
-          for file in /etc/nginx/sites-enabled/telecampaign /etc/nginx/sites-available/telecampaign; do
-            if sudo -n test -f "$file"; then
-              echo 'telecampaign_nginx_routing_begin'
-              sudo -n awk '/^[[:space:]]*(server_name|root|proxy_pass|listen)[[:space:]]/{print}' "$file"
-              echo 'telecampaign_nginx_routing_end'
-              break
-            fi
-          done
-          for tool in node pnpm pm2 pg_dump pg_restore flock tar; do
-            if command -v "$tool" >/dev/null; then printf '%s=available\n' "$tool"; else printf '%s=missing_in_ssh_path\n' "$tool"; fi
-          done
-          if command -v node >/dev/null; then node --version; fi
-          for file in artifacts/api-server/dist/index.mjs artifacts/telecampaign/dist/public/index.html; do
-            if test -s "$ROOT/$file"; then printf 'built_asset=%s\n' "$file"; else printf 'missing_asset=%s\n' "$file"; fi
-          done
-          df -h "$ROOT" /var/backups /var/lib
-          if test -f "$HOME/.pm2/pm2.pid" && command -v pm2 >/dev/null; then
-            pm2 jlist | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s).find(p=>p.name==="telecampaign-api"); console.log(JSON.stringify({pm2Owner:"ubuntu",found:!!p,status:p?.pm2_env?.status,cwd:p?.pm2_env?.pm_cwd,script:p?.pm2_env?.pm_exec_path}));});'
-          fi
-          if sudo -n true 2>/dev/null; then
-            sudo -n bash -lc 'if test -f /root/.pm2/pm2.pid && command -v pm2 >/dev/null; then pm2 jlist | node -e '"'"'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s).find(p=>p.name==="telecampaign-api");console.log(JSON.stringify({pm2Owner:"root",found:!!p,status:p?.pm2_env?.status,cwd:p?.pm2_env?.pm_cwd,script:p?.pm2_env?.pm_exec_path}));});'"'"'; fi'
-            if sudo -n test -r /etc/telecampaign/api.env; then echo 'dedicated_environment=readable_by_sudo'; fi
-          fi
-          if curl --fail --silent --max-time 10 http://127.0.0.1:3004/api/healthz | python3 -c 'import json,sys;x=json.load(sys.stdin);print("local_health="+str(x.get("status")));sys.exit(0 if x.get("status")=="ok" else 1)'; then
-            echo 'local_health_check=passed'
-          else
-            echo 'local_health_check=failed'
-          fi
-          node <<'DIAGNOSTIC'
-          const fs=require("node:fs");
-          const log="/var/backups/telecampaign/deploy-20261031T052306Z.log";
-          const text=fs.existsSync(log)?fs.readFileSync(log,"utf8"):"";
-          const patterns={
-            postgres_version_mismatch:/server version mismatch/i,
-            postgres_authentication_failure:/password authentication failed|no password supplied/i,
-            postgres_connection_failure:/could not connect|connection.*(failed|refused)|could not translate host|connection timed out/i,
-            postgres_invalid_parameter:/invalid URI query parameter|unrecognized configuration parameter/i,
-            permission_denied:/permission denied/i,
-            no_space:/no space left on device/i,
-            file_changed_during_archive:/file changed as we read it/i,
-            backup_success:/TeleCampaign backup completed:/,
-            checkpoint_success:/Ready-to-run TeleCampaign checkpoint:/,
-            prebuilt_invalid:/Prebuilt runtime is incomplete/,
-            restart_failed:/restart.*failed|could not safely restart/i,
-            lock_busy:/Another TeleCampaign operation/,
-            health_failed:/health.*failed|health.*timed out/i,
-            archive_error:/tar:.*(Error|failed|Cannot)/,
-            media_limit:/media exceeds/,
-            database_url_missing:/DATABASE_URL must be configured/,
-            media_directory_mismatch:/TELECAMPAIGN_MEDIA_DIR must be/,
-            postgres_error:/pg_dump: error:/,
-            dump_was_executed:/pg_dump:/,
-            signal_abort:/killed|terminated|signal/i
-          };
-          for(const [key,re] of Object.entries(patterns)) console.log("diagnostic_"+key+"="+re.test(text));
-          for(const [key,re] of Object.entries({
-            server_version:/server version: ([0-9.]+)/i,
-            dump_version:/pg_dump version: ([0-9.]+)/i,
-            shell_line:/\.sh: line ([0-9]+):/
-          })){const m=text.match(re);if(m)console.log("diagnostic_"+key+"="+m[1]);}
-          for(const dir of ["/var/backups/telecampaign","/var/backups/telecampaign/releases"]){
-            if(fs.existsSync(dir))for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
-              if(entry.isDirectory() && /^(telecampaign-|\.incomplete\.|[0-9]{8}T)/.test(entry.name)){
-                const p=dir+"/"+entry.name;
-                console.log(JSON.stringify({backupMetadata:p,complete:fs.existsSync(p+"/COMPLETE"),database:fs.existsSync(p+"/database.dump"),runtime:fs.existsSync(p+"/runtime.tar.gz")}));
-              }
-            }
-          }
-          DIAGNOSTIC
-          for binary in /usr/lib/postgresql/*/bin/pg_dump; do
-            if test -x "$binary"; then "$binary" --version; fi
-          done
-          REMOTE
-  validate:
-    if: ${{ inputs.validate_candidate }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Use Node.js 24
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: "24"
-      - name: Fetch exact candidate without production credentials
-        env:
-          CANDIDATE_SHA: 95ece98c51dc4345ad974f78e0ba250faaf27ad4
-        run: |
-          git init candidate
-          cd candidate
-          git remote add origin https://github.com/lyvankhai198-ops/Tele.git
-          git fetch --depth=1 origin "$CANDIDATE_SHA"
-          git checkout --detach FETCH_HEAD
-      - name: Install locked dependencies
-        working-directory: candidate
-        run: npx --yes pnpm@10.26.1 install --frozen-lockfile
-      - name: Test manual order review
-        working-directory: candidate
-        run: node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
-      - name: Typecheck and build TeleCampaign
-        working-directory: candidate
-        env:
-          PORT: "3004"
-          BASE_PATH: /
-        run: |
-          npx --yes pnpm@10.26.1 run typecheck:libs
-          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
-          npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck
-          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run build
-          npx --yes pnpm@10.26.1 --filter @workspace/api-server run build
+          known="$(mktemp)"
+          trap 'rm -f "$known"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 >"$known" 2>/dev/null
+          test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = 'SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM'
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
+          import os,json,subprocess,pwd,re
+          def run(args,env=None):
+              p=subprocess.run(args,capture_output=True,text=True,timeout=20,env=env)
+              return p.stdout if p.returncode==0 else ""
+          print("INVENTORY_HOST="+os.uname().nodename)
+          for u in pwd.getpwall():
+              if not os.path.isfile(u.pw_dir+"/.pm2/pm2.pid"): continue
+              command="command -v pm2 >/dev/null && pm2 jlist"
+              raw=run(["sudo","-n","-H","-u",u.pw_name,"bash","-lc",command])
+              try: entries=json.loads(raw)
+              except: 
+                  print("INVENTORY_PM2_UNREADABLE="+u.pw_name); continue
+              for p in entries:
+                  e=p.get("pm2_env",{})
+                  print("INVENTORY_APP="+json.dumps({"owner":u.pw_name,"name":p.get("name"),"status":e.get("status"),"cwd":e.get("pm_cwd"),"pid":p.get("pid")},ensure_ascii=False))
+          services=run(["systemctl","list-units","--type=service","--state=running","--no-pager","--no-legend"])
+          for line in services.splitlines():
+              parts=line.split()
+              if parts: print("INVENTORY_SERVICE="+parts[0])
+          ports=run(["ss","-H","-lntp"])
+          for line in ports.splitlines():
+              parts=line.split()
+              if len(parts)>=4:
+                  names=sorted(set(re.findall(r'"([^"]+)"',line)))
+                  print("INVENTORY_PORT="+json.dumps({"listen":parts[3],"process":names}))
+          for base in ["/etc/nginx/sites-enabled","/etc/nginx/conf.d"]:
+              if not os.path.isdir(base): continue
+              for name in sorted(os.listdir(base)):
+                  path=os.path.join(base,name)
+                  if not os.path.isfile(path): continue
+                  try: text=open(path).read()
+                  except: continue
+                  domains=re.findall(r"^\s*server_name\s+([^;]+);",text,re.M)
+                  upstreams=re.findall(r"^\s*proxy_pass\s+https?://(?:127\.0\.0\.1|localhost|\[::1\]):([0-9]+)",text,re.M)
+                  roots=re.findall(r"^\s*root\s+(/[a-zA-Z0-9_/.\-]+)\s*;",text,re.M)
+                  print("INVENTORY_SITE="+json.dumps({"file":name,"domains":domains,"local_ports":sorted(set(upstreams)),"roots":sorted(set(roots))},ensure_ascii=False))
+          PY
