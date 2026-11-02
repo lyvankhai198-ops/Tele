@@ -1,17 +1,14 @@
-name: Gift bot scoped menu visibility update
+name: Gift bot read-only source preflight
 on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: gift-bot-vps-operations
-  cancel-in-progress: false
 jobs:
-  deploy:
+  inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 5
     steps:
-      - name: Validate and apply only three menu changes
+      - name: Inspect only gift bot source and runtime
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
         shell: bash
@@ -24,77 +21,22 @@ jobs:
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 >"$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = 'SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM'
           sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
-          import ast,base64,hashlib,json,os,pathlib,subprocess,tempfile,time,stat
+          import pathlib,hashlib,subprocess,json
           root=pathlib.Path("/root/Bot-Qu-Tng")
-          target=root/"bot.py"
-          expected="2f771db02bbc6814f3f96f71c3c1e8c6b3baad246c784949f522b185a5353174"
-          def property(service,key):
-              return subprocess.check_output(["systemctl","show",service,"--property="+key,"--value"],text=True).strip()
-          before_api=property("bot-api.service","MainPID")
-          before_gift=property("gift-bot.service","MainPID")
-          assert property("gift-bot.service","WorkingDirectory")==str(root), "Unexpected service root"
-          assert property("gift-bot.service","ActiveState")=="active", "Gift service not active before change"
-          source=target.read_bytes()
-          assert hashlib.sha256(source).hexdigest()==expected, "Gift source changed; refusing overwrite"
-          text=source.decode()
-          patch=json.loads(base64.b64decode("W3sib2xkIjogIlxuZGVmIG1haW5fa2V5Ym9hcmQodXNlcl9pZDogaW50KSAtPiBSZXBseUtleWJvYXJkTWFya3VwOlxuICAgIEwgPSBsYW5nKHVzZXJfaWQpXG4gICAgcmV0dXJuIFJlcGx5S2V5Ym9hcmRNYXJrdXAoW1xuICAgICAgICBbdChMLCBcImJ0bl9zdXBwb3J0XCIpLCB0KEwsIFwiYnRuX2dpZnRcIildLFxuICAgICAgICBbdChMLCBcImJ0bl9jaGVja19vcmRlclwiKSwgdChMLCBcImJ0bl9zaG9wXCIpXSxcbiAgICAgICAgW3QoTCwgXCJidG5fY2hhdF9zdXBwb3J0XCIpLCB0KEwsIFwiYnRuX2ludHJvXCIpXSxcbiAgICBdLCByZXNpemVfa2V5Ym9hcmQ9VHJ1ZSlcblxuZGVmIGJhY2tfa2V5Ym9hcmQodXNlcl9pZDogaW50KSAtPiBSZXBseUtleWJvYXJkTWFya3VwOlxuICAgIEwgPSBsYW5nKHVzZXJfaWQpXG4iLCAibmV3IjogIlxuZGVmIG1haW5fa2V5Ym9hcmQodXNlcl9pZDogaW50KSAtPiBSZXBseUtleWJvYXJkTWFya3VwOlxuICAgIEwgPSBsYW5nKHVzZXJfaWQpXG4gICAgc2V0dGluZ3MgPSBkYi5nZXRfc2V0dGluZ3MoKVxuICAgIHJvd3MgPSBbXG4gICAgICAgIFsoXCJidG5fc3VwcG9ydFwiLCBcInN1cHBvcnRfZW5hYmxlZFwiKSwgKFwiYnRuX2dpZnRcIiwgXCJnaWZ0X2VuYWJsZWRcIildLFxuICAgICAgICBbKFwiYnRuX2NoZWNrX29yZGVyXCIsIE5vbmUpLCAoXCJidG5fc2hvcFwiLCBOb25lKV0sXG4gICAgICAgIFsoXCJidG5fY2hhdF9zdXBwb3J0XCIsIE5vbmUpLCAoXCJidG5faW50cm9cIiwgXCJpbnRyb19lbmFibGVkXCIpXSxcbiAgICBdXG4gICAga2V5Ym9hcmQgPSBbXG4gICAgICAgIFt0KEwsIGtleSkgZm9yIGtleSwgZmxhZyBpbiByb3cgaWYgZmxhZyBpcyBOb25lIG9yIHNldHRpbmdzLmdldChmbGFnLCBUcnVlKV1cbiAgICAgICAgZm9yIHJvdyBpbiByb3dzXG4gICAgXVxuICAgIHJldHVybiBSZXBseUtleWJvYXJkTWFya3VwKFtyb3cgZm9yIHJvdyBpbiBrZXlib2FyZCBpZiByb3ddLCByZXNpemVfa2V5Ym9hcmQ9VHJ1ZSlcblxuZGVmIGJhY2tfa2V5Ym9hcmQodXNlcl9pZDogaW50KSAtPiBSZXBseUtleWJvYXJkTWFya3VwOlxuICAgIEwgPSBsYW5nKHVzZXJfaWQpXG4ifSwgeyJvbGQiOiAiICAgIFwiXCJcIkhp4buDbiB0aOG7iyBzdWItbWVudSBo4buXIHRy4bujOiBZw6p1IGPhuqd1IGdpYW8gaMOgbmcgfCBCw6FvIGzhu5dpIHwgUXVheSBs4bqhaS5cIlwiXCJcbiAgICB1c2VyID0gdXBkYXRlLmVmZmVjdGl2ZV91c2VyXG4gICAgTCA9IGxhbmcodXNlci5pZClcbiAgICBkYi5zZXRfdXNlcl9zdGF0ZSh1c2VyLmlkLCBcImNvbnZfc3RhdGVcIiwgTm9uZSlcbiAgICBhd2FpdCB1cGRhdGUubWVzc2FnZS5yZXBseV90ZXh0KFxuICAgICAgICB0KEwsIFwic3VwcG9ydF9zdWJtZW51X3RpdGxlXCIpLFxuIiwgIm5ldyI6ICIgICAgXCJcIlwiSGnhu4NuIHRo4buLIHN1Yi1tZW51IGjhu5cgdHLhu6M6IFnDqnUgY+G6p3UgZ2lhbyBow6BuZyB8IELDoW8gbOG7l2kgfCBRdWF5IGzhuqFpLlwiXCJcIlxuICAgIHVzZXIgPSB1cGRhdGUuZWZmZWN0aXZlX3VzZXJcbiAgICBMID0gbGFuZyh1c2VyLmlkKVxuICAgIGlmIG5vdCBkYi5nZXRfc2V0dGluZ3MoKS5nZXQoXCJzdXBwb3J0X2VuYWJsZWRcIiwgVHJ1ZSk6XG4gICAgICAgIGF3YWl0IHVwZGF0ZS5tZXNzYWdlLnJlcGx5X3RleHQoXG4gICAgICAgICAgICB0KEwsIFwic3VwcG9ydF9kaXNhYmxlZFwiKSwgcmVwbHlfbWFya3VwPW1haW5fa2V5Ym9hcmQodXNlci5pZCksXG4gICAgICAgIClcbiAgICAgICAgcmV0dXJuXG4gICAgZGIuc2V0X3VzZXJfc3RhdGUodXNlci5pZCwgXCJjb252X3N0YXRlXCIsIE5vbmUpXG4gICAgYXdhaXQgdXBkYXRlLm1lc3NhZ2UucmVwbHlfdGV4dChcbiAgICAgICAgdChMLCBcInN1cHBvcnRfc3VibWVudV90aXRsZVwiKSxcbiJ9LCB7Im9sZCI6ICIgICAgIyBNYWludGVuYW5jZSBjaGVjayAoYWZ0ZXIgaG9tZSBidXR0b24pXG4gICAgaWYgYXdhaXQgbWFpbnRlbmFuY2VfcmVwbHkodXBkYXRlLCBMKTpcbiAgICAgICAgcmV0dXJuXG5cbiAgICAjIE1haW4gbWVudSBidXR0b25zXG4gICAgaWYgdGV4dCBpbiAodChcInZpXCIsIFwiYnRuX3N1cHBvcnRcIiksIHQoXCJlblwiLCBcImJ0bl9zdXBwb3J0XCIpKTpcbiIsICJuZXciOiAiICAgICMgTWFpbnRlbmFuY2UgY2hlY2sgKGFmdGVyIGhvbWUgYnV0dG9uKVxuICAgIGlmIGF3YWl0IG1haW50ZW5hbmNlX3JlcGx5KHVwZGF0ZSwgTCk6XG4gICAgICAgIHJldHVyblxuXG4gICAgIyBSZXBsYWNlIHN0YWxlIFRlbGVncmFtIGtleWJvYXJkcyB3aGVuIGEgY3VzdG9tZXIgcHJlc3NlcyBhIGRpc2FibGVkIGJ1dHRvbi5cbiAgICBzZXR0aW5ncyA9IGRiLmdldF9zZXR0aW5ncygpXG4gICAgZm9yIGtleSwgZmxhZyBpbiAoKFwiYnRuX3N1cHBvcnRcIiwgXCJzdXBwb3J0X2VuYWJsZWRcIiksXG4gICAgICAgICAgICAgICAgICAgICAgKFwiYnRuX2dpZnRcIiwgXCJnaWZ0X2VuYWJsZWRcIiksIChcImJ0bl9pbnRyb1wiLCBcImludHJvX2VuYWJsZWRcIikpOlxuICAgICAgICBpZiB0ZXh0IGluICh0KFwidmlcIiwga2V5KSwgdChcImVuXCIsIGtleSkpIGFuZCBub3Qgc2V0dGluZ3MuZ2V0KGZsYWcsIFRydWUpOlxuICAgICAgICAgICAgYXdhaXQgdXBkYXRlLm1lc3NhZ2UucmVwbHlfdGV4dChcbiAgICAgICAgICAgICAgICB0KEwsIFwiZmVhdHVyZV9kaXNhYmxlZFwiKSwgcmVwbHlfbWFya3VwPW1haW5fa2V5Ym9hcmQodXNlci5pZCksXG4gICAgICAgICAgICApXG4gICAgICAgICAgICByZXR1cm5cblxuICAgICMgTWFpbiBtZW51IGJ1dHRvbnNcbiAgICBpZiB0ZXh0IGluICh0KFwidmlcIiwgXCJidG5fc3VwcG9ydFwiKSwgdChcImVuXCIsIFwiYnRuX3N1cHBvcnRcIikpOlxuIn1d"))
-          assert len(patch)==3
-          for change in patch:
-              assert text.count(change["old"])==1, "Menu patch does not match live source"
-              text=text.replace(change["old"],change["new"],1)
-          ast.parse(text)
-          candidate=text.encode()
-          tests=base64.b64decode("IiIiRGVwZW5kZW5jeS1mcmVlIHRlc3RzIG9mIGFjdHVhbCBib3QgZnVuY3Rpb25zOyBubyBUZWxlZ3JhbS9uZXR3b3JrL2RhdGEgd3JpdGVzLiIiIgppbXBvcnQgYXN0CmltcG9ydCBhc3luY2lvCmltcG9ydCBpdGVydG9vbHMKaW1wb3J0IG9zCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aApmcm9tIHR5cGVzIGltcG9ydCBTaW1wbGVOYW1lc3BhY2UKaW1wb3J0IHVuaXR0ZXN0CmZyb20gdW5pdHRlc3QubW9jayBpbXBvcnQgQXN5bmNNb2NrLCBNb2NrCgpTT1VSQ0UgPSBQYXRoKG9zLmVudmlyb24uZ2V0KCJCT1RfTUVOVV9TT1VSQ0UiLCBQYXRoKF9fZmlsZV9fKS5yZXNvbHZlKCkucGFyZW50c1syXSAvICJib3QucHkiKSkKRkxBR1MgPSAoInN1cHBvcnRfZW5hYmxlZCIsICJnaWZ0X2VuYWJsZWQiLCAiaW50cm9fZW5hYmxlZCIpCkJVVFRPTlMgPSAoImJ0bl9zdXBwb3J0IiwgImJ0bl9naWZ0IiwgImJ0bl9jaGVja19vcmRlciIsICJidG5fc2hvcCIsICJidG5fY2hhdF9zdXBwb3J0IiwgImJ0bl9pbnRybyIpCgoKZGVmIGxvYWRfZnVuY3Rpb25zKHNldHRpbmdzLCBsYW5ndWFnZT0idmkiKToKICAgIG5hbWVzID0geyJtYWluX2tleWJvYXJkIiwgImhhbmRsZV9zdXBwb3J0X21lbnUiLCAibWVudV9yb3V0ZXIifQogICAgdHJlZSA9IGFzdC5wYXJzZShTT1VSQ0UucmVhZF90ZXh0KCkpCiAgICBub2RlcyA9IFtub2RlIGZvciBub2RlIGluIHRyZWUuYm9keSBpZiBpc2luc3RhbmNlKG5vZGUsIChhc3QuRnVuY3Rpb25EZWYsIGFzdC5Bc3luY0Z1bmN0aW9uRGVmKSkgYW5kIG5vZGUubmFtZSBpbiBuYW1lc10KICAgIGlmIGxlbihub2RlcykgIT0gbGVuKG5hbWVzKToKICAgICAgICByYWlzZSBBc3NlcnRpb25FcnJvcigiTWlzc2luZyBhY3R1YWwgYm90IGZ1bmN0aW9ucyIpCiAgICBmb3Igbm9kZSBpbiBub2RlczoKICAgICAgICBub2RlLnJldHVybnMgPSBOb25lCiAgICAgICAgZm9yIGFyZyBpbiBub2RlLmFyZ3MuYXJnczoKICAgICAgICAgICAgYXJnLmFubm90YXRpb24gPSBOb25lCiAgICBkYiA9IFNpbXBsZU5hbWVzcGFjZSgKICAgICAgICBnZXRfc2V0dGluZ3M9bGFtYmRhOiBzZXR0aW5ncywKICAgICAgICBnZXRfdXNlcl9sYW5nPWxhbWJkYSBfOiBsYW5ndWFnZSwKICAgICAgICBzZXRfdXNlcl9sYW5nPU1vY2soKSwKICAgICAgICBzZXRfdXNlcl9zdGF0ZT1Nb2NrKCksCiAgICApCiAgICBucyA9IHsKICAgICAgICAiZGIiOiBkYiwKICAgICAgICAibGFuZyI6IGxhbWJkYSBfOiBsYW5ndWFnZSwKICAgICAgICAidCI6IGxhbWJkYSBsYW5ndWFnZSwga2V5OiBmIntsYW5ndWFnZX06e2tleX0iLAogICAgICAgICJSZXBseUtleWJvYXJkTWFya3VwIjogbGFtYmRhIHJvd3MsICoqa3c6IFNpbXBsZU5hbWVzcGFjZShrZXlib2FyZD1yb3dzKSwKICAgICAgICAiX3JvdXRlX2Fzc2lnbmVkX2FkbWluX2RpcmVjdCI6IEFzeW5jTW9jayhyZXR1cm5fdmFsdWU9RmFsc2UpLAogICAgICAgICJfcm91dGVfYWRtaW5fY2hhdF9yZXBseSI6IEFzeW5jTW9jayhyZXR1cm5fdmFsdWU9RmFsc2UpLAogICAgICAgICJkZXRlY3RfbGFuZ19mcm9tX3RleHQiOiBsYW1iZGEgXzogTm9uZSwKICAgICAgICAibWFpbnRlbmFuY2VfcmVwbHkiOiBBc3luY01vY2socmV0dXJuX3ZhbHVlPUZhbHNlKSwKICAgICAgICAiaGFuZGxlX2dpZnQiOiBBc3luY01vY2soKSwKICAgICAgICAiaGFuZGxlX2ludHJvIjogQXN5bmNNb2NrKCksCiAgICAgICAgImhhbmRsZV9jaGVja19vcmRlciI6IEFzeW5jTW9jaygpLAogICAgICAgICJoYW5kbGVfc2hvcCI6IEFzeW5jTW9jaygpLAogICAgICAgICJoYW5kbGVfY2hhdF9zdXBwb3J0X3N0YXJ0IjogQXN5bmNNb2NrKCksCiAgICAgICAgInNob3dfbWFpbl9tZW51IjogQXN5bmNNb2NrKCksCiAgICAgICAgInN1cHBvcnRfbWVudV9rZXlib2FyZCI6IE1vY2socmV0dXJuX3ZhbHVlPSJzdXBwb3J0LW1lbnUiKSwKICAgICAgICAiUGFyc2VNb2RlIjogU2ltcGxlTmFtZXNwYWNlKEhUTUw9IkhUTUwiKSwKICAgIH0KICAgIGV4ZWMoY29tcGlsZShhc3QuTW9kdWxlKGJvZHk9bm9kZXMsIHR5cGVfaWdub3Jlcz1bXSksIHN0cihTT1VSQ0UpLCAiZXhlYyIpLCBucykKICAgIHJldHVybiBucwoKCmRlZiB1cGRhdGUodGV4dCk6CiAgICByZXR1cm4gU2ltcGxlTmFtZXNwYWNlKAogICAgICAgIGVmZmVjdGl2ZV91c2VyPVNpbXBsZU5hbWVzcGFjZShpZD0xMjMpLAogICAgICAgIG1lc3NhZ2U9U2ltcGxlTmFtZXNwYWNlKHRleHQ9dGV4dCwgcmVwbHlfdG9fbWVzc2FnZT1Ob25lLCByZXBseV90ZXh0PUFzeW5jTW9jaygpKSwKICAgICkKCgpjbGFzcyBNZW51VmlzaWJpbGl0eVRlc3RzKHVuaXR0ZXN0LlRlc3RDYXNlKToKICAgIGRlZiB0ZXN0X2V2ZXJ5X2ZsYWdfY29tYmluYXRpb25faW5fYm90aF9sYW5ndWFnZXMoc2VsZik6CiAgICAgICAgZm9yIGxhbmd1YWdlLCB2YWx1ZXMgaW4gaXRlcnRvb2xzLnByb2R1Y3QoKCJ2aSIsICJlbiIpLCBpdGVydG9vbHMucHJvZHVjdCgoVHJ1ZSwgRmFsc2UpLCByZXBlYXQ9MykpOgogICAgICAgICAgICBzZXR0aW5ncyA9IGRpY3QoemlwKEZMQUdTLCB2YWx1ZXMpKQogICAgICAgICAgICBucyA9IGxvYWRfZnVuY3Rpb25zKHNldHRpbmdzLCBsYW5ndWFnZSkKICAgICAgICAgICAgcm93cyA9IG5zWyJtYWluX2tleWJvYXJkIl0oMTIzKS5rZXlib2FyZAogICAgICAgICAgICB2aXNpYmxlID0gW3RleHQgZm9yIHJvdyBpbiByb3dzIGZvciB0ZXh0IGluIHJvd10KICAgICAgICAgICAgZXhwZWN0ZWQgPSBbCiAgICAgICAgICAgICAgICBmIntsYW5ndWFnZX06e2tleX0iIGZvciBrZXkgaW4gQlVUVE9OUwogICAgICAgICAgICAgICAgaWYga2V5IG5vdCBpbiB7ImJ0bl9zdXBwb3J0IiwgImJ0bl9naWZ0IiwgImJ0bl9pbnRybyJ9CiAgICAgICAgICAgICAgICBvciBzZXR0aW5nc1t7ImJ0bl9zdXBwb3J0IjogRkxBR1NbMF0sICJidG5fZ2lmdCI6IEZMQUdTWzFdLCAiYnRuX2ludHJvIjogRkxBR1NbMl19W2tleV1dCiAgICAgICAgICAgIF0KICAgICAgICAgICAgc2VsZi5hc3NlcnRFcXVhbCh2aXNpYmxlLCBleHBlY3RlZCkKICAgICAgICAgICAgc2VsZi5hc3NlcnRUcnVlKGFsbChyb3dzKSkKICAgICAgICAgICAgZm9yIHJvdyBpbiByb3dzOgogICAgICAgICAgICAgICAgc2VsZi5hc3NlcnRMZXNzRXF1YWwobGVuKHJvdyksIDIpCgogICAgZGVmIHRlc3RfbWlzc2luZ19zZXR0aW5nc19rZWVwX2V4aXN0aW5nX21lbnUoc2VsZik6CiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbCgKICAgICAgICAgICAgbG9hZF9mdW5jdGlvbnMoe30pWyJtYWluX2tleWJvYXJkIl0oMTIzKS5rZXlib2FyZCwKICAgICAgICAgICAgW1sidmk6YnRuX3N1cHBvcnQiLCAidmk6YnRuX2dpZnQiXSwgWyJ2aTpidG5fY2hlY2tfb3JkZXIiLCAidmk6YnRuX3Nob3AiXSwgWyJ2aTpidG5fY2hhdF9zdXBwb3J0IiwgInZpOmJ0bl9pbnRybyJdXSwKICAgICAgICApCgogICAgZGVmIHRlc3RfdG9nZ2xlX29mZl9hbmRfYmFja19vbl93aXRob3V0X3Jlc3RhcnQoc2VsZik6CiAgICAgICAgc2V0dGluZ3MgPSB7fQogICAgICAgIG5zID0gbG9hZF9mdW5jdGlvbnMoc2V0dGluZ3MpCiAgICAgICAgZm9yIGZsYWcsIGtleSBpbiB6aXAoRkxBR1MsICgiYnRuX3N1cHBvcnQiLCAiYnRuX2dpZnQiLCAiYnRuX2ludHJvIikpOgogICAgICAgICAgICBzZXR0aW5nc1tmbGFnXSA9IEZhbHNlCiAgICAgICAgICAgIHNlbGYuYXNzZXJ0Tm90SW4oZiJ2aTp7a2V5fSIsIHN1bShuc1sibWFpbl9rZXlib2FyZCJdKDEyMykua2V5Ym9hcmQsIFtdKSkKICAgICAgICAgICAgc2V0dGluZ3NbZmxhZ10gPSBUcnVlCiAgICAgICAgICAgIHNlbGYuYXNzZXJ0SW4oZiJ2aTp7a2V5fSIsIHN1bShuc1sibWFpbl9rZXlib2FyZCJdKDEyMykua2V5Ym9hcmQsIFtdKSkKCiAgICBkZWYgdGVzdF9zdGFsZV9idXR0b25zX3JlZnJlc2hfa2V5Ym9hcmRfd2l0aG91dF9leGVjdXRpbmdfZmVhdHVyZXMoc2VsZik6CiAgICAgICAgZm9yIGxhbmd1YWdlLCBrZXksIGZsYWcgaW4gaXRlcnRvb2xzLnByb2R1Y3QoKCJ2aSIsICJlbiIpLCAoImJ0bl9zdXBwb3J0IiwgImJ0bl9naWZ0IiwgImJ0bl9pbnRybyIpLCBGTEFHUyk6CiAgICAgICAgICAgIGV4cGVjdGVkX2ZsYWcgPSB7ImJ0bl9zdXBwb3J0IjogRkxBR1NbMF0sICJidG5fZ2lmdCI6IEZMQUdTWzFdLCAiYnRuX2ludHJvIjogRkxBR1NbMl19W2tleV0KICAgICAgICAgICAgaWYgZmxhZyAhPSBleHBlY3RlZF9mbGFnOgogICAgICAgICAgICAgICAgY29udGludWUKICAgICAgICAgICAgbnMgPSBsb2FkX2Z1bmN0aW9ucyh7ZmxhZzogRmFsc2V9LCBsYW5ndWFnZSkKICAgICAgICAgICAgdSA9IHVwZGF0ZShmIntsYW5ndWFnZX06e2tleX0iKQogICAgICAgICAgICBhc3luY2lvLnJ1bihuc1sibWVudV9yb3V0ZXIiXSh1LCBOb25lKSkKICAgICAgICAgICAgdS5tZXNzYWdlLnJlcGx5X3RleHQuYXNzZXJ0X2F3YWl0ZWRfb25jZSgpCiAgICAgICAgICAgIG1hcmt1cCA9IHUubWVzc2FnZS5yZXBseV90ZXh0LmF3YWl0X2FyZ3Mua3dhcmdzWyJyZXBseV9tYXJrdXAiXQogICAgICAgICAgICBzZWxmLmFzc2VydE5vdEluKGYie2xhbmd1YWdlfTp7a2V5fSIsIHN1bShtYXJrdXAua2V5Ym9hcmQsIFtdKSkKICAgICAgICAgICAgbnNbImhhbmRsZV9naWZ0Il0uYXNzZXJ0X25vdF9hd2FpdGVkKCkKICAgICAgICAgICAgbnNbImhhbmRsZV9pbnRybyJdLmFzc2VydF9ub3RfYXdhaXRlZCgpCiAgICAgICAgICAgIG5zWyJkYiJdLnNldF91c2VyX3N0YXRlLmFzc2VydF9ub3RfY2FsbGVkKCkKCiAgICBkZWYgdGVzdF9zdXBwb3J0X2NvbW1hbmRfY2Fubm90X29wZW5fZGlzYWJsZWRfbWVudShzZWxmKToKICAgICAgICBucyA9IGxvYWRfZnVuY3Rpb25zKHsic3VwcG9ydF9lbmFibGVkIjogRmFsc2V9KQogICAgICAgIHUgPSB1cGRhdGUoIi9zdXBwb3J0IikKICAgICAgICBhc3luY2lvLnJ1bihuc1siaGFuZGxlX3N1cHBvcnRfbWVudSJdKHUsIE5vbmUpKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwodS5tZXNzYWdlLnJlcGx5X3RleHQuYXdhaXRfYXJncy5hcmdzWzBdLCAidmk6c3VwcG9ydF9kaXNhYmxlZCIpCiAgICAgICAgc2VsZi5hc3NlcnROb3RJbigidmk6YnRuX3N1cHBvcnQiLCBzdW0odS5tZXNzYWdlLnJlcGx5X3RleHQuYXdhaXRfYXJncy5rd2FyZ3NbInJlcGx5X21hcmt1cCJdLmtleWJvYXJkLCBbXSkpCiAgICAgICAgbnNbImRiIl0uc2V0X3VzZXJfc3RhdGUuYXNzZXJ0X25vdF9jYWxsZWQoKQoKICAgIGRlZiB0ZXN0X2VuYWJsZWRfc3VwcG9ydF9zdGlsbF9vcGVuc19vcmlnaW5hbF9zdWJtZW51KHNlbGYpOgogICAgICAgIG5zID0gbG9hZF9mdW5jdGlvbnMoeyJzdXBwb3J0X2VuYWJsZWQiOiBUcnVlfSkKICAgICAgICB1ID0gdXBkYXRlKCIvc3VwcG9ydCIpCiAgICAgICAgYXN5bmNpby5ydW4obnNbImhhbmRsZV9zdXBwb3J0X21lbnUiXSh1LCBOb25lKSkKICAgICAgICBuc1siZGIiXS5zZXRfdXNlcl9zdGF0ZS5hc3NlcnRfY2FsbGVkX29uY2Vfd2l0aCgxMjMsICJjb252X3N0YXRlIiwgTm9uZSkKICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHUubWVzc2FnZS5yZXBseV90ZXh0LmF3YWl0X2FyZ3Mua3dhcmdzWyJyZXBseV9tYXJrdXAiXSwgInN1cHBvcnQtbWVudSIpCgogICAgZGVmIHRlc3Rfb3RoZXJfYnV0dG9uc19hcmVfdW5jaGFuZ2VkX3doZW5fYWxsX2NvbmZpZ3VyZWRfZmVhdHVyZXNfZGlzYWJsZWQoc2VsZik6CiAgICAgICAgZm9yIGtleSwgaGFuZGxlciBpbiAoKCJidG5fY2hlY2tfb3JkZXIiLCAiaGFuZGxlX2NoZWNrX29yZGVyIiksICgiYnRuX3Nob3AiLCAiaGFuZGxlX3Nob3AiKSwgKCJidG5fY2hhdF9zdXBwb3J0IiwgImhhbmRsZV9jaGF0X3N1cHBvcnRfc3RhcnQiKSk6CiAgICAgICAgICAgIG5zID0gbG9hZF9mdW5jdGlvbnMoZGljdC5mcm9ta2V5cyhGTEFHUywgRmFsc2UpKQogICAgICAgICAgICB1ID0gdXBkYXRlKCJ2aToiICsga2V5KQogICAgICAgICAgICBhc3luY2lvLnJ1bihuc1sibWVudV9yb3V0ZXIiXSh1LCBOb25lKSkKICAgICAgICAgICAgbnNbaGFuZGxlcl0uYXNzZXJ0X2F3YWl0ZWRfb25jZV93aXRoKHUsIE5vbmUpCiAgICAgICAgICAgIHUubWVzc2FnZS5yZXBseV90ZXh0LmFzc2VydF9ub3RfYXdhaXRlZCgpCgogICAgZGVmIHRlc3RfaG9tZV93b3Jrc19ldmVuX3dpdGhfZGlzYWJsZWRfZmVhdHVyZXMoc2VsZik6CiAgICAgICAgbnMgPSBsb2FkX2Z1bmN0aW9ucyhkaWN0LmZyb21rZXlzKEZMQUdTLCBGYWxzZSkpCiAgICAgICAgdSA9IHVwZGF0ZSgidmk6YnRuX2hvbWUiKQogICAgICAgIGFzeW5jaW8ucnVuKG5zWyJtZW51X3JvdXRlciJdKHUsIE5vbmUpKQogICAgICAgIG5zWyJzaG93X21haW5fbWVudSJdLmFzc2VydF9hd2FpdGVkX29uY2Vfd2l0aCh1LCBOb25lKQoKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICB1bml0dGVzdC5tYWluKCkK")
-          with tempfile.TemporaryDirectory(prefix=".menu-validation-",dir=root) as temp:
-              temp=pathlib.Path(temp)
-              code=temp/"bot.py"
-              code.write_bytes(candidate)
-              suite=temp/"test_menu_visibility.py"
-              suite.write_bytes(tests)
-              env={**os.environ,"BOT_MENU_SOURCE":str(code),"PYTHONDONTWRITEBYTECODE":"1"}
-              result=subprocess.run([str(root/"venv/bin/python"),str(suite)],env=env,capture_output=True,text=True,timeout=30)
-              assert result.returncode==0, "Live-source menu regression tests failed"
-              print("GIFT_MENU_REGRESSION=passed",flush=True)
-              # Exercise the installed Telegram library and the real settings reader,
-              # importing neither the full bot nor any polling/notification code.
-              smoke=r'''
-          import ast,json,sys
-          from pathlib import Path
-          from telegram import ReplyKeyboardMarkup
-          sys.path.insert(0,"/root/Bot-Qu-Tng")
-          import data_manager as db
-          from translations import t
-          tree=ast.parse(Path(sys.argv[1]).read_text())
-          fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="main_keyboard")
-          ns={"db":db,"t":t,"lang":lambda _:"vi","ReplyKeyboardMarkup":ReplyKeyboardMarkup}
-          exec(compile(ast.Module(body=[fn],type_ignores=[]),sys.argv[1],"exec"),ns)
-          settings=db.get_settings()
-          keys=ns["main_keyboard"](0).keyboard
-          visible=[button.text for row in keys for button in row]
-          for key,flag in [("btn_support","support_enabled"),("btn_gift","gift_enabled"),("btn_intro","intro_enabled")]:
-              assert (t("vi",key) in visible)==bool(settings.get(flag,True))
-          for key in ["btn_check_order","btn_shop","btn_chat_support"]:
-              assert t("vi",key) in visible
-          print("GIFT_MENU_LIVE_SETTINGS=passed")
-          '''
-              result=subprocess.run([str(root/"venv/bin/python"),"-c",smoke,str(code)],cwd=root,env=env,capture_output=True,text=True,timeout=20)
-              assert result.returncode==0, "Installed Telegram/settings smoke check failed"
-              print("GIFT_MENU_LIVE_SETTINGS=passed",flush=True)
-              # Re-check immediately before the atomic single-file replacement.
-              assert hashlib.sha256(target.read_bytes()).hexdigest()==expected, "Concurrent source modification"
-              metadata=target.stat()
-              os.chmod(code,stat.S_IMODE(metadata.st_mode))
-              os.chown(code,metadata.st_uid,metadata.st_gid)
-              with code.open("rb") as handle: os.fsync(handle.fileno())
-              os.replace(code,target)
-          subprocess.run(["systemctl","restart","gift-bot.service"],check=True,timeout=45,capture_output=True)
-          time.sleep(8)
-          assert property("gift-bot.service","ActiveState")=="active", "Gift bot startup failed"
-          assert property("gift-bot.service","MainPID") not in ("0",before_gift), "Gift process did not restart"
-          assert property("bot-api.service","MainPID")==before_api, "Unexpected API process change"
-          assert target.read_bytes()==candidate
-          print("GIFT_DEPLOYED_FILE_SHA256="+hashlib.sha256(candidate).hexdigest(),flush=True)
-          print("GIFT_BOT_SERVICE=active",flush=True)
-          print("GIFT_API_RESTARTED=false",flush=True)
-          print("GIFT_DATA_CHANGED=false",flush=True)
+          for name in ["bot.py","data_manager.py"]:
+              print("GIFT_SOURCE_"+name.replace(".","_")+"="+hashlib.sha256((root/name).read_bytes()).hexdigest())
+          for name in ["gift-bot.service","bot-api.service"]:
+              p=subprocess.run(["systemctl","show",name,"--property=ActiveState,MainPID,WorkingDirectory","--no-pager"],capture_output=True,text=True,check=True)
+              print("GIFT_SERVICE="+json.dumps({"name":name,"properties":p.stdout.splitlines()}))
+          p=subprocess.run(["git","-C",str(root),"rev-parse","HEAD"],capture_output=True,text=True)
+          print("GIFT_HEAD="+p.stdout.strip())
+          pid=subprocess.check_output(["systemctl","show","bot-api.service","--property=MainPID","--value"],text=True).strip()
+          print("GIFT_API_EXE="+str(pathlib.Path("/proc/"+pid+"/exe").resolve()))
+          arguments=pathlib.Path("/proc/"+pid+"/cmdline").read_bytes().split(bytes([0]))
+          print("GIFT_API_SCRIPTS="+json.dumps([x.decode() for x in arguments if x.endswith(b".py") or x.endswith(b".mjs")]))
+          print("GIFT_ROOT_PYTHON_FILES="+json.dumps([p.name for p in root.glob("*.py")]))
+          print("GIFT_PYTHON="+str((root/"venv/bin/python").exists()).lower())
+          settings=json.loads((root/"data/settings.json").read_text())
+          for name in ["gift_enabled","support_enabled","intro_enabled"]:
+              print("GIFT_FLAG_"+name+"="+str(settings.get(name,True)).lower())
           PY
