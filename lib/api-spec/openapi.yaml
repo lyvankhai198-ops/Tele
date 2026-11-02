@@ -606,6 +606,56 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BulkCampaignControlResult" }
+        "202":
+          description: Durable bulk operation accepted; poll its owner-scoped progress URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCampaignControlResult" }
+  /campaigns/bulk-control/jobs/active:
+    get:
+      operationId: getActiveCampaignBulkJob
+      tags: [campaigns]
+      responses:
+        "200":
+          description: Active or failed unfinished bulk operation for the signed-in owner
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: "#/components/schemas/CampaignBulkJobProgress"
+                  - type: "null"
+  /campaigns/bulk-control/jobs/{jobId}:
+    get:
+      operationId: getCampaignBulkJob
+      tags: [campaigns]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Durable progress of an owner-scoped bulk operation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignBulkJobProgress" }
+        "404": { description: Operation not found for this owner }
+  /campaigns/bulk-control/jobs/{jobId}/retry:
+    post:
+      operationId: retryCampaignBulkJob
+      tags: [campaigns]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Continue only the uncommitted part of a failed operation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignBulkJobProgress" }
+        "404": { description: Operation not found for this owner }
   /campaigns/bulk-template:
     post:
       operationId: bulkUpdateCampaignTemplate
@@ -2336,11 +2386,24 @@ components:
         scope: { type: string, enum: [draft, queued, paused, completed], default: paused }
         intervalSeconds: { type: number, minimum: 0, maximum: 259200 }
         scheduledAt: { type: ["string", "null"], format: date-time }
+    CampaignBulkJobProgress:
+      type: object
+      required: [id, status, total, processed, updatedCount, skippedCount, error]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        total: { type: integer }
+        processed: { type: integer }
+        updatedCount: { type: integer }
+        skippedCount: { type: integer }
+        error: { type: ["string", "null"] }
     BulkCampaignControlResult:
       type: object
       required: [action, updatedCount, skippedCount, skipped]
       properties:
         action: { type: string, enum: [pause, resume] }
+        job:
+          $ref: "#/components/schemas/CampaignBulkJobProgress"
         updatedCount: { type: number }
         skippedCount: { type: number }
         skipped:

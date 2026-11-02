@@ -7,9 +7,11 @@
  */
 import type { BulkCampaignControlResultAction } from './bulkCampaignControlResultAction';
 import type { BulkCampaignControlResultSkippedItem } from './bulkCampaignControlResultSkippedItem';
+import type { CampaignBulkJobProgress } from './campaignBulkJobProgress';
 
 export interface BulkCampaignControlResult {
   action: BulkCampaignControlResultAction;
+  job?: CampaignBulkJobProgress;
   updatedCount: number;
   skippedCount: number;
   skipped: BulkCampaignControlResultSkippedItem[];

@@ -123,6 +123,8 @@ export * from './bulkDeleteCampaignsResult';
 export * from './bulkDeleteCampaignsResultSkippedItem';
 export * from './calendarItem';
 export * from './campaign';
+export * from './campaignBulkJobProgress';
+export * from './campaignBulkJobProgressStatus';
 export * from './campaignCloneDestinationReadiness';
 export * from './campaignCloneMode';
 export * from './campaignCloneReadiness';

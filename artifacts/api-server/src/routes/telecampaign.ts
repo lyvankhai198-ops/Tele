@@ -110,6 +110,11 @@ import {
 import { campaignCloneMode, campaignSummary, rebaseCampaignScheduleForResume } from "../lib/campaigns";
 import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
+import { campaignTargetBatches } from "../lib/campaign-target-batches";
+import {
+  createCampaignBulkJob, getCampaignBulkJob, getActiveCampaignBulkJob,
+  registerCampaignBulkProcessor, retryCampaignBulkJob,
+} from "../lib/campaign-bulk-jobs";
 import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
 import { cancelOrder, createOrder, getOrderSettings, listOrders, settleVerifiedOrder, updateOrderProof, verifiedOrderNotification } from "../lib/telecampaign-orders";
@@ -2242,22 +2247,46 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
     return void sendError(res, 400, "Thời gian bắt đầu không hợp lệ.");
   }
   const startAt = new Date(Math.max(now.getTime(), requestedStart.getTime()));
-  const eligibleStatuses = scope === "completed"
-    ? ["completed", "completed_with_errors"] as const
-    : [scope] as const;
-  const candidates = await db.select().from(campaignsTable).where(and(
-    eq(campaignsTable.ownerUserId, ownerUserId),
-    inArray(campaignsTable.status, eligibleStatuses),
-  )).orderBy(campaignsTable.createdAt);
-  const skipped: Array<{ id: string; name: string; reason: string }> = [];
-  const completedAllowance = scope === "completed" ? await getCampaignAllowance(ownerUserId) : null;
-  const resumed: Array<{ id: string; name: string; sourceId?: string }> = [];
+  try {
+    const job = await createCampaignBulkJob({
+      ownerUserId, scope, intervalSeconds, startAt, scheduledAt: requestedStart,
+      requestId: req.get("Idempotency-Key"),
+    });
+    return void res.status(202).json(BulkControlCampaignsResponse.parse({
+      action: "resume", updatedCount: job.updatedCount, skippedCount: job.skippedCount,
+      skipped: [], job,
+    }));
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    return void sendError(res, 409, code.startsWith("CAMPAIGN_BULK_") ? code : "CAMPAIGN_BULK_BUSY");
+  }
+});
 
-  for (const candidate of candidates) {
-    const result = await db.transaction(async (tx) => {
-      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
+router.get("/campaigns/bulk-control/jobs/active", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await getActiveCampaignBulkJob(currentUserId(req)));
+});
+router.get("/campaigns/bulk-control/jobs/:jobId", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
+  const job = await getCampaignBulkJob(currentUserId(req), String(req.params.jobId));
+  if (!job) return void sendError(res, 404, "CAMPAIGN_BULK_NOT_FOUND");
+  res.json(job);
+});
+router.post("/campaigns/bulk-control/jobs/:jobId/retry", async (req, res): Promise<void> => {
+  const job = await retryCampaignBulkJob(currentUserId(req), String(req.params.jobId));
+  if (!job) return void sendError(res, 404, "CAMPAIGN_BULK_NOT_FOUND");
+  res.json(job);
+});
+
+registerCampaignBulkProcessor(async (tx, job, candidateId) => {
+      const ownerUserId = job.ownerUserId;
+      const scope = job.scope;
+      const intervalSeconds = job.intervalSeconds;
+      const now = new Date();
+      const completedAllowance = scope === "completed" ? await getCampaignAllowance(ownerUserId) : null;
+      await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidateId} FOR UPDATE`);
       const [campaign] = await tx.select().from(campaignsTable).where(and(
-        eq(campaignsTable.id, candidate.id),
+        eq(campaignsTable.id, candidateId),
         eq(campaignsTable.ownerUserId, ownerUserId),
       ));
       const stillEligible = campaign && (
@@ -2269,26 +2298,21 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
         return { kind: "skip" as const, reason: "Trạng thái campaign đã thay đổi." };
       }
 
-      await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${campaign.id} FOR UPDATE`);
-      const targets = await tx.select({
-        id: campaignTargetsTable.id,
-        destinationId: campaignTargetsTable.destinationId,
-        status: campaignTargetsTable.status,
-        lastError: campaignTargetsTable.lastError,
-        nextAttemptAt: campaignTargetsTable.nextAttemptAt,
-      }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, campaign.id));
-      const pending = targets.filter((target) => (
-        target.status === "pending"
-        && target.lastError === null
-        && target.nextAttemptAt !== null
+      const [pendingSchedule] = scope === "completed" ? [] : await tx.select({
+        earliest: sql<Date | null>`min(${campaignTargetsTable.nextAttemptAt})`,
+      }).from(campaignTargetsTable).where(and(
+        eq(campaignTargetsTable.campaignId, campaign.id),
+        eq(campaignTargetsTable.status, "pending"),
+        isNull(campaignTargetsTable.lastError),
+        isNotNull(campaignTargetsTable.nextAttemptAt),
       ));
-      if (scope !== "completed" && !pending.length) {
+      if (scope !== "completed" && !pendingSchedule?.earliest) {
         return { kind: "skip" as const, reason: "Không còn lượt gửi đang chờ để tiếp tục." };
       }
 
       if (scope === "completed" && completedAllowance?.campaignLimit !== null
         && completedAllowance
-        && completedAllowance.used + resumed.length >= completedAllowance.campaignLimit) {
+        && completedAllowance.used >= completedAllowance.campaignLimit) {
         return { kind: "skip" as const, reason: "Đã đạt giới hạn số campaign của gói hiện tại." };
       }
 
@@ -2326,10 +2350,14 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       )) {
         return { kind: "skip" as const, reason: "Mẫu forward chưa chọn đúng Tin nhắn đã lưu." };
       }
+      const fallbackTargets = !campaign.destinationIds?.length
+        ? await tx.selectDistinct({destinationId: campaignTargetsTable.destinationId})
+          .from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, campaign.id))
+        : [];
       const destinationIds = [...new Set(
         campaign.destinationIds?.length
           ? campaign.destinationIds
-          : targets.map((target) => target.destinationId),
+          : fallbackTargets.map((target) => target.destinationId),
       )];
       const destinations = destinationIds.length
         ? await tx.select().from(destinationsTable).where(and(
@@ -2337,7 +2365,7 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
           eq(destinationsTable.accountId, campaign.telegramAccountId),
         ))
         : [];
-      const campaignStart = new Date(startAt.getTime() + resumed.length * intervalSeconds * 1000);
+      const campaignStart = new Date(new Date(job.startAt).getTime() + job.updatedCount * intervalSeconds * 1000);
       const scheduleAtForValidation = campaignStart > now ? campaignStart : null;
       if (
         destinations.length !== destinationIds.length
@@ -2354,29 +2382,7 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
           + Math.floor(Math.random() * (
             campaign.roundDelayMaxSeconds - campaign.roundDelayMinSeconds + 1
           ));
-        const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
-        let nextDeliveryAt = campaignStart.getTime();
-        for (let round = 0; round < campaign.repeatCount; round += 1) {
-          for (let destinationIndex = 0; destinationIndex < destinations.length; destinationIndex += 1) {
-            const destination = destinations[destinationIndex];
-            const nextAttemptAt = new Date(nextDeliveryAt);
-            targetRows.push({
-              campaignId: campaign.id,
-              destinationId: destination.id,
-              status: "pending",
-              attempts: 0,
-              quotaReservedAt: null,
-              nextAttemptAt,
-              lastError: null,
-              sentMessageId: null,
-              sentAt: null,
-            });
-            if (round < campaign.repeatCount - 1 || destinationIndex < destinations.length - 1) {
-              nextDeliveryAt += randomRoundDelay() * 1000;
-            }
-          }
-        }
-        if (!targetRows.length) {
+        if (!destinations.length || campaign.repeatCount < 1) {
           return { kind: "skip" as const, reason: "Campaign không còn destination để tạo lượt chạy mới." };
         }
 
@@ -2405,26 +2411,27 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
           roundDelayMinSeconds: campaign.roundDelayMinSeconds,
           roundDelayMaxSeconds: campaign.roundDelayMaxSeconds,
         }).returning({ id: campaignsTable.id, name: campaignsTable.name });
-        await tx.insert(campaignTargetsTable).values(targetRows.map((target) => ({
-          ...target,
-          campaignId: run.id,
-        })));
+        for (const rows of campaignTargetBatches({
+          campaignId: run.id, destinationIds: destinations.map(destination => destination.id),
+          repeatCount: campaign.repeatCount, startAt: campaignStart, nextDelaySeconds: randomRoundDelay,
+        })) {
+          await tx.insert(campaignTargetsTable).values(rows);
+        }
         return { kind: "created" as const, campaign: run, sourceId: campaign.id };
       }
 
-      const earliest = pending.reduce((value, target) => (
-        !value || target.nextAttemptAt! < value ? target.nextAttemptAt! : value
-      ), null as Date | null);
+      const earliest = pendingSchedule?.earliest;
       if (!earliest) return { kind: "skip" as const, reason: "Không xác định được lịch gửi còn lại." };
       const shiftMs = campaignStart.getTime() - earliest.getTime();
-      await Promise.all(pending.map((target) => tx.update(campaignTargetsTable).set({
-        nextAttemptAt: new Date(target.nextAttemptAt!.getTime() + shiftMs),
+      await tx.update(campaignTargetsTable).set({
+        nextAttemptAt: sql`${campaignTargetsTable.nextAttemptAt} + (${shiftMs}::bigint * interval '1 millisecond')`,
         updatedAt: now,
       }).where(and(
-        eq(campaignTargetsTable.id, target.id),
+        eq(campaignTargetsTable.campaignId, campaign.id),
         eq(campaignTargetsTable.status, "pending"),
         isNull(campaignTargetsTable.lastError),
-      ))));
+        isNotNull(campaignTargetsTable.nextAttemptAt),
+      ));
 
       const [updated] = await tx.update(campaignsTable).set({
         status: "queued",
@@ -2439,36 +2446,6 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       return updated
         ? { kind: "resumed" as const, campaign: updated }
         : { kind: "skip" as const, reason: "Campaign đã được xử lý bởi thao tác khác." };
-    });
-
-    if (result.kind === "resumed" || result.kind === "created") {
-      resumed.push({ ...result.campaign, ...(result.kind === "created" ? { sourceId: result.sourceId } : {}) });
-      await recordActivity({
-        event: result.kind === "created" ? "campaign.bulk_rerun_created" : "campaign.resumed",
-        message: result.kind === "created"
-          ? `Created a new run "${result.campaign.name}" from bulk control`
-          : `Resumed campaign "${result.campaign.name}" from bulk control`,
-        ownerUserId,
-        campaignId: result.campaign.id,
-        level: "success",
-        metadata: {
-          bulk: true,
-          scope,
-          intervalSeconds,
-          ...(result.kind === "created" ? { sourceCampaignId: result.sourceId } : {}),
-        },
-      });
-    } else {
-      skipped.push({ id: candidate.id, name: candidate.name, reason: result.reason });
-    }
-  }
-
-  return void res.json(BulkControlCampaignsResponse.parse({
-    action: "resume",
-    updatedCount: resumed.length,
-    skippedCount: skipped.length,
-    skipped,
-  }));
 });
 
 router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {

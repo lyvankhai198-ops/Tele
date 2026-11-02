@@ -41,6 +41,7 @@ jobs:
         run: |
           bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
           node --test scripts/tests/campaign-bulk-delete.test.mjs
+          node --test scripts/tests/campaign-bulk-jobs.test.mjs
           python3 scripts/tests/test_release_safety.py
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
           node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs

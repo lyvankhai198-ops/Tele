@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { campaignDeleteError } from "@/lib/campaign-delete-error";
+import { campaignBulkError } from "@/lib/campaign-bulk-error";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
@@ -14,9 +15,12 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import type { Campaign, MessageTemplate } from "@workspace/api-client-react";
+import type { Campaign, MessageTemplate, CampaignBulkJobProgress } from "@workspace/api-client-react";
 import {
   getListCalendarItemsQueryKey,
+  getCampaignBulkJob,
+  getActiveCampaignBulkJob,
+  retryCampaignBulkJob,
   getListCampaignsQueryKey,
   useCloneCampaign,
   useGetCampaignCloneReadiness,
@@ -473,7 +477,6 @@ export default function Campaigns() {
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
-  const bulkControl = useBulkControlCampaigns();
   const bulkDelete = useBulkDeleteCampaigns();
   const deleteOne = useDeleteCampaign();
   const bulkTemplate = useBulkUpdateCampaignTemplate();
@@ -499,6 +502,54 @@ export default function Campaigns() {
   const [bulkIntervalMinutes, setBulkIntervalMinutes] = useState("");
   const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
   const [bulkScheduleTime, setBulkScheduleTime] = useState(() => localTimeInputValue());
+  const [bulkJob, setBulkJob] = useState<CampaignBulkJobProgress | null>(null);
+  const [bulkRetrying, setBulkRetrying] = useState(false);
+  const lastBulkCompletion = useRef<string | null>(null);
+  const bulkRequestId = useMemo(() => crypto.randomUUID(), [
+    bulkResumeOpen, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
+  ]);
+  const bulkControl = useBulkControlCampaigns({request: {headers: {"Idempotency-Key": bulkRequestId}}});
+  const bulkJobActive = bulkJob?.status === "queued" || bulkJob?.status === "running";
+  const bulkStorageKey = `telecamp.bulk-job:${user?.id ?? ""}`;
+  function rememberBulkJob(job: CampaignBulkJobProgress) {
+    setBulkJob(job);
+    try { localStorage.setItem(bulkStorageKey, job.id); } catch { /* storage is optional */ }
+  }
+  useEffect(() => {
+    let disposed = false;
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(bulkStorageKey); } catch { /* private browser mode */ }
+    void (async () => {
+      try {
+        const job = saved ? await getCampaignBulkJob(saved).catch(() => getActiveCampaignBulkJob())
+          : await getActiveCampaignBulkJob();
+        if (!disposed && job) { setBulkJob(job); setBulkResumeOpen(true); }
+      } catch { /* no access or no saved operation; no automatic resubmission */ }
+    })();
+    return () => { disposed = true; };
+  }, [bulkStorageKey]);
+  useEffect(() => {
+    if (!bulkJobActive || !bulkJob) return;
+    let disposed = false;
+    async function poll() {
+      try {
+        const next = await getCampaignBulkJob(bulkJob!.id);
+        if (disposed) return;
+        setBulkJob(next);
+        if ((next.status === "completed" || next.status === "failed") && lastBulkCompletion.current !== `${next.id}:${next.status}`) {
+          lastBulkCompletion.current = `${next.id}:${next.status}`;
+          void campaigns.refetch();
+          void queryClient.invalidateQueries({queryKey: getListCalendarItemsQueryKey()});
+          setToast(next.status === "completed" ? c.bulkResumedResult(next.updatedCount, next.skippedCount)
+            : language === "vi" ? "Tác vụ đã dừng do lỗi. Các lượt đã tạo được giữ nguyên; không bấm tạo lại."
+              : "The operation stopped with an error. Existing runs are preserved; do not submit again.");
+        }
+      } catch { /* preserve job identity and retry reading progress, never resubmit */ }
+    }
+    const timer = setInterval(() => { void poll(); }, 2000);
+    void poll();
+    return () => { disposed = true; clearInterval(timer); };
+  }, [bulkJob?.id, bulkJobActive, language]);
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateId, setBulkTemplateId] = useState("");
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
@@ -635,6 +686,9 @@ export default function Campaigns() {
   }
 
   function openBulkResume() {
+    if (bulkJob && bulkJob.status !== "completed") { setBulkResumeOpen(true); return; }
+    setBulkJob(null);
+    try { localStorage.removeItem(bulkStorageKey); } catch { /* optional storage */ }
     if (!bulkScopeOptions.length) {
       setToast(c.bulkNoEligible);
       return;
@@ -648,6 +702,7 @@ export default function Campaigns() {
   }
 
   async function submitBulkResume() {
+    if (bulkControl.isPending || bulkJob) return;
     const intervalMinutes = Number(bulkIntervalMinutes.trim());
     if (!bulkIntervalMinutes.trim() || !Number.isInteger(intervalMinutes) || intervalMinutes < 0 || intervalMinutes > 4320 || !bulkScheduleDate || !bulkScheduleTime) {
       setToast(c.genericError);
@@ -659,6 +714,9 @@ export default function Campaigns() {
         setToast(c.genericError);
         return;
       }
+      // Save the request identity before sending, so a lost response can be
+      // recovered after a reload without resubmitting the campaign operation.
+      try { localStorage.setItem(bulkStorageKey, bulkRequestId); } catch { /* optional storage */ }
       const result = await bulkControl.mutateAsync({
         data: {
           action: "resume",
@@ -667,11 +725,19 @@ export default function Campaigns() {
           scheduledAt: scheduledAt.toISOString(),
         },
       });
-      await campaigns.refetch();
-      setBulkResumeOpen(false);
-      setToast(c.bulkResumedResult(result.updatedCount, result.skippedCount));
+      if (result.job) {
+        rememberBulkJob(result.job);
+      } else {
+        await campaigns.refetch();
+        setBulkResumeOpen(false);
+        setToast(c.bulkResumedResult(result.updatedCount, result.skippedCount));
+      }
     } catch (error) {
-      setToast(localizedErrorMessage(error, language, c.genericError));
+      try {
+        const active = await getActiveCampaignBulkJob();
+        if (active) { rememberBulkJob(active); return; }
+      } catch { /* show a safe connection message below */ }
+      setToast(campaignBulkError(error, language));
     }
   }
 
@@ -995,6 +1061,29 @@ export default function Campaigns() {
           }}
         >
           <div className="space-y-4">
+            {bulkJob && (
+              <div role="status" aria-live="polite" className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
+                <strong>{language === "vi"
+                  ? bulkJob.status === "completed" ? "Đã hoàn tất" : bulkJob.status === "failed" ? "Tác vụ cần kiểm tra" : "Đang xử lý chiến dịch"
+                  : bulkJob.status === "completed" ? "Completed" : bulkJob.status === "failed" ? "Operation needs attention" : "Processing campaigns"}</strong>
+                <p className="mt-1">{bulkJob.processed}/{bulkJob.total} · {language === "vi" ? "Đã xử lý" : "Processed"}: {bulkJob.updatedCount} · {language === "vi" ? "Bỏ qua" : "Skipped"}: {bulkJob.skippedCount}</p>
+                {bulkJobActive && <progress aria-label={language === "vi" ? "Tiến độ xử lý" : "Operation progress"} className="mt-3 h-2 w-full" max={Math.max(1, bulkJob.total)} value={bulkJob.processed} />}
+                <p className="mt-2 text-xs">{bulkJob.status === "failed"
+                  ? language === "vi" ? "Phần đã tạo được giữ nguyên. Tiếp tục chỉ xử lý phần chưa hoàn tất." : "Created runs are preserved. Continuing processes only the unfinished part."
+                  : bulkJobActive
+                    ? language === "vi" ? "Có thể đóng cửa sổ; tác vụ vẫn tiếp tục. Không bấm chạy lại để tránh tạo trùng." : "You can close this dialog; processing continues. Do not submit again to avoid duplicate runs."
+                    : language === "vi" ? "Đã xử lý xong tác vụ này." : "This operation is complete."}</p>
+                {bulkJob.status === "failed" && <button type="button" disabled={bulkRetrying}
+                  className="mt-3 rounded-lg bg-indigo-700 px-4 py-2 font-semibold text-white disabled:opacity-50"
+                  onClick={() => {
+                    setBulkRetrying(true);
+                    void retryCampaignBulkJob(bulkJob.id).then(rememberBulkJob)
+                      .catch(error => setToast(campaignBulkError(error, language)))
+                      .finally(() => setBulkRetrying(false));
+                  }}>{language === "vi" ? "Tiếp tục phần chưa xử lý" : "Continue unfinished work"}</button>}
+              </div>
+            )}
+            <fieldset disabled={Boolean(bulkJob) || bulkControl.isPending} className="space-y-4 disabled:opacity-60">
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkScopeLabel}</span>
               <select
@@ -1061,6 +1150,7 @@ export default function Campaigns() {
                 </div>
               </label>
             </div>
+            </fieldset>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -1068,12 +1158,12 @@ export default function Campaigns() {
                 disabled={bulkControl.isPending}
                 className="h-10 rounded-xl border border-[#cbd5e1] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#f8fafc] disabled:opacity-50"
               >
-                {c.bulkCancel}
+                {bulkJob ? language === "vi" ? "Đóng" : "Close" : c.bulkCancel}
               </button>
-              <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={bulkControl.isPending}>
+              {!bulkJob && <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={bulkControl.isPending}>
                 {bulkControl.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {c.bulkApply}
-              </PrimaryButton>
+              </PrimaryButton>}
             </div>
           </div>
         </Modal>

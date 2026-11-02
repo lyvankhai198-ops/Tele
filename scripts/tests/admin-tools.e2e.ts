@@ -11,6 +11,7 @@ import { pollTelegram } from "../../artifacts/api-server/src/lib/support-telegra
 import { encryptSecret } from "../../artifacts/api-server/src/lib/crypto";
 import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecampaign-orders";
 import sharp from "sharp";
+import { testCampaignBulkJobs } from "./campaign-bulk-jobs.e2e";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
@@ -84,10 +85,10 @@ try {
   await new Promise<void>(resolve => server!.once("listening", resolve));
   const address = server.address() as { port: number };
   const base = `http://127.0.0.1:${address.port}`;
-  async function request(path: string, cookie = "", body?: unknown, method = "POST") {
+  async function request(path: string, cookie = "", body?: unknown, method = "POST", headers: Record<string,string> = {}) {
     return fetch(base + "/api" + path, {
       method: body === undefined ? "GET" : method,
-      headers: { "Content-Type": "application/json", "x-forwarded-for": "127.0.0.1", ...(cookie ? { Cookie: cookie } : {}) },
+      headers: { "Content-Type": "application/json", "x-forwarded-for": "127.0.0.1", ...(cookie ? { Cookie: cookie } : {}), ...headers },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   }
@@ -146,6 +147,8 @@ try {
   const activeOnly = await request("/campaigns/bulk-delete", userCookie, {status:"all",search:deletePrefix});
   const activeResult = await activeOnly.json() as any;
   check(activeOnly.ok && activeResult.deletedCount === 1 && activeResult.skippedCount === 2, "E2E_DELETE_RUNNING_QUEUED_SKIPPED");
+  phase = "E2E_CAMPAIGN_BULK_JOBS";
+  await testCampaignBulkJobs({ownerId:userId,ownerCookie:userCookie,otherCookie:adminCookie,request});
   phase = "E2E_ORDER_PROOF_APPROVAL";
   const created = await request("/purchase-orders", userCookie, { plan: "PLUS", currency: "VND", orderType: "license" });
   check(created.status === 201 || created.status === 200, "E2E_ORDER_CREATE");
