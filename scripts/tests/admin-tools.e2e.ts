@@ -12,6 +12,7 @@ import { encryptSecret } from "../../artifacts/api-server/src/lib/crypto";
 import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecampaign-orders";
 import sharp from "sharp";
 import { testCampaignBulkJobs } from "./campaign-bulk-jobs.e2e";
+import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
@@ -149,6 +150,29 @@ try {
   check(activeOnly.ok && activeResult.deletedCount === 1 && activeResult.skippedCount === 2, "E2E_DELETE_RUNNING_QUEUED_SKIPPED");
   phase = "E2E_CAMPAIGN_BULK_JOBS";
   await testCampaignBulkJobs({ownerId:userId,ownerCookie:userCookie,otherCookie:adminCookie,request});
+  phase = "E2E_DESTINATION_MEMBERSHIP_VISIBILITY";
+  const leftGroupId=randomUUID(), restrictedGroupId=randomUUID(), activeGroupId=randomUUID();
+  for (const [id,canPost,reason] of [
+    [leftGroupId,false,UNAVAILABLE_TELEGRAM_DESTINATION_REASON],
+    [restrictedGroupId,false,"Posting is restricted by Telegram"],
+    [activeGroupId,true,null],
+  ] as const) {
+    await pool.query(`INSERT INTO destinations(id,account_id,telegram_id,title,can_post,permission_reason)
+      VALUES($1,$2,$3,'membership fixture',$4,$5)`,[id,accountId,id,canPost,reason]);
+  }
+  const [historyTargetId]=[randomUUID()];
+  await pool.query(`INSERT INTO campaign_targets(id,campaign_id,destination_id,status)
+    VALUES($1,$2,$3,'sent')`,[historyTargetId,deleteIds[2],leftGroupId]);
+  const listGroups=async(cookie:string)=>await(await request("/destinations",cookie)).json() as any[];
+  const memberList=await listGroups(userCookie);
+  check(!memberList.some(row=>row.id===leftGroupId) && memberList.some(row=>row.id===restrictedGroupId)
+    && memberList.some(row=>row.id===activeGroupId),"E2E_LEFT_HIDDEN_RESTRICTED_VISIBLE");
+  check(!(await listGroups(adminCookie)).some(row=>[leftGroupId,restrictedGroupId,activeGroupId].includes(row.id)),
+    "E2E_MEMBERSHIP_DESTINATION_OWNER");
+  const oldHistory=await pool.query("SELECT destination_id FROM campaign_targets WHERE id=$1",[historyTargetId]);
+  check(oldHistory.rows[0]?.destination_id===leftGroupId,"E2E_LEFT_HISTORY_PRESERVED");
+  await pool.query("UPDATE destinations SET can_post=true,permission_reason='Posting permission available' WHERE id=$1",[leftGroupId]);
+  check((await listGroups(userCookie)).some(row=>row.id===leftGroupId),"E2E_REJOIN_SAME_DESTINATION_RESTORED");
   phase = "E2E_ORDER_PROOF_APPROVAL";
   const created = await request("/purchase-orders", userCookie, { plan: "PLUS", currency: "VND", orderType: "license" });
   check(created.status === 201 || created.status === 200, "E2E_ORDER_CREATE");

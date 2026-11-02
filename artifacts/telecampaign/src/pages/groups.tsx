@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownToLine,
   ChevronDown,
@@ -12,7 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { type Destination, useListDestinations, useListTelegramAccounts, useSyncTelegramDestinations } from "@workspace/api-client-react";
+import { type Destination, getListDestinationsQueryKey, getListTelegramAccountsQueryKey, useListDestinations, useListTelegramAccounts, useSyncTelegramDestinations } from "@workspace/api-client-react";
 import { AppLayout, Modal, Panel, Toast } from "@/components/layout/AppLayout";
 import { useLanguage } from "@/lib/i18n";
 
@@ -30,6 +31,7 @@ const statusOptions = {
 } as const;
 
 export default function Groups() {
+  const queryClient = useQueryClient();
   const { language } = useLanguage();
   const vi = language === "vi";
   const destinations = useListDestinations();
@@ -177,10 +179,18 @@ export default function Groups() {
       setToast(copy.noAccountToast);
       return;
     }
-    void Promise.all(connected.map((account) => sync.mutateAsync({ accountId: account.id })))
-      .then(() => {
-        void destinations.refetch();
-        setToast(copy.syncDone);
+    void Promise.allSettled(connected.map((account) => sync.mutateAsync({ accountId: account.id })))
+      .then(async results => {
+        await Promise.all([
+          queryClient.invalidateQueries({queryKey: getListDestinationsQueryKey()}),
+          queryClient.invalidateQueries({queryKey: getListTelegramAccountsQueryKey()}),
+        ]);
+        const current = queryClient.getQueryData<Destination[]>(getListDestinationsQueryKey());
+        setSelected(previous => previous && current && !current.some(row => row.id === previous.id) ? null : previous);
+        const failed = results.filter(result => result.status === "rejected").length;
+        setToast(!failed ? copy.syncDone : failed === results.length ? copy.syncError
+          : vi ? "Đã cập nhật các tài khoản đồng bộ thành công. Một số tài khoản chưa đồng bộ được, vui lòng thử lại."
+            : "Successfully synced accounts have been updated. Some accounts could not sync; please retry.");
       })
       .catch(() => setToast(copy.syncError));
   };

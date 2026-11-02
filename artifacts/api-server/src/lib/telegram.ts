@@ -1,7 +1,12 @@
 import { Api, TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { db, destinationsTable, proxiesTable, telegramAccountsTable } from "@workspace/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import {
+  destinationIdsToMarkUnavailableAfterSync, isLeftTelegramEntity,
+  UNAVAILABLE_TELEGRAM_DESTINATION_REASON,
+} from "./telegram-destination-state";
+export { destinationIdsToMarkUnavailableAfterSync } from "./telegram-destination-state";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { requireTelegramConfiguration } from "./telegram-config";
 import { recordActivity } from "./activity";
@@ -22,6 +27,8 @@ type TelegramEntity = {
   broadcast?: boolean;
   megagroup?: boolean;
   forum?: boolean;
+  left?: boolean;
+  kicked?: boolean;
   creator?: boolean;
   adminRights?: {
     postMessages?: boolean;
@@ -340,31 +347,6 @@ type TelegramForumTopic = {
   hidden?: boolean;
 };
 
-type SyncedDestination = {
-  id: string;
-  telegramId: string;
-  topicId: number | null;
-};
-
-export function destinationIdsToMarkUnavailableAfterSync(
-  previousDestinations: SyncedDestination[],
-  syncedTelegramIds: ReadonlySet<string>,
-  syncedDestinationKeys: ReadonlySet<string>,
-  topicSyncVerifiedForTelegramIds: ReadonlySet<string>,
-): string[] {
-  const destinationKey = (telegramId: string, topicId: number | null) =>
-    `${telegramId}:${topicId ?? "chat"}`;
-
-  return previousDestinations
-    .filter((destination) => {
-      if (!syncedTelegramIds.has(destination.telegramId)) return true;
-      if (destination.topicId === null) return false;
-      return topicSyncVerifiedForTelegramIds.has(destination.telegramId)
-        && !syncedDestinationKeys.has(destinationKey(destination.telegramId, destination.topicId));
-    })
-    .map((destination) => destination.id);
-}
-
 async function listForumTopics(client: TelegramClient, channel: any): Promise<TelegramForumTopic[]> {
   const topics: TelegramForumTopic[] = [];
   let offsetDate = 0;
@@ -600,6 +582,7 @@ export async function getTelegramProxyConfig(account: typeof telegramAccountsTab
 
 export async function syncAccountDestinations(accountId: string) {
   const { client, account } = await getAccountClient(accountId);
+  const syncStartedAt = new Date();
   let count = 0;
   try {
     const previousDestinations = await db.select().from(destinationsTable)
@@ -651,6 +634,7 @@ export async function syncAccountDestinations(accountId: string) {
       if (!entity || (!entity.megagroup && !entity.broadcast && !String(entity.className ?? "").includes("Chat"))) {
         continue;
       }
+      if (isLeftTelegramEntity(entity)) continue;
       const id = telegramId(entity);
       if (!id) continue;
       const canPost = canPostToEntity(entity);
@@ -713,14 +697,20 @@ export async function syncAccountDestinations(accountId: string) {
       syncedDestinationKeys,
       topicSyncVerifiedForTelegramIds,
     );
-    await Promise.all(unavailableDestinationIds
-      .map((destinationId) => db.update(destinationsTable).set({
+    if (unavailableDestinationIds.length) {
+      await db.update(destinationsTable).set({
         canPost: false,
-        permissionReason: "This destination is no longer available to the connected account",
+        permissionReason: UNAVAILABLE_TELEGRAM_DESTINATION_REASON,
         permissionCheckedAt: new Date(),
         restrictedUntil: null,
         updatedAt: new Date(),
-      }).where(eq(destinationsTable.id, destinationId))));
+      }).where(and(
+        eq(destinationsTable.accountId, accountId),
+        inArray(destinationsTable.id, unavailableDestinationIds),
+        // A later sync may have already proved that this account rejoined.
+        or(isNull(destinationsTable.permissionCheckedAt), lte(destinationsTable.permissionCheckedAt, syncStartedAt)),
+      ));
+    }
     await db.update(telegramAccountsTable).set({ status: "connected", lastSyncAt: new Date(), updatedAt: new Date() })
       .where(eq(telegramAccountsTable.id, accountId));
     await recordActivity({

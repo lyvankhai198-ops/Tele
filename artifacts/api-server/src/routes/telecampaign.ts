@@ -111,6 +111,7 @@ import { campaignCloneMode, campaignSummary, rebaseCampaignScheduleForResume } f
 import { getUserDailyQuotaUsage } from "../lib/user-daily-quota";
 import { recordActivity } from "../lib/activity";
 import { campaignTargetBatches } from "../lib/campaign-target-batches";
+import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../lib/telegram-destination-state";
 import {
   createCampaignBulkJob, getCampaignBulkJob, getActiveCampaignBulkJob,
   registerCampaignBulkProcessor, retryCampaignBulkJob,
@@ -2037,10 +2038,14 @@ router.post("/telegram/accounts/:accountId/sync", async (req, res): Promise<void
 });
 
 router.get("/destinations", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store");
   const accounts = await db.select({ id: telegramAccountsTable.id }).from(telegramAccountsTable)
     .where(and(eq(telegramAccountsTable.ownerUserId, currentUserId(req)), isNull(telegramAccountsTable.deletedAt)));
   const destinations = accounts.length
-    ? await db.select().from(destinationsTable).where(inArray(destinationsTable.accountId, accounts.map((account) => account.id))).orderBy(desc(destinationsTable.permissionCheckedAt))
+    ? await db.select().from(destinationsTable).where(and(
+      inArray(destinationsTable.accountId, accounts.map((account) => account.id)),
+      or(isNull(destinationsTable.permissionReason), ne(destinationsTable.permissionReason, UNAVAILABLE_TELEGRAM_DESTINATION_REASON)),
+    )).orderBy(desc(destinationsTable.permissionCheckedAt))
     : [];
   res.json(ListDestinationsResponse.parse(destinations));
 });
