@@ -641,6 +641,27 @@ export interface BulkCampaignControlInput {
   scheduledAt?: string | null;
 }
 
+export type CampaignBulkJobProgressStatus = typeof CampaignBulkJobProgressStatus[keyof typeof CampaignBulkJobProgressStatus];
+
+
+export const CampaignBulkJobProgressStatus = {
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface CampaignBulkJobProgress {
+  id: string;
+  status: CampaignBulkJobProgressStatus;
+  total: number;
+  processed: number;
+  updatedCount: number;
+  skippedCount: number;
+  /** @nullable */
+  error: string | null;
+}
+
 export type BulkCampaignControlResultAction = typeof BulkCampaignControlResultAction[keyof typeof BulkCampaignControlResultAction];
 
 
@@ -657,6 +678,7 @@ export type BulkCampaignControlResultSkippedItem = {
 
 export interface BulkCampaignControlResult {
   action: BulkCampaignControlResultAction;
+  job?: CampaignBulkJobProgress;
   updatedCount: number;
   skippedCount: number;
   skipped: BulkCampaignControlResultSkippedItem[];
@@ -1350,6 +1372,7 @@ export interface PurchaseOrderReviewInput {
      * @maxLength 1000
      */
   reason?: string;
+  /** Admin confirmation of an actual VND bank receipt for a pending or expired order, including automated orders. Does not bypass USDT on-chain verification. Rejection of pending/expired orders requires a reason. */
   manualVerification?: boolean;
 }
 

@@ -8,6 +8,7 @@ import { startAdminGroupJoinWorker } from "./lib/admin-group-join-worker";
 import { startSubscriptionReminderWorker } from "./lib/subscription-reminder-worker";
 import { startSupportTelegramBridge } from "./lib/support-telegram";
 import { startPaymentWorker } from "./lib/payment-worker";
+import { startCampaignBulkJobWorker } from "./lib/campaign-bulk-jobs";
 
 const rawPort = process.env["PORT"];
 
@@ -36,6 +37,7 @@ void getUnmappedLegacyOwnerCount().then(async (unmappedOwners) => {
   startActivityLogCleanup();
   startSupportTelegramBridge();
   startPaymentWorker();
+  if (unmappedOwners === 0) startCampaignBulkJobWorker();
   if (unmappedOwners === 0 && process.env.TELECAMPAIGN_DISABLE_WORKER !== "true") {
     startCampaignWorker();
         if (process.env.TELECAMPAIGN_DISABLE_GROUP_JOIN_WORKER !== "true") {

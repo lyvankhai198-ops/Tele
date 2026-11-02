@@ -918,6 +918,15 @@ export const BulkControlCampaignsBody = zod.object({
 
 export const BulkControlCampaignsResponse = zod.object({
   "action": zod.enum(['pause', 'resume']),
+  "job": zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.int(),
+  "processed": zod.int(),
+  "updatedCount": zod.int(),
+  "skippedCount": zod.int(),
+  "error": zod.string().nullable()
+}).optional(),
   "updatedCount": zod.number(),
   "skippedCount": zod.number(),
   "skipped": zod.array(zod.object({
@@ -925,6 +934,47 @@ export const BulkControlCampaignsResponse = zod.object({
   "name": zod.string(),
   "reason": zod.string()
 }))
+})
+
+
+export const GetActiveCampaignBulkJobResponse = zod.union([zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.int(),
+  "processed": zod.int(),
+  "updatedCount": zod.int(),
+  "skippedCount": zod.int(),
+  "error": zod.string().nullable()
+}),zod.null()])
+
+
+export const GetCampaignBulkJobParams = zod.object({
+  "jobId": zod.coerce.string()
+})
+
+export const GetCampaignBulkJobResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.int(),
+  "processed": zod.int(),
+  "updatedCount": zod.int(),
+  "skippedCount": zod.int(),
+  "error": zod.string().nullable()
+})
+
+
+export const RetryCampaignBulkJobParams = zod.object({
+  "jobId": zod.coerce.string()
+})
+
+export const RetryCampaignBulkJobResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.int(),
+  "processed": zod.int(),
+  "updatedCount": zod.int(),
+  "skippedCount": zod.int(),
+  "error": zod.string().nullable()
 })
 
 
@@ -1877,7 +1927,7 @@ export const reviewPurchaseOrderBodyManualVerificationDefault = false;
 export const ReviewPurchaseOrderBody = zod.object({
   "decision": zod.enum(['paid', 'rejected']),
   "reason": zod.string().min(reviewPurchaseOrderBodyReasonMin).max(reviewPurchaseOrderBodyReasonMax).optional(),
-  "manualVerification": zod.boolean().default(reviewPurchaseOrderBodyManualVerificationDefault)
+  "manualVerification": zod.boolean().default(reviewPurchaseOrderBodyManualVerificationDefault).describe('Admin confirmation of an actual VND bank receipt for a pending or expired order, including automated orders. Does not bypass USDT on-chain verification. Rejection of pending\/expired orders requires a reason.')
 })
 
 export const ReviewPurchaseOrderResponse = zod.object({
