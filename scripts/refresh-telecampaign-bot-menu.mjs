@@ -8,8 +8,19 @@ import { TELEGRAM_ADMIN_MENU } from "../artifacts/api-server/src/lib/telegram-ad
 let databaseCheckPassed = false;
 
 export function adminUpdateText(note = "") {
-  const detail = typeof note === "string" ? note.trim().slice(0, 3500) : "";
-  return detail ? `TeleCamp — nội dung cập nhật:\n\n${detail}` : "Menu quản trị đã được làm mới.";
+  if (typeof note !== "string") throw Error("Bilingual release notes are required");
+  if (!note.trim()) return "Menu quản trị đã được làm mới.\nAdmin menu refreshed.";
+  // The deployed commit body or TELECAMPAIGN_UPDATE_NOTE supplies both
+  // translations explicitly. Never invent an English translation or silently
+  // send a Vietnamese-only release announcement.
+  const match = note.trim().match(/(?:^|\r?\n)\[VI\][ \t]*\r?\n([\s\S]+?)\r?\n\[EN\][ \t]*\r?\n([\s\S]+)$/);
+  const vi = match?.[1].trim(), en = match?.[2].trim();
+  if (!vi || !en || /\r?\n\[(?:VI|EN)\]/.test(vi + "\n" + en)) {
+    throw Error("Both VI and EN release notes are required");
+  }
+  const bounded = text => text.length <= 1750 ? text
+    : text.slice(0, 1749).replace(/[\uD800-\uDBFF]$/, "").trimEnd() + "…";
+  return `TELECAMP — CẬP NHẬT / UPDATE\n\nTIẾNG VIỆT\n${bounded(vi)}\n\nENGLISH\n${bounded(en)}`;
 }
 
 function deployedUpdateNote() {
@@ -44,8 +55,10 @@ export async function refreshAdminMenu(settings, call, updateNote = "", options 
   const support = settings?.supportChat;
   if (support?.telegramBridgeEnabled === false) throw Error("Bridge is disabled");
   if (options.announcementChatId !== undefined) {
+    if (typeof updateNote !== "string" || !updateNote.trim()) throw Error("Bilingual release notes are required");
+    const text = adminUpdateText(updateNote);
     const chatId = await verifyReleaseGroup(call, options.announcementChatId);
-    const sent = await call("sendMessage", { chat_id: chatId, text: adminUpdateText(updateNote) });
+    const sent = await call("sendMessage", { chat_id: chatId, text });
     if (!sent?.message_id || String(sent.chat?.id) !== chatId) throw Error("Group delivery was not confirmed");
     return "group";
   }

@@ -8,7 +8,9 @@ import vm from "node:vm";
 import * as identity from "../../artifacts/api-server/src/lib/license-key-identity.ts";
 import * as access from "../../artifacts/api-server/src/lib/telegram-admin-access.ts";
 import { TELEGRAM_ADMIN_MENU } from "../../artifacts/api-server/src/lib/telegram-admin-menu.ts";
-import { refreshAdminMenu } from "../refresh-telecampaign-bot-menu.mjs";
+import { refreshAdminMenu, adminUpdateText } from "../refresh-telecampaign-bot-menu.mjs";
+
+const bilingualNote = "[VI]\nĐã sửa đồng bộ nhóm.\n[EN]\nFixed group synchronization.";
 
 const KEY = "TEST-ONLY-NOT-A-REAL-LICENSE";
 const NOW = Date.parse("2026-10-31T06:00:00Z");
@@ -228,12 +230,13 @@ test("configured updates go only to the verified admin group, without a private 
     if(method==="getChat")return {id:-100123,type:"supergroup"};
     if(method==="getChatMember")return {status:"administrator",user:{id:7}};
     return {message_id:99,chat:{id:-100123}};
-  },"Đã sửa đồng bộ nhóm.",{announcementChatId:"-100123"});
+  },bilingualNote,{announcementChatId:"-100123"});
   assert.equal(destination,"group");
   assert.deepEqual(calls.map(c=>c.method),["getMe","getChat","getChatMember","sendMessage"]);
   assert.equal(calls[3].payload.chat_id,"-100123");
   assert.equal(calls[3].payload.reply_markup,undefined);
   assert.match(calls[3].payload.text,/Đã sửa đồng bộ nhóm/);
+  assert.match(calls[3].payload.text,/Fixed group synchronization/);
   assert.ok(!calls.some(c=>c.payload.chat_id==="42"));
 });
 test("invalid group, missing admin permission, mismatched identity or failed group delivery never falls back to private",async()=>{
@@ -246,9 +249,31 @@ test("invalid group, missing admin permission, mismatched identity or failed gro
       if(method==="getChatMember")return {status:scenario==="member"?"member":"administrator",user:{id:scenario==="other-bot"?8:7}};
       if(scenario==="send-error")throw Error("fixture failure");
       return {message_id:99,chat:{id:scenario==="wrong-receipt"?42:-100123}};
-    },"current release",{announcementChatId:scenario==="positive"?"42":scenario==="empty"?"":"-100123"}));
+    },bilingualNote,{announcementChatId:scenario==="positive"?"42":scenario==="empty"?"":"-100123"}));
     assert.ok(!calls.some(c=>c.payload.chat_id==="42"),scenario);
   }
+});
+test("release notices show separate VI and EN sections from the actual deployed notes",()=>{
+  const text=adminUpdateText("Scoped commit title\n\n"+bilingualNote.replaceAll("\n","\r\n"));
+  assert.match(text,/TIẾNG VIỆT\nĐã sửa đồng bộ nhóm\./);
+  assert.match(text,/ENGLISH\nFixed group synchronization\./);
+  assert.ok(!text.includes("Scoped commit title"));
+});
+test("missing or empty translations cannot send a group message or fall back to private",async()=>{
+  for(const note of ["","Only Vietnamese","[VI]\nOnly Vietnamese","[EN]\nOnly English",
+    "[VI]\n \n[EN]\nEnglish","[VI]\nTiếng Việt\n[EN]\n "]){
+    const methods=[];
+    await assert.rejects(refreshAdminMenu({supportChat:{adminTelegramChatId:"42"}},
+      async method=>{methods.push(method);},note,{announcementChatId:"-100123"}));
+    assert.equal(methods.length,0);
+  }
+});
+test("long bilingual notices retain both translations within Telegram's message limit",()=>{
+  const text=adminUpdateText(`[VI]\n${"Nội dung ".repeat(800)}\n[EN]\n${"Release detail ".repeat(800)}`);
+  assert.ok(text.length<=3600);
+  assert.match(text,/TIẾNG VIỆT\nNội dung/);
+  assert.match(text,/ENGLISH\nRelease detail/);
+  assert.equal((text.match(/…/g)||[]).length,2);
 });
 test("menu refresh refuses disabled/missing/group or mismatched private chat configurations", async () => {
   for (const supportChat of [{}, { adminTelegramChatId: "-10042" }, { adminTelegramChatId: "42", telegramBridgeEnabled: false }]) {
