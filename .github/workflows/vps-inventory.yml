@@ -1,0 +1,60 @@
+name: VPS read-only application inventory
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read running applications without environment or secrets
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v sshpass >/dev/null || { sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq sshpass >/dev/null; }
+          umask 077
+          known="$(mktemp)"
+          trap 'rm -f "$known"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 >"$known" 2>/dev/null
+          test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = 'SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM'
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
+          import os,json,subprocess,pwd,re
+          def run(args,env=None):
+              p=subprocess.run(args,capture_output=True,text=True,timeout=20,env=env)
+              return p.stdout if p.returncode==0 else ""
+          print("INVENTORY_HOST="+os.uname().nodename)
+          for u in pwd.getpwall():
+              if not os.path.isfile(u.pw_dir+"/.pm2/pm2.pid"): continue
+              command="command -v pm2 >/dev/null && pm2 jlist"
+              raw=run(["sudo","-n","-H","-u",u.pw_name,"bash","-lc",command])
+              try: entries=json.loads(raw)
+              except: 
+                  print("INVENTORY_PM2_UNREADABLE="+u.pw_name); continue
+              for p in entries:
+                  e=p.get("pm2_env",{})
+                  print("INVENTORY_APP="+json.dumps({"owner":u.pw_name,"name":p.get("name"),"status":e.get("status"),"cwd":e.get("pm_cwd"),"pid":p.get("pid")},ensure_ascii=False))
+          services=run(["systemctl","list-units","--type=service","--state=running","--no-pager","--no-legend"])
+          for line in services.splitlines():
+              parts=line.split()
+              if parts: print("INVENTORY_SERVICE="+parts[0])
+          ports=run(["ss","-H","-lntp"])
+          for line in ports.splitlines():
+              parts=line.split()
+              if len(parts)>=4:
+                  names=sorted(set(re.findall(r'"([^"]+)"',line)))
+                  print("INVENTORY_PORT="+json.dumps({"listen":parts[3],"process":names}))
+          for base in ["/etc/nginx/sites-enabled","/etc/nginx/conf.d"]:
+              if not os.path.isdir(base): continue
+              for name in sorted(os.listdir(base)):
+                  path=os.path.join(base,name)
+                  if not os.path.isfile(path): continue
+                  try: text=open(path).read()
+                  except: continue
+                  domains=re.findall(r"^\s*server_name\s+([^;]+);",text,re.M)
+                  upstreams=re.findall(r"^\s*proxy_pass\s+https?://(?:127\.0\.0\.1|localhost|\[::1\]):([0-9]+)",text,re.M)
+                  roots=re.findall(r"^\s*root\s+(/[a-zA-Z0-9_/.\-]+)\s*;",text,re.M)
+                  print("INVENTORY_SITE="+json.dumps({"file":name,"domains":domains,"local_ports":sorted(set(upstreams)),"roots":sorted(set(roots))},ensure_ascii=False))
+          PY
