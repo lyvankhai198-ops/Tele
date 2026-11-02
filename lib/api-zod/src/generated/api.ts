@@ -921,10 +921,10 @@ export const BulkControlCampaignsResponse = zod.object({
   "job": zod.object({
   "id": zod.string(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
-  "total": zod.int(),
-  "processed": zod.int(),
-  "updatedCount": zod.int(),
-  "skippedCount": zod.int(),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "skippedCount": zod.number().int(),
   "error": zod.string().nullable()
 }).optional(),
   "updatedCount": zod.number(),
@@ -940,10 +940,10 @@ export const BulkControlCampaignsResponse = zod.object({
 export const GetActiveCampaignBulkJobResponse = zod.union([zod.object({
   "id": zod.string(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
-  "total": zod.int(),
-  "processed": zod.int(),
-  "updatedCount": zod.int(),
-  "skippedCount": zod.int(),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "skippedCount": zod.number().int(),
   "error": zod.string().nullable()
 }),zod.null()])
 
@@ -955,10 +955,10 @@ export const GetCampaignBulkJobParams = zod.object({
 export const GetCampaignBulkJobResponse = zod.object({
   "id": zod.string(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
-  "total": zod.int(),
-  "processed": zod.int(),
-  "updatedCount": zod.int(),
-  "skippedCount": zod.int(),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "skippedCount": zod.number().int(),
   "error": zod.string().nullable()
 })
 
@@ -970,10 +970,10 @@ export const RetryCampaignBulkJobParams = zod.object({
 export const RetryCampaignBulkJobResponse = zod.object({
   "id": zod.string(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
-  "total": zod.int(),
-  "processed": zod.int(),
-  "updatedCount": zod.int(),
-  "skippedCount": zod.int(),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number().int(),
+  "skippedCount": zod.number().int(),
   "error": zod.string().nullable()
 })
 
