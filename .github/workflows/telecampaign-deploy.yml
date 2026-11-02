@@ -349,8 +349,8 @@ jobs:
           echo "public_release_check=passed"
           echo "private_diagnostic_log=$log"
           echo "backup_and_automatic_rollback=disabled"
-          # Refresh only the configured private admin's keyboard, never customer
-          # chats. Credentials stay on VPS; failures are reported without values.
+          # Updates use the configured release group; support/order recipients
+          # and the private admin keyboard are unchanged. No credentials printed.
           if [[ -f "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs" ]]; then
             if (
               set -a
@@ -359,7 +359,7 @@ jobs:
               node "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs"
             ) >>"$log" 2>&1; then
               echo "license_lookup_database_check=passed"
-              echo "admin_menu_refresh=passed"
+              echo "bot_update_delivery=passed"
             else
               bot_check_code=$?
               if [[ "$bot_check_code" -ne 3 ]]; then
@@ -368,7 +368,7 @@ jobs:
                 exit 1
               fi
               echo "license_lookup_database_check=passed"
-              echo "admin_menu_refresh=failed"
+              echo "bot_update_delivery=failed"
             fi
           fi
           REMOTE
