@@ -1,0 +1,90 @@
+name: Configure TeleCamp release notification group
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: Exact group chat ID confirmed by the owner
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: telecampaign-vps-operations
+  cancel-in-progress: false
+jobs:
+  configure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Use Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+      - name: Test notification routing without credentials or customer data
+        run: |
+          set -euo pipefail
+          git init candidate >/dev/null
+          git -C candidate fetch --depth=1 https://github.com/lyvankhai198-ops/Tele.git "$GITHUB_SHA" >/dev/null 2>&1
+          git -C candidate checkout --detach FETCH_HEAD >/dev/null 2>&1
+          cd candidate
+          node --check scripts/refresh-telecampaign-bot-menu.mjs
+          node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs
+      - name: Verify group and apply only release-notification operations files
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          GROUP_ID: ${{ inputs.chat_id }}
+        run: |
+          set -euo pipefail
+          [[ "$GROUP_ID" =~ ^-[1-9][0-9]{1,19}$ ]]
+          command -v sshpass >/dev/null || { sudo apt-get update -qq >/dev/null && sudo apt-get install -y -qq sshpass >/dev/null; }
+          umask 077
+          known="$(mktemp)"
+          trap 'rm -f "$known"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 >"$known" 2>/dev/null
+          test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = 'SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM'
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" ubuntu@15.235.142.30 "bash -s -- '$GITHUB_SHA' '$GROUP_ID'" <<'REMOTE'
+          set -euo pipefail
+          TARGET="$1"; GROUP_ID="$2"
+          cd /opt/telecampaign
+          exec 9>/var/lib/telecampaign/operation.lock
+          flock -w 60 9
+          log="/var/backups/telecampaign/release-group-$(date -u +%Y%m%dT%H%M%SZ).log"
+          umask 077
+          candidate="scripts/.release-group-candidate-$$.mjs"
+          trap 'rm -f "$candidate"' EXIT
+          set +e
+          (
+            set -e
+            git fetch --depth=2 https://github.com/lyvankhai198-ops/Tele.git "$TARGET"
+            git merge-base --is-ancestor HEAD "$TARGET"
+            while IFS= read -r path; do
+              case "$path" in
+                scripts/refresh-telecampaign-bot-menu.mjs|scripts/tests/telegram-license-lookup.test.mjs|.github/workflows/telecampaign-deploy.yml|.github/workflows/telecampaign-release-group.yml) ;;
+                *) echo 'notification_only_change_guard=failed'; exit 1 ;;
+              esac
+            done < <(git diff --name-only HEAD "$TARGET")
+            git diff --quiet -- scripts/refresh-telecampaign-bot-menu.mjs scripts/tests/telegram-license-lookup.test.mjs .github/workflows/telecampaign-deploy.yml .github/workflows/telecampaign-release-group.yml
+            git diff --cached --quiet
+            git show "$TARGET:scripts/refresh-telecampaign-bot-menu.mjs" >"$candidate"
+            node --check "$candidate"
+            set -a
+            source /etc/telecampaign/api.env
+            set +a
+            node "$candidate" --check-release-group "$GROUP_ID"
+            git -c core.hooksPath=/dev/null merge --ff-only "$TARGET"
+            test "$(git rev-parse HEAD)" = "$TARGET"
+            node scripts/refresh-telecampaign-bot-menu.mjs --configure-release-group "$GROUP_ID"
+            echo "release_group_operations=passed"
+          ) >>"$log" 2>&1
+          result=$?
+          set -e
+          if [[ "$result" -eq 0 ]]; then
+            grep -E '^(release_group_check|release_group_configured|release_announcement|release_group_operations)=passed$' "$log"
+            echo "notification_source_commit=$TARGET"
+            echo "application_restart=not_required"
+          else
+            echo "release_group_operations=failed"
+            echo "private_diagnostic_log=$log"
+            exit 1
+          fi
+          REMOTE
