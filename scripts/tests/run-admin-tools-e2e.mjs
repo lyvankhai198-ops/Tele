@@ -16,7 +16,12 @@ try {
   await build({
     entryPoints: [path.join(root, "scripts/tests/admin-tools.e2e.ts")],
     outfile: path.join(dir, "suite.mjs"), bundle: true, platform: "node", format: "esm",
-    alias: { "@workspace/db": path.join(root, "lib/db/src/index.ts") },
+    alias: {
+      "@workspace/db": path.join(root, "lib/db/src/index.ts"),
+      // Fixtures live outside the API package; use its actual ORM dependency,
+      // including subpaths, rather than relying on root dependency hoisting.
+      "drizzle-orm": path.dirname(require.resolve("drizzle-orm")),
+    },
     external: ["pg-native", "sharp", "pino", "pino-http", "express", "cookie-parser",
       "bufferutil", "utf-8-validate", "@clerk/*"],
     banner: { js: 'import {createRequire as __e2eRequire} from "node:module";import __e2ePath from "node:path";import __e2eUrl from "node:url";const require=__e2eRequire(import.meta.url);globalThis.require=require;globalThis.__filename=__e2eUrl.fileURLToPath(import.meta.url);globalThis.__dirname=__e2ePath.dirname(globalThis.__filename);' },
