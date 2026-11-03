@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n";
 import { adminToolRequest } from "@/lib/admin-tools-client";
 import { popupCopy, type Popup } from "@/lib/popup-client";
+import { hasSupportChatOpenIntent, isSupportChatOpenLink, requestSupportChatOpen, SUPPORT_CHAT_OPEN_EVENT } from "@/lib/support-chat-link";
 
 function buttonInk(color: string) {
   const c = color.match(/[a-f0-9]{2}/gi)?.map(v => parseInt(v, 16)) ?? [0,0,0];
@@ -48,9 +49,16 @@ export function PopupDialog({ popup, close, preview = false, mobile = false, pre
           </div>
         </div>
         <footer className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-6 py-4 sm:flex-row-reverse sm:px-8">
-          {popup.linkUrl && button && <a href={popup.linkUrl} target={popup.linkUrl.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer"
+          {popup.linkUrl && button && <a href={popup.linkUrl} target={popup.linkUrl.startsWith("/") || isSupportChatOpenLink(popup.linkUrl, window.location.origin) ? undefined : "_blank"} rel="noopener noreferrer"
             style={{ backgroundColor: popup.accent, color: buttonInk(popup.accent) }} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-extrabold shadow-sm transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-            onClick={e => { if (preview) { e.preventDefault(); return; } close(); if (popup.linkUrl.startsWith("/")) { e.preventDefault(); navigate(popup.linkUrl); } }}>
+            onClick={e => {
+              if (preview) { e.preventDefault(); return; }
+              if (isSupportChatOpenLink(popup.linkUrl, window.location.origin)) {
+                e.preventDefault(); close(); requestSupportChatOpen(); return;
+              }
+              close();
+              if (popup.linkUrl.startsWith("/")) { e.preventDefault(); navigate(popup.linkUrl); }
+            }}>
             {button}<ArrowUpRight size={17} />
           </a>}
           <Dialog.Close className="min-h-12 rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50">{text.close}</Dialog.Close>
@@ -63,15 +71,27 @@ export function AnnouncementPopup() {
   const { user } = useAuth();
   const [popup, setPopup] = useState<Popup | null>(null);
   const visit = useRef<{ userId: string; id: string; requested: boolean } | null>(null);
+  const supportRequested = useRef(hasSupportChatOpenIntent(window.location.search));
   const eligible = Boolean(user && user.role !== "admin" && !user.support && !user.mustChangePassword);
   useEffect(() => {
+    const openSupport = () => { supportRequested.current = true; setPopup(null); };
+    window.addEventListener(SUPPORT_CHAT_OPEN_EVENT, openSupport);
+    return () => window.removeEventListener(SUPPORT_CHAT_OPEN_EVENT, openSupport);
+  }, []);
+  useEffect(() => {
     setPopup(null);
-    if (!eligible || !user) { visit.current = null; return; }
-    if (visit.current?.userId !== user.id) visit.current = { userId: user.id, id: crypto.randomUUID(), requested: false };
+    if (!eligible || !user) {
+      if (visit.current) supportRequested.current = false;
+      visit.current = null; return;
+    }
+    if (visit.current?.userId !== user.id) {
+      if (visit.current) supportRequested.current = hasSupportChatOpenIntent(window.location.search);
+      visit.current = { userId: user.id, id: crypto.randomUUID(), requested: false };
+    }
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const attempt = () => {
-      if (cancelled) return;
+      if (cancelled || supportRequested.current) return;
       if (document.querySelector('[role="dialog"],[role="alertdialog"]')) { timer = setTimeout(attempt, 1000); return; }
       const current = visit.current;
       if (!current || current.requested) return;
@@ -79,7 +99,7 @@ export function AnnouncementPopup() {
       void adminToolRequest<{ popup: Popup | null }>("/popups/claim", { visitId: current.id })
         .then(result => {
           const show = () => {
-            if (cancelled || !result.popup || (result.popup.expiresAt && Date.parse(result.popup.expiresAt) <= Date.now())) return;
+            if (cancelled || supportRequested.current || !result.popup || (result.popup.expiresAt && Date.parse(result.popup.expiresAt) <= Date.now())) return;
             if (document.querySelector('[role="dialog"],[role="alertdialog"]')) { timer = setTimeout(show, 1000); return; }
             setPopup(result.popup);
           };
