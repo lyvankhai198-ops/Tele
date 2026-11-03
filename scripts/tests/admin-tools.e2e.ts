@@ -417,7 +417,7 @@ try {
   check((await request("/admin/popups")).status === 401, "E2E_POPUP_LOGIN_REQUIRED");
   check((await request("/admin/popups", userCookie)).status === 403, "E2E_POPUP_ADMIN_ONLY");
   const popupInput = { title: "Ưu đãi mẫu", body: "Nội dung kiểm thử popup.", titleEn: "Fixture offer", bodyEn: "Fixture announcement content.",
-    button: "Xem ưu đãi", buttonEn: "View offer", linkUrl: "/upgrade", status: "draft", enabled: true,
+    button: "Chat với hỗ trợ", buttonEn: "Chat with support", linkUrl: "/dashboard?chat=open", status: "draft", enabled: true,
     frequency: "daily", audience: "all", template: "offer", accent: "#4f46e5", priority: 70, startsAt: null, expiresAt: null };
   check((await request("/admin/popups", userCookie, popupInput)).status === 403, "E2E_POPUP_CUSTOMER_CANNOT_PUBLISH");
   for (const bad of [{ linkUrl: "javascript:alert(1)" }, { accent: ["#123456"] }, { priority: 999 },
@@ -429,6 +429,7 @@ try {
   check(madePopup.status === 201, "E2E_POPUP_DRAFT_CREATED");
   let popup = await madePopup.json() as any;
   check(popup.imageUrl && popup.frequency === "daily", "E2E_POPUP_IMAGE_AND_DEFAULT");
+  check(popup.linkUrl === "/dashboard?chat=open", "E2E_POPUP_SUPPORT_CHAT_LINK_PRESERVED");
   check((await request(`/popups/${popup.id}`, userCookie)).status === 404, "E2E_POPUP_DRAFT_PRIVATE");
   check((await request(`/popups/${popup.id}/image`)).status === 401, "E2E_POPUP_IMAGE_AUTH");
   check((await request(`/popups/${popup.id}/image`, adminCookie)).ok, "E2E_POPUP_ADMIN_IMAGE_PREVIEW");

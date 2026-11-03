@@ -46,6 +46,7 @@ jobs:
           python3 scripts/tests/test_release_safety.py
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
           node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs
+          node --experimental-vm-modules --test scripts/tests/support-chat-link.test.mjs
           node --experimental-vm-modules --test scripts/tests/admin-tools.test.mjs
           node --experimental-vm-modules --test scripts/tests/admin-key-access.test.mjs
           node --test scripts/tests/admin-navigation.test.mjs

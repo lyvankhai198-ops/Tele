@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useCloseSupportChat,
@@ -11,6 +11,7 @@ import { Headset, ImagePlus, Minus, Send, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useLanguage } from "@/lib/i18n";
 import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
+import { useSupportChatLink } from "@/lib/use-support-chat-link";
 
 export function SupportChatWidget() {
   const { user } = useAuth();
@@ -37,6 +38,18 @@ export function SupportChatWidget() {
   const send = useSendSupportChatMessage();
   const markRead = useMarkSupportChatRead();
   const closeChat = useCloseSupportChat();
+  const openFromLink = useCallback(() => {
+    try { window.localStorage.removeItem("telecampaign-support-chat-hidden"); } catch { /* Opening still works if storage is unavailable. */ }
+    setHidden(false);
+    setCloseConfirmOpen(false);
+    setOpen(true);
+  }, []);
+  useSupportChatLink({
+    user,
+    ready: Boolean(!chatEnabled || chat.data || chat.isError),
+    enabled: Boolean(chatEnabled && chat.data?.enabled !== false),
+    onOpen: openFromLink,
+  });
   const conversation = chat.data?.conversation;
   const messages = useMemo(() => conversation?.messages ?? [], [conversation?.messages]);
   const adminMessages = useMemo(
