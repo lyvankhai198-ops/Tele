@@ -41,7 +41,7 @@ jobs:
             out("CONTEXT",ctx.rows);
             phase="funnel";
             const funnel=await client.query(`
-              WITH log_flags AS (
+              WITH log_flags AS MATERIALIZED (
                 SELECT owner_user_id,
                   bool_or(event='account.login_started') AS attempted,
                   bool_or(event='account.connected') AS connected,
@@ -55,7 +55,7 @@ jobs:
                 WHERE event IN ('account.login_started','account.connected','destinations.synced','campaign.created',
                   'campaign.auto_created_after_group_join','campaign.cloned_by_user','campaign.target.sent','auth.login')
                 GROUP BY owner_user_id
-              ), flags AS (
+              ), flags AS MATERIALIZED (
                 SELECT u.created_at,
                   coalesce(l.attempted,false) OR EXISTS(SELECT 1 FROM telegram_accounts a WHERE a.owner_user_id=u.id::text) AS attempted,
                   coalesce(l.connected,false) OR EXISTS(SELECT 1 FROM telegram_accounts a WHERE a.owner_user_id=u.id::text AND a.session_encrypted IS NOT NULL) AS connected,
@@ -63,7 +63,7 @@ jobs:
                   coalesce(l.synced,false) OR EXISTS(SELECT 1 FROM telegram_accounts a JOIN destinations d ON d.account_id=a.id WHERE a.owner_user_id=u.id::text) AS synced,
                   coalesce(l.created_campaign,false) OR EXISTS(SELECT 1 FROM campaigns c WHERE c.owner_user_id=u.id::text) AS created_campaign,
                   coalesce(l.sent,false) AS sent_logged,
-                  coalesce(l.sent,false) OR EXISTS(SELECT 1 FROM campaigns c JOIN campaign_targets t ON t.campaign_id=c.id WHERE c.owner_user_id=u.id::text AND t.sent_at IS NOT NULL) AS sent,
+                  coalesce(l.sent,false) AS sent,
                   l.first_sent,coalesce(l.send_days,0) AS send_days,coalesce(l.login_7d,false) AS login_7d,
                   EXISTS(SELECT 1 FROM license_keys k WHERE k.claimed_by=u.id::text AND k.claimed_at IS NOT NULL) AS key_activated,
                   EXISTS(SELECT 1 FROM purchase_orders p WHERE p.owner_user_id=u.id::text AND p.status='paid') AS paid_order,
