@@ -47,7 +47,6 @@ jobs:
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
           node --experimental-vm-modules --test scripts/tests/telegram-license-lookup.test.mjs
           node --experimental-vm-modules --test scripts/tests/support-chat-link.test.mjs
-          node --test scripts/tests/telegram-connection-privacy.test.mjs
           node --experimental-vm-modules --test scripts/tests/admin-tools.test.mjs
           node --experimental-vm-modules --test scripts/tests/admin-key-access.test.mjs
           node --test scripts/tests/admin-navigation.test.mjs
@@ -72,6 +71,7 @@ jobs:
           PORT: "3004"
           BASE_PATH: /
         run: |
+          node --test scripts/tests/telegram-connection-privacy.test.mjs
           npx --yes pnpm@10.26.1 run typecheck:libs
           npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
           npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck
