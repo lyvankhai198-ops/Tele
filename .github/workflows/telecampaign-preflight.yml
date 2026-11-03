@@ -90,8 +90,9 @@ jobs:
           fi
           node <<'DIAGNOSTIC'
           const fs=require("node:fs");
-          const log="/var/backups/telecampaign/deploy-20261031T052306Z.log";
+          const log="/var/backups/telecampaign/deploy-20261103T175810Z.log";
           const text=fs.existsSync(log)?fs.readFileSync(log,"utf8"):"";
+          for (const code of new Set(text.match(/^ROUND_SCHEMA_[A-Z0-9_]+$/gm) ?? [])) console.log("migration_diagnostic="+code);
           const patterns={
             postgres_version_mismatch:/server version mismatch/i,
             postgres_authentication_failure:/password authentication failed|no password supplied/i,
