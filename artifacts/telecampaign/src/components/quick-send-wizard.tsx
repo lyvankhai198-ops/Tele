@@ -27,6 +27,7 @@ import {
   useGetGroupLibrary,
   useGetGroupLibraryAccess,
   useGetSystemDefaults,
+  useGetAccountSummary,
   useListDestinations,
   useListCampaigns,
   useListTelegramAccounts,
@@ -49,6 +50,7 @@ import {
   splitGroupLibrary,
 } from "@/lib/quick-send-groups";
 import { useLocation } from "wouter";
+import { CampaignFieldNote, DelayExamples } from "@/components/campaign-field-guidance";
 
 type QuickSendWizardProps = {
   onClose: () => void;
@@ -180,7 +182,8 @@ const copy = {
     time: "Giờ",
     advanced: "Cài đặt thêm",
     repeat: "Số vòng",
-    delay: "Delay giữa các vòng",
+    delay: "Delay Min",
+    delayMax: "Delay Max",
     seconds: "giây",
     defaultSafe: "Mặc định an toàn",
     run: "Tạo & bắt đầu gửi",
@@ -272,7 +275,8 @@ const copy = {
     time: "Time",
     advanced: "More settings",
     repeat: "Rounds",
-    delay: "Delay between rounds",
+    delay: "Delay Min",
+    delayMax: "Delay Max",
     seconds: "seconds",
     defaultSafe: "Safe default",
     run: "Create & start sending",
@@ -317,6 +321,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     },
   });
   const systemDefaults = useGetSystemDefaults();
+  const accountSummary = useGetAccountSummary();
   const sync = useSyncTelegramDestinations();
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const groupLibrary = useGetGroupLibrary(undefined, {
@@ -675,6 +680,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                           <option value="">{c.accountPlaceholder}</option>
                           {connectedAccounts.map((account) => <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>)}
                         </select>
+                        <CampaignFieldNote language={language} field="account" />
                       </label>
                       <div className="rounded-2xl border border-[#dbe6f0] bg-[#f8fbff] p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -696,6 +702,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                             <div>
                               <span className="text-[14px] font-extrabold text-[#0f172a]">{c.yourGroups}</span>
                               <p className="mt-1 text-[12px] font-medium text-[#64748b]">{c.yourGroupsDetail}</p>
+                              <CampaignFieldNote language={language} field="destinations" />
                             </div>
                             <div className="flex items-center justify-between gap-3">
                               <span className="text-[12px] font-bold text-[#64748b]">{c.selectedGroups(destinationIds.length)}</span>
@@ -823,6 +830,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                     <label className="block">
                       <span className="mb-2 block text-[13px] font-bold text-[#334155]">{c.textLabel}</span>
                       <textarea value={content} onChange={(event) => setContent(event.target.value)} rows={7} placeholder={c.textPlaceholder} className="w-full resize-y rounded-2xl border border-[#dbe2ea] px-4 py-3.5 text-[14px] font-medium leading-relaxed outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="quick-send-content" />
+                      <CampaignFieldNote language={language} field="text" />
                     </label>
                   ) : (
                     <div className="block">
@@ -845,6 +853,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                       {accountSavedMessages.isError
                         ? <p className="mt-2 text-[12px] font-semibold text-[#dc2626]">{c.savedError}</p>
                         : !accountSavedMessages.isLoading && !(accountSavedMessages.data ?? []).length && <p className="mt-2 text-[12px] font-semibold text-[#64748b]">{c.savedEmpty}</p>}
+                      <CampaignFieldNote language={language} field="saved" />
                     </div>
                   )}
                 </section>
@@ -864,6 +873,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                   <label className="block">
                     <span className="mb-2 block text-[13px] font-bold text-[#334155]">{c.campaignName}</span>
                     <input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} placeholder={c.campaignNamePlaceholder} className="h-12 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="quick-send-campaign-name" />
+                    <CampaignFieldNote language={language} field="name" />
                   </label>
                   {suggestedScheduleAt && (
                     <div className="rounded-2xl border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[#92400e]" data-testid="quick-send-restriction-suggestion">
@@ -886,18 +896,20 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                         <CalendarClock className="h-5 w-5 text-[#1d3bb8]" /><span className="text-[14px] font-extrabold text-[#0f172a]">{c.schedule}</span>
                       </button>
                     </div>
+                    <CampaignFieldNote language={language} field="schedule" />
                     {scheduleMode === "later" && <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.date}</span><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="quick-send-date" /></label>
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.time}</span><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="quick-send-time" /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.date}</span><input type="date" value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="quick-send-date" /><CampaignFieldNote language={language} field="dateRequired" /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.time}</span><input type="time" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="quick-send-time" /><CampaignFieldNote language={language} field="timeRequired" /></label>
                     </div>}
                   </div>
                   <details className="rounded-2xl border border-[#e2e8f0] px-4 py-3">
                     <summary className="cursor-pointer text-[13px] font-extrabold text-[#334155]">{c.advanced}</summary>
                     <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.repeat}</span><input type="number" min="1" max="300" value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} ({c.seconds})</span><input type="number" min="0" value={delayMin} onChange={(event) => setDelayMin(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} max ({c.seconds})</span><input type="number" min="0" value={delayMax} onChange={(event) => setDelayMax(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.repeat}</span><input type="number" min="1" max={accountSummary.data?.subscription.plan === "plus" ? 300 : undefined} value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="repeat" emphasis={Number(repeatCount) !== 300} /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} ({c.seconds})</span><input type="number" min="0" value={delayMin} onChange={(event) => setDelayMin(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="delayMin" /></label>
+                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delayMax} ({c.seconds})</span><input type="number" min="0" value={delayMax} onChange={(event) => setDelayMax(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="delayMax" /></label>
                     </div>
+                    <DelayExamples language={language} />
                   </details>
                 </section>
               )}
