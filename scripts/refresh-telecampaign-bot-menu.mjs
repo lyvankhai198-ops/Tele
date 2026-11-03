@@ -4,7 +4,8 @@ import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TELEGRAM_ADMIN_MENU } from "../artifacts/api-server/src/lib/telegram-admin-menu.ts";
+import { parseReleaseNote, releaseId } from "../artifacts/api-server/src/lib/release-update-core.ts";
+import { createRelease } from "../artifacts/api-server/src/lib/release-update-store.ts";
 let databaseCheckPassed = false;
 
 export function adminUpdateText(note = "") {
@@ -52,35 +53,16 @@ export async function verifyReleaseGroup(call, configuredChatId) {
 }
 
 export async function refreshAdminMenu(settings, call, updateNote = "", options = {}) {
-  const support = settings?.supportChat;
-  if (support?.telegramBridgeEnabled === false) throw Error("Bridge is disabled");
-  if (options.announcementChatId !== undefined) {
-    if (typeof updateNote !== "string" || !updateNote.trim()) throw Error("Bilingual release notes are required");
-    const text = adminUpdateText(updateNote);
-    const chatId = await verifyReleaseGroup(call, options.announcementChatId);
-    const sent = await call("sendMessage", { chat_id: chatId, text });
-    if (!sent?.message_id || String(sent.chat?.id) !== chatId) throw Error("Group delivery was not confirmed");
-    return "group";
-  }
-  const chatId = typeof support?.adminTelegramChatId === "string" ? support.adminTelegramChatId.trim() : "";
-  if (!/^[0-9]{1,20}$/.test(chatId)) throw Error("Private admin configuration required");
-  const me = await call("getMe", {});
-  if (!me?.is_bot) throw Error("Bot identity was not verified");
-  const chat = await call("getChat", { chat_id: chatId });
-  if (chat?.type !== "private" || String(chat.id) !== chatId) throw Error("Private admin chat was not verified");
-  const sent = await call("sendMessage", {
-    chat_id: chatId,
-    text: adminUpdateText(updateNote),
-    reply_markup: TELEGRAM_ADMIN_MENU,
-  });
-  if (!sent?.message_id || String(sent.chat?.id) !== chatId) throw Error("Admin menu delivery was not confirmed");
-  return "private";
+  // Retain a fail-closed export for older operations scripts. No CLI/automatic
+  // path may publish release notes or fall back to the private administrator.
+  throw Error("Approve one release update on the admin website before sending");
 }
 
 async function main() {
   const token = process.env.TELECAMPAIGN_SUPPORT_BOT_TOKEN ?? process.env.TELECAMPAIGN_KGPT_BOT_TOKEN;
-  if (!token || !process.env.DATABASE_URL) throw Error("Required protected configuration is missing");
+  if (!process.env.DATABASE_URL) throw Error("Required protected configuration is missing");
   const call = async (method, payload) => {
+    if (!token) throw Error("Bot configuration is missing");
     const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload), signal: AbortSignal.timeout(20_000),
@@ -102,7 +84,6 @@ async function main() {
     connectionTimeoutMillis: 10_000,
     query_timeout: 10_000,
   });
-  let settings;
   try {
     await client.connect();
     // Exercise PostgreSQL's real column/operator types without real keys, user
@@ -125,26 +106,23 @@ async function main() {
     databaseCheckPassed = true;
     console.log("license_lookup_database_check=passed");
     console.log("admin_tools_database_check=passed");
-    const result = await client.query("SELECT value FROM system_settings WHERE key = $1 LIMIT 1", ["admin_system_settings"]);
-    settings = JSON.parse(result.rows[0]?.value ?? "{}");
-    const storedGroup = await client.query("SELECT value FROM system_settings WHERE key=$1 LIMIT 1",
-      ["telecampaign_release_notification_settings"]);
-    const currentGroup = storedGroup.rows[0] ? JSON.parse(storedGroup.rows[0].value).chatId : undefined;
-    const announcementChatId = configureGroup ? process.argv[3] : currentGroup;
-    // An invalid configured group or a delivery failure must never fall back to
-    // a private chat, nor change the support/order-confirmation recipient.
-    if ((configureGroup || storedGroup.rows[0]) && announcementChatId === undefined) {
-      throw Error("Invalid release recipient configuration");
-    }
-    const destination = await refreshAdminMenu(settings, call, deployedUpdateNote(), { announcementChatId });
     if (configureGroup) {
-      // Persist only after Telegram confirms delivery to the exact group.
+      // Configuration verifies identity/permissions but never sends an update.
+      await verifyReleaseGroup(call, process.argv[3]);
       await client.query(`INSERT INTO system_settings(key,value) VALUES($1,$2)
-        ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`,
-      ["telecampaign_release_notification_settings", JSON.stringify({chatId:announcementChatId.trim()})]);
+        ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=now()`,
+      ["telecampaign_release_notification_settings", JSON.stringify({chatId:process.argv[3].trim()})]);
       console.log("release_group_configured=passed");
+      console.log("release_announcement=not_sent");
+      return;
     }
-    console.log(destination === "group" ? "release_announcement=passed" : "admin_menu_refresh=passed");
+    const root = fileURLToPath(new URL("../", import.meta.url));
+    const commit = releaseId(execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: root, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"],
+    }).trim());
+    const created = await createRelease(client, parseReleaseNote(deployedUpdateNote()), "deployment", commit);
+    console.log(created ? "release_draft=saved" : "release_draft=already_recorded");
+    console.log("release_announcement=not_sent");
   } finally {
     await client.end();
   }
@@ -152,7 +130,7 @@ async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(() => {
-    console.error("admin_menu_refresh=failed");
+    console.error("release_draft=failed");
     process.exitCode = databaseCheckPassed ? 3 : 2;
   });
 }

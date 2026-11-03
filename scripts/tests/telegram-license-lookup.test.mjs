@@ -210,34 +210,26 @@ test("real message router dispatches lookup only after admin authorization, befo
   assert.match(activation, /import \{ licenseKeyHash, normalizedLicenseKey \} from "\.\/license-key-identity"/);
 });
 
-test("menu refresh verifies bot and the exact private admin chat before sending", async () => {
+test("legacy menu-refresh entry point cannot send an automatic private update", async () => {
   const calls = [];
-  await refreshAdminMenu({ supportChat: { adminTelegramChatId: "42", telegramBridgeEnabled: true } }, async (method, payload) => {
+  await assert.rejects(refreshAdminMenu({ supportChat: { adminTelegramChatId: "42", telegramBridgeEnabled: true } }, async (method, payload) => {
     calls.push({ method, payload });
     if (method === "getMe") return { is_bot: true };
     if (method === "getChat") return { id: 42, type: "private" };
     return { message_id: 123, chat: { id: 42 } };
-  });
-  assert.deepEqual(calls.map(c => c.method), ["getMe", "getChat", "sendMessage"]);
-  assert.equal(calls[2].payload.chat_id, "42");
-  assert.equal(calls[2].payload.reply_markup, TELEGRAM_ADMIN_MENU);
+  }));
+  assert.equal(calls.length, 0);
 });
-test("configured updates go only to the verified admin group, without a private admin keyboard", async () => {
+test("configured group does not bypass approval on the admin website", async () => {
   const calls=[];
-  const destination=await refreshAdminMenu({supportChat:{adminTelegramChatId:"42"}},async(method,payload)=>{
+  await assert.rejects(refreshAdminMenu({supportChat:{adminTelegramChatId:"42"}},async(method,payload)=>{
     calls.push({method,payload});
     if(method==="getMe")return {id:7,is_bot:true};
     if(method==="getChat")return {id:-100123,type:"supergroup"};
     if(method==="getChatMember")return {status:"administrator",user:{id:7}};
     return {message_id:99,chat:{id:-100123}};
-  },bilingualNote,{announcementChatId:"-100123"});
-  assert.equal(destination,"group");
-  assert.deepEqual(calls.map(c=>c.method),["getMe","getChat","getChatMember","sendMessage"]);
-  assert.equal(calls[3].payload.chat_id,"-100123");
-  assert.equal(calls[3].payload.reply_markup,undefined);
-  assert.match(calls[3].payload.text,/Đã sửa đồng bộ nhóm/);
-  assert.match(calls[3].payload.text,/Fixed group synchronization/);
-  assert.ok(!calls.some(c=>c.payload.chat_id==="42"));
+  },bilingualNote,{announcementChatId:"-100123"}));
+  assert.equal(calls.length, 0);
 });
 test("invalid group, missing admin permission, mismatched identity or failed group delivery never falls back to private",async()=>{
   for(const scenario of ["positive","empty","wrong-chat","channel","member","other-bot","wrong-receipt","send-error"]){

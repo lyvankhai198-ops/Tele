@@ -12,6 +12,7 @@ import { encryptSecret } from "../../artifacts/api-server/src/lib/crypto";
 import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecampaign-orders";
 import sharp from "sharp";
 import { testCampaignBulkJobs } from "./campaign-bulk-jobs.e2e";
+import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
 const url = new URL(process.env.DATABASE_URL!);
@@ -26,6 +27,8 @@ const replies: Array<{ text?: string; reply_markup?: unknown }> = [];
 const feedbackPhotos: Array<{ caption: string; chatId: string; jpeg: boolean; type: string }> = [];
 let failNextFeedbackPhoto = false;
 let updates: unknown[] = [];
+let releaseMode = "ok";
+const releaseSends: Array<{ chat_id: string; text: string }> = [];
 globalThis.fetch = async (input, init) => {
   if (String(input).startsWith("https://api.telegram.org/")) {
     const method = String(input).split("/").pop();
@@ -50,8 +53,16 @@ globalThis.fetch = async (input, init) => {
     }
     const payload = JSON.parse(String(init?.body ?? "{}"));
     if (method === "getUpdates") return Response.json({ ok: true, result: updates.filter((u: any) => u.update_id >= payload.offset) });
-    if (method === "getChat") return Response.json({ ok: true, result: { id: 123456789, type: "private" } });
+    if (method === "getChat") return Response.json({ ok: true, result: String(payload.chat_id).startsWith("-")
+      ? { id: Number(payload.chat_id), type: "supergroup" } : { id: 123456789, type: "private" } });
+    if (method === "getChatMember") return Response.json({ ok:true,result:{status:"administrator",user:{id:123456789}} });
     if (method === "getMe") return Response.json({ ok: true, result: { id: 123456789, is_bot: true, username: "fixture_bot" } });
+    if (method === "sendMessage" && String(payload.text).startsWith("TELECAMP — CẬP NHẬT / UPDATE")) {
+      releaseSends.push(payload);
+      if (releaseMode === "reject") return Response.json({ok:false,error_code:400},{status:400});
+      if (releaseMode === "timeout") throw new DOMException("Fixture timeout","TimeoutError");
+      return Response.json({ok:true,result:{message_id:releaseSends.length,chat:{id:releaseMode==="wrong-receipt"?123456789:Number(payload.chat_id)}}});
+    }
     replies.push(payload);
     return Response.json({ ok: true, result: { message_id: replies.length, chat: { id: 123456789, type: "private" } } });
   }
@@ -261,6 +272,8 @@ try {
   check(schedule.ok, "E2E_SCHEDULE");
   const audit = await (await request("/admin/tools/audit", adminCookie)).json() as any[];
   check(audit.some(row => row.metadata.action === "daily_report.update"), "E2E_AUDIT_ACTOR");
+  phase = "E2E_RELEASE_UPDATES";
+  await testReleaseUpdates({request,adminCookie,userCookie,setMode:mode=>{releaseMode=mode;},sends:releaseSends});
   phase = "E2E_MFA_ENROLLMENT_AND_REPLAY";
   const begun = await request("/auth/mfa/begin", adminCookie, { password });
   check(begun.ok, "E2E_MFA_BEGIN");

@@ -79,7 +79,7 @@ jobs:
           result=$?
           set -e
           if [[ "$result" -eq 0 ]]; then
-            grep -E '^(release_group_check|release_group_configured|release_announcement|release_group_operations)=passed$' "$log"
+             grep -E '^(release_group_check|release_group_configured|release_group_operations)=passed$|^release_announcement=not_sent$' "$log"
             echo "notification_source_commit=$TARGET"
             echo "application_restart=not_required"
           else

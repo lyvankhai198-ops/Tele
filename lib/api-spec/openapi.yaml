@@ -17,6 +17,89 @@ tags:
   - name: activity
   - name: admin
 paths:
+  /admin/release-updates:
+    get:
+      operationId: listReleaseUpdates
+      tags: [admin]
+      responses:
+        "200":
+          description: Private release drafts and the configured group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseUpdateList"
+    post:
+      operationId: createReleaseUpdate
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseContent"
+      responses:
+        "201":
+          description: Private draft created without sending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseUpdate"
+  /admin/release-updates/{releaseId}:
+    parameters:
+      - in: path
+        name: releaseId
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: updateReleaseUpdate
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseEdit"
+      responses:
+        "200":
+          description: Draft text saved, previous delivery state unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseUpdate"
+    delete:
+      operationId: deleteReleaseUpdate
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseVersion"
+      responses:
+        "204":
+          description: Hidden from web, Telegram message untouched
+  /admin/release-updates/{releaseId}/send:
+    parameters:
+      - in: path
+        name: releaseId
+        required: true
+        schema: { type: string }
+    post:
+      operationId: sendReleaseUpdate
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseSend"
+      responses:
+        "200":
+          description: Outcome of sending only the explicitly selected release
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseUpdate"
   /healthz:
     get:
       operationId: healthCheck
@@ -2027,6 +2110,54 @@ components:
       required: true
       schema: { type: string }
   schemas:
+    ReleaseContent:
+      type: object
+      required: [title, vi, en]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        vi: { type: string, minLength: 1, maxLength: 1750 }
+        en: { type: string, minLength: 1, maxLength: 1750 }
+    ReleaseVersion:
+      type: object
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
+    ReleaseEdit:
+      allOf:
+        - $ref: "#/components/schemas/ReleaseContent"
+        - $ref: "#/components/schemas/ReleaseVersion"
+    ReleaseSend:
+      type: object
+      required: [version, destination, confirmed]
+      properties:
+        version: { type: integer, minimum: 1 }
+        destination: { type: string, pattern: "^-[1-9][0-9]{1,19}$" }
+        confirmed: { type: boolean, enum: [true] }
+    ReleaseUpdate:
+      allOf:
+        - $ref: "#/components/schemas/ReleaseContent"
+        - type: object
+          required: [id, version, status, createdAt, updatedAt, deletedAt, sentAt, sendingAt, sentMessageId, destination, sentText]
+          properties:
+            id: { type: string }
+            version: { type: integer }
+            status: { type: string, enum: [draft, sending, sent, failed, unknown] }
+            createdAt: { type: string }
+            updatedAt: { type: string }
+            deletedAt: { type: [string, "null"] }
+            sentAt: { type: [string, "null"] }
+            sendingAt: { type: [string, "null"] }
+            sentMessageId: { type: [integer, "null"] }
+            destination: { type: [string, "null"] }
+            sentText: { type: [string, "null"] }
+    ReleaseUpdateList:
+      type: object
+      required: [updates, destination]
+      properties:
+        updates:
+          type: array
+          items: { $ref: "#/components/schemas/ReleaseUpdate" }
+        destination: { type: [string, "null"] }
     HealthStatus:
       type: object
       properties:

@@ -49,6 +49,7 @@ jobs:
           node --experimental-vm-modules --test scripts/tests/support-chat-link.test.mjs
           node --experimental-vm-modules --test scripts/tests/admin-tools.test.mjs
           node --experimental-vm-modules --test scripts/tests/admin-key-access.test.mjs
+          node --test scripts/tests/release-updates.test.mjs
           node --test scripts/tests/admin-navigation.test.mjs
       - name: Restore dependency download cache
         id: pnpm-cache
@@ -351,8 +352,8 @@ jobs:
           echo "public_release_check=passed"
           echo "private_diagnostic_log=$log"
           echo "backup_and_automatic_rollback=disabled"
-          # Updates use the configured release group; support/order recipients
-          # and the private admin keyboard are unchanged. No credentials printed.
+          # Persist one private release draft. Never send Telegram during a
+          # deployment; only an administrator can approve one update on the web.
           if [[ -f "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs" ]]; then
             if (
               set -a
@@ -361,7 +362,8 @@ jobs:
               node "$ROOT/scripts/refresh-telecampaign-bot-menu.mjs"
             ) >>"$log" 2>&1; then
               echo "license_lookup_database_check=passed"
-              echo "bot_update_delivery=passed"
+              echo "release_draft=passed"
+              echo "release_announcement=not_sent"
             else
               bot_check_code=$?
               if [[ "$bot_check_code" -ne 3 ]]; then
@@ -370,7 +372,8 @@ jobs:
                 exit 1
               fi
               echo "license_lookup_database_check=passed"
-              echo "bot_update_delivery=failed"
+              echo "release_draft=failed"
+              exit 1
             fi
           fi
           REMOTE
