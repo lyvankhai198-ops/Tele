@@ -61,7 +61,7 @@ async function verifyInstalled(client) {
 
 export async function prepareSchema(root, {verifyOnly=false}={}) {
   if (!process.env.DATABASE_URL) fail("ROUND_SCHEMA_DATABASE_UNAVAILABLE");
-  const require = createRequire(path.join(root,"artifacts/api-server/package.json"));
+  const require = createRequire(path.join(root,"lib/db/package.json"));
   const {Client} = require("pg");
   const client = new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
   await client.connect();
@@ -134,6 +134,8 @@ if (process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta
     console.log("round_timing_schema=passed");
   } catch (error) {
     console.error(error instanceof Error && /^ROUND_SCHEMA_[A-Z_]+$/.test(error.message) ? error.message : "ROUND_SCHEMA_FAILED");
+    if (typeof error?.code==="string" && /^[A-Z0-9_]{3,40}$/.test(error.code))
+      console.error("ROUND_SCHEMA_ERROR_CODE_"+error.code);
     process.exitCode=1;
   }
 }

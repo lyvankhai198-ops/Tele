@@ -34,17 +34,17 @@ export async function testCampaignRoundTiming(input: {
   const seconds=(items:any[])=>items.map(row=>(new Date(row.next_attempt_at).getTime()-new Date(scheduledAt).getTime())/1000);
   const single=await create(1,600);
   check(single.timingMode==="round"&&single.groupIntervalSeconds===0,"E2E_ROUND_SINGLE_NORMALIZE");
-  assert.deepEqual(seconds(await rows(single.id)),[0,3600],"E2E_ROUND_SINGLE_SCHEDULE");
+  check(JSON.stringify(seconds(await rows(single.id)))===JSON.stringify([0,3600]),"E2E_ROUND_SINGLE_SCHEDULE");
   const together=await create(3,0);
-  assert.deepEqual(seconds(await rows(together.id)),[0,0,0,3600,3600,3600],"E2E_ROUND_SAME_BATCH");
+  check(JSON.stringify(seconds(await rows(together.id)))===JSON.stringify([0,0,0,3600,3600,3600]),"E2E_ROUND_SAME_BATCH");
   const spaced=await create(3,300);
-  assert.deepEqual(seconds(await rows(spaced.id)),[0,300,600,4200,4500,4800],"E2E_ROUND_FIVE_MINUTES");
+  check(JSON.stringify(seconds(await rows(spaced.id)))===JSON.stringify([0,300,600,4200,4500,4800]),"E2E_ROUND_FIVE_MINUTES");
   const many=await create(6,600);
   check((await rows(many.id)).length===12&&many.destinationIds.length===6,"E2E_ROUND_MANY_GROUPS_ALLOWED");
   const legacy=await create(3,0,"legacy");
   const legacyRows=await rows(legacy.id);
   check(legacy.timingMode==="legacy"&&legacyRows.every(row=>row.delivery_order===null),"E2E_ROUND_LEGACY_METADATA");
-  assert.deepEqual(seconds(legacyRows),[0,3600,7200,10800,14400,18000],"E2E_ROUND_LEGACY_UNCHANGED");
+  check(JSON.stringify(seconds(legacyRows))===JSON.stringify([0,3600,7200,10800,14400,18000]),"E2E_ROUND_LEGACY_UNCHANGED");
 
   // Exercise the exact SQL predicate used by the worker, without contacting Telegram.
   async function ready(id:string,at:Date) {
@@ -68,7 +68,7 @@ export async function testCampaignRoundTiming(input: {
   });
   check(shifted===5,"E2E_ROUND_SHIFT_FUTURE_ONLY");
   ordered=await rows(spaced.id);
-  assert.deepEqual(seconds(ordered),[3600,3900,4200,7800,8100,8400],"E2E_ROUND_SHIFT_PRESERVES_GAPS");
+  check(JSON.stringify(seconds(ordered))===JSON.stringify([3600,3900,4200,7800,8100,8400]),"E2E_ROUND_SHIFT_PRESERVES_GAPS");
   await pool.query("UPDATE campaign_targets SET status='failed',sent_at=NULL,updated_at=$2 WHERE id=$1",[ordered[1].id,plus(4000)]);
   check((await ready(spaced.id,plus(4299))).length===0,"E2E_ROUND_FAILURE_WAIT");
   check((await ready(spaced.id,plus(4300)))[0]?.order===2,"E2E_ROUND_FAILURE_ADVANCES");
@@ -83,7 +83,7 @@ export async function testCampaignRoundTiming(input: {
   check(edit.ok,"E2E_ROUND_EXPLICIT_EDIT");
   const edited=await edit.json() as any;
   check(edited.timingMode==="round"&&edited.groupIntervalSeconds===600,"E2E_ROUND_EDIT_RELOAD_VALUES");
-  assert.deepEqual(seconds(await rows(legacy.id)),[0,600,1200,4800,5400,6000],"E2E_ROUND_EDIT_REBUILDS");
+  check(JSON.stringify(seconds(await rows(legacy.id)))===JSON.stringify([0,600,1200,4800,5400,6000]),"E2E_ROUND_EDIT_REBUILDS");
   const invalid=await request("/campaigns",ownerCookie,{
     name:"invalid",content:"isolated fixture",telegramAccountId:account,templateId:template,destinationIds:destinations.slice(0,2),
     repeatCount:2,roundDelayMinSeconds:3600,roundDelayMaxSeconds:3600,timingMode:"round",groupIntervalSeconds:61,
