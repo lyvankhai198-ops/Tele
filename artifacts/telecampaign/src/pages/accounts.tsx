@@ -10,6 +10,7 @@ import {
   QrCode,
   RefreshCw,
   Send,
+  ShieldCheck,
   Smartphone,
   Trash2,
   X,
@@ -36,6 +37,11 @@ import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 
 const copy = {
   en: {
+    connectionPrivacyTitle: "Before you connect",
+    connectionPrivacyPurpose: "Connecting lets TeleCamp sync your groups and send campaigns according to your settings.",
+    connectionPrivacyPassword: "TeleCamp does not store your Telegram / 2FA password. If requested, it is used only to authenticate with Telegram.",
+    connectionPrivacySession: "Your login session is stored encrypted to keep the connection active.",
+    connectionPrivacyRevoke: "You can revoke this session at any time in Telegram → Settings → Devices.",
     requestFailed: "The request could not be completed.",
     codeSent: "A new Telegram verification code was sent. Use only the latest code.",
     loginComplete: "Telegram account logged in.",
@@ -125,6 +131,11 @@ const copy = {
     qrRegenerate: "Generate new QR",
   },
   vi: {
+    connectionPrivacyTitle: "Trước khi kết nối",
+    connectionPrivacyPurpose: "Kết nối giúp TeleCamp đồng bộ nhóm và gửi chiến dịch theo cấu hình của bạn.",
+    connectionPrivacyPassword: "TeleCamp không lưu mật khẩu Telegram / 2FA của bạn. Mật khẩu (nếu được yêu cầu) chỉ dùng để xác thực với Telegram.",
+    connectionPrivacySession: "Phiên đăng nhập được lưu dưới dạng mã hóa để duy trì kết nối.",
+    connectionPrivacyRevoke: "Bạn có thể thu hồi phiên bất cứ lúc nào tại Telegram → Cài đặt → Thiết bị.",
     requestFailed: "Yêu cầu không thể hoàn thành.",
     codeSent: "Đã gửi mã xác minh Telegram mới. Chỉ dùng mã mới nhất.",
     loginComplete: "Đã Login tài khoản Telegram.",
@@ -214,6 +225,23 @@ const copy = {
     qrRegenerate: "Tạo mã QR mới",
   },
 } as const;
+
+function ConnectionPrivacyNotice({ language }: { language: Language }) {
+  const text = copy[language];
+  return (
+    <aside role="note" className="mb-5 rounded-2xl border border-[#bde4f9] bg-[#f0f9ff] p-4" data-testid="telegram-connection-privacy">
+      <div className="mb-2 flex items-center gap-2 text-[#075985]">
+        <ShieldCheck className="h-5 w-5 shrink-0" aria-hidden="true" />
+        <h3 className="text-[14px] font-bold">{text.connectionPrivacyTitle}</h3>
+      </div>
+      <div className="space-y-2 text-[13px] leading-relaxed text-[#334155]">
+        <p>{text.connectionPrivacyPurpose}</p>
+        <p className="font-semibold">{text.connectionPrivacyPassword}</p>
+        <p>{text.connectionPrivacySession} {text.connectionPrivacyRevoke}</p>
+      </div>
+    </aside>
+  );
+}
 
 function errorMessage(error: unknown, language: Language, fallback: string) {
   return localizedErrorMessage(error, language, fallback);
@@ -794,6 +822,7 @@ export default function Accounts() {
 
       {showAddModal && (
         <AccountsDialog title={text.addTitle} description={text.addDescription} onClose={closeAddModal} testId="telegram-accounts-add-dialog">
+          <ConnectionPrivacyNotice language={language} />
           {addMethod === "choose" ? (
             <div className="space-y-4">
               <button type="button" onClick={() => setAddMethod("api")} className="flex w-full items-start gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5 text-left shadow-sm transition-all hover:border-[#7dd3fc] hover:bg-[#f8fcff] hover:shadow-md" data-testid="telegram-accounts-method-api">
@@ -849,6 +878,7 @@ export default function Accounts() {
           onClose={closeLoginDialog}
           testId="telegram-accounts-login-dialog"
         >
+          <ConnectionPrivacyNotice language={language} />
           {loginFlow.step === "code" ? (
             <form className="space-y-5" onSubmit={submitVerificationCode}>
               <p className="rounded-xl bg-[#f0f9ff] px-4 py-3 text-[13px] font-semibold text-[#0369a1]">
