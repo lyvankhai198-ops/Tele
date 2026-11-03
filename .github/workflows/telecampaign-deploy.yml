@@ -42,6 +42,7 @@ jobs:
           bash -n scripts/*.sh scripts/lib/telecampaign-release.sh
           node --test scripts/tests/campaign-bulk-delete.test.mjs
           node --test scripts/tests/campaign-bulk-jobs.test.mjs
+          node --test scripts/tests/campaign-round-timing.test.mjs scripts/tests/round-schema-approval.test.mjs
           node --test scripts/tests/telegram-destination-sync.test.mjs
           python3 scripts/tests/test_release_safety.py
           node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
@@ -90,6 +91,7 @@ jobs:
           DATABASE_URL: postgres://telecamp_test@127.0.0.1:5432/telecamp_test
         run: |
           npx --yes pnpm@10.26.1 --filter @workspace/db run push-force
+          node scripts/prepare-round-timing-schema.mjs --verify-installed "$PWD" "$GITHUB_SHA"
           node scripts/tests/run-admin-tools-e2e.mjs
       - name: Read frontend build environment without logging values
         env:
@@ -189,7 +191,7 @@ jobs:
           path: runtime
       - name: Package pinned recovery controls
         env:
-          CONTROL_SHA: 090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a
+          CONTROL_SHA: dfe79b8c8ea54d3cc3ee55c4c1ef77063280f423
         run: |
           git init controls
           cd controls
@@ -199,7 +201,7 @@ jobs:
             scripts/lib/telecampaign-release.sh scripts/deploy-telecampaign.sh \
             scripts/checkpoint-telecampaign.sh scripts/rollback-telecampaign.sh \
             scripts/backup-telecampaign.sh scripts/restore-telecampaign.sh \
-            scripts/prepare-notification-media-storage.sh
+            scripts/prepare-notification-media-storage.sh scripts/prepare-round-timing-schema.mjs
           git fetch --depth=1 origin "$GITHUB_SHA"
           git show FETCH_HEAD:scripts/prepare-campaign-delete-indexes.mjs > ../prepare-campaign-delete-indexes.mjs
       - name: Install SSH password helper
@@ -212,7 +214,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
           TARGET: ${{ github.sha }}
-          CONTROL_SHA: 090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a
+          CONTROL_SHA: dfe79b8c8ea54d3cc3ee55c4c1ef77063280f423
           HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
         shell: bash
         run: |

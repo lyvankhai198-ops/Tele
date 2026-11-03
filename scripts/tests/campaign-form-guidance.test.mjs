@@ -26,7 +26,7 @@ function load(name, mocks) {
 const guidance = load("campaign-field-guidance", {"react/jsx-runtime":{jsx,jsxs:jsx}});
 const expand = node => {
   if (!node || typeof node !== "object") return node;
-  if (typeof node.type === "function" && ["CampaignFieldNote","DelayExamples","DelayFields","ReviewItem"].includes(node.type.name)) return expand(node.type(node.props));
+  if (typeof node.type === "function" && ["CampaignFieldNote","CampaignGroupInterval","GroupCountRecommendation","DelayExamples","DelayFields","ReviewItem"].includes(node.type.name)) return expand(node.type(node.props));
   return {...node,props:{...node.props,children:[node.props.children].flat(Infinity).map(expand)}};
 };
 const nodes = node => !node || typeof node !== "object" ? [] : [node,...[node.props?.children].flat(Infinity).flatMap(nodes)];
@@ -47,7 +47,7 @@ function fixture(name,{language="vi",plan="pro",step=3,draft=baseDraft,editing=n
   };
   const data = {
     useListTelegramAccounts:[{id:"account",name:"Fixture account",status:"connected"}],
-    useListDestinations:["A","B"].map(id=>({id,accountId:"account",telegramId:id,title:id,canPost:true,kind:"group",topicId:null})),
+    useListDestinations:["A","B","C","D","E","F","G"].map(id=>({id,accountId:"account",telegramId:id,title:id,canPost:true,kind:"group",topicId:null})),
     useListCampaigns:[], useListMessageTemplates:[{id:"template",name:"Fixture template",mode:"text"}],
     useGetAccountSummary:{subscription:{plan}},useGetSystemDefaults:{campaignDefaults:{roundDelayMinSeconds:3600,roundDelayMaxSeconds:3600}},
     useListTelegramSavedMessages:[],useGetGroupLibraryAccess:{canView:false,canOpenLinks:false},useGetGroupLibrary:{groups:[]},
@@ -86,7 +86,8 @@ for(const language of ["vi","en"]) {
     const text=textOf(tree);
     for(const term of ["10800","18000","A","B","C","Telegram"])assert.ok(text.includes(term));
     assert.match(text,language==="vi"?/không đảm bảo chính xác/:/not guaranteed/);
-    assert.match(text,language==="vi"?/Không phải gửi hết/:/not only after/);
+    assert.match(text,language==="vi"?/gửi xong vòng này/:/after completing this round/);
+    assert.ok(text.includes("08:05") && text.includes("09:10"));
   });
   test(`create/edit campaign helpers retain controlled values, package limits and default 300 (${language})`,()=>{
     const editing={id:"existing",name:"Untouched name",telegramAccountId:"account",templateId:"template",destinationIds:["A"],
@@ -127,5 +128,33 @@ for(const language of ["vi","en"]) {
     const fresh=nodes(fixture("quick-send-wizard",{language,draft:null,step:3,plan:"plus"}).render());
     const repeat=fresh.find(n=>n.type==="input"&&n.props.min==="1");
     assert.equal(repeat.props.value,"300");assert.equal(repeat.props.max,300);
+  });
+  test(`group spacing is hidden for one group and the five-group advice is not a cap (${language})`,()=>{
+    for (const count of [1,2,4,5,6]) {
+      const ids=["A","B","C","D","E","F"].slice(0,count);
+      const campaign={id:"edit",name:"Fixture",telegramAccountId:"account",templateId:"template",destinationIds:ids,
+        timingMode:"round",groupIntervalSeconds:300,repeatCount:300,roundDelayMinSeconds:3600,roundDelayMaxSeconds:3600,status:"paused"};
+      const cf=fixture("campaign-form-modal",{language,editing:campaign});
+      let tree=cf.render(),all=nodes(tree);
+      assert.equal(all.some(n=>n.props["data-testid"]==="campaign-group-interval"),count>1);
+      assert.equal(all.some(n=>n.props["data-testid"]==="campaign-group-recommendation"),count>=5);
+      if(count>1) {
+        const field=all.find(n=>n.props["data-testid"]==="campaign-group-interval");
+        assert.equal(field.props.value,"5");
+        field.props.onChange({target:{value:"10"}});
+        tree=cf.render();cf.language(language==="vi"?"en":"vi");tree=cf.render();
+        assert.equal(nodes(tree).find(n=>n.props["data-testid"]==="campaign-group-interval").props.value,"10");
+      }
+      const qs=fixture("quick-send-wizard",{language,step:3,draft:{...baseDraft,destinationIds:ids,groupIntervalMinutes:"10"}});
+      const qnodes=nodes(qs.render());
+      assert.equal(qnodes.some(n=>n.props["data-testid"]==="quick-send-group-interval"),count>1);
+      const groups=fixture("quick-send-wizard",{language,step:1,draft:{...baseDraft,destinationIds:ids}});
+      assert.equal(nodes(groups.render()).some(n=>n.props["data-testid"]==="campaign-group-recommendation"),count>=5);
+      if(count>=5) {
+        const advice=all.find(n=>n.props["data-testid"]==="campaign-group-recommendation");
+        assert.match(textOf(advice),language==="vi"?/vẫn có thể tiếp tục/:/still continue/);
+      }
+      assert.equal(cf.mutations.length,0);assert.equal(qs.mutations.length,0);
+    }
   });
 }

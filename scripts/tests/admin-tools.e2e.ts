@@ -12,6 +12,7 @@ import { encryptSecret } from "../../artifacts/api-server/src/lib/crypto";
 import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecampaign-orders";
 import sharp from "sharp";
 import { testCampaignBulkJobs } from "./campaign-bulk-jobs.e2e";
+import { testCampaignRoundTiming } from "./campaign-round-timing.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
@@ -161,6 +162,7 @@ try {
   check(activeOnly.ok && activeResult.deletedCount === 1 && activeResult.skippedCount === 2, "E2E_DELETE_RUNNING_QUEUED_SKIPPED");
   phase = "E2E_CAMPAIGN_BULK_JOBS";
   await testCampaignBulkJobs({ownerId:userId,ownerCookie:userCookie,otherCookie:adminCookie,request});
+  await testCampaignRoundTiming({ownerId:userId,ownerCookie:userCookie,request});
   phase = "E2E_DESTINATION_MEMBERSHIP_VISIBILITY";
   const leftGroupId=randomUUID(), restrictedGroupId=randomUUID(), activeGroupId=randomUUID();
   for (const [id,canPost,reason] of [

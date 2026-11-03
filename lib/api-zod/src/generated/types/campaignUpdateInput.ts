@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CampaignUpdateInputStatus } from './campaignUpdateInputStatus';
+import type { CampaignUpdateInputTimingMode } from './campaignUpdateInputTimingMode';
 
 export interface CampaignUpdateInput {
   status?: CampaignUpdateInputStatus;
@@ -33,4 +34,10 @@ export interface CampaignUpdateInput {
      * @maximum 259200
      */
   roundDelayMaxSeconds?: number;
+  timingMode?: CampaignUpdateInputTimingMode;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  groupIntervalSeconds?: number;
 }

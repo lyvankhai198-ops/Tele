@@ -968,7 +968,8 @@ export default function Campaigns() {
                         <p>{account?.phone ?? account?.name ?? c.accountFallback}</p>
                         <p>{account?.name ?? "—"}</p>
                         <p>{c.scheduledLabel} {formatSchedule(campaign.scheduledAt, language)}</p>
-                        <p>{c.detailDelayRound} {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds}s</p>
+                        <p>{campaign.timingMode === "round" ? c.detailDelayRound : (language === "vi" ? "Delay lịch cũ:" : "Legacy send delay:")} {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds}s</p>
+                        {campaign.timingMode === "round" && campaign.destinationIds.length > 1 && <p>{language === "vi" ? "Khoảng cách nhóm:" : "Group spacing:"} {(campaign.groupIntervalSeconds ?? 0) / 60} {language === "vi" ? "phút" : "min"}</p>}
                          {isHighlighted && (
                            <p className="mt-2 rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 font-extrabold leading-relaxed text-[#b91c1c]">
                              Hãy kiểm tra chi tiết lỗi, xem nhóm đang chạy trong chiến dịch có quyền đăng không, sau đó chỉnh sửa để chạy lại chiến dịch.
@@ -1392,7 +1393,8 @@ export default function Campaigns() {
             </div>
             <div className="rounded-xl bg-[#f8fafc] p-4 text-[#475569]">
               <p><b>{c.detailRepeat}</b> {details.repeatCount} {c.detailRounds}</p>
-              <p className="mt-1"><b>{c.detailDelayRound}</b> {details.roundDelayMinSeconds}–{details.roundDelayMaxSeconds}s</p>
+              <p className="mt-1"><b>{details.timingMode === "round" ? c.detailDelayRound : (language === "vi" ? "Delay lịch cũ:" : "Legacy send delay:")}</b> {details.roundDelayMinSeconds}–{details.roundDelayMaxSeconds}s</p>
+              {details.timingMode === "round" && details.destinationIds.length > 1 && <p className="mt-1"><b>{language === "vi" ? "Khoảng cách nhóm:" : "Group spacing:"}</b> {(details.groupIntervalSeconds ?? 0) / 60} {language === "vi" ? "phút" : "min"}</p>}
               <p className="mt-1"><b>{c.detailSchedule}</b> {formatSchedule(details.scheduledAt, language)}</p>
             </div>
              {details.templateMode === "forward" ? (

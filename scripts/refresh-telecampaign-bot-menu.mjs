@@ -103,6 +103,9 @@ async function main() {
       (COALESCE((r.value::jsonb->>'paidAt')::timestamptz,CASE WHEN o.status='paid' THEN o.reviewed_at END)
         AT TIME ZONE 'Asia/Ho_Chi_Minh')::date=current_date GROUP BY o.currency`);
     await client.query(`SELECT key FROM system_settings WHERE key LIKE 'admin_audit:%' LIMIT 0`);
+    await client.query(`SELECT c.timing_mode,t.delivery_order,t.wait_before_seconds
+      FROM campaigns c LEFT JOIN campaign_targets t ON t.campaign_id=c.id WHERE false`);
+    console.log("round_timing_database_check=passed");
     databaseCheckPassed = true;
     console.log("license_lookup_database_check=passed");
     console.log("admin_tools_database_check=passed");

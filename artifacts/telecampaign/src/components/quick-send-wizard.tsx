@@ -50,7 +50,7 @@ import {
   splitGroupLibrary,
 } from "@/lib/quick-send-groups";
 import { useLocation } from "wouter";
-import { CampaignFieldNote, DelayExamples } from "@/components/campaign-field-guidance";
+import { CampaignFieldNote, CampaignGroupInterval, DelayExamples, GroupCountRecommendation } from "@/components/campaign-field-guidance";
 
 type QuickSendWizardProps = {
   onClose: () => void;
@@ -72,6 +72,7 @@ type QuickSendDraft = {
   repeatCount: string;
   delayMin: string;
   delayMax: string;
+  groupIntervalMinutes: string;
 };
 
 const QUICK_SEND_DRAFT_KEY = "telecampaign.quick-send-draft";
@@ -100,6 +101,7 @@ function readQuickSendDraft(): QuickSendDraft | null {
       repeatCount: hasLegacyDefaults ? QUICK_SEND_DEFAULTS.repeatCount : typeof value.repeatCount === "string" ? value.repeatCount : QUICK_SEND_DEFAULTS.repeatCount,
       delayMin: hasLegacyDefaults ? QUICK_SEND_DEFAULTS.delayMin : typeof value.delayMin === "string" ? value.delayMin : QUICK_SEND_DEFAULTS.delayMin,
       delayMax: hasLegacyDefaults ? QUICK_SEND_DEFAULTS.delayMax : typeof value.delayMax === "string" ? value.delayMax : QUICK_SEND_DEFAULTS.delayMax,
+      groupIntervalMinutes: typeof value.groupIntervalMinutes === "string" ? value.groupIntervalMinutes : "0",
     };
   } catch {
     return null;
@@ -348,6 +350,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   const [repeatCount, setRepeatCount] = useState(initialDraft.current?.repeatCount ?? QUICK_SEND_DEFAULTS.repeatCount);
   const [delayMin, setDelayMin] = useState(initialDraft.current?.delayMin ?? QUICK_SEND_DEFAULTS.delayMin);
   const [delayMax, setDelayMax] = useState(initialDraft.current?.delayMax ?? QUICK_SEND_DEFAULTS.delayMax);
+  const [groupIntervalMinutes, setGroupIntervalMinutes] = useState(initialDraft.current?.groupIntervalMinutes ?? "0");
   const [formError, setFormError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState(false);
@@ -428,6 +431,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       repeatCount,
       delayMin,
       delayMax,
+      groupIntervalMinutes,
     };
     window.localStorage.setItem(QUICK_SEND_DRAFT_KEY, JSON.stringify(draft));
   }, [
@@ -436,6 +440,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     completed,
     content,
     delayMax,
+    groupIntervalMinutes,
     delayMin,
     destinationIds,
     mode,
@@ -564,6 +569,10 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       return setFormError(c.validationRestrictionSchedule(formatRestrictionTime(suggestedScheduleAt!)));
     }
     const numericValues = [Number(repeatCount), Number(delayMin), Number(delayMax)];
+    const groupMinutes = destinationIds.length > 1 ? Number(groupIntervalMinutes) : 0;
+    if (!Number.isInteger(groupMinutes) || groupMinutes < 0 || groupMinutes > 4320) {
+      return setFormError(language === "vi" ? "Khoảng cách nhóm phải là số phút nguyên từ 0 đến 4320." : "Group spacing must be a whole number of minutes from 0 to 4320.");
+    }
     if (!Number.isInteger(numericValues[0]) || numericValues[0] < 1
       || !Number.isInteger(numericValues[1]) || numericValues[1] < 0
       || !Number.isInteger(numericValues[2]) || numericValues[2] < numericValues[1]) {
@@ -592,6 +601,8 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
           repeatCount: numericValues[0],
           roundDelayMinSeconds: numericValues[1],
           roundDelayMaxSeconds: numericValues[2],
+          timingMode: "round",
+          groupIntervalSeconds: groupMinutes * 60,
         },
       });
       window.localStorage.removeItem(QUICK_SEND_DRAFT_KEY);
@@ -703,6 +714,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                               <span className="text-[14px] font-extrabold text-[#0f172a]">{c.yourGroups}</span>
                               <p className="mt-1 text-[12px] font-medium text-[#64748b]">{c.yourGroupsDetail}</p>
                               <CampaignFieldNote language={language} field="destinations" />
+                              <GroupCountRecommendation language={language} count={selectedDestinations.length} />
                             </div>
                             <div className="flex items-center justify-between gap-3">
                               <span className="text-[12px] font-bold text-[#64748b]">{c.selectedGroups(destinationIds.length)}</span>
@@ -904,9 +916,11 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
                   </div>
                   <details className="rounded-2xl border border-[#e2e8f0] px-4 py-3">
                     <summary className="cursor-pointer text-[13px] font-extrabold text-[#334155]">{c.advanced}</summary>
-                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.repeat}</span><input type="number" min="1" max={accountSummary.data?.subscription.plan === "plus" ? 300 : undefined} value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="repeat" emphasis={Number(repeatCount) !== 300} /></label>
+                    <div className={`mt-4 grid grid-cols-1 gap-4 ${selectedDestinations.length > 1 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                      <label className="sm:col-span-full"><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.repeat}</span><input type="number" min="1" max={accountSummary.data?.subscription.plan === "plus" ? 300 : undefined} value={repeatCount} onChange={(event) => setRepeatCount(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="repeat" emphasis={Number(repeatCount) !== 300} /></label>
                       <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delay} ({c.seconds})</span><input type="number" min="0" value={delayMin} onChange={(event) => setDelayMin(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="delayMin" /></label>
+                      {selectedDestinations.length > 1 && <CampaignGroupInterval language={language} value={groupIntervalMinutes}
+                        onChange={setGroupIntervalMinutes} id="quick-send-group-interval" />}
                       <label><span className="mb-1.5 block text-[12px] font-bold text-[#64748b]">{c.delayMax} ({c.seconds})</span><input type="number" min="0" value={delayMax} onChange={(event) => setDelayMax(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbe2ea] px-3 text-[13px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="delayMax" /></label>
                     </div>
                     <DelayExamples language={language} />
