@@ -191,7 +191,7 @@ jobs:
           path: runtime
       - name: Package pinned recovery controls
         env:
-          CONTROL_SHA: 090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a
+          CONTROL_SHA: dfe79b8c8ea54d3cc3ee55c4c1ef77063280f423
         run: |
           git init controls
           cd controls
@@ -214,7 +214,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
           TARGET: ${{ github.sha }}
-          CONTROL_SHA: 090cf7ecfcc917068dcf82130a0c2fc8d5cd7e9a
+          CONTROL_SHA: dfe79b8c8ea54d3cc3ee55c4c1ef77063280f423
           HOST_FINGERPRINT: SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM
         shell: bash
         run: |
