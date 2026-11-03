@@ -79,7 +79,13 @@ export async function testCampaignRoundTiming(input: {
 
   const pause=await request(`/campaigns/${legacy.id}`,ownerCookie,{status:"paused"},"PATCH");
   check(pause.ok,"E2E_ROUND_PAUSE_BEFORE_EDIT");
-  const edit=await request(`/campaigns/${legacy.id}`,ownerCookie,{name:"round-edit",timingMode:"round",groupIntervalSeconds:600},"PATCH");
+  const resume=await request(`/campaigns/${legacy.id}`,ownerCookie,{status:"queued"},"PATCH");
+  check(resume.ok,"E2E_ROUND_LEGACY_RESUME");
+  const resumed=await resume.json() as any;
+  check(resumed.timingMode==="legacy"&&(await rows(legacy.id)).every(row=>row.delivery_order===null),
+    "E2E_ROUND_RESUME_RETAINS_LEGACY");
+  check((await request(`/campaigns/${legacy.id}`,ownerCookie,{status:"paused"},"PATCH")).ok,"E2E_ROUND_PAUSE_AGAIN");
+  const edit=await request(`/campaigns/${legacy.id}`,ownerCookie,{name:"round-edit",timingMode:"round",groupIntervalSeconds:600,scheduledAt},"PATCH");
   check(edit.ok,"E2E_ROUND_EXPLICIT_EDIT");
   const edited=await edit.json() as any;
   check(edited.timingMode==="round"&&edited.groupIntervalSeconds===600,"E2E_ROUND_EDIT_RELOAD_VALUES");

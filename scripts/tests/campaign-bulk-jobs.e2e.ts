@@ -75,8 +75,10 @@ export async function testCampaignBulkJobs(input: {
     const targets=await pool.query(`SELECT count(*)::int AS n,min(next_attempt_at) AS first,max(next_attempt_at) AS last
       FROM campaign_targets WHERE campaign_id=$1`,[run.id]);
     check(targets.rows[0].n===900,"E2E_BULK_ALL_TARGET_CHUNKS");
-    check(new Date(targets.rows[0].last).getTime()-new Date(targets.rows[0].first).getTime()===899*3000,
-      "E2E_BULK_TARGET_DELAY_PRESERVED");
+    check(run.timing_mode==="round" && run.delay_min_seconds===0 && run.delay_max_seconds===0,
+      "E2E_BULK_NEW_RUN_ROUND_MODE");
+    check(new Date(targets.rows[0].last).getTime()-new Date(targets.rows[0].first).getTime()===299*3000,
+      "E2E_BULK_ROUND_DELAY_PRESERVED");
   }
   const originals=await pool.query(`SELECT count(*)::int AS n FROM campaigns
     WHERE id=ANY($1::uuid[]) AND status='completed' AND repeat_count=300`,[ids]);
