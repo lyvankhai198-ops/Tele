@@ -2411,14 +2411,17 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
           timezone: campaign.timezone,
           maxRetries: campaign.maxRetries,
           repeatCount: campaign.repeatCount,
-          delayMinSeconds: 0,
-          delayMaxSeconds: 0,
+          timingMode: "round",
+          delayMinSeconds: campaign.timingMode === "round" && destinations.length > 1 ? campaign.delayMinSeconds : 0,
+          delayMaxSeconds: campaign.timingMode === "round" && destinations.length > 1 ? campaign.delayMinSeconds : 0,
           roundDelayMinSeconds: campaign.roundDelayMinSeconds,
           roundDelayMaxSeconds: campaign.roundDelayMaxSeconds,
         }).returning({ id: campaignsTable.id, name: campaignsTable.name });
         for (const rows of campaignTargetBatches({
           campaignId: run.id, destinationIds: destinations.map(destination => destination.id),
           repeatCount: campaign.repeatCount, startAt: campaignStart, nextDelaySeconds: randomRoundDelay,
+          timingMode: "round",
+          groupIntervalSeconds: campaign.timingMode === "round" ? campaign.delayMinSeconds : 0,
         })) {
           await tx.insert(campaignTargetsTable).values(rows);
         }
@@ -2699,29 +2702,19 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     status: "queued",
     maxRetries: systemSettings.campaignDefaults.maxRetries,
     repeatCount: parsed.data.repeatCount,
-    // Retained legacy columns are fixed at zero. New schedules no longer
-    // offset groups within the same delivery round.
-    delayMinSeconds: 0,
-    delayMaxSeconds: 0,
+    timingMode: parsed.data.timingMode,
+    // Reuse existing intra-round columns; the explicit mode preserves old schedules.
+    delayMinSeconds: parsed.data.timingMode === "round" && destinations.length > 1 ? parsed.data.groupIntervalSeconds : 0,
+    delayMaxSeconds: parsed.data.timingMode === "round" && destinations.length > 1 ? parsed.data.groupIntervalSeconds : 0,
     roundDelayMinSeconds: parsed.data.roundDelayMinSeconds,
     roundDelayMaxSeconds: parsed.data.roundDelayMaxSeconds,
   }).returning();
-  let nextDeliveryAt = initialRoundStartAt.getTime();
-  const targetRows = [];
-  for (let round = 0; round < parsed.data.repeatCount; round += 1) {
-    for (let destinationIndex = 0; destinationIndex < destinations.length; destinationIndex += 1) {
-      const destination = destinations[destinationIndex];
-      targetRows.push({
-        campaignId: campaign.id,
-        destinationId: destination.id,
-        status: "pending",
-        nextAttemptAt: new Date(nextDeliveryAt),
-      });
-      if (round < parsed.data.repeatCount - 1 || destinationIndex < destinations.length - 1) {
-        nextDeliveryAt += (parsed.data.roundDelayMinSeconds + Math.floor(Math.random() * (parsed.data.roundDelayMaxSeconds - parsed.data.roundDelayMinSeconds + 1))) * 1000;
-      }
-    }
-  }
+  const targetRows = [...campaignTargetBatches({
+    campaignId: campaign.id, destinationIds: destinations.map(destination => destination.id),
+    repeatCount: campaign.repeatCount, startAt: initialRoundStartAt,
+    timingMode: campaign.timingMode, groupIntervalSeconds: campaign.delayMinSeconds,
+    nextDelaySeconds: () => campaign.roundDelayMinSeconds + Math.floor(Math.random() * (campaign.roundDelayMaxSeconds - campaign.roundDelayMinSeconds + 1)),
+  })].flat();
   await db.insert(campaignTargetsTable).values(targetRows);
   await recordActivity({
     event: "campaign.created",
@@ -2826,26 +2819,19 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
       timezone: sourceCampaign.timezone,
       maxRetries: sourceCampaign.maxRetries,
       repeatCount: sourceCampaign.repeatCount,
-      delayMinSeconds: sourceCampaign.delayMinSeconds,
-      delayMaxSeconds: sourceCampaign.delayMaxSeconds,
+      timingMode: "round",
+      delayMinSeconds: sourceCampaign.timingMode === "round" && clonedDestinationIds.length > 1 ? sourceCampaign.delayMinSeconds : 0,
+      delayMaxSeconds: sourceCampaign.timingMode === "round" && clonedDestinationIds.length > 1 ? sourceCampaign.delayMinSeconds : 0,
       roundDelayMinSeconds: sourceCampaign.roundDelayMinSeconds,
       roundDelayMaxSeconds: sourceCampaign.roundDelayMaxSeconds,
     }).returning();
     if (clonedDestinationIds.length) {
-      await tx.insert(campaignTargetsTable).values(Array.from(
-        { length: sourceCampaign.repeatCount },
-        () => clonedDestinationIds.map((destinationId) => ({
-          campaignId: clone.id,
-          destinationId,
-          status: "pending" as const,
-          attempts: 0,
-          quotaReservedAt: null,
-          nextAttemptAt: null,
-          lastError: null,
-          sentMessageId: null,
-          sentAt: null,
-        })),
-      ).flat());
+      for (const rows of campaignTargetBatches({
+        campaignId: clone.id, destinationIds: clonedDestinationIds,
+        repeatCount: clone.repeatCount, startAt: new Date(),
+        timingMode: "round", groupIntervalSeconds: clone.delayMinSeconds,
+        nextDelaySeconds: () => clone.roundDelayMinSeconds + Math.floor(Math.random() * (clone.roundDelayMaxSeconds - clone.roundDelayMinSeconds + 1)),
+      })) await tx.insert(campaignTargetsTable).values(rows);
     }
     await tx.insert(activityLogsTable).values({
       ownerUserId,
@@ -2939,7 +2925,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     || parsed.data.templateId !== undefined || parsed.data.destinationIds !== undefined
     || parsed.data.scheduledAt !== undefined || parsed.data.timezone !== undefined
     || parsed.data.repeatCount !== undefined || parsed.data.roundDelayMinSeconds !== undefined
-    || parsed.data.roundDelayMaxSeconds !== undefined;
+    || parsed.data.roundDelayMaxSeconds !== undefined || parsed.data.groupIntervalSeconds !== undefined
+    || parsed.data.timingMode !== undefined;
   if (!editing && !parsed.data.status) return void sendError(res, 400, "No campaign changes were provided");
   if (editing && parsed.data.status !== undefined) {
     return void sendError(res, 400, "Update campaign details and status in separate requests");
@@ -2984,6 +2971,10 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       const repeatCount = parsed.data.repeatCount ?? lockedCampaign.repeatCount;
       const roundDelayMinSeconds = parsed.data.roundDelayMinSeconds ?? lockedCampaign.roundDelayMinSeconds;
       const roundDelayMaxSeconds = parsed.data.roundDelayMaxSeconds ?? lockedCampaign.roundDelayMaxSeconds;
+      const timingMode = parsed.data.timingMode ?? lockedCampaign.timingMode;
+      const groupIntervalSeconds = timingMode === "round" && destinationIds.length > 1
+        ? (parsed.data.groupIntervalSeconds ?? (lockedCampaign.timingMode === "round" ? lockedCampaign.delayMinSeconds : 0))
+        : 0;
       if (!name.trim() || !telegramAccountId || !templateId || !destinationIds.length) {
         return { kind: "error" as const, status: 400, message: "Campaign name, account, template, and at least one destination are required" };
       }
@@ -3032,7 +3023,6 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         return { kind: "error" as const, status: 409, message: "Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission" };
       }
 
-      const targetRows: (typeof campaignTargetsTable.$inferInsert)[] = [];
        const reopeningCompletedCampaign = ["completed", "completed_with_errors"].includes(lockedCampaign.status);
        const sentByDestination = new Map<string, number>();
        let latestSentAt: Date | null = null;
@@ -3051,7 +3041,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
        const firstDeliveryAfterLastSend = latestSentAt
          ? latestSentAt.getTime() + randomGroupDelay() * 1000
         : Number.NEGATIVE_INFINITY;
-       let nextDeliveryAt = Math.max(
+       const nextDeliveryAt = Math.max(
         configuredRoundStartAt.getTime(),
         editSetAt.getTime(),
          firstDeliveryAfterLastSend,
@@ -3060,26 +3050,11 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         destination.id,
         Math.max(0, repeatCount - (sentByDestination.get(destination.id) ?? 0)),
       ]));
-      let remainingDeliveries = [...remainingByDestination.values()].reduce((total, count) => total + count, 0);
-       while (remainingDeliveries > 0) {
-         const roundDestinations = destinations.filter((destination) => (remainingByDestination.get(destination.id) ?? 0) > 0);
-         for (let destinationIndex = 0; destinationIndex < roundDestinations.length; destinationIndex += 1) {
-           const destination = roundDestinations[destinationIndex];
-          const remaining = remainingByDestination.get(destination.id) ?? 0;
-          if (remaining === 0) continue;
-          targetRows.push({
-            campaignId: lockedCampaign.id,
-            destinationId: destination.id,
-            status: "pending",
-             nextAttemptAt: new Date(nextDeliveryAt),
-          });
-          remainingByDestination.set(destination.id, remaining - 1);
-          remainingDeliveries -= 1;
-           if (destinationIndex < roundDestinations.length - 1 || remainingDeliveries > 0) {
-             nextDeliveryAt += randomGroupDelay() * 1000;
-           }
-        }
-      }
+      const targetRows = [...campaignTargetBatches({
+        campaignId: lockedCampaign.id, destinationIds: destinations.map(destination => destination.id),
+        repeatCount, startAt: new Date(nextDeliveryAt), nextDelaySeconds: randomGroupDelay,
+        timingMode, groupIntervalSeconds, remainingByDestination,
+      })].flat();
 
        // Editing a completed campaign starts a fresh run on the same campaign:
        // the old delivery history is replaced by a new schedule beginning at 0.
@@ -3099,8 +3074,9 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         scheduleAnchorAt,
         timezone: parsed.data.timezone ?? lockedCampaign.timezone,
         repeatCount,
-        delayMinSeconds: 0,
-        delayMaxSeconds: 0,
+        timingMode,
+        delayMinSeconds: groupIntervalSeconds,
+        delayMaxSeconds: groupIntervalSeconds,
         roundDelayMinSeconds,
         roundDelayMaxSeconds,
         status: nextStatus,
@@ -3199,22 +3175,21 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         targetsByDestination.set(target.destinationId, rows);
       }
       const { roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(existing.scheduledAt, new Date());
-      let nextDeliveryAt = initialRoundStartAt.getTime();
       const destinationIds = [...targetsByDestination.keys()];
-      for (let round = 0; round < existing.repeatCount; round += 1) {
-        for (let destinationIndex = 0; destinationIndex < destinationIds.length; destinationIndex += 1) {
-          const destinationId = destinationIds[destinationIndex];
-          const targetId = targetsByDestination.get(destinationId)?.shift();
+      for (const rows of campaignTargetBatches({
+        campaignId: existing.id, destinationIds, repeatCount: existing.repeatCount, startAt: initialRoundStartAt,
+        timingMode: existing.timingMode, groupIntervalSeconds: existing.timingMode === "round" ? existing.delayMinSeconds : 0,
+        nextDelaySeconds: () => existing.roundDelayMinSeconds + Math.floor(Math.random() * (existing.roundDelayMaxSeconds - existing.roundDelayMinSeconds + 1)),
+      })) {
+        for (const row of rows) {
+          const targetId = targetsByDestination.get(row.destinationId)?.shift();
           if (targetId) {
             await db.update(campaignTargetsTable).set({
-              nextAttemptAt: new Date(nextDeliveryAt),
+              nextAttemptAt: row.nextAttemptAt,
+              deliveryOrder: row.deliveryOrder,
+              waitBeforeSeconds: row.waitBeforeSeconds,
               updatedAt: new Date(),
             }).where(eq(campaignTargetsTable.id, targetId));
-          }
-          if (round < existing.repeatCount - 1 || destinationIndex < destinationIds.length - 1) {
-            nextDeliveryAt += (existing.roundDelayMinSeconds + Math.floor(
-            Math.random() * (existing.roundDelayMaxSeconds - existing.roundDelayMinSeconds + 1),
-          )) * 1000;
           }
         }
       }

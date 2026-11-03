@@ -545,6 +545,14 @@ export const CampaignCloneMode = {
   user: 'user',
 } as const;
 
+export type CampaignTimingMode = typeof CampaignTimingMode[keyof typeof CampaignTimingMode];
+
+
+export const CampaignTimingMode = {
+  legacy: 'legacy',
+  round: 'round',
+} as const;
+
 export interface CampaignDailyQuota {
   /** @nullable */
   limit: number | null;
@@ -596,6 +604,12 @@ export interface Campaign {
   repeatCount: number;
   roundDelayMinSeconds: number;
   roundDelayMaxSeconds: number;
+  timingMode?: CampaignTimingMode;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  groupIntervalSeconds?: number;
   createdAt: string;
   targetCount: number;
   sentCount: number;
@@ -605,6 +619,14 @@ export interface Campaign {
   destinationIds: string[];
   errors: CampaignTargetError[];
 }
+
+export type CampaignInputTimingMode = typeof CampaignInputTimingMode[keyof typeof CampaignInputTimingMode];
+
+
+export const CampaignInputTimingMode = {
+  legacy: 'legacy',
+  round: 'round',
+} as const;
 
 export interface CampaignInput {
   /**
@@ -637,6 +659,12 @@ export interface CampaignInput {
      * @maximum 259200
      */
   roundDelayMaxSeconds?: number;
+  timingMode?: CampaignInputTimingMode;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  groupIntervalSeconds?: number;
 }
 
 export interface CloneCampaignInput {
@@ -651,6 +679,14 @@ export const CampaignUpdateInputStatus = {
   queued: 'queued',
   paused: 'paused',
   cancelled: 'cancelled',
+} as const;
+
+export type CampaignUpdateInputTimingMode = typeof CampaignUpdateInputTimingMode[keyof typeof CampaignUpdateInputTimingMode];
+
+
+export const CampaignUpdateInputTimingMode = {
+  legacy: 'legacy',
+  round: 'round',
 } as const;
 
 export interface CampaignUpdateInput {
@@ -679,6 +715,12 @@ export interface CampaignUpdateInput {
      * @maximum 259200
      */
   roundDelayMaxSeconds?: number;
+  timingMode?: CampaignUpdateInputTimingMode;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  groupIntervalSeconds?: number;
 }
 
 export type BulkCampaignControlInputAction = typeof BulkCampaignControlInputAction[keyof typeof BulkCampaignControlInputAction];

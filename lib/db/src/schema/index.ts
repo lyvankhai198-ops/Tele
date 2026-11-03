@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 export * from "./user-daily-message-quotas";
 export * from "./admin-system-events";
@@ -214,6 +215,8 @@ export const campaignsTable = pgTable("campaigns", {
   timezone: text("timezone").notNull().default("Asia/Ho_Chi_Minh"),
   maxRetries: integer("max_retries").notNull().default(3),
   repeatCount: integer("repeat_count").notNull().default(1),
+  // Preserve pre-existing schedules until an explicit new run/edit selects rounds.
+  timingMode: text("timing_mode").$type<"legacy" | "round">().notNull().default("legacy"),
   delayMinSeconds: integer("delay_min_seconds").notNull().default(5),
   delayMaxSeconds: integer("delay_max_seconds").notNull().default(8),
   roundDelayMinSeconds: integer("round_delay_min_seconds").notNull().default(1),
@@ -232,6 +235,9 @@ export const campaignTargetsTable = pgTable(
     attempts: integer("attempts").notNull().default(0),
     quotaReservedAt: timestamp("quota_reserved_at", { withTimezone: true }),
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+    // Nullable on legacy jobs; new round jobs retain strict order and one sampled wait.
+    deliveryOrder: integer("delivery_order"),
+    waitBeforeSeconds: integer("wait_before_seconds"),
     lastError: text("last_error"),
     sentMessageId: text("sent_message_id"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
@@ -240,6 +246,8 @@ export const campaignTargetsTable = pgTable(
   },
   (table) => [
     index("campaign_targets_campaign_updated_idx").on(table.campaignId, table.updatedAt),
+    index("campaign_targets_campaign_delivery_order_idx").on(table.campaignId, table.deliveryOrder)
+      .where(sql`${table.deliveryOrder} is not null`),
   ],
 );
 

@@ -31,6 +31,7 @@ import {
 } from "./campaign-schedule";
 import { canReserveDailyQuota, isWithinDailyQuota } from "./campaign-policy";
 import { getDatabaseNow } from "./database-clock";
+import { deliveryScheduleShiftMs } from "./campaign-target-batches";
 import {
   getUserDailyQuotaUsage,
   releaseUserDailyQuota,
@@ -62,7 +63,10 @@ export async function rebaseLegacyPastScheduleCampaigns() {
   const now = new Date();
   const activeCampaigns = await db.select({ id: campaignsTable.id })
     .from(campaignsTable)
-    .where(inArray(campaignsTable.status, ["queued", "running"]));
+    .where(and(
+      inArray(campaignsTable.status, ["queued", "running"]),
+      eq(campaignsTable.timingMode, "legacy"),
+    ));
 
   let rebasedCampaigns = 0;
   let rebasedTargets = 0;
@@ -708,6 +712,7 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
   const cancelledCount = targets.filter(({ target }) => target.status === "cancelled").length;
   return {
     ...campaign,
+    groupIntervalSeconds: campaign.timingMode === "round" ? campaign.delayMinSeconds : 0,
     cloneMode: campaignCloneMode(campaign),
     targetCount: targets.length,
     destinationIds: campaign.destinationIds ?? [...new Set(targets.map(({ target }) => target.destinationId))],
@@ -847,6 +852,46 @@ async function rescheduleTemporaryRestriction(input: {
   });
 }
 
+export async function shiftPendingRoundSchedule(input: {
+  campaignId: string; nextOrder: number; plannedNext: Date; completedAt: Date; waitBeforeSeconds: number;
+}) {
+  const shiftMs = deliveryScheduleShiftMs(input.plannedNext, input.completedAt, input.waitBeforeSeconds);
+  if (shiftMs <= 0) return 0;
+  const rows = await db.update(campaignTargetsTable).set({
+    nextAttemptAt: sql`${campaignTargetsTable.nextAttemptAt} + ${shiftMs} * interval '1 millisecond'`,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(campaignTargetsTable.campaignId, input.campaignId),
+    eq(campaignTargetsTable.status, "pending"),
+    gte(campaignTargetsTable.deliveryOrder, input.nextOrder),
+    sql`EXISTS (SELECT 1 FROM ${campaignsTable}
+      WHERE ${campaignsTable.id} = ${campaignTargetsTable.campaignId}
+        AND ${campaignsTable.timingMode} = 'round'
+        AND ${campaignsTable.status} IN ('queued', 'running'))`,
+  )).returning({ id: campaignTargetsTable.id });
+  return rows.length;
+}
+
+export function campaignTimingReady(now: Date) {
+  return sql`(${campaignsTable.timingMode} <> 'round' OR (
+    ${campaignTargetsTable.deliveryOrder} IS NOT NULL
+    AND ${campaignTargetsTable.waitBeforeSeconds} IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM campaign_targets AS earlier
+      WHERE earlier.campaign_id = ${campaignTargetsTable.campaignId}
+        AND earlier.delivery_order < ${campaignTargetsTable.deliveryOrder}
+        AND earlier.status IN ('pending', 'sending')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM campaign_targets AS previous
+      WHERE previous.campaign_id = ${campaignTargetsTable.campaignId}
+        AND previous.delivery_order = ${campaignTargetsTable.deliveryOrder} - 1
+        AND coalesce(previous.sent_at, previous.updated_at)
+          + ${campaignTargetsTable.waitBeforeSeconds} * interval '1 second' > ${now}
+    )
+  ))`;
+}
+
 export async function processNextCampaignTarget(accountId?: string) {
   const now = await getDatabaseNow();
   const candidates = await db.select({
@@ -862,6 +907,9 @@ export async function processNextCampaignTarget(accountId?: string) {
     .where(and(
       inArray(campaignsTable.status, ["queued", "running"]),
       eq(campaignTargetsTable.status, "pending"),
+      // Legacy schedules remain untouched. New jobs cannot overtake a retry,
+      // and enforce their sampled wait even after a crash before schedule pacing.
+      campaignTimingReady(now),
       or(
         lte(campaignTargetsTable.nextAttemptAt, now),
         isNull(campaignTargetsTable.nextAttemptAt),
@@ -1009,25 +1057,42 @@ export async function processNextCampaignTarget(accountId?: string) {
     const [nextCampaignTarget] = await db.select({
       id: campaignTargetsTable.id,
       nextAttemptAt: campaignTargetsTable.nextAttemptAt,
+      deliveryOrder: campaignTargetsTable.deliveryOrder,
+      waitBeforeSeconds: campaignTargetsTable.waitBeforeSeconds,
     }).from(campaignTargetsTable).where(and(
       eq(campaignTargetsTable.campaignId, job.campaign.id),
       eq(campaignTargetsTable.status, "pending"),
       isNotNull(campaignTargetsTable.nextAttemptAt),
-    )).orderBy(asc(campaignTargetsTable.nextAttemptAt)).limit(1);
+    )).orderBy(asc(campaignTargetsTable.deliveryOrder), asc(campaignTargetsTable.nextAttemptAt)).limit(1);
     if (nextCampaignTarget?.nextAttemptAt) {
-      const gapSeconds = job.campaign.roundDelayMinSeconds
-        + Math.floor(Math.random() * (
-          job.campaign.roundDelayMaxSeconds - job.campaign.roundDelayMinSeconds + 1
+      const gapSeconds = job.campaign.timingMode === "round"
+        ? nextCampaignTarget.waitBeforeSeconds
+        : job.campaign.roundDelayMinSeconds + Math.floor(Math.random() * (
+            job.campaign.roundDelayMaxSeconds - job.campaign.roundDelayMinSeconds + 1
+          ));
+      if (gapSeconds === null || (job.campaign.timingMode === "round" && nextCampaignTarget.deliveryOrder === null)) {
+        await db.update(campaignsTable).set({
+          status: "paused", pauseReason: "invalid_round_timing_metadata", updatedAt: new Date(),
+        }).where(eq(campaignsTable.id, job.campaign.id));
+        logger.error({ campaignId: job.campaign.id }, "Missing ordered round timing; campaign paused");
+        return true;
+      }
+      if (job.campaign.timingMode === "round") {
+        await shiftPendingRoundSchedule({
+          campaignId: job.campaign.id, nextOrder: nextCampaignTarget.deliveryOrder!,
+          plannedNext: nextCampaignTarget.nextAttemptAt, completedAt: sentAt, waitBeforeSeconds: gapSeconds,
+        });
+      } else {
+        const nextAttemptAt = new Date(Math.max(
+          nextCampaignTarget.nextAttemptAt.getTime(),
+          sentAt.getTime() + gapSeconds * 1000,
         ));
-      const nextAttemptAt = new Date(Math.max(
-        nextCampaignTarget.nextAttemptAt.getTime(),
-        sentAt.getTime() + gapSeconds * 1000,
-      ));
-      await db.update(campaignTargetsTable).set({ nextAttemptAt, updatedAt: new Date() })
-        .where(and(
-          eq(campaignTargetsTable.id, nextCampaignTarget.id),
-          eq(campaignTargetsTable.status, "pending"),
-        ));
+        await db.update(campaignTargetsTable).set({ nextAttemptAt, updatedAt: new Date() })
+          .where(and(
+            eq(campaignTargetsTable.id, nextCampaignTarget.id),
+            eq(campaignTargetsTable.status, "pending"),
+          ));
+      }
     }
     try {
       await recordActivity({

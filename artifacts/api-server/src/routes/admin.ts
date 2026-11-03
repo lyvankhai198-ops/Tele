@@ -112,6 +112,7 @@ import {
   telegramAccountsTable,
   db,
 } from "@workspace/db";
+import { campaignTargetBatches } from "../lib/campaign-target-batches";
 import {
   createAdminLicenseKeys,
   listAdminLicenseKeys,
@@ -927,8 +928,9 @@ router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res)
       timezone: sourceCampaign.timezone,
       maxRetries: sourceCampaign.maxRetries,
       repeatCount: sourceCampaign.repeatCount,
-      delayMinSeconds: sourceCampaign.delayMinSeconds,
-      delayMaxSeconds: sourceCampaign.delayMaxSeconds,
+      timingMode: "round",
+      delayMinSeconds: sourceCampaign.timingMode === "round" && sourceDestinations.length > 1 ? sourceCampaign.delayMinSeconds : 0,
+      delayMaxSeconds: sourceCampaign.timingMode === "round" && sourceDestinations.length > 1 ? sourceCampaign.delayMinSeconds : 0,
       roundDelayMinSeconds: sourceCampaign.roundDelayMinSeconds,
       roundDelayMaxSeconds: sourceCampaign.roundDelayMaxSeconds,
     }).returning();
@@ -962,20 +964,12 @@ router.post("/admin/users/:userId/campaigns/:campaignId/clone", async (req, res)
       clonedDestinationIds.push(destination.id);
     }
     if (clonedDestinationIds.length) {
-      await tx.insert(campaignTargetsTable).values(Array.from(
-        { length: sourceCampaign.repeatCount },
-        () => clonedDestinationIds.map((destinationId) => ({
-          campaignId: clone.id,
-          destinationId,
-          status: "pending" as const,
-          attempts: 0,
-          quotaReservedAt: null,
-          nextAttemptAt: null,
-          lastError: null,
-          sentMessageId: null,
-          sentAt: null,
-        })),
-      ).flat());
+      for (const rows of campaignTargetBatches({
+        campaignId: clone.id, destinationIds: clonedDestinationIds,
+        repeatCount: clone.repeatCount, startAt: new Date(),
+        timingMode: "round", groupIntervalSeconds: clone.delayMinSeconds,
+        nextDelaySeconds: () => clone.roundDelayMinSeconds + Math.floor(Math.random() * (clone.roundDelayMaxSeconds - clone.roundDelayMinSeconds + 1)),
+      })) await tx.insert(campaignTargetsTable).values(rows);
     }
     const [updatedClone] = await tx.update(campaignsTable)
       .set({ destinationIds: clonedDestinationIds })

@@ -31,8 +31,11 @@ fi
 # Automatic code rollback must never silently undo or mismatch a DB migration.
 # Schema-changing releases need a separately reviewed, backward-compatible plan.
 if ! release_git diff --quiet HEAD "$target" -- lib/db; then
-  echo "Database package changed. Refusing automatic deploy; review schema compatibility and paired recovery first." >&2
-  exit 1
+  node "$CONTROL_SCRIPTS/prepare-round-timing-schema.mjs" --check-source "$ROOT" "$target" \
+    || { echo "Database package changed outside the reviewed additive round-timing migration; refusing deploy." >&2; exit 1; }
+  round_schema_change=1
+else
+  round_schema_change=0
 fi
 if ! release_git cat-file -e "${target}:artifacts/api-server/src/lib/notificationMediaStorage.ts" 2>/dev/null; then
   echo "Target lacks protected filesystem notification media support." >&2
@@ -41,6 +44,10 @@ fi
 if [[ -n "$PREBUILT" ]]; then
   release_validate_prebuilt "$PREBUILT" "$target" \
     || { echo "Prebuilt runtime is incomplete, corrupt, unsafe, or ABI-incompatible; nothing changed." >&2; exit 1; }
+fi
+if [[ "$round_schema_change" == "1" ]]; then
+  node "$CONTROL_SCRIPTS/prepare-round-timing-schema.mjs" --apply "$ROOT" "$target" \
+    || { echo "Additive round timing schema preparation failed; existing code remains active." >&2; exit 1; }
 fi
 
 # Existing backup creates a consistent database/media pair. It briefly stops

@@ -30,7 +30,7 @@ import {
   temporaryRestrictionUntil,
 } from "@/lib/telegram-restrictions";
 import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-sync";
-import { CampaignFieldNote, DelayExamples } from "@/components/campaign-field-guidance";
+import { CampaignFieldNote, CampaignGroupInterval, DelayExamples, GroupCountRecommendation } from "@/components/campaign-field-guidance";
 
 type CampaignForm = {
   name: string;
@@ -40,6 +40,7 @@ type CampaignForm = {
   repeatCount: string;
   roundDelayMinSeconds: string;
   roundDelayMaxSeconds: string;
+  groupIntervalMinutes: string;
   scheduleDate: string;
   scheduleTime: string;
 };
@@ -103,7 +104,7 @@ const copy = {
     repeatCountLimitHint: "PLUS allows up to 300 repeats.",
     repeatCountUnlimitedHint: "Pro and higher plans have no repeat-count limit.",
     completedRerunHint: "This completed campaign will start a fresh run from 0 with the repeat count below.",
-    delayBetweenRounds: "Wait between consecutive sends",
+    delayBetweenRounds: "Round wait and group spacing",
     delayMinRoundLabel: "Delay Min (seconds)",
     delayMaxRoundLabel: "Delay Max (seconds)",
     delayMaxHint: (max: number) => `Max ${max.toLocaleString("en-US")} seconds.`,
@@ -158,7 +159,7 @@ const copy = {
     repeatCountLimitHint: "Gói PLUS tối đa 300 lần lặp.",
     repeatCountUnlimitedHint: "Gói Pro trở lên không giới hạn số lần lặp.",
     completedRerunHint: "Chiến dịch đã hoàn thành sẽ bắt đầu một lượt chạy mới từ 0 theo số vòng lặp bên dưới.",
-    delayBetweenRounds: "Khoảng chờ giữa các lượt gửi liên tiếp",
+    delayBetweenRounds: "Khoảng chờ giữa vòng và giữa nhóm",
     delayMinRoundLabel: "Delay Min (giây)",
     delayMaxRoundLabel: "Delay Max (giây)",
     delayMaxHint: (max: number) => `Tối đa ${max.toLocaleString("vi-VN")} giây.`,
@@ -180,6 +181,7 @@ const emptyForm = (prefill?: CampaignFormPrefill | null): CampaignForm => ({
   templateId: "",
   destinationIds: [],
   repeatCount: "300",
+  groupIntervalMinutes: "0",
   roundDelayMinSeconds: prefill?.roundDelayMinSeconds !== undefined
     ? String(prefill.roundDelayMinSeconds)
     : "1",
@@ -215,6 +217,7 @@ function initialForm(
     templateId: editingCampaign.templateId ?? "",
     destinationIds: editingCampaign.destinationIds,
     repeatCount: String(editingCampaign.repeatCount),
+    groupIntervalMinutes: String((editingCampaign.groupIntervalSeconds ?? 0) / 60),
     roundDelayMinSeconds: String(editingCampaign.roundDelayMinSeconds),
     roundDelayMaxSeconds: String(editingCampaign.roundDelayMaxSeconds),
     scheduleDate: schedule ? new Intl.DateTimeFormat("en-CA").format(schedule) : "",
@@ -471,6 +474,11 @@ export function CampaignFormModal({
   async function submit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
+    const groupIntervalMinutes = form.destinationIds.length > 1 ? Number(form.groupIntervalMinutes) : 0;
+    if (!Number.isInteger(groupIntervalMinutes) || groupIntervalMinutes < 0 || groupIntervalMinutes > 4320) {
+      setFormError(language === "vi" ? "Khoảng cách nhóm phải là số phút nguyên từ 0 đến 4320." : "Group spacing must be a whole number of minutes from 0 to 4320.");
+      return;
+    }
     const values = [
       Number(form.repeatCount),
       Number(form.roundDelayMinSeconds),
@@ -521,6 +529,8 @@ export function CampaignFormModal({
             repeatCount: values[0],
             roundDelayMinSeconds: values[1],
             roundDelayMaxSeconds: values[2],
+            timingMode: "round",
+            groupIntervalSeconds: groupIntervalMinutes * 60,
           },
         });
         await onSaved(updatedCampaign);
@@ -537,6 +547,8 @@ export function CampaignFormModal({
             repeatCount: values[0],
             roundDelayMinSeconds: values[1],
             roundDelayMaxSeconds: values[2],
+            timingMode: "round",
+            groupIntervalSeconds: groupIntervalMinutes * 60,
           },
         });
         await onSaved(createdCampaign);
@@ -698,6 +710,8 @@ export function CampaignFormModal({
           </div>
         </div>
 
+        <GroupCountRecommendation language={language} count={form.destinationIds.length} />
+        {editingCampaign && editingCampaign.timingMode !== "round" && <CampaignFieldNote language={language} field="legacyWarning" emphasis />}
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldRepeatCount}</span>
           {editingCampaign && ["completed", "completed_with_errors"].includes(editingCampaign.status) && <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{c.completedRerunHint}</span>}
@@ -772,6 +786,8 @@ function DelayFields({
         <input type="number" min="0" max={max} value={form[firstKey]} onChange={(event) => setForm({ ...form, [firstKey]: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
         <CampaignFieldNote language={language} field="delayMin" />
       </label>
+      {form.destinationIds.length > 1 && <CampaignGroupInterval language={language} value={form.groupIntervalMinutes}
+        onChange={value => setForm({ ...form, groupIntervalMinutes: value })} />}
       <label className="block">
         <span className="mb-1.5 block text-[14px] font-bold text-[#0f172a]">{secondLabel}</span>
         <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{maxHint(max)}</span>

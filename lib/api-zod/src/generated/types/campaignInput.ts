@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignInputTimingMode } from './campaignInputTimingMode';
 
 export interface CampaignInput {
   /**
@@ -37,4 +38,10 @@ export interface CampaignInput {
      * @maximum 259200
      */
   roundDelayMaxSeconds?: number;
+  timingMode?: CampaignInputTimingMode;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  groupIntervalSeconds?: number;
 }

@@ -953,6 +953,12 @@ export const DeleteMessageTemplateParams = zod.object({
 export const DeleteMessageTemplateResponse = zod.void()
 
 
+export const listCampaignsResponseGroupIntervalSecondsMin = 0;
+export const listCampaignsResponseGroupIntervalSecondsMax = 259200;
+export const listCampaignsResponseGroupIntervalSecondsMultipleOf = 60;
+
+
+
 export const ListCampaignsResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -973,6 +979,8 @@ export const ListCampaignsResponseItem = zod.object({
   "repeatCount": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(listCampaignsResponseGroupIntervalSecondsMin).max(listCampaignsResponseGroupIntervalSecondsMax).multipleOf(listCampaignsResponseGroupIntervalSecondsMultipleOf).optional(),
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
@@ -1016,6 +1024,12 @@ export const createCampaignBodyRoundDelayMaxSecondsDefault = 3;
 export const createCampaignBodyRoundDelayMaxSecondsMin = 0;
 export const createCampaignBodyRoundDelayMaxSecondsMax = 259200;
 
+export const createCampaignBodyTimingModeDefault = `legacy`;
+export const createCampaignBodyGroupIntervalSecondsDefault = 0;
+export const createCampaignBodyGroupIntervalSecondsMin = 0;
+export const createCampaignBodyGroupIntervalSecondsMax = 259200;
+export const createCampaignBodyGroupIntervalSecondsMultipleOf = 60;
+
 
 
 export const CreateCampaignBody = zod.object({
@@ -1029,8 +1043,16 @@ export const CreateCampaignBody = zod.object({
   "timezone": zod.string().default(createCampaignBodyTimezoneDefault),
   "repeatCount": zod.number().min(1).default(createCampaignBodyRepeatCountDefault),
   "roundDelayMinSeconds": zod.number().min(createCampaignBodyRoundDelayMinSecondsMin).max(createCampaignBodyRoundDelayMinSecondsMax).default(createCampaignBodyRoundDelayMinSecondsDefault),
-  "roundDelayMaxSeconds": zod.number().min(createCampaignBodyRoundDelayMaxSecondsMin).max(createCampaignBodyRoundDelayMaxSecondsMax).default(createCampaignBodyRoundDelayMaxSecondsDefault)
+  "roundDelayMaxSeconds": zod.number().min(createCampaignBodyRoundDelayMaxSecondsMin).max(createCampaignBodyRoundDelayMaxSecondsMax).default(createCampaignBodyRoundDelayMaxSecondsDefault),
+  "timingMode": zod.enum(['legacy', 'round']).default(createCampaignBodyTimingModeDefault),
+  "groupIntervalSeconds": zod.number().int().min(createCampaignBodyGroupIntervalSecondsMin).max(createCampaignBodyGroupIntervalSecondsMax).multipleOf(createCampaignBodyGroupIntervalSecondsMultipleOf).default(createCampaignBodyGroupIntervalSecondsDefault)
 })
+
+export const createCampaignResponseGroupIntervalSecondsMin = 0;
+export const createCampaignResponseGroupIntervalSecondsMax = 259200;
+export const createCampaignResponseGroupIntervalSecondsMultipleOf = 60;
+
+
 
 export const CreateCampaignResponse = zod.object({
   "id": zod.string(),
@@ -1052,6 +1074,8 @@ export const CreateCampaignResponse = zod.object({
   "repeatCount": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(createCampaignResponseGroupIntervalSecondsMin).max(createCampaignResponseGroupIntervalSecondsMax).multipleOf(createCampaignResponseGroupIntervalSecondsMultipleOf).optional(),
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
@@ -1204,6 +1228,10 @@ export const updateCampaignStatusBodyRoundDelayMinSecondsMax = 259200;
 export const updateCampaignStatusBodyRoundDelayMaxSecondsMin = 0;
 export const updateCampaignStatusBodyRoundDelayMaxSecondsMax = 259200;
 
+export const updateCampaignStatusBodyGroupIntervalSecondsMin = 0;
+export const updateCampaignStatusBodyGroupIntervalSecondsMax = 259200;
+export const updateCampaignStatusBodyGroupIntervalSecondsMultipleOf = 60;
+
 
 
 export const UpdateCampaignStatusBody = zod.object({
@@ -1216,8 +1244,16 @@ export const UpdateCampaignStatusBody = zod.object({
   "timezone": zod.string().optional(),
   "repeatCount": zod.number().min(1).optional(),
   "roundDelayMinSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMinSecondsMin).max(updateCampaignStatusBodyRoundDelayMinSecondsMax).optional(),
-  "roundDelayMaxSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMaxSecondsMin).max(updateCampaignStatusBodyRoundDelayMaxSecondsMax).optional()
+  "roundDelayMaxSeconds": zod.number().min(updateCampaignStatusBodyRoundDelayMaxSecondsMin).max(updateCampaignStatusBodyRoundDelayMaxSecondsMax).optional(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(updateCampaignStatusBodyGroupIntervalSecondsMin).max(updateCampaignStatusBodyGroupIntervalSecondsMax).multipleOf(updateCampaignStatusBodyGroupIntervalSecondsMultipleOf).optional()
 })
+
+export const updateCampaignStatusResponseGroupIntervalSecondsMin = 0;
+export const updateCampaignStatusResponseGroupIntervalSecondsMax = 259200;
+export const updateCampaignStatusResponseGroupIntervalSecondsMultipleOf = 60;
+
+
 
 export const UpdateCampaignStatusResponse = zod.object({
   "id": zod.string(),
@@ -1239,6 +1275,8 @@ export const UpdateCampaignStatusResponse = zod.object({
   "repeatCount": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(updateCampaignStatusResponseGroupIntervalSecondsMin).max(updateCampaignStatusResponseGroupIntervalSecondsMax).multipleOf(updateCampaignStatusResponseGroupIntervalSecondsMultipleOf).optional(),
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
@@ -1279,6 +1317,12 @@ export const CloneCampaignBody = zod.object({
   "telegramAccountId": zod.string()
 })
 
+export const cloneCampaignResponseGroupIntervalSecondsMin = 0;
+export const cloneCampaignResponseGroupIntervalSecondsMax = 259200;
+export const cloneCampaignResponseGroupIntervalSecondsMultipleOf = 60;
+
+
+
 export const CloneCampaignResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -1299,6 +1343,8 @@ export const CloneCampaignResponse = zod.object({
   "repeatCount": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(cloneCampaignResponseGroupIntervalSecondsMin).max(cloneCampaignResponseGroupIntervalSecondsMax).multipleOf(cloneCampaignResponseGroupIntervalSecondsMultipleOf).optional(),
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
@@ -1371,6 +1417,12 @@ export const ListActivityResponseItem = zod.object({
 export const ListActivityResponse = zod.array(ListActivityResponseItem)
 
 
+export const getDashboardResponseRecentCampaignsItemGroupIntervalSecondsMin = 0;
+export const getDashboardResponseRecentCampaignsItemGroupIntervalSecondsMax = 259200;
+export const getDashboardResponseRecentCampaignsItemGroupIntervalSecondsMultipleOf = 60;
+
+
+
 export const GetDashboardResponse = zod.object({
   "metrics": zod.object({
   "telegramAccounts": zod.number(),
@@ -1400,6 +1452,8 @@ export const GetDashboardResponse = zod.object({
   "repeatCount": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(getDashboardResponseRecentCampaignsItemGroupIntervalSecondsMin).max(getDashboardResponseRecentCampaignsItemGroupIntervalSecondsMax).multipleOf(getDashboardResponseRecentCampaignsItemGroupIntervalSecondsMultipleOf).optional(),
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),
@@ -4075,6 +4129,12 @@ export const CloneAdminUserCampaignBody = zod.object({
   "telegramAccountId": zod.string()
 })
 
+export const cloneAdminUserCampaignResponseGroupIntervalSecondsMin = 0;
+export const cloneAdminUserCampaignResponseGroupIntervalSecondsMax = 259200;
+export const cloneAdminUserCampaignResponseGroupIntervalSecondsMultipleOf = 60;
+
+
+
 export const CloneAdminUserCampaignResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -4095,6 +4155,8 @@ export const CloneAdminUserCampaignResponse = zod.object({
   "repeatCount": zod.number(),
   "roundDelayMinSeconds": zod.number(),
   "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(cloneAdminUserCampaignResponseGroupIntervalSecondsMin).max(cloneAdminUserCampaignResponseGroupIntervalSecondsMax).multipleOf(cloneAdminUserCampaignResponseGroupIntervalSecondsMultipleOf).optional(),
   "createdAt": zod.coerce.date(),
   "targetCount": zod.number(),
   "sentCount": zod.number(),

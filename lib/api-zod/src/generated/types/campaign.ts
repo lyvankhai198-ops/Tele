@@ -9,6 +9,7 @@ import type { CampaignCloneMode } from './campaignCloneMode';
 import type { CampaignDailyQuota } from './campaignDailyQuota';
 import type { CampaignTargetError } from './campaignTargetError';
 import type { CampaignTemplateMode } from './campaignTemplateMode';
+import type { CampaignTimingMode } from './campaignTimingMode';
 
 export interface Campaign {
   id: string;
@@ -39,6 +40,12 @@ export interface Campaign {
   repeatCount: number;
   roundDelayMinSeconds: number;
   roundDelayMaxSeconds: number;
+  timingMode?: CampaignTimingMode;
+  /**
+     * @minimum 0
+     * @maximum 259200
+     */
+  groupIntervalSeconds?: number;
   createdAt: Date;
   targetCount: number;
   sentCount: number;
