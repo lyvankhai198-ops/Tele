@@ -65,7 +65,7 @@ export async function testCampaignBulkJobs(input: {
   await processCampaignBulkJobs(20);
   const done=await progress();
   check(done.status==="completed" && done.updatedCount===15 && done.processed===15,"E2E_BULK_COMPLETED");
-  const runs=await pool.query(`SELECT id,scheduled_at,schedule_anchor_at,repeat_count FROM campaigns
+  const runs=await pool.query(`SELECT id,scheduled_at,schedule_anchor_at,repeat_count,timing_mode,delay_min_seconds,delay_max_seconds FROM campaigns
     WHERE cloned_from_campaign_id=ANY($1::uuid[]) ORDER BY schedule_anchor_at`,[ids]);
   check(runs.rowCount===15,"E2E_BULK_EXACTLY_ONE_COPY");
   for(let index=0;index<runs.rows.length;index++) {
