@@ -1,3 +1,24 @@
+test("support-session editing accepts timing fields without broadening existing permissions", async () => {
+  const fsModule = await import("node:fs");
+  const vmModule = await import("node:vm");
+  const source = fsModule.readFileSync(new URL("../../artifacts/api-server/src/routes/telecampaign.ts", import.meta.url), "utf8");
+  const start = source.indexOf("router.use((req, res, next): void => {");
+  const end = source.indexOf('\nrouter.get("/notifications"', start);
+  assert.ok(start >= 0 && end > start);
+  const guard = vmModule.runInNewContext("let guard;const router={use(fn){guard=fn}};"
+    + source.slice(start, end).replace(": void =>", " =>") + ";guard;");
+  const allowed = (body, support = true, method = "PATCH") => {
+    let passed = false;
+    const res = {status(){return this;},json(){}};
+    guard({body,supportSession:support?{}:undefined,method,path:"/campaigns/fixture"},res,()=>{passed=true;});
+    return passed;
+  };
+  assert.equal(allowed({name:"edited",timingMode:"round",groupIntervalSeconds:300}),true);
+  assert.equal(allowed({timingMode:"round",groupIntervalSeconds:600,role:"admin"}),false);
+  assert.equal(allowed({timingMode:"round",status:"queued"}),false);
+  assert.equal(allowed({timingMode:"round"},true,"POST"),false);
+  assert.equal(allowed({timingMode:"round"},false),true);
+});
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

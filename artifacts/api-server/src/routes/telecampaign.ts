@@ -845,6 +845,8 @@ router.use((req, res, next): void => {
       "repeatCount",
       "roundDelayMinSeconds",
       "roundDelayMaxSeconds",
+      "timingMode",
+      "groupIntervalSeconds",
     ].includes(key));
   const isGroupSync = req.method === "POST"
     && /^\/telegram\/accounts\/[^/]+\/sync$/.test(req.path);

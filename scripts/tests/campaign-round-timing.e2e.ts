@@ -11,6 +11,9 @@ export async function testCampaignRoundTiming(input: {
   console.log("E2E_PHASE_ROUND_TIMING");
   const {ownerId,ownerCookie,request}=input;
   const check=(condition:unknown,code:string)=>assert.ok(condition,code);
+  // The preceding bulk suite deliberately restores PLUS after creating 30
+  // campaigns. Give this isolated fixture its own unlimited allowance.
+  await pool.query("UPDATE subscriptions SET plan='unlimited' WHERE owner_user_id=$1",[ownerId]);
   const account=randomUUID(), template=randomUUID(), destinations=Array.from({length:6},()=>randomUUID());
   await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status,session_encrypted) VALUES($1,$2,'round-fixture','connected','fixture-not-a-real-session')",[account,ownerId]);
   await pool.query("INSERT INTO message_templates(id,owner_user_id,name,mode,content) VALUES($1,$2,'round-fixture','text','isolated fixture')",[template,ownerId]);
@@ -95,5 +98,6 @@ export async function testCampaignRoundTiming(input: {
     repeatCount:2,roundDelayMinSeconds:3600,roundDelayMaxSeconds:3600,timingMode:"round",groupIntervalSeconds:61,
   });
   check(invalid.status===400,"E2E_ROUND_MINUTE_CONTRACT");
+  await pool.query("UPDATE subscriptions SET plan='plus' WHERE owner_user_id=$1",[ownerId]);
   console.log("E2E_ROUND_TIMING_PASSED");
 }
