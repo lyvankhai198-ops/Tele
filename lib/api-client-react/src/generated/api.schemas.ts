@@ -5,6 +5,76 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ReleaseContent {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 1750
+     */
+  vi: string;
+  /**
+     * @minLength 1
+     * @maxLength 1750
+     */
+  en: string;
+}
+
+export interface ReleaseVersion {
+  /** @minimum 1 */
+  version: number;
+}
+
+export type ReleaseEdit = ReleaseContent & ReleaseVersion;
+
+export interface ReleaseSend {
+  /** @minimum 1 */
+  version: number;
+  /** @pattern ^-[1-9][0-9]{1,19}$ */
+  destination: string;
+  confirmed: true;
+}
+
+export type ReleaseUpdateStatus = typeof ReleaseUpdateStatus[keyof typeof ReleaseUpdateStatus];
+
+
+export const ReleaseUpdateStatus = {
+  draft: 'draft',
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+  unknown: 'unknown',
+} as const;
+
+export type ReleaseUpdate = ReleaseContent & ({
+  id: string;
+  version: number;
+  status: ReleaseUpdateStatus;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  deletedAt: string | null;
+  /** @nullable */
+  sentAt: string | null;
+  /** @nullable */
+  sendingAt: string | null;
+  /** @nullable */
+  sentMessageId: number | null;
+  /** @nullable */
+  destination: string | null;
+  /** @nullable */
+  sentText: string | null;
+});
+
+export interface ReleaseUpdateList {
+  updates: ReleaseUpdate[];
+  /** @nullable */
+  destination: string | null;
+}
+
 export interface HealthStatus {
   status: string;
 }

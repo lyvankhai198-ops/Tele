@@ -8,6 +8,180 @@
 import * as zod from 'zod';
 
 
+export const listReleaseUpdatesResponseUpdatesItemOneTitleMax = 200;
+
+export const listReleaseUpdatesResponseUpdatesItemOneViMax = 1750;
+
+export const listReleaseUpdatesResponseUpdatesItemOneEnMax = 1750;
+
+
+
+export const ListReleaseUpdatesResponse = zod.object({
+  "updates": zod.array(zod.object({
+  "title": zod.string().min(1).max(listReleaseUpdatesResponseUpdatesItemOneTitleMax),
+  "vi": zod.string().min(1).max(listReleaseUpdatesResponseUpdatesItemOneViMax),
+  "en": zod.string().min(1).max(listReleaseUpdatesResponseUpdatesItemOneEnMax)
+}).and(zod.object({
+  "id": zod.string(),
+  "version": zod.number().int(),
+  "status": zod.enum(['draft', 'sending', 'sent', 'failed', 'unknown']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().nullable(),
+  "sentAt": zod.string().nullable(),
+  "sendingAt": zod.string().nullable(),
+  "sentMessageId": zod.number().int().nullable(),
+  "destination": zod.string().nullable(),
+  "sentText": zod.string().nullable()
+}))),
+  "destination": zod.string().nullable()
+})
+
+
+export const createReleaseUpdateBodyTitleMax = 200;
+
+export const createReleaseUpdateBodyViMax = 1750;
+
+export const createReleaseUpdateBodyEnMax = 1750;
+
+
+
+export const CreateReleaseUpdateBody = zod.object({
+  "title": zod.string().min(1).max(createReleaseUpdateBodyTitleMax),
+  "vi": zod.string().min(1).max(createReleaseUpdateBodyViMax),
+  "en": zod.string().min(1).max(createReleaseUpdateBodyEnMax)
+})
+
+export const createReleaseUpdateResponseOneTitleMax = 200;
+
+export const createReleaseUpdateResponseOneViMax = 1750;
+
+export const createReleaseUpdateResponseOneEnMax = 1750;
+
+
+
+export const CreateReleaseUpdateResponse = zod.object({
+  "title": zod.string().min(1).max(createReleaseUpdateResponseOneTitleMax),
+  "vi": zod.string().min(1).max(createReleaseUpdateResponseOneViMax),
+  "en": zod.string().min(1).max(createReleaseUpdateResponseOneEnMax)
+}).and(zod.object({
+  "id": zod.string(),
+  "version": zod.number().int(),
+  "status": zod.enum(['draft', 'sending', 'sent', 'failed', 'unknown']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().nullable(),
+  "sentAt": zod.string().nullable(),
+  "sendingAt": zod.string().nullable(),
+  "sentMessageId": zod.number().int().nullable(),
+  "destination": zod.string().nullable(),
+  "sentText": zod.string().nullable()
+}))
+
+
+export const UpdateReleaseUpdateParams = zod.object({
+  "releaseId": zod.coerce.string()
+})
+
+export const updateReleaseUpdateBodyOneTitleMax = 200;
+
+export const updateReleaseUpdateBodyOneViMax = 1750;
+
+export const updateReleaseUpdateBodyOneEnMax = 1750;
+
+
+
+
+export const UpdateReleaseUpdateBody = zod.object({
+  "title": zod.string().min(1).max(updateReleaseUpdateBodyOneTitleMax),
+  "vi": zod.string().min(1).max(updateReleaseUpdateBodyOneViMax),
+  "en": zod.string().min(1).max(updateReleaseUpdateBodyOneEnMax)
+}).and(zod.object({
+  "version": zod.number().int().min(1)
+}))
+
+export const updateReleaseUpdateResponseOneTitleMax = 200;
+
+export const updateReleaseUpdateResponseOneViMax = 1750;
+
+export const updateReleaseUpdateResponseOneEnMax = 1750;
+
+
+
+export const UpdateReleaseUpdateResponse = zod.object({
+  "title": zod.string().min(1).max(updateReleaseUpdateResponseOneTitleMax),
+  "vi": zod.string().min(1).max(updateReleaseUpdateResponseOneViMax),
+  "en": zod.string().min(1).max(updateReleaseUpdateResponseOneEnMax)
+}).and(zod.object({
+  "id": zod.string(),
+  "version": zod.number().int(),
+  "status": zod.enum(['draft', 'sending', 'sent', 'failed', 'unknown']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().nullable(),
+  "sentAt": zod.string().nullable(),
+  "sendingAt": zod.string().nullable(),
+  "sentMessageId": zod.number().int().nullable(),
+  "destination": zod.string().nullable(),
+  "sentText": zod.string().nullable()
+}))
+
+
+export const DeleteReleaseUpdateParams = zod.object({
+  "releaseId": zod.coerce.string()
+})
+
+
+
+
+export const DeleteReleaseUpdateBody = zod.object({
+  "version": zod.number().int().min(1)
+})
+
+export const DeleteReleaseUpdateResponse = zod.void()
+
+
+export const SendReleaseUpdateParams = zod.object({
+  "releaseId": zod.coerce.string()
+})
+
+
+export const sendReleaseUpdateBodyDestinationRegExp = new RegExp('^-[1-9][0-9]{1,19}$');
+
+
+export const SendReleaseUpdateBody = zod.object({
+  "version": zod.number().int().min(1),
+  "destination": zod.string().regex(sendReleaseUpdateBodyDestinationRegExp),
+  "confirmed": zod.literal(true)
+})
+
+export const sendReleaseUpdateResponseOneTitleMax = 200;
+
+export const sendReleaseUpdateResponseOneViMax = 1750;
+
+export const sendReleaseUpdateResponseOneEnMax = 1750;
+
+
+
+export const SendReleaseUpdateResponse = zod.object({
+  "title": zod.string().min(1).max(sendReleaseUpdateResponseOneTitleMax),
+  "vi": zod.string().min(1).max(sendReleaseUpdateResponseOneViMax),
+  "en": zod.string().min(1).max(sendReleaseUpdateResponseOneEnMax)
+}).and(zod.object({
+  "id": zod.string(),
+  "version": zod.number().int(),
+  "status": zod.enum(['draft', 'sending', 'sent', 'failed', 'unknown']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().nullable(),
+  "sentAt": zod.string().nullable(),
+  "sendingAt": zod.string().nullable(),
+  "sentMessageId": zod.number().int().nullable(),
+  "destination": zod.string().nullable(),
+  "sentText": zod.string().nullable()
+}))
+
+
 /**
  * Returns server health status
  * @summary Health check

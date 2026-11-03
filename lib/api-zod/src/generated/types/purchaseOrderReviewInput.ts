@@ -14,5 +14,6 @@ export interface PurchaseOrderReviewInput {
      * @maxLength 1000
      */
   reason?: string;
+  /** Admin confirmation of an actual VND bank receipt for a pending or expired order, including automated orders. Does not bypass USDT on-chain verification. Rejection of pending/expired orders requires a reason. */
   manualVerification?: boolean;
 }

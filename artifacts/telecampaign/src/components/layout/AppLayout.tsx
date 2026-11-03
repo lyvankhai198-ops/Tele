@@ -46,6 +46,7 @@ export type PageKey =
   | "admin"
   | "admin-overview"
   | "admin-notifications"
+  | "admin-release-updates"
   | "admin-users"
   | "license-keys"
   | "admin-revenue"
@@ -160,6 +161,7 @@ export function AppLayout({
       icon: LifeBuoy,
       entries: [
         { key: "admin-notifications" as PageKey, label: language === "vi" ? "Thông báo người dùng" : "User notifications", path: "/admin/notifications" },
+        { key: "admin-release-updates" as PageKey, label: language === "vi" ? "Cập nhật phiên bản" : "Release updates", path: "/admin/release-updates" },
         { key: "admin-popups" as PageKey, label: language === "vi" ? "Popup thông báo" : "Announcement popups", path: "/admin/popups" },
         { key: "admin-support-chat" as PageKey, label: language === "vi" ? "Hỗ trợ chat" : "Support chat", path: "/admin/support-chat" },
         { key: "feedback" as PageKey, label: language === "vi" ? "Góp ý & thảo luận" : "Feedback & discussion", path: "/dashboard/feedback" },
