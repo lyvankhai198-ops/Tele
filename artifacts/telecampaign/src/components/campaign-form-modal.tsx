@@ -30,6 +30,7 @@ import {
   temporaryRestrictionUntil,
 } from "@/lib/telegram-restrictions";
 import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-sync";
+import { CampaignFieldNote, DelayExamples } from "@/components/campaign-field-guidance";
 
 type CampaignForm = {
   name: string;
@@ -102,9 +103,9 @@ const copy = {
     repeatCountLimitHint: "PLUS allows up to 300 repeats.",
     repeatCountUnlimitedHint: "Pro and higher plans have no repeat-count limit.",
     completedRerunHint: "This completed campaign will start a fresh run from 0 with the repeat count below.",
-    delayBetweenRounds: "Delay between rounds",
-    delayMinRoundLabel: "Min delay between rounds (sec)",
-    delayMaxRoundLabel: "Max delay between rounds (sec)",
+    delayBetweenRounds: "Wait between consecutive sends",
+    delayMinRoundLabel: "Delay Min (seconds)",
+    delayMaxRoundLabel: "Delay Max (seconds)",
     delayMaxHint: (max: number) => `Max ${max.toLocaleString("en-US")} seconds.`,
     fieldSchedule: "Schedule (optional)",
     validationRequired: "Please enter a name, select an account, template, and at least one destination.",
@@ -157,9 +158,9 @@ const copy = {
     repeatCountLimitHint: "Gói PLUS tối đa 300 lần lặp.",
     repeatCountUnlimitedHint: "Gói Pro trở lên không giới hạn số lần lặp.",
     completedRerunHint: "Chiến dịch đã hoàn thành sẽ bắt đầu một lượt chạy mới từ 0 theo số vòng lặp bên dưới.",
-    delayBetweenRounds: "Delay giữa các vòng lặp",
-    delayMinRoundLabel: "Delay min giữa mỗi vòng lặp (giây)",
-    delayMaxRoundLabel: "Delay max giữa mỗi vòng lặp (giây)",
+    delayBetweenRounds: "Khoảng chờ giữa các lượt gửi liên tiếp",
+    delayMinRoundLabel: "Delay Min (giây)",
+    delayMaxRoundLabel: "Delay Max (giây)",
     delayMaxHint: (max: number) => `Tối đa ${max.toLocaleString("vi-VN")} giây.`,
     fieldSchedule: "Lên lịch (tùy chọn)",
     validationRequired: "Hãy nhập tên, chọn tài khoản, mẫu tin và ít nhất một nhóm gửi.",
@@ -551,6 +552,7 @@ export function CampaignFormModal({
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldName}</span>
           <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="campaign-name" />
+          <CampaignFieldNote language={language} field="name" />
         </label>
 
         <label className="block">
@@ -559,6 +561,7 @@ export function CampaignFormModal({
             <option value="">{c.fieldAccountPlaceholder}</option>
             {connectedAccounts.map((account) => <option value={account.id} key={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>)}
           </select>
+          <CampaignFieldNote language={language} field="account" />
         </label>
 
         <label className="block">
@@ -568,6 +571,7 @@ export function CampaignFormModal({
             {accountTemplates.map((template) => <option value={template.id} key={template.id}>{template.name}{template.mode === "forward" ? " · Forward" : ""}</option>)}
           </select>
           {editingCampaign?.cloneMode === "admin" && <span className="mt-2 block text-[12px] font-medium leading-relaxed text-[#64748b]">{c.cloneFixed}</span>}
+          <CampaignFieldNote language={language} field="template" />
         </label>
 
         <div>
@@ -579,7 +583,8 @@ export function CampaignFormModal({
               </button>
             )}
           </div>
-          <div className="rounded-xl border border-[#e2e8f0] p-3">
+          <CampaignFieldNote language={language} field="destinations" />
+          <div className="mt-2 rounded-xl border border-[#e2e8f0] p-3">
              {(syncDestinations.isPending || syncMessage) && (
                <div
                  className={`mb-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold leading-relaxed ${
@@ -695,12 +700,12 @@ export function CampaignFormModal({
 
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldRepeatCount}</span>
-          <span id="campaign-repeat-count-hint" className={`mb-2 block rounded-lg text-[12px] font-medium ${Number(form.repeatCount) !== 300 ? "border border-amber-200 bg-amber-50 p-2.5 text-amber-800" : "text-[#64748b]"}`}>
-            {c.repeatCountHint}
-            {accountSummary.data && <span className="mt-1 block">{accountSummary.data.subscription.plan === "plus" ? c.repeatCountLimitHint : c.repeatCountUnlimitedHint}</span>}
-          </span>
           {editingCampaign && ["completed", "completed_with_errors"].includes(editingCampaign.status) && <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{c.completedRerunHint}</span>}
           <input type="number" min="1" max={accountSummary.data?.subscription.plan === "plus" ? 300 : undefined} aria-describedby="campaign-repeat-count-hint" value={form.repeatCount} onChange={(event) => setForm({ ...form, repeatCount: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
+          <span id="campaign-repeat-count-hint" className={`mt-2 block rounded-lg text-[12px] font-medium ${Number(form.repeatCount) !== 300 ? "border border-amber-200 bg-amber-50 p-2.5 text-amber-800" : "text-[#64748b]"}`}>
+            <CampaignFieldNote language={language} field="repeat" emphasis={Number(form.repeatCount) !== 300} />
+            {accountSummary.data && <span className="mt-1 block">{accountSummary.data.subscription.plan === "plus" ? c.repeatCountLimitHint : c.repeatCountUnlimitedHint}</span>}
+          </span>
         </label>
 
         <div className="border-t border-[#eef2f6] pt-5">
@@ -714,14 +719,16 @@ export function CampaignFormModal({
             secondKey="roundDelayMaxSeconds"
             max={259200}
             maxHint={c.delayMaxHint}
+            language={language}
           />
+          <DelayExamples language={language} />
         </div>
 
         <div>
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldSchedule}</span>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <input type="date" value={form.scheduleDate} onChange={(event) => setForm({ ...form, scheduleDate: event.target.value })} className="h-11 rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
-            <input type="time" value={form.scheduleTime} onChange={(event) => setForm({ ...form, scheduleTime: event.target.value })} className="h-11 rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
+            <label><input type="date" aria-label={language === "vi" ? "Ngày bắt đầu" : "Start date"} value={form.scheduleDate} onChange={(event) => setForm({ ...form, scheduleDate: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="dateOptional" /></label>
+            <label><input type="time" aria-label={language === "vi" ? "Giờ bắt đầu" : "Start time"} value={form.scheduleTime} onChange={(event) => setForm({ ...form, scheduleTime: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" /><CampaignFieldNote language={language} field="timeOptional" /></label>
           </div>
         </div>
 
@@ -745,6 +752,7 @@ function DelayFields({
   secondKey,
   max,
   maxHint,
+  language,
 }: {
   form: CampaignForm;
   setForm: (form: CampaignForm) => void;
@@ -754,6 +762,7 @@ function DelayFields({
   secondKey: "roundDelayMaxSeconds";
   max: number;
   maxHint: (max: number) => string;
+  language: "vi" | "en";
 }) {
   return (
     <div className="space-y-4">
@@ -761,11 +770,13 @@ function DelayFields({
         <span className="mb-1.5 block text-[14px] font-bold text-[#0f172a]">{firstLabel}</span>
         <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{maxHint(max)}</span>
         <input type="number" min="0" max={max} value={form[firstKey]} onChange={(event) => setForm({ ...form, [firstKey]: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
+        <CampaignFieldNote language={language} field="delayMin" />
       </label>
       <label className="block">
         <span className="mb-1.5 block text-[14px] font-bold text-[#0f172a]">{secondLabel}</span>
         <span className="mb-2 block text-[12px] font-medium text-[#64748b]">{maxHint(max)}</span>
         <input type="number" min="0" max={max} value={form[secondKey]} onChange={(event) => setForm({ ...form, [secondKey]: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
+        <CampaignFieldNote language={language} field="delayMax" />
       </label>
     </div>
   );
