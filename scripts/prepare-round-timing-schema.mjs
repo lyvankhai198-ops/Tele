@@ -76,7 +76,7 @@ export async function prepareSchema(root, {verifyOnly=false}={}) {
       const {rows:[identity]} = await client.query(`SELECT current_database() AS database,
         (SELECT oid::text FROM pg_database WHERE datname=current_database()) AS oid,
         extract(epoch from pg_postmaster_start_time())::text AS started,
-        inet_server_addr()::text AS address,inet_server_port() AS port,
+        host(inet_server_addr()) AS address,inet_server_port() AS port,
         (SELECT bool_and(pg_has_role(current_user,pg_get_userbyid(relowner),'USAGE'))
           FROM pg_class WHERE oid IN ('public.campaigns'::regclass,'public.campaign_targets'::regclass)) AS owns`);
       const invalidIndex = await client.query(`SELECT i.indisvalid,pg_get_indexdef(i.indexrelid) AS definition

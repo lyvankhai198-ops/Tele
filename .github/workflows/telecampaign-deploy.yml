@@ -91,6 +91,7 @@ jobs:
           DATABASE_URL: postgres://telecamp_test@127.0.0.1:5432/telecamp_test
         run: |
           npx --yes pnpm@10.26.1 --filter @workspace/db run push-force
+          node scripts/tests/round-schema.e2e.mjs
           node scripts/prepare-round-timing-schema.mjs --verify-installed "$PWD" "$GITHUB_SHA"
           node scripts/tests/run-admin-tools-e2e.mjs
       - name: Read frontend build environment without logging values
