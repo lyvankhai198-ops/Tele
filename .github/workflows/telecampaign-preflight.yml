@@ -40,132 +40,58 @@ jobs:
             -o ConnectTimeout=15 -o NumberOfPasswordPrompts=1 \
             -p 22 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
           set -euo pipefail
-          test "$(hostname)" = "vps-cd243267" || { echo "Unexpected hostname"; exit 1; }
-          printf 'host=%s\nssh_user=%s\n' "$(hostname)" "$(id -un)"
-          if sudo -n true 2>/dev/null; then echo "sudo_without_prompt=yes"; else echo "sudo_without_prompt=no"; fi
-          ROOT=/opt/telecampaign
-          test -d "$ROOT/.git"
-          test "$(realpath "$ROOT")" = "$ROOT"
-          printf 'repository_owner='; stat -c '%U:%G' "$ROOT"
-          printf 'source_commit='; git -c safe.directory="$ROOT" -C "$ROOT" rev-parse HEAD
-          printf 'tracked_changes='; git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal | wc -l
-          echo 'source_change_paths_begin'
-          git -c safe.directory="$ROOT" -C "$ROOT" status --porcelain --untracked-files=normal
-          git -c safe.directory="$ROOT" -C "$ROOT" diff --stat
-          echo 'source_change_paths_end'
-          for path in /etc/telecampaign/api.env /var/backups/telecampaign /var/lib/telecampaign /var/lib/telecampaign/media; do
-            if test -e "$path"; then
-              printf 'dedicated_path=%s ' "$path"; stat -c '%U:%G %a' "$path"
-              if test -r "$path"; then echo 'readable_by_ubuntu=yes'; fi
-              if test -w "$path"; then echo 'writable_by_ubuntu=yes'; fi
-            fi
-          done
-          for file in /etc/nginx/sites-enabled/telecampaign /etc/nginx/sites-available/telecampaign; do
-            if sudo -n test -f "$file"; then
-              echo 'telecampaign_nginx_routing_begin'
-              sudo -n awk '/^[[:space:]]*(server_name|root|proxy_pass|listen)[[:space:]]/{print}' "$file"
-              echo 'telecampaign_nginx_routing_end'
-              break
-            fi
-          done
-          for tool in node pnpm pm2 pg_dump pg_restore flock tar; do
-            if command -v "$tool" >/dev/null; then printf '%s=available\n' "$tool"; else printf '%s=missing_in_ssh_path\n' "$tool"; fi
-          done
-          if command -v node >/dev/null; then node --version; fi
-          for file in artifacts/api-server/dist/index.mjs artifacts/telecampaign/dist/public/index.html; do
-            if test -s "$ROOT/$file"; then printf 'built_asset=%s\n' "$file"; else printf 'missing_asset=%s\n' "$file"; fi
-          done
-          df -h "$ROOT" /var/backups /var/lib
-          if test -f "$HOME/.pm2/pm2.pid" && command -v pm2 >/dev/null; then
-            pm2 jlist | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s).find(p=>p.name==="telecampaign-api"); console.log(JSON.stringify({pm2Owner:"ubuntu",found:!!p,status:p?.pm2_env?.status,cwd:p?.pm2_env?.pm_cwd,script:p?.pm2_env?.pm_exec_path}));});'
-          fi
-          if sudo -n true 2>/dev/null; then
-            sudo -n bash -lc 'if test -f /root/.pm2/pm2.pid && command -v pm2 >/dev/null; then pm2 jlist | node -e '"'"'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const p=JSON.parse(s).find(p=>p.name==="telecampaign-api");console.log(JSON.stringify({pm2Owner:"root",found:!!p,status:p?.pm2_env?.status,cwd:p?.pm2_env?.pm_cwd,script:p?.pm2_env?.pm_exec_path}));});'"'"'; fi'
-            if sudo -n test -r /etc/telecampaign/api.env; then echo 'dedicated_environment=readable_by_sudo'; fi
-          fi
-          if curl --fail --silent --max-time 10 http://127.0.0.1:3004/api/healthz | python3 -c 'import json,sys;x=json.load(sys.stdin);print("local_health="+str(x.get("status")));sys.exit(0 if x.get("status")=="ok" else 1)'; then
-            echo 'local_health_check=passed'
-          else
-            echo 'local_health_check=failed'
-          fi
-          node <<'DIAGNOSTIC'
-          const fs=require("node:fs");
-          const log="/var/backups/telecampaign/deploy-20261103T175810Z.log";
-          const text=fs.existsSync(log)?fs.readFileSync(log,"utf8"):"";
-          for (const code of new Set(text.match(/^ROUND_SCHEMA_[A-Z0-9_]+$/gm) ?? [])) console.log("migration_diagnostic="+code);
-          const patterns={
-            postgres_version_mismatch:/server version mismatch/i,
-            postgres_authentication_failure:/password authentication failed|no password supplied/i,
-            postgres_connection_failure:/could not connect|connection.*(failed|refused)|could not translate host|connection timed out/i,
-            postgres_invalid_parameter:/invalid URI query parameter|unrecognized configuration parameter/i,
-            permission_denied:/permission denied/i,
-            no_space:/no space left on device/i,
-            file_changed_during_archive:/file changed as we read it/i,
-            backup_success:/TeleCampaign backup completed:/,
-            checkpoint_success:/Ready-to-run TeleCampaign checkpoint:/,
-            prebuilt_invalid:/Prebuilt runtime is incomplete/,
-            restart_failed:/restart.*failed|could not safely restart/i,
-            lock_busy:/Another TeleCampaign operation/,
-            health_failed:/health.*failed|health.*timed out/i,
-            archive_error:/tar:.*(Error|failed|Cannot)/,
-            media_limit:/media exceeds/,
-            database_url_missing:/DATABASE_URL must be configured/,
-            media_directory_mismatch:/TELECAMPAIGN_MEDIA_DIR must be/,
-            postgres_error:/pg_dump: error:/,
-            dump_was_executed:/pg_dump:/,
-            signal_abort:/killed|terminated|signal/i
-          };
-          for(const [key,re] of Object.entries(patterns)) console.log("diagnostic_"+key+"="+re.test(text));
-          for(const [key,re] of Object.entries({
-            server_version:/server version: ([0-9.]+)/i,
-            dump_version:/pg_dump version: ([0-9.]+)/i,
-            shell_line:/\.sh: line ([0-9]+):/
-          })){const m=text.match(re);if(m)console.log("diagnostic_"+key+"="+m[1]);}
-          for(const dir of ["/var/backups/telecampaign","/var/backups/telecampaign/releases"]){
-            if(fs.existsSync(dir))for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
-              if(entry.isDirectory() && /^(telecampaign-|\.incomplete\.|[0-9]{8}T)/.test(entry.name)){
-                const p=dir+"/"+entry.name;
-                console.log(JSON.stringify({backupMetadata:p,complete:fs.existsSync(p+"/COMPLETE"),database:fs.existsSync(p+"/database.dump"),runtime:fs.existsSync(p+"/runtime.tar.gz")}));
+              test "$(hostname)" = vps-cd243267
+              cd /opt/telecampaign
+              printf 'inspection_source_commit='; git -c safe.directory=/opt/telecampaign rev-parse HEAD
+              set -a
+              source /etc/telecampaign/api.env
+              set +a
+              node --input-type=module <<'NODE'
+              import fs from 'node:fs';
+              import {execFileSync} from 'node:child_process';
+              import {createRequire} from 'node:module';
+              const require=createRequire(new URL('file:///opt/telecampaign/lib/db/package.json'));
+              const {Client}=require('pg');
+              let processInfo={found:false};
+              try {
+              const rows=JSON.parse(execFileSync('pm2',['jlist'],{encoding:'utf8',maxBuffer:3000000}));
+              const p=rows.find(x=>x.name==='telecampaign-api');
+              if(p){
+              let runtimeEnv=p.pm2_env,source='pm2';
+              try{runtimeEnv=Object.fromEntries(fs.readFileSync('/proc/'+p.pid+'/environ','utf8').split('\0').filter(x=>x.includes('=')).map(x=>{const i=x.indexOf('=');return[x.slice(0,i),x.slice(i+1)];}));source='proc';}catch{}
+              processInfo={found:true,status:p.pm2_env.status,uptimeSeconds:Math.floor((Date.now()-p.pm2_env.pm_uptime)/1000),flagSource:source,disableAllWorkers:runtimeEnv.TELECAMPAIGN_DISABLE_WORKER==='true',disableGroupJoin:runtimeEnv.TELECAMPAIGN_DISABLE_GROUP_JOIN_WORKER==='true'};
+              const seen={started:false,tickFailures:0,periodicSyncs:0,ownershipPause:false,disabled:false,lastSqlState:null,lastErrorTime:null};
+              for(const path of new Set([p.pm2_env.pm_out_log_path,p.pm2_env.pm_err_log_path].filter(Boolean))){
+              let text='';try{text=execFileSync('tail',['-c','524288',path],{encoding:'utf8',maxBuffer:600000});}catch{}
+              for(const line of text.split('\n')){let x;try{x=JSON.parse(line);}catch{continue;}if(Number(x.time)<p.pm2_env.pm_uptime)continue;
+              if(x.msg==='Admin group join worker started')seen.started=true;
+              if(x.msg==='Admin group join worker tick failed'){seen.tickFailures++;seen.lastErrorTime=x.time;const code=x.err?.code;if(/^[A-Z0-9_]{2,40}$/.test(code??''))seen.lastSqlState=code;}
+              if(x.msg==='Periodic Telegram group sync completed'||x.msg==='Periodic group sync and automatic campaign scan completed')seen.periodicSyncs++;
+              if(x.msg==='Campaign worker is paused until legacy ownership is migrated')seen.ownershipPause=true;
+              if(x.msg==='Campaign worker is disabled by TELECAMPAIGN_DISABLE_WORKER')seen.disabled=true;
               }
-            }
-          }
-          DIAGNOSTIC
-          for binary in /usr/lib/postgresql/*/bin/pg_dump; do
-            if test -x "$binary"; then "$binary" --version; fi
-          done
+              }
+              processInfo.logEvidence=seen;
+              }
+              }catch{processInfo.error='PROCESS_INSPECTION_UNAVAILABLE';}
+              console.log('background_process='+JSON.stringify(processInfo));
+              const client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
+              try{
+              await client.connect();await client.query('SET default_transaction_read_only=on');await client.query("SET statement_timeout='5s'");await client.query("SET lock_timeout='1s'");
+              const setting=(await client.query("SELECT value FROM system_settings WHERE key='admin_system_settings'")).rows[0]?.value;
+              const s=typeof setting==='string'?JSON.parse(setting):setting;
+              console.log('background_settings='+JSON.stringify({present:!!s,autoJoin:s?.groupLibraryAutoJoinEnabled??true,autoCampaign:s?.postJoinCampaign?.enabled??false,mode:s?.postJoinCampaign?.mode??'draft',hasContent:!!s?.postJoinCampaign?.content?.trim(),startGapSeconds:s?.postJoinCampaign?.campaignStartDelaySeconds??null}));
+              const unmapped=await client.query('SELECT count(*)::int AS count FROM (SELECT owner_user_id FROM telegram_accounts UNION SELECT owner_user_id FROM campaigns) owners WHERE NOT EXISTS(SELECT 1 FROM app_users WHERE app_users.id::text=owners.owner_user_id)');
+              console.log('background_unmapped_owners='+unmapped.rows[0].count);
+              const accounts=await client.query("SELECT count(*)::int AS total,count(*) FILTER(WHERE a.status='connected' AND a.session_encrypted IS NOT NULL AND a.telegram_user_id IS NOT NULL)::int AS eligible FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text WHERE u.role='admin' AND a.deleted_at IS NULL");
+              console.log('background_admin_accounts='+JSON.stringify(accounts.rows[0]));
+              for(let pass=0;pass<2;pass++){
+              const jobs=await client.query("SELECT status,count(*)::int AS count,count(*) FILTER(WHERE next_attempt_at<=now())::int AS due,count(*) FILTER(WHERE lease_until>now())::int AS leased,max(last_attempt_at) AS last_attempt,max(updated_at) AS last_update FROM admin_group_join_jobs GROUP BY status ORDER BY status");
+              console.log('background_jobs_'+pass+'='+JSON.stringify(jobs.rows.map(x=>({...x,status:/^[a-z_]{1,24}$/.test(x.status)?x.status:'unknown'}))));
+              const recent=await client.query("SELECT row_number() OVER(ORDER BY a.created_at DESC)::int AS account_slot,a.status,a.created_at,(SELECT count(*)::int FROM admin_group_join_jobs j WHERE j.telegram_account_id=a.id) AS jobs,(SELECT count(*)::int FROM admin_group_join_jobs j WHERE j.telegram_account_id=a.id AND j.status='joined') AS joined,(SELECT count(*)::int FROM campaigns c WHERE c.telegram_account_id=a.id AND c.name LIKE 'Tự động sau khi tham gia:%') AS automatic_campaigns FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text WHERE u.role='admin' AND a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT 5");
+              console.log('background_recent_accounts_'+pass+'='+JSON.stringify(recent.rows));
+              if(pass===0)await new Promise(r=>setTimeout(r,30000));
+              }
+              }catch(e){console.log('background_sqlstate='+(/^[A-Z0-9]{5}$/.test(e.code??'')?e.code:'UNKNOWN'));process.exitCode=1;}finally{await client.end();}
+              NODE
           REMOTE
-  validate:
-    if: ${{ inputs.validate_candidate }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Use Node.js 24
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        with:
-          node-version: "24"
-      - name: Fetch exact candidate without production credentials
-        env:
-          CANDIDATE_SHA: 95ece98c51dc4345ad974f78e0ba250faaf27ad4
-        run: |
-          git init candidate
-          cd candidate
-          git remote add origin https://github.com/lyvankhai198-ops/Tele.git
-          git fetch --depth=1 origin "$CANDIDATE_SHA"
-          git checkout --detach FETCH_HEAD
-      - name: Install locked dependencies
-        working-directory: candidate
-        run: npx --yes pnpm@10.26.1 install --frozen-lockfile
-      - name: Test manual order review
-        working-directory: candidate
-        run: node --experimental-vm-modules --test scripts/tests/manual-order-review.test.mjs
-      - name: Typecheck and build TeleCampaign
-        working-directory: candidate
-        env:
-          PORT: "3004"
-          BASE_PATH: /
-        run: |
-          npx --yes pnpm@10.26.1 run typecheck:libs
-          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
-          npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck
-          npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run build
-          npx --yes pnpm@10.26.1 --filter @workspace/api-server run build
