@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import { registerCampaignCleanupRoutes } from "./campaign-cleanup";
+import { assertCampaignDestinationsAllowed } from "../lib/campaign-destination-blocks";
 import { deleteTelegramAccountData } from "../lib/delete-telegram-account";
 import {registerOperationRoutes} from "./operations";
 import {enqueuePreparation,enqueueLargeResume} from "../lib/operation-preparation";
@@ -2221,9 +2223,8 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   }
 
   const scope = parsed.data.scope ?? "paused";
-  if (parsed.data.autoDeleteInvalid && parsed.data.confirmAutoDelete !== true) {
-    return void sendError(res,400,"CAMPAIGN_RERUN_DELETE_CONFIRMATION_REQUIRED");
-  }
+  // Legacy auto-delete inputs are accepted but never execute deletion. Cleanup
+  // now requires a fresh preview and an explicitly selected confirmation.
   const intervalSeconds = parsed.data.intervalSeconds;
   if (intervalSeconds === undefined
     || !Number.isInteger(intervalSeconds)
@@ -2270,6 +2271,8 @@ router.post("/campaigns/bulk-control/jobs/:jobId/retry", async (req, res): Promi
   res.json(job);
 });
 
+registerCampaignCleanupRoutes(router,currentUserId);
+
 registerCampaignBulkProcessor(async (tx, job, candidateId) => {
       const ownerUserId = job.ownerUserId;
       const scope = job.scope;
@@ -2294,10 +2297,8 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
       // No switch may disable duplicate-send protection.
       if (assessment.category==="review") return {kind:"skip" as const,name:campaign.name,
         reason:assessment.reason,assessment};
-      if (job.autoDeleteInvalid && assessment.canDelete) {
-        await tx.delete(campaignsTable).where(and(eq(campaignsTable.id,campaign.id),
-          eq(campaignsTable.ownerUserId,ownerUserId)));
-        return {kind:"deleted" as const,campaign:{id:campaign.id,name:campaign.name},assessment};
+      if(assessment.groups.length&&assessment.groups.every(group=>group.reason==="blocked_by_cleanup")){
+        return {kind:"skip" as const,name:campaign.name,reason:"blocked_by_cleanup",assessment};
       }
       if (job.onlySendable && assessment.category!=="sendable") return {
         kind:"skip" as const,name:campaign.name,reason:assessment.reason,assessment};
@@ -2363,6 +2364,8 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
           ? campaign.destinationIds
           : fallbackTargets.map((target) => target.destinationId),
       )];
+      const blockedIds=new Set(assessment.groups.filter(group=>group.reason==="blocked_by_cleanup").map(group=>group.id));
+      destinationIds=destinationIds.filter(id=>!blockedIds.has(id));
       if (job.onlySendable) {
         const eligibleIds=new Set(assessment.groups.filter(g=>g.category==="sendable").map(g=>g.id));
         destinationIds=destinationIds.filter(id=>eligibleIds.has(id));
@@ -2622,6 +2625,9 @@ router.post("/campaigns", async (req, res): Promise<void> => {
       const usable=await tx.select({id:telegramAccountsTable.id}).from(telegramAccountsTable).where(and(
         eq(telegramAccountsTable.ownerUserId,currentUserId(req)),inArray(telegramAccountsTable.id,accountIds),isNull(telegramAccountsTable.deletedAt))).for("update");
       if(usable.length!==accountIds.length)throw Error("OPERATION_SOURCE_DELETED");
+      for(const accountId of accountIds)await assertCampaignDestinationsAllowed(
+        tx,currentUserId(req),accountId,destinations.filter(destination=>destination.accountId===accountId).map(destination=>destination.id),
+      );
     }
   const [campaign] = await tx.insert(campaignsTable).values({
     ownerUserId: currentUserId(req),
@@ -2752,6 +2758,7 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
     const templateSourceMessageId = keepTemplate ? sourceTemplate!.sourceMessageId : null;
     const content = keepTemplate ? sourceTemplate!.content : templateMode === "text" ? sourceCampaign.content : "";
 
+    await assertCampaignDestinationsAllowed(tx,ownerUserId,targetAccount.id,clonedDestinationIds);
     const [clone] = await tx.insert(campaignsTable).values({
       ownerUserId,
       name: `${sourceCampaign.name} (Bản sao)`,
@@ -3109,6 +3116,14 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       ? [...new Set((await db.select({ destinationId: campaignTargetsTable.destinationId }).from(campaignTargetsTable)
         .where(eq(campaignTargetsTable.campaignId, existing.id))).map(({ destinationId }) => destinationId))]
       : [...new Set(existing.destinationIds)];
+    try{
+      await assertCampaignDestinationsAllowed(db,ownerUserId,existing.telegramAccountId,configuredDestinationIds);
+    }catch(error){
+      if(error instanceof Error&&error.message==="CAMPAIGN_DESTINATION_BLOCKED"){
+        return void sendError(res,409,error.message);
+      }
+      throw error;
+    }
     const targetDestinations = configuredDestinationIds.length
       ? await db.select({ destination: destinationsTable }).from(destinationsTable)
         .where(inArray(destinationsTable.id, configuredDestinationIds))

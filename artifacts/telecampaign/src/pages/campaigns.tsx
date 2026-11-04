@@ -44,6 +44,7 @@ import { CampaignListFeedback } from "@/components/campaign-list-feedback";
 import { claimCampaignCompletion, wasCampaignCompletionHandled } from "@/lib/campaign-completion-receipt";
 import { useCompleteCampaigns } from "@/lib/use-complete-campaigns";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
+import { CampaignSkippedCleanup } from "@/components/campaign-skipped-cleanup";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
@@ -758,9 +759,6 @@ export default function Campaigns() {
       return;
     }
     try {
-      if (autoDeleteInvalid && !window.confirm(language==="vi"
-        ?"Chỉ xoá chiến dịch khi mọi đích đã được xác nhận không còn hợp lệ, lượt thử đã kết thúc và không có tin gửi thành công. Các lượt gửi sẽ bị xoá và không thể hoàn tác. Lỗi tạm thời và lượt chưa xác minh không bị xoá. Xác nhận bật tự dọn cho lượt này?"
-        :"Delete a campaign only when all destinations are confirmed unavailable, an attempted run has ended, and no messages succeeded. Its sending targets will be permanently deleted. Temporary errors and unverified deliveries are retained. Enable cleanup for this operation?")) return;
       const scheduledAt = new Date(`${bulkScheduleDate}T${bulkScheduleTime}:00`);
       if (Number.isNaN(scheduledAt.getTime())) {
         setToast(c.genericError);
@@ -776,7 +774,7 @@ export default function Campaigns() {
           scope: bulkResumeScope,
           intervalSeconds: intervalMinutes * 60,
           scheduledAt: scheduledAt.toISOString(),
-          onlySendable,autoDeleteInvalid,confirmAutoDelete:autoDeleteInvalid,
+          onlySendable,autoDeleteInvalid:false,confirmAutoDelete:false,
         },
       });
       if (result.job) {
@@ -1161,6 +1159,9 @@ export default function Campaigns() {
               </div>
             )}
             {bulkJob && <CampaignRerunResults job={bulkJob} language={language} />}
+            {bulkJob?.status==="completed" && bulkJob.skippedCount>0 && <CampaignSkippedCleanup
+              key={bulkJob.id} jobId={bulkJob.id} accounts={accounts.data??[]} initialAccountId={accountFilter}
+              language={language} onAccepted={()=>setBulkResumeOpen(false)} />}
             <fieldset disabled={Boolean(bulkJob) || bulkControl.isPending} className="space-y-4 disabled:opacity-60">
               <p className="rounded-xl bg-[#eef2ff] px-3 py-2.5 text-[12px] leading-relaxed text-[#3730a3]">
                 {bulkJob

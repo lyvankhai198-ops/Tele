@@ -80,6 +80,9 @@ import type {
   CalendarItem,
   Campaign,
   CampaignBulkJobProgress,
+  CampaignCleanupConfirmationInput,
+  CampaignCleanupPreview,
+  CampaignCleanupPreviewInput,
   CampaignCloneReadiness,
   CampaignInput,
   CampaignLoadBatch,
@@ -3934,6 +3937,138 @@ export function useGetCampaignBulkJob<TData = Awaited<ReturnType<typeof getCampa
 
 
 
+
+export const getCreateCampaignCleanupPreviewUrl = (jobId: string,) => {
+
+
+
+
+  return `/api/campaigns/bulk-control/jobs/${jobId}/cleanup-preview`
+}
+
+export const createCampaignCleanupPreview = async (jobId: string,
+    campaignCleanupPreviewInput: CampaignCleanupPreviewInput, options?: Parameters<typeof customFetch>[1]): Promise<CampaignCleanupPreview> => {
+
+  return customFetch<CampaignCleanupPreview>(getCreateCampaignCleanupPreviewUrl(jobId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(campaignCleanupPreviewInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCampaignCleanupPreviewMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaignCleanupPreview>>, TError,{jobId: string;data: BodyType<CampaignCleanupPreviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCampaignCleanupPreview>>, TError,{jobId: string;data: BodyType<CampaignCleanupPreviewInput>}, TContext> => {
+
+const mutationKey = ['createCampaignCleanupPreview'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCampaignCleanupPreview>>, {jobId: string;data: BodyType<CampaignCleanupPreviewInput>}> = (props) => {
+          const {jobId,data} = props ?? {};
+
+          return  createCampaignCleanupPreview(jobId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCampaignCleanupPreviewMutationResult = NonNullable<Awaited<ReturnType<typeof createCampaignCleanupPreview>>>
+    export type CreateCampaignCleanupPreviewMutationBody = BodyType<CampaignCleanupPreviewInput>
+    export type CreateCampaignCleanupPreviewMutationError = ErrorType<void>
+
+    export const useCreateCampaignCleanupPreview = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCampaignCleanupPreview>>, TError,{jobId: string;data: BodyType<CampaignCleanupPreviewInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCampaignCleanupPreview>>,
+        TError,
+        {jobId: string;data: BodyType<CampaignCleanupPreviewInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCampaignCleanupPreviewMutationOptions(options));
+    }
+
+export const getConfirmCampaignCleanupUrl = (jobId: string,) => {
+
+
+
+
+  return `/api/campaigns/bulk-control/jobs/${jobId}/cleanup-confirm`
+}
+
+export const confirmCampaignCleanup = async (jobId: string,
+    campaignCleanupConfirmationInput: CampaignCleanupConfirmationInput, options?: Parameters<typeof customFetch>[1]): Promise<BackgroundOperation> => {
+
+  return customFetch<BackgroundOperation>(getConfirmCampaignCleanupUrl(jobId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(campaignCleanupConfirmationInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmCampaignCleanupMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmCampaignCleanup>>, TError,{jobId: string;data: BodyType<CampaignCleanupConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmCampaignCleanup>>, TError,{jobId: string;data: BodyType<CampaignCleanupConfirmationInput>}, TContext> => {
+
+const mutationKey = ['confirmCampaignCleanup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmCampaignCleanup>>, {jobId: string;data: BodyType<CampaignCleanupConfirmationInput>}> = (props) => {
+          const {jobId,data} = props ?? {};
+
+          return  confirmCampaignCleanup(jobId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmCampaignCleanupMutationResult = NonNullable<Awaited<ReturnType<typeof confirmCampaignCleanup>>>
+    export type ConfirmCampaignCleanupMutationBody = BodyType<CampaignCleanupConfirmationInput>
+    export type ConfirmCampaignCleanupMutationError = ErrorType<void>
+
+    export const useConfirmCampaignCleanup = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmCampaignCleanup>>, TError,{jobId: string;data: BodyType<CampaignCleanupConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmCampaignCleanup>>,
+        TError,
+        {jobId: string;data: BodyType<CampaignCleanupConfirmationInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmCampaignCleanupMutationOptions(options));
+    }
 
 export const getRetryCampaignBulkJobUrl = (jobId: string,) => {
 

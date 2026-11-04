@@ -80,7 +80,7 @@ export async function createCampaignBulkJob(input: CampaignListScope & {
       startAt: input.startAt.toISOString(), fingerprint, ids: candidates.map(c => c.id),
       cursor: 0, updatedCount: 0, skipped: [], status: candidates.length ? "queued" : "completed",
       error: null, createdAt: new Date().toISOString(),
-      onlySendable:input.onlySendable ?? true,autoDeleteInvalid:input.autoDeleteInvalid ?? false,
+      onlySendable:input.onlySendable ?? true,autoDeleteInvalid:false,
       deletedCount:0,results:[],
     };
     await tx.insert(systemSettingsTable).values({key: keyFor(input.ownerUserId, id), value: JSON.stringify(job)});

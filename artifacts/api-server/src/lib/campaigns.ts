@@ -1,5 +1,6 @@
 import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { blockedCampaignDestinationIds } from "./campaign-destination-blocks";
 import { registerWorker, workerHeartbeat } from "./worker-health";
 import {
   campaignTargetsTable,
@@ -1034,6 +1035,12 @@ export async function processNextCampaignTarget(accountId?: string) {
       );
       return true;
     }
+    if ((await blockedCampaignDestinationIds(db,job.campaign.ownerUserId,job.destination.accountId,[job.destination.id])).length) {
+      await db.update(campaignTargetsTable).set({
+        status:"cancelled",lastError:"CAMPAIGN_DESTINATION_BLOCKED",nextAttemptAt:null,updatedAt:new Date(),
+      }).where(and(eq(campaignTargetsTable.id,job.target.id),eq(campaignTargetsTable.status,"sending")));
+      return true;
+    }
     const quota = await pauseForDailyQuota(job.campaign, job.target.id, job.target.attempts);
     if (quota.pausedForQuota) return true;
     userQuotaReservation = quota.userQuotaReservation;
@@ -1136,6 +1143,16 @@ export async function processNextCampaignTarget(accountId?: string) {
       return true;
     }
     const message = error instanceof Error ? error.message : "Telegram delivery failed";
+    if(message==="CAMPAIGN_DESTINATION_BLOCKED"){
+      if(userQuotaReservation)await releaseUserDailyQuota({
+        ownerUserId:job.campaign.ownerUserId,quotaDate:userQuotaReservation.quotaDate,
+      });
+      userQuotaReservation=undefined;
+      await db.update(campaignTargetsTable).set({
+        status:"cancelled",lastError:message,nextAttemptAt:null,updatedAt:new Date(),
+      }).where(and(eq(campaignTargetsTable.id,job.target.id),eq(campaignTargetsTable.status,"sending")));
+      return true;
+    }
     const postingPermissionReason = telegramPostingPermissionFailureReason(error);
     const postingPermissionRestrictedUntil = telegramPostingPermissionRestrictedUntil(error);
     const floodSeconds = Number((error as { seconds?: number }).seconds);

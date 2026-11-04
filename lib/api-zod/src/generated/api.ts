@@ -1453,6 +1453,77 @@ export const GetCampaignBulkJobResponse = zod.object({
 })
 
 
+export const createCampaignCleanupPreviewPathJobIdMin = 16;
+export const createCampaignCleanupPreviewPathJobIdMax = 80;
+
+
+
+export const CreateCampaignCleanupPreviewParams = zod.object({
+  "jobId": zod.coerce.string().min(createCampaignCleanupPreviewPathJobIdMin).max(createCampaignCleanupPreviewPathJobIdMax)
+})
+
+export const CreateCampaignCleanupPreviewBody = zod.object({
+  "telegramAccountId": zod.string().uuid()
+})
+
+export const CreateCampaignCleanupPreviewResponse = zod.object({
+  "id": zod.string().uuid(),
+  "jobId": zod.string(),
+  "telegramAccountId": zod.string().uuid(),
+  "accountName": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "campaigns": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "selectable": zod.boolean(),
+  "groups": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "telegramId": zod.string(),
+  "title": zod.string()
+}))
+}))
+})
+
+
+export const confirmCampaignCleanupPathJobIdMin = 16;
+export const confirmCampaignCleanupPathJobIdMax = 80;
+
+
+
+export const ConfirmCampaignCleanupParams = zod.object({
+  "jobId": zod.coerce.string().min(confirmCampaignCleanupPathJobIdMin).max(confirmCampaignCleanupPathJobIdMax)
+})
+
+export const confirmCampaignCleanupBodyCampaignIdsMax = 5000;
+
+
+
+export const ConfirmCampaignCleanupBody = zod.object({
+  "previewId": zod.string().uuid(),
+  "campaignIds": zod.array(zod.string().uuid()).min(1).max(confirmCampaignCleanupBodyCampaignIdsMax),
+  "confirm": zod.literal(true)
+})
+
+export const ConfirmCampaignCleanupResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['delete_account', 'delete_campaigns', 'sync_groups', 'prepare_campaign']),
+  "label": zod.string(),
+  "accountId": zod.string().optional(),
+  "campaignId": zod.string().optional(),
+  "state": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "phase": zod.string(),
+  "processed": zod.number().int(),
+  "stageProcessed": zod.number().int().optional(),
+  "total": zod.number().int().nullable(),
+  "unit": zod.enum(['records', 'groups', 'deliveries']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
 export const RetryCampaignBulkJobParams = zod.object({
   "jobId": zod.coerce.string()
 })
