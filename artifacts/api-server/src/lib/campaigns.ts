@@ -671,6 +671,14 @@ export function campaignCloneMode(campaign: Pick<typeof campaignsTable.$inferSel
 }
 
 export async function campaignSummary(campaign: typeof campaignsTable.$inferSelect) {
+  return buildCampaignSummary(campaign,false);
+}
+
+export async function readOnlyCampaignSummary(campaign: typeof campaignsTable.$inferSelect) {
+  return buildCampaignSummary(campaign,true);
+}
+
+async function buildCampaignSummary(campaign: typeof campaignsTable.$inferSelect,readOnly:boolean) {
   const [targets, subscription, settings] = await Promise.all([
     db.select({
     target: campaignTargetsTable,
@@ -678,7 +686,7 @@ export async function campaignSummary(campaign: typeof campaignsTable.$inferSele
   }).from(campaignTargetsTable)
     .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
     .where(eq(campaignTargetsTable.campaignId, campaign.id)),
-    getSubscription(campaign.ownerUserId),
+    getSubscription(campaign.ownerUserId,undefined,readOnly),
     getSystemSettings(),
   ]);
   const timezone = settings.defaultTimezone;

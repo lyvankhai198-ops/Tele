@@ -648,6 +648,33 @@ paths:
       responses:
         "204": { description: Message template deleted }
         "404": { description: Message template not found }
+  /campaigns/load-manifest:
+    get:
+      operationId: getCampaignLoadManifest
+      tags: [campaigns]
+      responses:
+        "200":
+          description: Read-only owner-scoped campaign selection at the start of a load
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignLoadManifest" }
+  /campaigns/load-batch:
+    get:
+      operationId: getCampaignLoadBatch
+      tags: [campaigns]
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema: { type: string, minLength: 36, maxLength: 924 }
+          description: Up to 25 comma-separated unique UUIDs from the load manifest
+      responses:
+        "200":
+          description: Read-only summaries still owned by this workspace; unavailable ids are explicitly excluded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CampaignLoadBatch" }
+        "400": { description: Invalid or oversized batch }
   /campaigns:
     get:
       operationId: listCampaigns
@@ -2472,6 +2499,18 @@ components:
         content: { type: string, maxLength: 4096 }
         sourceAccountId: { type: ["string", "null"] }
         sourceMessageId: { type: ["string", "null"] }
+    CampaignLoadManifest:
+      type: object
+      required: [campaignIds, total]
+      properties:
+        campaignIds: { type: array, items: { type: string, format: uuid } }
+        total: { type: integer, minimum: 0 }
+    CampaignLoadBatch:
+      type: object
+      required: [campaigns, missingIds]
+      properties:
+        campaigns: { type: array, items: { $ref: "#/components/schemas/Campaign" } }
+        missingIds: { type: array, items: { type: string, format: uuid } }
     Campaign:
       type: object
       required: [id, name, content, telegramAccountId, templateId, templateMode, templateSourceAccountId, templateSourceMessageId, clonedFromCampaignId, clonedFromUserId, cloneMode, mediaUrl, status, scheduledAt, timezone, maxRetries, repeatCount, roundDelayMinSeconds, roundDelayMaxSeconds, createdAt, targetCount, sentCount, failedCount, completedCount, dailyQuota, destinationIds, errors]

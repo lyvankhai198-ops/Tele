@@ -52,7 +52,7 @@ test("a definite rejected input is not treated as an unknown accepted operation"
   assert.equal(h.storage.size,0);
 });
 test("progress can be reopened during processing and closed without cancelling the server task",()=>{
-  assert.match(page,/onClick=\{openBulkTemplate\}[\s\S]*?disabled=\{bulkControl\.isPending \|\| \(templateProgress\.waiting/);
+  assert.match(page,/onClick=\{openBulkTemplate\}[\s\S]*?disabled=\{\(!templateProgress\.job&&!templateProgress\.uncertain&&campaignDataBlocked\)/);
   assert.match(page,/onClose=\{\(\) => setBulkTemplateOpen\(false\)\}/);
   assert.match(page,/CampaignTemplateProgress/);
   assert.match(hook,/getLatestCampaignTemplateJob/);
