@@ -3,16 +3,41 @@ import {useQueryClient} from "@tanstack/react-query";
 import {LoaderCircle,CheckCircle2,AlertCircle,X} from "lucide-react";
 import {useOperations} from "@/lib/operations";
 import {useLanguage} from "@/lib/i18n";
+import {deletionSyncToken,invalidateDeletionDependencies,reconcileCampaignDeletions} from "@/lib/reconcile-campaign-deletions";
 export function OperationsProgress(){
   const operations=useOperations(),{language}=useLanguage(),client=useQueryClient(),vi=language==="vi";
   const seen=useRef(new Map<string,string>()),[hidden,setHidden]=useState<string[]>([]),[retrying,setRetrying]=useState<string|null>(null),[limit,setLimit]=useState(5);
+  const [syncFailed,setSyncFailed]=useState(false),activeScope=useRef(operations.scope);
   const storage=`telecamp-operation-receipts:${operations.scope}`;
+  activeScope.current=operations.scope;
+  useEffect(()=>{activeScope.current=operations.scope;setSyncFailed(false);return()=>{activeScope.current="";};},[operations.scope]);
   useEffect(()=>{try{setHidden(JSON.parse(localStorage.getItem(storage)??"[]"));}catch{setHidden([]);}seen.current.clear();},[storage]);
   useEffect(()=>{
     const preparing=(operations.data??[]).some(j=>j.kind==="prepare_campaign"&&(j.state==="queued"||j.state==="running"));
     let invalidate=false;
     for(const job of operations.data??[]){
       let applied:string[]=[];try{applied=JSON.parse(localStorage.getItem(storage+":applied")??"[]");}catch{}
+      if(job.kind==="delete_account"||job.kind==="delete_campaigns"){
+        if(applied.includes(job.id)||seen.current.get(job.id)==="applied")continue;
+        const token=deletionSyncToken(job),scope=operations.scope;
+        if(seen.current.get(job.id)===token)continue;
+        seen.current.set(job.id,token);
+        void reconcileCampaignDeletions(client,scope,()=>activeScope.current===scope).then(()=>{
+          if(activeScope.current!==scope)return;
+          setSyncFailed(false);
+          if(job.state==="completed"){
+            seen.current.set(job.id,"applied");
+            let latest:string[]=[];try{latest=JSON.parse(localStorage.getItem(storage+":applied")??"[]");}catch{}
+            try{localStorage.setItem(storage+":applied",JSON.stringify([...new Set([...latest,job.id])].slice(-100)));}catch{}
+            void invalidateDeletionDependencies(client);
+          }
+        }).catch(()=>{
+          if(activeScope.current!==scope)return;
+          if(seen.current.get(job.id)===token)seen.current.delete(job.id);
+          setSyncFailed(true);
+        });
+        continue;
+      }
       if(job.state==="completed"&&!applied.includes(job.id)&&seen.current.get(job.id)!=="applied"
         &&(job.kind!=="prepare_campaign"||!preparing)){
         // Invalidate after an actual mutation, not on every poll or page visit.
@@ -21,9 +46,9 @@ export function OperationsProgress(){
       }
     }
     if(invalidate)void client.invalidateQueries({predicate:q=>q.queryKey[0]!=="telecamp-operations"});
-  },[operations.data,client,storage]);
+  },[operations.data,operations.dataUpdatedAt,client,storage,operations.scope]);
   const jobs=(operations.data??[]).filter(j=>!hidden.includes(j.id));
-  if(!jobs.length&&!operations.isError)return null;
+  if(!jobs.length&&!operations.isError&&!syncFailed)return null;
   const names=vi?{delete_account:"Xoá tài khoản Telegram",delete_campaigns:"Xoá chiến dịch",sync_groups:"Đồng bộ nhóm",prepare_campaign:"Chuẩn bị lượt gửi"}
     :{delete_account:"Delete Telegram account",delete_campaigns:"Delete campaigns",sync_groups:"Sync groups",prepare_campaign:"Prepare deliveries"};
   const phases:Record<string,string>=vi?{queued:"Đang chờ xử lý",logs:"Đang xoá nhật ký liên quan",targets:"Đang xoá lượt gửi",campaigns:"Đang xoá chiến dịch",
@@ -33,6 +58,10 @@ export function OperationsProgress(){
       account:"Finishing account removal",sync:"Reading Telegram groups",preparing:"Preparing deliveries",reset:"Preparing the updated schedule",retiming:"Restoring the delivery schedule",completed:"Completed",cancelled:"Stopped by deletion request"};
   const dismiss=(id:string)=>{const next=[...hidden,id].slice(-100);setHidden(next);try{localStorage.setItem(storage,JSON.stringify(next));}catch{}};
   return <section aria-label={vi?"Tiến trình tác vụ":"Background progress"} className="mb-5 space-y-3" data-testid="operations-progress">
+    {syncFailed&&<div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      {vi?"Chưa đồng bộ được kết quả xoá. Danh sách hiện tại được giữ nguyên; hệ thống sẽ thử lại, không cần gửi lại lệnh xoá.":"Deletion results could not be synchronized. Your current list is preserved and synchronization will retry; do not submit deletion again."}
+      <button type="button" className="ml-2 font-bold underline" onClick={()=>{seen.current.clear();void operations.refetch();}}>{vi?"Kiểm tra lại":"Check again"}</button>
+    </div>}
     {operations.isError&&<div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
       {vi?"Chưa lấy được tiến trình. Tác vụ có thể vẫn đang chạy; không gửi lại lệnh xoá.":"Progress is unavailable. Work may still be running; do not submit deletion again."}
       <button className="ml-2 font-bold underline" onClick={()=>void operations.refetch()}>{vi?"Kiểm tra lại":"Check again"}</button>
