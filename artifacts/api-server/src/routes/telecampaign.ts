@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { deleteTelegramAccountData } from "../lib/delete-telegram-account";
+import { campaignRerunAssessment, saveRerunPolicy } from "../lib/campaign-rerun-review";
 import { createReadStream } from "node:fs";
 import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -2215,6 +2216,9 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   }
 
   const scope = parsed.data.scope ?? "paused";
+  if (parsed.data.autoDeleteInvalid && parsed.data.confirmAutoDelete !== true) {
+    return void sendError(res,400,"CAMPAIGN_RERUN_DELETE_CONFIRMATION_REQUIRED");
+  }
   const intervalSeconds = parsed.data.intervalSeconds;
   if (intervalSeconds === undefined
     || !Number.isInteger(intervalSeconds)
@@ -2232,6 +2236,7 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
     const job = await createCampaignBulkJob({
       ownerUserId, scope, intervalSeconds, startAt, scheduledAt: requestedStart,
       requestId: req.get("Idempotency-Key"),
+      onlySendable:parsed.data.onlySendable,autoDeleteInvalid:parsed.data.autoDeleteInvalid,
     });
     return void res.status(202).json(BulkControlCampaignsResponse.parse({
       action: "resume", updatedCount: job.updatedCount, skippedCount: job.skippedCount,
@@ -2278,6 +2283,18 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
       if (!stillEligible) {
         return { kind: "skip" as const, reason: "Trạng thái campaign đã thay đổi." };
       }
+
+      const assessment=await campaignRerunAssessment(tx,campaign);
+      // No switch may disable duplicate-send protection.
+      if (assessment.category==="review") return {kind:"skip" as const,name:campaign.name,
+        reason:assessment.reason,assessment};
+      if (job.autoDeleteInvalid && assessment.canDelete) {
+        await tx.delete(campaignsTable).where(and(eq(campaignsTable.id,campaign.id),
+          eq(campaignsTable.ownerUserId,ownerUserId)));
+        return {kind:"deleted" as const,campaign:{id:campaign.id,name:campaign.name},assessment};
+      }
+      if (job.onlySendable && assessment.category!=="sendable") return {
+        kind:"skip" as const,name:campaign.name,reason:assessment.reason,assessment};
 
       const [pendingSchedule] = scope === "completed" ? [] : await tx.select({
         earliest: sql<Date | null>`min(${campaignTargetsTable.nextAttemptAt})`,
@@ -2335,11 +2352,15 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
         ? await tx.selectDistinct({destinationId: campaignTargetsTable.destinationId})
           .from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId, campaign.id))
         : [];
-      const destinationIds = [...new Set(
+      let destinationIds = [...new Set(
         campaign.destinationIds?.length
           ? campaign.destinationIds
           : fallbackTargets.map((target) => target.destinationId),
       )];
+      if (job.onlySendable) {
+        const eligibleIds=new Set(assessment.groups.filter(g=>g.category==="sendable").map(g=>g.id));
+        destinationIds=destinationIds.filter(id=>eligibleIds.has(id));
+      }
       const destinations = destinationIds.length
         ? await tx.select().from(destinationsTable).where(and(
           inArray(destinationsTable.id, destinationIds),
@@ -2365,6 +2386,12 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
           ));
         if (!destinations.length || campaign.repeatCount < 1) {
           return { kind: "skip" as const, reason: "Campaign không còn destination để tạo lượt chạy mới." };
+        }
+        if (job.autoDeleteInvalid && assessment.groups.some(g=>g.category==="invalid")) {
+          const invalidIds=new Set(assessment.groups.filter(g=>g.category==="invalid").map(g=>g.id));
+          const keptIds=assessment.groups.filter(g=>!invalidIds.has(g.id)).map(g=>g.id);
+          if (keptIds.length) await tx.update(campaignsTable).set({destinationIds:keptIds,updatedAt:now})
+            .where(and(eq(campaignsTable.id,campaign.id),eq(campaignsTable.ownerUserId,ownerUserId)));
         }
 
         const [run] = await tx.insert(campaignsTable).values({
@@ -2401,12 +2428,24 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
         })) {
           await tx.insert(campaignTargetsTable).values(rows);
         }
-        return { kind: "created" as const, campaign: run, sourceId: campaign.id };
+        await saveRerunPolicy(tx,ownerUserId,run.id,{onlySendable:job.onlySendable ?? false,
+          autoDeleteInvalid:job.autoDeleteInvalid ?? false,jobId:job.id});
+        return { kind: "created" as const, campaign: run, sourceId: campaign.id,assessment };
       }
 
       const earliest = pendingSchedule?.earliest;
       if (!earliest) return { kind: "skip" as const, reason: "Không xác định được lịch gửi còn lại." };
       const shiftMs = campaignStart.getTime() - earliest.getTime();
+      if (job.onlySendable) {
+        // Preserve evidence and the source destination list. These unattempted
+        // targets must not sneak into the resumed run after the readiness filter.
+        const excluded=assessment.groups.filter(g=>g.category!=="sendable").map(g=>g.id);
+        if (excluded.length) await tx.update(campaignTargetsTable).set({
+          status:"cancelled",lastError:"RERUN_FILTER_EXCLUDED",nextAttemptAt:null,
+          quotaReservedAt:null,updatedAt:now,
+        }).where(and(eq(campaignTargetsTable.campaignId,campaign.id),
+          inArray(campaignTargetsTable.destinationId,excluded),eq(campaignTargetsTable.status,"pending")));
+      }
       await tx.update(campaignTargetsTable).set({
         nextAttemptAt: sql`${campaignTargetsTable.nextAttemptAt} + (${shiftMs}::bigint * interval '1 millisecond')`,
         updatedAt: now,
@@ -2427,8 +2466,10 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
         eq(campaignsTable.id, campaign.id),
         eq(campaignsTable.status, scope),
       )).returning({ id: campaignsTable.id, name: campaignsTable.name });
+      if (updated) await saveRerunPolicy(tx,ownerUserId,updated.id,{onlySendable:job.onlySendable ?? false,
+        autoDeleteInvalid:job.autoDeleteInvalid ?? false,jobId:job.id});
       return updated
-        ? { kind: "resumed" as const, campaign: updated }
+        ? { kind: "resumed" as const, campaign: updated,assessment }
         : { kind: "skip" as const, reason: "Campaign đã được xử lý bởi thao tác khác." };
 });
 

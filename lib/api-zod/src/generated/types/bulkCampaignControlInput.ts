@@ -18,4 +18,7 @@ export interface BulkCampaignControlInput {
   intervalSeconds?: number;
   /** @nullable */
   scheduledAt?: Date | null;
+  onlySendable?: boolean;
+  autoDeleteInvalid?: boolean;
+  confirmAutoDelete?: boolean;
 }

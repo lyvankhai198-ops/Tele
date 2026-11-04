@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { activityLogsTable, campaignsTable, db, systemSettingsTable } from "@workspace/db";
+import { getRerunReports, processFinishedRerunReviews } from "./campaign-rerun-review";
+import { logger } from "./logger";
+import type { RerunAssessment } from "./campaign-rerun-assessment";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type CampaignBulkJob = {
@@ -10,27 +13,36 @@ export type CampaignBulkJob = {
   skipped: Array<{id: string; name: string; reason: string}>;
   status: "queued" | "running" | "completed" | "failed";
   error: string | null; createdAt: string;
+  onlySendable?: boolean; autoDeleteInvalid?: boolean; deletedCount?: number;
+  results?: Array<{id:string;name:string;outcome:"created"|"resumed"|"skipped"|"deleted";
+    reason:string;runId?:string;assessment?:RerunAssessment}>;
 };
-type Result = {kind: "skip"; reason: string} | {
-  kind: "created" | "resumed"; campaign: {id: string; name: string}; sourceId?: string;
+type Result = {kind: "skip"; reason: string; name?:string; assessment?:RerunAssessment}
+  | {kind:"deleted";campaign:{id:string;name:string};assessment:RerunAssessment} | {
+  kind: "created" | "resumed"; campaign: {id: string; name: string}; sourceId?: string; assessment?:RerunAssessment;
 };
 let processor: ((tx: Tx, job: CampaignBulkJob, id: string) => Promise<Result>) | undefined;
 let busy = false;
 let timer: ReturnType<typeof setInterval> | undefined;
+let reviewTick=0;
 const prefix = "campaign_bulk_job:";
 const keyFor = (owner: string, id: string) => `${prefix}${owner}:${id}`;
 export const bulkJobSummary = (job: CampaignBulkJob) => ({
   id: job.id, status: job.status, total: job.ids.length, processed: job.cursor,
   updatedCount: job.updatedCount, skippedCount: job.skipped.length, error: job.error,
+  onlySendable: job.onlySendable ?? false, autoDeleteInvalid: job.autoDeleteInvalid ?? false,
+  deletedCount:job.deletedCount ?? 0,results:job.results ?? [],reviews:[],
 });
 export function registerCampaignBulkProcessor(fn: NonNullable<typeof processor>) { processor = fn; }
 
 export async function createCampaignBulkJob(input: {
   ownerUserId: string; scope: CampaignBulkJob["scope"]; intervalSeconds: number;
   startAt: Date; scheduledAt: Date; requestId?: string;
+  onlySendable?:boolean;autoDeleteInvalid?:boolean;
 }) {
   const fingerprint = createHash("sha256").update(JSON.stringify({
     scope: input.scope, intervalSeconds: input.intervalSeconds, scheduledAt: input.scheduledAt.toISOString(),
+    onlySendable:input.onlySendable ?? true,autoDeleteInvalid:input.autoDeleteInvalid ?? false,
   })).digest("hex");
   const id = input.requestId ?? fingerprint;
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(id)) throw new Error("CAMPAIGN_BULK_INVALID_REQUEST");
@@ -60,6 +72,8 @@ export async function createCampaignBulkJob(input: {
       startAt: input.startAt.toISOString(), fingerprint, ids: candidates.map(c => c.id),
       cursor: 0, updatedCount: 0, skipped: [], status: candidates.length ? "queued" : "completed",
       error: null, createdAt: new Date().toISOString(),
+      onlySendable:input.onlySendable ?? true,autoDeleteInvalid:input.autoDeleteInvalid ?? false,
+      deletedCount:0,results:[],
     };
     await tx.insert(systemSettingsTable).values({key: keyFor(input.ownerUserId, id), value: JSON.stringify(job)});
     return job;
@@ -70,7 +84,8 @@ export async function createCampaignBulkJob(input: {
 export async function getCampaignBulkJob(owner: string, id: string) {
   const [row] = await db.select({value: systemSettingsTable.value}).from(systemSettingsTable)
     .where(eq(systemSettingsTable.key, keyFor(owner, id)));
-  return row ? bulkJobSummary(JSON.parse(row.value) as CampaignBulkJob) : null;
+  if (!row) return null;
+  return {...bulkJobSummary(JSON.parse(row.value) as CampaignBulkJob),reviews:await getRerunReports(owner,id)};
 }
 
 export async function getActiveCampaignBulkJob(owner: string) {
@@ -78,7 +93,7 @@ export async function getActiveCampaignBulkJob(owner: string) {
     .where(like(systemSettingsTable.key, `${prefix}${owner}:%`));
   const job = rows.map(row => JSON.parse(row.value) as CampaignBulkJob)
     .find(job => job.status !== "completed");
-  return job ? bulkJobSummary(job) : null;
+  return job ? {...bulkJobSummary(job),reviews:await getRerunReports(owner,job.id)} : null;
 }
 
 export async function retryCampaignBulkJob(owner: string, id: string) {
@@ -119,10 +134,21 @@ export async function processCampaignBulkJobs(maxSteps = 10) {
           failedCursor = job.cursor;
           const sourceId = job.ids[job.cursor];
           const handled = await processor!(tx, job, sourceId);
+          job.results ??= [];
           if (handled.kind === "skip") {
-            job.skipped.push({id: sourceId, name: "", reason: handled.reason});
+            job.skipped.push({id: sourceId, name: handled.name ?? "", reason: handled.reason});
+            job.results.push({id:sourceId,name:handled.name ?? "",outcome:"skipped",reason:handled.reason,assessment:handled.assessment});
+          } else if (handled.kind === "deleted") {
+            job.deletedCount=(job.deletedCount ?? 0)+1;
+            job.results.push({id:sourceId,name:handled.campaign.name,outcome:"deleted",
+              reason:"membership_unavailable",assessment:handled.assessment});
+            await tx.insert(activityLogsTable).values({ownerUserId:job.ownerUserId,event:"campaign.rerun_invalid_deleted",
+              level:"info",message:`Removed invalid campaign "${handled.campaign.name}" after confirmed membership loss`,
+              metadata:{jobId:job.id,sourceCampaignId:sourceId}});
           } else {
             job.updatedCount++;
+            job.results.push({id:sourceId,name:handled.campaign.name,outcome:handled.kind,runId:handled.campaign.id,
+              reason:handled.assessment?.reason ?? "ready_destinations",assessment:handled.assessment});
             await tx.insert(activityLogsTable).values({
               ownerUserId: job.ownerUserId, campaignId: handled.campaign.id, level: "success",
               event: handled.kind === "created" ? "campaign.bulk_rerun_created" : "campaign.resumed",
@@ -168,7 +194,11 @@ export async function processCampaignBulkJobs(maxSteps = 10) {
 
 export function startCampaignBulkJobWorker() {
   if (timer) return;
-  timer = setInterval(() => { void processCampaignBulkJobs().catch(() => {}); }, 1000);
+  timer = setInterval(() => {
+    void processCampaignBulkJobs().catch(() => {});
+    if (++reviewTick % 30 === 0) void processFinishedRerunReviews()
+      .catch(()=>logger.warn("Pending campaign rerun reviews will be retried"));
+  }, 1000);
   timer.unref();
   void processCampaignBulkJobs().catch(() => {});
 }

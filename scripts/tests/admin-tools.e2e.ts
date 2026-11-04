@@ -14,6 +14,7 @@ import sharp from "sharp";
 import { testCampaignBulkJobs } from "./campaign-bulk-jobs.e2e";
 import { testCampaignRoundTiming } from "./campaign-round-timing.e2e";
 import { testTelegramAccountDeletion } from "./telegram-account-delete.e2e";
+import { testCampaignRerunSafety } from "./campaign-rerun-safety.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
@@ -117,6 +118,9 @@ try {
   const userLogin = await login("fixture_customer");
   check(userLogin.status === 200, "E2E_USER_LOGIN");
   const userCookie = userLogin.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
+  phase="E2E_RERUN_SAFETY";
+  await testCampaignRerunSafety({ownerId:adminId,ownerCookie:adminCookie,
+    otherOwnerId:userId,otherCookie:userCookie,request});
   check((await request("/admin/tools/summary")).status === 401, "E2E_ANONYMOUS_DENIED");
   check((await request("/admin/tools/summary", userCookie)).status === 403, "E2E_USER_ADMIN_DENIED");
   phase = "E2E_CAMPAIGN_BULK_DELETE";

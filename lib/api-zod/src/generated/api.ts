@@ -1105,13 +1105,18 @@ export const bulkControlCampaignsBodyScopeDefault = `paused`;
 export const bulkControlCampaignsBodyIntervalSecondsMin = 0;
 export const bulkControlCampaignsBodyIntervalSecondsMax = 259200;
 
-
+export const bulkControlCampaignsBodyOnlySendableDefault = true;
+export const bulkControlCampaignsBodyAutoDeleteInvalidDefault = false;
+export const bulkControlCampaignsBodyConfirmAutoDeleteDefault = false;
 
 export const BulkControlCampaignsBody = zod.object({
   "action": zod.enum(['pause', 'resume']),
   "scope": zod.enum(['draft', 'queued', 'paused', 'completed']).default(bulkControlCampaignsBodyScopeDefault),
   "intervalSeconds": zod.number().min(bulkControlCampaignsBodyIntervalSecondsMin).max(bulkControlCampaignsBodyIntervalSecondsMax).optional(),
-  "scheduledAt": zod.coerce.date().nullish()
+  "scheduledAt": zod.coerce.date().nullish(),
+  "onlySendable": zod.boolean().default(bulkControlCampaignsBodyOnlySendableDefault),
+  "autoDeleteInvalid": zod.boolean().default(bulkControlCampaignsBodyAutoDeleteInvalidDefault),
+  "confirmAutoDelete": zod.boolean().default(bulkControlCampaignsBodyConfirmAutoDeleteDefault)
 })
 
 export const BulkControlCampaignsResponse = zod.object({
@@ -1123,7 +1128,51 @@ export const BulkControlCampaignsResponse = zod.object({
   "processed": zod.number().int(),
   "updatedCount": zod.number().int(),
   "skippedCount": zod.number().int(),
-  "error": zod.string().nullable()
+  "error": zod.string().nullable(),
+  "onlySendable": zod.boolean().optional(),
+  "autoDeleteInvalid": zod.boolean().optional(),
+  "deletedCount": zod.number().int().optional(),
+  "results": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "outcome": zod.enum(['created', 'resumed', 'skipped', 'deleted']),
+  "reason": zod.string(),
+  "runId": zod.string().optional(),
+  "assessment": zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).optional()
+})).optional(),
+  "reviews": zod.array(zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).and(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reviewedAt": zod.coerce.date(),
+  "deleted": zod.boolean(),
+  "removedDestinationCount": zod.number().int()
+}))).optional()
 }).optional(),
   "updatedCount": zod.number(),
   "skippedCount": zod.number(),
@@ -1142,7 +1191,51 @@ export const GetActiveCampaignBulkJobResponse = zod.union([zod.object({
   "processed": zod.number().int(),
   "updatedCount": zod.number().int(),
   "skippedCount": zod.number().int(),
-  "error": zod.string().nullable()
+  "error": zod.string().nullable(),
+  "onlySendable": zod.boolean().optional(),
+  "autoDeleteInvalid": zod.boolean().optional(),
+  "deletedCount": zod.number().int().optional(),
+  "results": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "outcome": zod.enum(['created', 'resumed', 'skipped', 'deleted']),
+  "reason": zod.string(),
+  "runId": zod.string().optional(),
+  "assessment": zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).optional()
+})).optional(),
+  "reviews": zod.array(zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).and(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reviewedAt": zod.coerce.date(),
+  "deleted": zod.boolean(),
+  "removedDestinationCount": zod.number().int()
+}))).optional()
 }),zod.null()])
 
 
@@ -1157,7 +1250,51 @@ export const GetCampaignBulkJobResponse = zod.object({
   "processed": zod.number().int(),
   "updatedCount": zod.number().int(),
   "skippedCount": zod.number().int(),
-  "error": zod.string().nullable()
+  "error": zod.string().nullable(),
+  "onlySendable": zod.boolean().optional(),
+  "autoDeleteInvalid": zod.boolean().optional(),
+  "deletedCount": zod.number().int().optional(),
+  "results": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "outcome": zod.enum(['created', 'resumed', 'skipped', 'deleted']),
+  "reason": zod.string(),
+  "runId": zod.string().optional(),
+  "assessment": zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).optional()
+})).optional(),
+  "reviews": zod.array(zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).and(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reviewedAt": zod.coerce.date(),
+  "deleted": zod.boolean(),
+  "removedDestinationCount": zod.number().int()
+}))).optional()
 })
 
 
@@ -1172,7 +1309,51 @@ export const RetryCampaignBulkJobResponse = zod.object({
   "processed": zod.number().int(),
   "updatedCount": zod.number().int(),
   "skippedCount": zod.number().int(),
-  "error": zod.string().nullable()
+  "error": zod.string().nullable(),
+  "onlySendable": zod.boolean().optional(),
+  "autoDeleteInvalid": zod.boolean().optional(),
+  "deletedCount": zod.number().int().optional(),
+  "results": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "outcome": zod.enum(['created', 'resumed', 'skipped', 'deleted']),
+  "reason": zod.string(),
+  "runId": zod.string().optional(),
+  "assessment": zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).optional()
+})).optional(),
+  "reviews": zod.array(zod.object({
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string(),
+  "groups": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
+  "reason": zod.string()
+})),
+  "sentCount": zod.number().int(),
+  "failedCount": zod.number().int(),
+  "targetCount": zod.number().int(),
+  "canDelete": zod.boolean()
+}).and(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reviewedAt": zod.coerce.date(),
+  "deleted": zod.boolean(),
+  "removedDestinationCount": zod.number().int()
+}))).optional()
 })
 
 
