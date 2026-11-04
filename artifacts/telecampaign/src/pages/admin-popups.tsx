@@ -18,12 +18,12 @@ function localDate(value: string | null) {
   const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 export default function AdminPopupsPage() {
-  const { language } = useLanguage(), text = popupCopy[language];
+  const { language } = useLanguage(), text = popupCopy[language === "vi" ? "vi" : "en"];
   const [rows, setRows] = useState<Popup[]>([]), [draft, setDraft] = useState<Popup | null>(null);
   const [image, setImage] = useState<string | undefined>(), [busy, setBusy] = useState(false), [imageBusy, setImageBusy] = useState(false);
   const [error, setError] = useState<"loadError" | "error" | "imageError" | "conflict" | "limit" | null>(null);
   const [notice, setNotice] = useState<"saved" | "deleted" | null>(null);
-  const [preview, setPreview] = useState<Popup | null>(null), [mobile, setMobile] = useState(false), [previewLanguage, setPreviewLanguage] = useState<"vi" | "en">(language);
+  const [preview, setPreview] = useState<Popup | null>(null), [mobile, setMobile] = useState(false), [previewLanguage, setPreviewLanguage] = useState<"vi" | "en">(language === "vi" ? "vi" : "en");
   const load = async () => setRows(await adminToolRequest<Popup[]>("/admin/popups"));
   useEffect(() => { void load().catch(() => setError("loadError")); }, []);
   function edit(p: Popup) { setDraft({ ...p }); setImage(undefined); setError(null); setNotice(null); }

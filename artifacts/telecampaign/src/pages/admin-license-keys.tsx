@@ -462,7 +462,7 @@ export function AdminLicenseKeysPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const [isCompactInventory, setIsCompactInventory] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;

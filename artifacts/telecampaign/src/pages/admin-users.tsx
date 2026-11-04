@@ -169,7 +169,7 @@ export default function AdminUsersPage() {
   const [, setLocation] = useLocation();
   const { language } = useLanguage();
   const { refresh } = useAuth();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");

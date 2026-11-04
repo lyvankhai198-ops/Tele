@@ -28,7 +28,9 @@ function message(error: unknown, vi: boolean, confirming: boolean) {
       : "Confirmation was not received. The request may have been accepted; retrying this same selection will not create a duplicate deletion."
     : vi ? "Chưa tải được bản xem trước. Không có chiến dịch nào bị xoá." : "The preview could not be loaded. No campaigns were deleted.";
 }
-function rowReason(reason: string, language: "vi" | "en") {
+type InterfaceLanguage = import("@/lib/locales").InterfaceLanguage;
+
+function rowReason(reason: string, language: InterfaceLanguage) {
   const vi = language === "vi";
   if (reason === "cleanup_now_ready") return vi ? "Hiện đã sẵn sàng — giữ lại." : "Currently ready — retained.";
   if (reason === "cleanup_missing_identity") return vi ? "Thiếu định danh nhóm để chặn an toàn; cần kiểm tra trước." : "Missing group identity for safe blocking; check this campaign first.";
@@ -38,7 +40,7 @@ function rowReason(reason: string, language: "vi" | "en") {
 
 export function CampaignSkippedCleanup({ jobId, accounts, initialAccountId = "", language, onAccepted }: {
   jobId: string; accounts: Array<{ id: string; name: string; username?: string | null }>;
-  initialAccountId?: string; language: "vi" | "en"; onAccepted: () => void;
+  initialAccountId?: string; language: InterfaceLanguage; onAccepted: () => void;
 }) {
   const vi = language === "vi", operations = useOperations(), client = useQueryClient(), { user } = useAuth();
   const [accountId, setAccountId] = useState(initialAccountId);

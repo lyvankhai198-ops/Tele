@@ -30,7 +30,7 @@ import { QuickSendWizard } from "@/components/quick-send-wizard";
 import { shouldShowQuickSend } from "@/lib/onboarding";
 
 export default function Dashboard() {
-  const { language, t } = useLanguage();
+  const { language, t, ti } = useLanguage();
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useGetDashboard({
     query: {
@@ -88,9 +88,9 @@ export default function Dashboard() {
   const expiresAt = upgradeSummary?.subscription.expiresAt ? new Date(upgradeSummary.subscription.expiresAt) : null;
   const remainingHours = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000))) : null;
   const showExpiryNotice = upgradeSummary?.subscription.status === "active" && remainingHours !== null && remainingHours <= 24;
-  const expiryNotice = language === "vi"
-    ? `Thời gian sử dụng còn ${remainingHours} giờ. Hãy mua license key để không bị gián đoạn.`
-    : `${remainingHours} hour${remainingHours === 1 ? "" : "s"} remaining. Buy a license key to avoid interruption.`;
+  const expiryNotice = ti("Time remaining: {{0}}. Buy a license key to avoid interruption.", {
+    "0": new Intl.NumberFormat(language, { style: "unit", unit: "hour", unitDisplay: "long" }).format(remainingHours ?? 0),
+  });
 
   return (
     <AppLayout activePage="dashboard" title={t("Dashboard")}>

@@ -4,7 +4,7 @@ import { Modal } from "@/components/layout/AppLayout";
 import { useLanguage, type Language } from "@/lib/i18n";
 
 function localizedCopy(notification: AdminNotification, language: Language) {
-  const useEnglish = language === "en" && Boolean(notification.titleEn?.trim() || notification.bodyEn?.trim());
+  const useEnglish = language !== "vi" && Boolean(notification.titleEn?.trim() || notification.bodyEn?.trim());
   return {
     title: useEnglish && notification.titleEn?.trim() ? notification.titleEn : notification.title,
     body: useEnglish && notification.bodyEn?.trim() ? notification.bodyEn : notification.body,
@@ -52,7 +52,7 @@ export function NotificationDetailModal({
         )}
 
         <div className="rounded-2xl border border-[#dbeafe] bg-[#f8fbff] p-5">
-          <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#64748b]">{language === "en" ? "English" : "Tiếng Việt"}</p>
+          <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#64748b]">{language === "vi" ? t("Vietnamese") : t("English")}</p>
           <h3 className="text-xl font-extrabold leading-tight text-[#0f172a]">{current.title}</h3>
           {current.body && <p className="mt-3 whitespace-pre-line text-[15px] font-medium leading-7 text-[#334155]">{current.body}</p>}
         </div>

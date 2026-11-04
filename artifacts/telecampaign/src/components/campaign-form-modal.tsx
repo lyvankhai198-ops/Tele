@@ -21,7 +21,7 @@ import {
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { Modal, PrimaryButton } from "@/components/layout/AppLayout";
-import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 import {
   canChooseRestrictedDestination,
   localScheduleFields,
@@ -232,7 +232,7 @@ export function CampaignFormModal({
   onSaved,
 }: CampaignFormModalProps) {
   const { language } = useLanguage();
-  const c = copy[language];
+  const c = copy[language === "vi" ? "vi" : "en"];
   const accounts = useListTelegramAccounts();
   const destinations = useListDestinations({
     query: {
@@ -776,7 +776,7 @@ function DelayFields({
   secondKey: "roundDelayMaxSeconds";
   max: number;
   maxHint: (max: number) => string;
-  language: "vi" | "en";
+  language: Language;
 }) {
   return (
     <div className="space-y-4">

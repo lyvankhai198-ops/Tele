@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CampaignBulkJobProgress } from "@workspace/api-client-react";
 
-type Language = "vi" | "en";
+type Language = import("@/lib/locales").InterfaceLanguage;
 export const rerunReason = (reason:string, language:Language) => {
   const labels:Record<string,[string,string]> = {
     uncertain_delivery:["Có lượt gửi chưa xác minh; không tự gửi lại để tránh trùng.","A delivery is unverified; automatic rerun is blocked to prevent duplicates."],
@@ -63,7 +63,7 @@ export function CampaignRerunOptions(props:{
 export function CampaignRerunResults({job,language}:{job:CampaignBulkJobProgress;language:Language}) {
   const vi=language==="vi", [limit,setLimit]=useState(50);
   const results=job.results ?? [], reports=job.reviews ?? [];
-  const c=categories[language];
+  const c=categories[language === "vi" ? "vi" : "en"];
   const outcomes={created:vi?"Đã tạo lượt":"Run created",resumed:vi?"Đã tiếp tục":"Resumed",
     skipped:vi?"Bỏ qua":"Skipped",deleted:vi?"Đã xoá":"Deleted"};
   return <div className="space-y-3" data-testid="campaign-rerun-results">

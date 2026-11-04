@@ -624,3 +624,9 @@
   }
 }
 
+/* Preserve the existing sidebar, flex/grid order and controls. Only text
+   paragraph direction follows Arabic/Urdu; mixed URLs and IDs stay readable. */
+html[data-interface-direction="rtl"] :where(p, label, h1, h2, h3, h4, li, td, th, [role="alert"]) {
+  unicode-bidi: plaintext;
+}
+

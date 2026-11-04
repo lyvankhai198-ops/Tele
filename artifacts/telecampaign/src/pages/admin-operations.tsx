@@ -205,7 +205,7 @@ function StorageMetric({
 
 export default function AdminOperationsPage() {
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const query = useGetAdminOperations({ query: { queryKey: getGetAdminOperationsQueryKey(), refetchInterval: 30_000, refetchOnWindowFocus: true } });
   const queryClient = useQueryClient();
   const updateCampaign = useUpdateAdminCampaignStatus();

@@ -17,7 +17,7 @@ import {
 import { useListActivity } from "@workspace/api-client-react";
 import type { ActivityLog } from "@workspace/api-client-react";
 import { AppLayout, PageIntro, Panel, QuietButton, SectionHeader } from "@/components/layout/AppLayout";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, type Language } from "@/lib/i18n";
 
 type FilterTab = "all" | "success" | "warning" | "error" | "review";
 
@@ -44,14 +44,14 @@ const eventLabels: Record<string, { vi: string; en: string }> = {
   "proxy.detached": { vi: "Đã gỡ proxy", en: "Proxy detached" },
 };
 
-function formatDate(value: string, language: "vi" | "en") {
+function formatDate(value: string, language: Language) {
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : undefined, {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 }
 
-function logStatus(log: ActivityLog, language: "vi" | "en") {
+function logStatus(log: ActivityLog, language: Language) {
   if (log.level === "error") {
     return {
       label: language === "vi" ? "Thất bại" : "Failed",
@@ -84,7 +84,7 @@ function logStatus(log: ActivityLog, language: "vi" | "en") {
   };
 }
 
-function targetStatusLabel(status: string, language: "vi" | "en") {
+function targetStatusLabel(status: string, language: Language) {
   const labels: Record<string, { vi: string; en: string }> = {
     pending: { vi: "Đang chờ", en: "Pending" },
     sending: { vi: "Đang gửi", en: "Sending" },
@@ -93,7 +93,7 @@ function targetStatusLabel(status: string, language: "vi" | "en") {
     requires_review: { vi: "Cần xem xét", en: "Needs review" },
     cancelled: { vi: "Đã hủy", en: "Cancelled" },
   };
-  return labels[status]?.[language] ?? status;
+  return labels[status]?.[language === "vi" ? "vi" : "en"] ?? status;
 }
 
 function isUserDailyQuotaLog(log: ActivityLog) {
@@ -101,17 +101,17 @@ function isUserDailyQuotaLog(log: ActivityLog) {
     || /Daily user message limit/i.test(log.message);
 }
 
-function activityTitle(log: ActivityLog, language: "vi" | "en") {
+function activityTitle(log: ActivityLog, language: Language) {
   if (log.event === "campaign.paused.daily_quota_reached") {
     if (isUserDailyQuotaLog(log)) {
       return language === "vi" ? "Đã đạt ngân sách gửi tổng trong ngày" : "Daily user message budget reached";
     }
     return language === "vi" ? "Đã đạt giới hạn gửi của chiến dịch" : "Campaign daily message limit reached";
   }
-  return eventLabels[log.event]?.[language] ?? log.event.replace(/[._]/g, " ");
+  return eventLabels[log.event]?.[language === "vi" ? "vi" : "en"] ?? log.event.replace(/[._]/g, " ");
 }
 
-function userMessage(log: ActivityLog, language: "vi" | "en") {
+function userMessage(log: ActivityLog, language: Language) {
   if (language === "en") return log.message;
 
   if (log.event === "campaign.target.failed") {

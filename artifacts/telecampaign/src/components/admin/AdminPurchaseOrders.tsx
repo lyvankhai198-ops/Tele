@@ -22,7 +22,7 @@ import {
   getListAdminPurchaseOrdersQueryKey,
   getListPurchaseOrdersQueryKey,
 } from "@workspace/api-client-react";
-import { useLanguage, localizedErrorMessage } from "@/lib/i18n";
+import { useLanguage, localizedErrorMessage, interfaceText } from "@/lib/i18n";
 import { format } from "date-fns";
 import { getPurchaseOrderActions } from "@/lib/purchase-order-actions";
 
@@ -110,7 +110,9 @@ export function AdminPurchaseOrders() {
       ] as const;
       const bad = invalid.find(([value, pattern]) => !pattern.test(value));
       if (bad) {
-        setDestinationError(language === "vi" ? `Chưa lưu: ${bad[2]} không hợp lệ. Sửa hoặc để trống ô này; bạn cũng có thể lưu giá riêng.` : `Not saved: Invalid ${bad[3]}. Fix or clear this field, or save prices separately.`);
+        setDestinationError(interfaceText("Not saved: Invalid {{0}}. Fix or clear this field, or save prices separately.", language, {
+          "0": interfaceText(bad[3], language),
+        }));
         return;
       }
     }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { AppLayout, Panel } from "@/components/layout/AppLayout";
 import { adminToolRequest } from "@/lib/admin-tools-client";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, type Language } from "@/lib/i18n";
 import {
   Activity, ArrowDownToLine, ArrowUpRight, CalendarClock, Check, CircleDollarSign,
   Clock3, FileClock, HardDrive, RefreshCw, ScrollText, ShieldCheck,
@@ -161,14 +161,14 @@ const copy = {
 const fieldClass = "rounded-xl border border-[#ccd9de] bg-white p-3 text-sm text-[#203d4a] outline-none focus:border-[#147b87] focus:ring-4 focus:ring-[#147b87]/10";
 const buttonClass = "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#cbdbe0] bg-white px-3.5 py-2.5 text-xs font-bold text-[#315362] transition hover:border-[#a6c4ca] hover:bg-[#f4f8f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#147b87] disabled:cursor-not-allowed disabled:opacity-50";
 
-function formatTime(value: number | null | undefined, language: "vi" | "en") {
+function formatTime(value: number | null | undefined, language: Language) {
   if (!value) return language === "vi" ? "Chưa ghi nhận" : "Not recorded";
   return new Date(value).toLocaleString(language === "vi" ? "vi-VN" : "en-GB");
 }
 
 export default function AdminToolsPage() {
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const [data, setData] = useState<Summary | null>(null);
   const [audit, setAudit] = useState<Audit[]>([]);
   const [message, setMessage] = useState("");

@@ -285,14 +285,14 @@ export const RegisterAuthBody = zod.object({
   "confirmPassword": zod.string().min(registerAuthBodyConfirmPasswordMin).max(registerAuthBodyConfirmPasswordMax),
   "captchaChallengeId": zod.string().min(1).max(registerAuthBodyCaptchaChallengeIdMax),
   "captchaCode": zod.string().min(1).max(registerAuthBodyCaptchaCodeMax),
-  "preferredLanguage": zod.enum(['vi', 'en']).optional()
+  "preferredLanguage": zod.enum(['vi', 'en', 'lo', 'ms', 'ja', 'th', 'ko', 'zh-Hans', 'zh-Hant', 'ru', 'hi', 'ar', 'fil', 'de', 'my', 'ur', 'si', 'id', 'nl', 'sr', 'hy', 'bn']).optional()
 })
 
 export const RegisterAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
-  "preferredLanguage": zod.enum(['vi', 'en']),
+  "preferredLanguage": zod.enum(['vi', 'en', 'lo', 'ms', 'ja', 'th', 'ko', 'zh-Hans', 'zh-Hant', 'ru', 'hi', 'ar', 'fil', 'de', 'my', 'ur', 'si', 'id', 'nl', 'sr', 'hy', 'bn']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
@@ -323,7 +323,7 @@ export const LoginAuthResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
-  "preferredLanguage": zod.enum(['vi', 'en']),
+  "preferredLanguage": zod.enum(['vi', 'en', 'lo', 'ms', 'ja', 'th', 'ko', 'zh-Hans', 'zh-Hant', 'ru', 'hi', 'ar', 'fil', 'de', 'my', 'ur', 'si', 'id', 'nl', 'sr', 'hy', 'bn']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
@@ -432,7 +432,7 @@ export const GetAuthUserResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
-  "preferredLanguage": zod.enum(['vi', 'en']),
+  "preferredLanguage": zod.enum(['vi', 'en', 'lo', 'ms', 'ja', 'th', 'ko', 'zh-Hans', 'zh-Hant', 'ru', 'hi', 'ar', 'fil', 'de', 'my', 'ur', 'si', 'id', 'nl', 'sr', 'hy', 'bn']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
@@ -443,14 +443,14 @@ export const GetAuthUserResponse = zod.object({
 
 
 export const UpdateAuthLanguageBody = zod.object({
-  "preferredLanguage": zod.enum(['vi', 'en'])
+  "preferredLanguage": zod.enum(['vi', 'en', 'lo', 'ms', 'ja', 'th', 'ko', 'zh-Hans', 'zh-Hant', 'ru', 'hi', 'ar', 'fil', 'de', 'my', 'ur', 'si', 'id', 'nl', 'sr', 'hy', 'bn'])
 })
 
 export const UpdateAuthLanguageResponse = zod.object({
   "id": zod.string(),
   "username": zod.string(),
   "role": zod.enum(['user', 'admin']),
-  "preferredLanguage": zod.enum(['vi', 'en']),
+  "preferredLanguage": zod.enum(['vi', 'en', 'lo', 'ms', 'ja', 'th', 'ko', 'zh-Hans', 'zh-Hant', 'ru', 'hi', 'ar', 'fil', 'de', 'my', 'ur', 'si', 'id', 'nl', 'sr', 'hy', 'bn']),
   "mustChangePassword": zod.boolean(),
   "support": zod.object({
   "targetUserId": zod.string(),
