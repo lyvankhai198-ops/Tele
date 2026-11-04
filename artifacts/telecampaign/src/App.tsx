@@ -888,17 +888,15 @@ function AdminRoute({ children }: { children: ReactNode }) {
 
 function AdminLanguageScope({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const parentLanguage = useLanguage();
   const [location] = useLocation();
-  const [adminLanguage, setAdminLanguage] = useState<Language>(parentLanguage.language);
+  const [adminLanguage, setAdminLanguage] = useState<Language>("vi");
   useEffect(() => {
-    if (user?.role === "admin") setAdminLanguage(parentLanguage.language);
+    if (user?.role === "admin") setAdminLanguage("vi");
   }, [user?.id]);
-  useEffect(() => { setAdminLanguage(parentLanguage.language); }, [parentLanguage.language]);
   const adminSurface = location === "/admin" || location.startsWith("/admin/")
     || location === "/dashboard/feedback";
   return user?.role === "admin" && adminSurface
-    ? <LanguageOverride language={adminLanguage} setLanguage={parentLanguage.setLanguage}>{children}</LanguageOverride>
+    ? <LanguageOverride language={adminLanguage} setLanguage={setAdminLanguage}>{children}</LanguageOverride>
     : children;
 }
 
