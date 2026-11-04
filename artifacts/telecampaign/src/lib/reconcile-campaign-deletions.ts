@@ -43,7 +43,11 @@ export function reconcileCampaignDeletions(client:QueryClient,scope:string,activ
       if(query.state.fetchStatus==="fetching"||client.getQueryData(key)!==before||query.state.dataUpdatedAt!==updatedAt){
         flight.again=true;continue;
       }
+      // Membership reconciliation is not a refresh of existing summaries.
+      // Preserve another writer's freshness request, especially off this page.
+      const invalidated=query.state.isInvalidated;
       client.setQueryData(key,next,{updatedAt});
+      if(invalidated)void client.invalidateQueries({queryKey:key,exact:true,refetchType:"none"});
       client.setQueryData(campaignProgressKey(scope),(old:Record<string,unknown>|undefined)=>({
         ...old,loaded:next.length,total:next.length,phase:"complete",
       }));

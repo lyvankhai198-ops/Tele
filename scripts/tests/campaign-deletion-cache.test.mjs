@@ -99,6 +99,18 @@ test("a concurrent cache edit is preserved rather than overwritten by an older m
   client.setQueryData(key,[{...rows[1],status:"paused"}]);gate.resolve(manifest(["campaign-1"]));await task;
   assert.equal(client.getQueryData(key)[0].status,"paused");assert.equal(calls,2);client.clear();
 });
+test("membership changes preserve an existing/concurrent freshness request without starting a full reload",async()=>{
+  for(const concurrent of [false,true]){
+    const client=cached(),gate=deferred();
+    if(!concurrent)await client.invalidateQueries({queryKey:key,exact:true,refetchType:"none"});
+    const task=sync.reconcileCampaignDeletions(client,scope,()=>true,{manifest:()=>gate.promise,batch:async()=>{throw Error("UNEXPECTED_BATCH");}});
+    if(concurrent)await client.invalidateQueries({queryKey:key,exact:true,refetchType:"none"});
+    gate.resolve(manifest(["campaign-1"]));await task;
+    assert.equal(client.getQueryState(key).isInvalidated,true);
+    assert.equal(client.getQueryState(key).fetchStatus,"idle");
+    assert.deepEqual(Array.from(client.getQueryData(key),r=>r.id),["campaign-1"]);client.clear();
+  }
+});
 test("completed deletion refreshes dependent caches, not complete campaign lists, counters or operation polling",async()=>{
   const client=cached(),calls={campaigns:0,calendar:0,operations:0,counter:0},stops=[];
   const observe=(queryKey,name)=>{client.setQueryData(queryKey,[]);const o=new QueryObserver(client,{queryKey,queryFn:async()=>{calls[name]++;return[];},staleTime:Infinity,gcTime:Infinity});stops.push(o.subscribe(()=>{}));};
