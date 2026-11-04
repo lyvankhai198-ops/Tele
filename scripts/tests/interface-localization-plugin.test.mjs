@@ -77,6 +77,41 @@ test("locale formatting uses the actual selected language and CSS branches stay 
   assert.match(output, /language === "vi" \? "bg-white text-red-500" : "bg-blue-500 text-white"/u);
 });
 
+test("the actual release-date helper keeps Intl enums valid after localization", () => {
+  const page = fs.readFileSync(new URL("../../artifacts/telecampaign/src/pages/admin-release-updates.tsx", import.meta.url), "utf8");
+  const helper = page.match(/function dateLabel\([\s\S]*?\n\}/u)?.[0];
+  assert.ok(helper, "actual release date helper must be exercised");
+  const { output, catalog } = compile(helper.replace(/: string/gu, ""));
+  assert.equal(catalog.length, 0);
+  assert.doesNotMatch(output, /interfaceText/u);
+  assert.match(output, /dateStyle: "medium"/u);
+  assert.match(output, /timeStyle: "short"/u);
+  const dateLabel = new Function(`${output}; return dateLabel;`)();
+  for (const language of ["vi", "en", "bn", "ur", "ar", "ja"]) {
+    assert.equal(typeof dateLabel("2026-11-05T00:00:00.000Z", language), "string");
+  }
+});
+
+test("Intl and toLocale options stay technical while visible short/medium labels translate", () => {
+  const { output, catalog } = compile(`function amountLabel(value, language) {
+    return new Intl.NumberFormat(language, { notation: "compact", compactDisplay: "short" }).format(value);
+  }
+  function dateLabel(value, language) {
+    return new Date(value).toLocaleString(language === "vi" ? "vi-VN" : "en-GB",
+      { dateStyle: language === "vi" ? "medium" : "medium", timeStyle: "short" });
+  }`);
+  assert.equal(catalog.length, 0);
+  assert.doesNotMatch(output, /interfaceText/u);
+  const helpers = new Function(`${output}; return {amountLabel,dateLabel};`)();
+  for (const language of ["vi", "en", "bn", "ur"]) {
+    assert.equal(typeof helpers.amountLabel(12000, language), "string");
+    assert.equal(typeof helpers.dateLabel("2026-11-05T00:00:00.000Z", language), "string");
+  }
+  const visible = compile('function Page({language}) { return <p>{language === "vi" ? "Ngắn" : "short"} medium</p>; }');
+  assert.ok(visible.catalog.some(entry => entry.source === "short"));
+  assert.ok(visible.catalog.some(entry => entry.source.trim() === "medium"));
+});
+
 test("different interpolation expressions require explicit review, never silently swap values", () => {
   const { unresolved, catalog } = compile("function Page({language,left,right}) { return <p>{language === 'vi' ? `Nhóm ${left}` : `Group ${right}`}</p>; }");
   assert.equal(unresolved.length, 1);
