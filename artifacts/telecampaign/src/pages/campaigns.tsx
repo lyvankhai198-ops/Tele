@@ -38,6 +38,7 @@ import {
 import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { useTemplateJob } from "@/lib/use-template-job";
 import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
+import { CampaignListFeedback } from "@/components/campaign-list-feedback";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
@@ -971,9 +972,9 @@ export default function Campaigns() {
         )}
 
         <Panel className="overflow-hidden">
-          {campaigns.isLoading
-            ? <div className="grid min-h-64 place-items-center"><LoaderCircle className="h-6 w-6 animate-spin text-[#64748b]" /></div>
-            : listedCampaigns.length
+          <CampaignListFeedback language={language} hasData={campaigns.data!==undefined}
+            fetching={campaigns.isFetching} failed={campaigns.isError} filtered={Boolean(search.trim()||status!=="all")}>
+          {listedCampaigns.length
               ? <div className="divide-y divide-[#eef2f6]">{listedCampaigns.map((campaign) => {
                   const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
                   const complete = campaign.targetCount ? Math.round((campaign.completedCount / campaign.targetCount) * 100) : 0;
@@ -1070,6 +1071,7 @@ export default function Campaigns() {
                   detail={search || status !== "all" ? c.emptyFilterDetail : c.emptyDetail}
                    action={!isSupportMode && !search && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
                 />}
+          </CampaignListFeedback>
         </Panel>
       </div>
 
