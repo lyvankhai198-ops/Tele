@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
-import { processTemplateJobs } from "../../artifacts/api-server/src/lib/campaign-template-jobs";
+import { getTemplateJob, processTemplateJobs } from "../../artifacts/api-server/src/lib/campaign-template-jobs";
 import { getSystemSettings,updateSystemSettings } from "../../artifacts/api-server/src/lib/system-settings";
 
 export async function testTemplateJobs({adminId,userId,adminCookie,userCookie,request}:{
@@ -122,7 +122,12 @@ export async function testTemplateJobs({adminId,userId,adminCookie,userCookie,re
     const otherAccount=await pool.query("SELECT content FROM campaigns WHERE id=$1",[ownCampaigns[2]]);
     check(otherAccount.rows[0].content==="customer-original","E2E_TEMPLATE_CUSTOMER_ACCOUNT_SCOPE");
     // Client-supplied privilege fields must not grant access to shared defaults.
-    const allOwnResponse=await ownCreate({updateGlobalDefault:true,owner:adminId}),allOwn=await allOwnResponse.json() as any;
+    let allOwnResponse=await ownCreate({updateGlobalDefault:true,owner:adminId});
+    if(allOwnResponse.status!==202){
+      check(allOwnResponse.status===400,"E2E_TEMPLATE_CUSTOMER_PRIVILEGE_FIELDS_REJECTED");
+      allOwnResponse=await ownCreate();
+    }
+    const allOwn=await allOwnResponse.json() as any;
     check(allOwnResponse.status===202&&allOwn.total===3&&allOwn.defaultStatus==="not_applicable","E2E_TEMPLATE_CUSTOMER_ALL_ACCEPTED");
     await processTemplateJobs(12);
     const ownDone=await ownRead(allOwn.id);
@@ -131,6 +136,16 @@ export async function testTemplateJobs({adminId,userId,adminCookie,userCookie,re
     check(matching.rows[0].n===3,"E2E_TEMPLATE_CUSTOMER_ELIGIBLE_ONLY");
     assert.deepEqual(await getSystemSettings(),sharedBefore,"E2E_TEMPLATE_CUSTOMER_SHARED_DEFAULT_PROTECTED");
     check((await request(`${base}/jobs/${allOwn.id}`,adminCookie)).status===404,"E2E_TEMPLATE_CUSTOMER_JOB_PRIVATE");
+    const privileged=await(await create({telegramAccountId:undefined})).json() as any;
+    check(privileged.defaultStatus==="pending","E2E_TEMPLATE_ADMIN_PRIVILEGED_JOB_ACCEPTED");
+    try{
+      await pool.query("UPDATE app_users SET role='user' WHERE id=$1",[adminId]);
+      await processTemplateJobs(1);
+      check((await getTemplateJob(adminId,privileged.id))?.status==="failed","E2E_TEMPLATE_ADMIN_PRIVILEGE_REVOCATION");
+      assert.deepEqual(await getSystemSettings(),sharedBefore,"E2E_TEMPLATE_REVOKED_SHARED_DEFAULT_PROTECTED");
+    }finally{
+      await pool.query("UPDATE app_users SET role='admin' WHERE id=$1",[adminId]);
+    }
     console.log("E2E_TEMPLATE_CUSTOMER_ACCESS_PASSED");
     console.log("E2E_TEMPLATE_JOBS_PASSED");
   }finally{

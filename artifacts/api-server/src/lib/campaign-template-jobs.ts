@@ -166,10 +166,11 @@ export async function processTemplateJobs(maxSteps = 25) {
         const job = JSON.parse(result.rows[0].value) as Job;
         failed={key:result.rows[0].key,cursor:job.cursor};
         await lockOwner(tx,job.owner);
-        // Permission can be revoked after acceptance. Stop rather than complete
-        // privileged work under an account no longer authorized as administrator.
-        const admin = await tx.query("SELECT id FROM app_users WHERE id=$1 AND role='admin'", [job.owner]);
-        if (!admin.rows.length) throw Error("TEMPLATE_JOB_ACCESS_REVOKED");
+        // Editing owned campaigns is available to customers. Only a job that
+        // also changes the shared default requires continuing admin authority.
+        const owner = await tx.query("SELECT id,role FROM app_users WHERE id=$1", [job.owner]);
+        if (!owner.rows.length || (job.defaultStatus==="pending" && owner.rows[0].role!=="admin"))
+          throw Error("TEMPLATE_JOB_ACCESS_REVOKED");
         if (job.cursor<job.ids.length) {
           const id=job.ids[job.cursor], outcome=await processCampaign(tx,job,id);
           if (outcome.reason) job.skipped.push({id,name:outcome.name,reason:outcome.reason});

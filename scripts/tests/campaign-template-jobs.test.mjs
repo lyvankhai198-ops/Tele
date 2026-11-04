@@ -94,3 +94,8 @@ test("worker is durable and atomic, and completion patches only the shared templ
   assert.match(worker,/jsonb_set/);
   assert.doesNotMatch(worker,/api\.telegram\.org|sendMessage|updateSystemSettings\(/);
 });
+test("only shared-default work requires admin, including permission revocation after acceptance",()=>{
+  assert.match(worker,/job\.defaultStatus==="pending" && owner\.rows\[0\]\.role!=="admin"/);
+  assert.doesNotMatch(worker,/WHERE id=\$1 AND role='admin'/);
+  assert.match(worker,/defaultStatus:!input\.telegramAccountId&&input\.updateGlobalDefault\?"pending":"not_applicable"/);
+});
