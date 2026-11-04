@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db,campaignsTable } from "@workspace/db";
-import { and,desc,eq,inArray } from "drizzle-orm";
+import { and,desc,inArray } from "drizzle-orm";
 import { GetCampaignLoadBatchQueryParams, GetCampaignLoadBatchResponse, GetCampaignLoadManifestQueryParams, GetCampaignLoadManifestResponse } from "@workspace/api-zod";
 import { campaignListScope } from "../lib/campaign-list-scope";
 import { readOnlyCampaignSummary } from "../lib/campaigns";
