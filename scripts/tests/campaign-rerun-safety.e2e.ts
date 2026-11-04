@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { testCampaignSkippedCleanup } from "./campaign-skipped-cleanup.e2e";
 import { pool, db } from "@workspace/db";
 import { processCampaignBulkJobs } from "../../artifacts/api-server/src/lib/campaign-bulk-jobs";
 import { processFinishedRerunReviews, reviewFinishedRerun, saveRerunPolicy } from "../../artifacts/api-server/src/lib/campaign-rerun-review";
@@ -65,22 +66,21 @@ export async function testCampaignRerunSafety(input:{
   check((await pool.query("SELECT destination_ids FROM campaigns WHERE id=$1",[mixed])).rows[0].destination_ids.length===3,
     "E2E_RERUN_NO_CLEANUP_WITHOUT_OPT_IN");
   check((await request(`/campaigns/bulk-control/jobs/${initial.id}`,otherCookie)).status===404,"E2E_RERUN_REPORT_OWNER");
-  check((await request("/campaigns/bulk-control",ownerCookie,{...body,autoDeleteInvalid:true})).status===400,
-    "E2E_RERUN_DESTRUCTIVE_CONFIRMATION");
   check((await request("/campaigns/bulk-control",ownerCookie,{...body,onlySendable:false},"POST",{"Idempotency-Key":token})).status===409,
     "E2E_RERUN_OPTIONS_IDEMPOTENCY");
   const secondResponse=await request("/campaigns/bulk-control",ownerCookie,
-    {...body,autoDeleteInvalid:true,confirmAutoDelete:true},"POST",{"Idempotency-Key":randomUUID()});
+    {...body,autoDeleteInvalid:true},"POST",{"Idempotency-Key":randomUUID()});
   const secondId=(await secondResponse.json() as any).job.id;
   await processCampaignBulkJobs(20);
   const second=await load(secondId);
-  check(second.deletedCount===1 && second.results.find((r:any)=>r.id===ids.invalid).outcome==="deleted",
-    "E2E_RERUN_DELETE_CONFIRMED_INVALID_ONLY");
+  check(second.deletedCount===0 && second.autoDeleteInvalid===false
+    && second.results.find((r:any)=>r.id===ids.invalid).outcome==="skipped",
+    "E2E_RERUN_LEGACY_FLAG_CANNOT_BYPASS_PREVIEW");
   check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])",[
     [ids.temporary,ids.uncertain,ids.unattempted,ids["hidden-history"]]])).rowCount===4,
     "E2E_RERUN_NEVER_DELETE_TRANSIENT_UNKNOWN_OR_SUCCESS_HISTORY");
   const kept=(await pool.query("SELECT destination_ids FROM campaigns WHERE id=$1",[mixed])).rows[0].destination_ids;
-  check(kept.includes(good)&&kept.includes(temporary)&&!kept.includes(bad),"E2E_RERUN_ONLY_DETACH_INVALID_SOURCE_GROUP");
+  check(kept.includes(good)&&kept.includes(temporary)&&kept.includes(bad),"E2E_RERUN_NO_DETACH_BEFORE_SELECTION");
   check((await pool.query("SELECT id FROM campaign_targets WHERE campaign_id=$1",[mixed])).rowCount===3,
     "E2E_RERUN_PARTIAL_HISTORY_PRESERVED");
 
@@ -91,9 +91,9 @@ export async function testCampaignRerunSafety(input:{
   await pool.query("UPDATE campaigns SET status='completed' WHERE id=$1",[finish]);
   await pool.query("UPDATE destinations SET can_post=false,permission_reason=$1,permission_checked_at=now() WHERE id=$2",[unavailable,good]);
   await processFinishedRerunReviews();
-  check((await pool.query("SELECT id FROM campaigns WHERE id=$1",[finish])).rowCount===0,"E2E_RERUN_AFTER_FINISH_DELETE");
+  check((await pool.query("SELECT id FROM campaigns WHERE id=$1",[finish])).rowCount===1,"E2E_RERUN_AFTER_FINISH_PREVIEW_REQUIRED");
   const reviewed=await load(secondId);
-  check(reviewed.reviews.some((r:any)=>r.id===finish && r.deleted && r.sentCount===0),"E2E_RERUN_DURABLE_REVIEW_REPORT");
+  check(reviewed.reviews.some((r:any)=>r.id===finish && !r.deleted && r.sentCount===0),"E2E_RERUN_DURABLE_REVIEW_REPORT");
   await processFinishedRerunReviews();
   check((await load(secondId)).reviews.length===reviewed.reviews.length,"E2E_RERUN_REVIEW_IDEMPOTENT");
 
@@ -111,7 +111,7 @@ export async function testCampaignRerunSafety(input:{
   await target(partial,temporary,"sent");await target(partial,bad,"failed");
   await db.transaction(tx=>saveRerunPolicy(tx,ownerId,partial,{onlySendable:true,autoDeleteInvalid:true,jobId:secondId}));
   const partialReport=await reviewFinishedRerun(partial);
-  check(partialReport?.removedDestinationCount===1 && !partialReport.deleted,"E2E_RERUN_AFTER_FINISH_PARTIAL");
+  check(partialReport?.removedDestinationCount===0 && !partialReport.deleted,"E2E_RERUN_REVIEW_NEVER_DETACHES_WITHOUT_SELECTION");
   check((await pool.query("SELECT count(*)::int n FROM campaign_targets WHERE campaign_id=$1",[partial])).rows[0].n===2,
     "E2E_RERUN_PARTIAL_KEEP_DELIVERY_EVIDENCE");
   const protectedRun=await seed("protected-review",[bad]);await target(protectedRun,bad,"requires_review");
@@ -121,6 +121,7 @@ export async function testCampaignRerunSafety(input:{
   check(JSON.stringify((await pool.query("SELECT row_to_json(c) value FROM campaigns c WHERE id=$1",[foreign])).rows[0].value)===JSON.stringify(foreignBefore),
     "E2E_RERUN_OTHER_OWNER_UNCHANGED");
 
+  await testCampaignSkippedCleanup(input);
   // Restore this isolated owner so the existing bulk-suite cardinality checks
   // remain independent of these new fixtures.
   await pool.query("DELETE FROM campaigns WHERE name LIKE 'rerun-safety-fixture-%'");

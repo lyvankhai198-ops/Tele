@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, like, sql } from "drizzle-orm";
 import { db, campaignsTable, campaignTargetsTable, destinationsTable, telegramAccountsTable,
   systemSettingsTable } from "@workspace/db";
 import { assessCampaignRerun, type RerunAssessment, type RerunDestinationEvidence } from "./campaign-rerun-assessment";
+import { blockedCampaignDestinationIds } from "./campaign-destination-blocks";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Campaign = typeof campaignsTable.$inferSelect;
@@ -33,9 +34,10 @@ export async function campaignRerunAssessment(tx: Tx, campaign: Campaign): Promi
   const ids = [...new Set(campaign.destinationIds?.length ? campaign.destinationIds : counts.map(c=>c.id))];
   const rows = ids.length && account ? await tx.select().from(destinationsTable).where(and(
     inArray(destinationsTable.id,ids),eq(destinationsTable.accountId,account.id))).for("share") : [];
+  const blocked = new Set(account ? await blockedCampaignDestinationIds(tx,campaign.ownerUserId,account.id,ids) : []);
   const evidence: RerunDestinationEvidence[] = ids.map(id=>{
     const g=rows.find(row=>row.id===id), c=counts.find(row=>row.id===id);
-    return { id,title:g?.title ?? id,exists:Boolean(g),canPost:g?.canPost ?? false,
+    return { id,title:g?.title ?? id,exists:Boolean(g),canPost:g?.canPost ?? false,blocked:blocked.has(id),
       permissionReason:g?.permissionReason ?? null,permissionCheckedAt:g?.permissionCheckedAt ?? null,
       restrictedUntil:g?.restrictedUntil ?? null,pending:c?.pending ?? 0,sending:c?.sending ?? 0,
       uncertain:c?.uncertain ?? 0,sent:c?.sent ?? 0,failed:c?.failed ?? 0,cancelled:c?.cancelled ?? 0,
@@ -75,21 +77,9 @@ export async function reviewFinishedRerun(campaignId:string) {
     const pending=await tx.select({id:campaignTargetsTable.id}).from(campaignTargetsTable).where(and(
       eq(campaignTargetsTable.campaignId,campaign.id),inArray(campaignTargetsTable.status,["pending","sending"]))).limit(1);
     if (pending.length) return;
-    const invalidIds=assessment.groups.filter(g=>g.category==="invalid").map(g=>g.id);
-    let deleted=false, removedDestinationCount=0;
-    if (policy.autoDeleteInvalid && assessment.canDelete) {
-      await tx.delete(campaignsTable).where(and(eq(campaignsTable.id,campaign.id),
-        eq(campaignsTable.ownerUserId,campaign.ownerUserId)));
-      deleted=true;
-    } else if (policy.autoDeleteInvalid && invalidIds.length && assessment.category!=="review"
-      && assessment.groups.some(g=>g.category!=="invalid")) {
-      // Retain sent/error history. Only detach confirmed-unavailable destinations
-      // from this campaign, never remove globally synced groups or other campaigns.
-      const kept=assessment.groups.filter(g=>!invalidIds.includes(g.id)).map(g=>g.id);
-      await tx.update(campaignsTable).set({destinationIds:kept,updatedAt:new Date()})
-        .where(and(eq(campaignsTable.id,campaign.id),eq(campaignsTable.ownerUserId,campaign.ownerUserId)));
-      removedDestinationCount=invalidIds.length;
-    }
+    // Historical autoDeleteInvalid flags must not bypass the new preview and
+    // selected confirmation. Reviewing delivery results is now read-only.
+    const deleted=false, removedDestinationCount=0;
     const report:RerunReport={...assessment,id:campaign.id,name:campaign.name,reviewedAt:new Date().toISOString(),
       deleted,removedDestinationCount};
     await tx.insert(systemSettingsTable).values({

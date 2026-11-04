@@ -12,6 +12,7 @@ export const rerunReason = (reason:string, language:Language) => {
     last_delivery_failed:["Lần gửi gần nhất lỗi; tạm loại, giữ dữ liệu.","The latest delivery failed; temporarily excluded, with data retained."],
     membership_needs_refresh:["Cần đồng bộ nhóm lại để xác nhận trạng thái mới nhất.","Sync groups again to confirm the latest membership status."],
     membership_unavailable:["Đồng bộ nhóm đã xác nhận tài khoản không còn đích gửi này.","Group synchronization confirmed this destination is no longer available to this account."],
+    blocked_by_cleanup:["Nhóm đã bị chặn trên tài khoản này sau khi xác nhận xoá chiến dịch.","This group was blocked on this account after confirmed campaign deletion."],
     delivery_confirmed:["Đã có bằng chứng gửi thành công.","Confirmed successful delivery exists."],
     ready_not_tested:["Nhóm sẵn sàng nhưng chưa có lần gửi thành công; không phải bảo đảm gửi được.","Ready but not yet successfully tested; delivery is not guaranteed."],
     ready_destinations:["Có nhóm còn sẵn sàng để gửi.","There are destinations ready for sending."],
@@ -53,17 +54,9 @@ export function CampaignRerunOptions(props:{
           ?"Tạm loại lỗi tạm thời. Lượt chưa xác minh luôn bị chặn để tránh gửi trùng."
           :"Temporarily exclude transient failures. Unverified deliveries are always blocked to prevent duplicates."}</small></span>
     </label>
-    <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-      <input type="checkbox" checked={props.autoDeleteInvalid} onChange={e=>props.onAutoDelete(e.target.checked)} className="mt-1" />
-      <span>{vi?"Tự dọn đích không còn hợp lệ":"Automatically clean up invalid destinations"}
-        <small className="mt-1 block font-normal text-slate-500">{vi
-          ?"Nhiều nhóm: chỉ gỡ đích đã xác nhận không còn hợp lệ. Chỉ xoá cả chiến dịch khi mọi đích đều mất, đã kết thúc lượt thử và không có tin gửi thành công."
-          :"For multiple groups, detach only confirmed-invalid destinations. Delete the whole campaign only when all destinations are gone, an attempted run has ended, and no messages succeeded."}</small></span>
-    </label>
-    {props.autoDeleteInvalid && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
-      {vi?"Xoá chiến dịch sẽ mất các lượt gửi và không thể hoàn tác. Không xoá vì mất mạng, giới hạn tốc độ, hạn chế tạm thời hoặc cần đăng nhập lại. Lựa chọn chỉ áp dụng cho lượt chạy này."
-        :"Deleting a campaign removes its targets and cannot be undone. Network failures, rate limits, temporary restrictions or expired login sessions never authorize deletion. This choice applies only to this operation."}
-    </p>}
+    <p className="text-xs leading-relaxed text-slate-600">{vi
+      ?"Sau khi phân loại, xem trước các chiến dịch bị bỏ qua theo tài khoản và chọn mục cần xoá. Chưa xác nhận thì không xoá hay chặn nhóm."
+      :"After classification, preview skipped campaigns by account and select items to delete. Nothing is deleted or blocked until you confirm."}</p>
   </div>;
 }
 

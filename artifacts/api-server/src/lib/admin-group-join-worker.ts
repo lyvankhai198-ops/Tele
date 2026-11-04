@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { blockedCampaignDestinationIds } from "./campaign-destination-blocks";
 import { and, asc, eq, inArray, isNull, isNotNull, lte, lt, or, sql } from "drizzle-orm";
 import {
   adminGroupJoinJobsTable,
@@ -161,6 +162,9 @@ async function createPostJoinCampaign(input: {
     )).limit(1);
     if (!destination) {
       logger.warn({ accountId: input.accountId, jobId: input.jobId }, "Joined group has no synced destination for automatic campaign");
+      return null;
+    }
+    if ((await blockedCampaignDestinationIds(tx,input.ownerUserId,input.accountId,[destination.id])).length) {
       return null;
     }
     if (!destination.canPost) {

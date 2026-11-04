@@ -5,6 +5,54 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface CampaignCleanupPreviewInput {
+  telegramAccountId: string;
+}
+
+export interface CampaignCleanupConfirmationInput {
+  previewId: string;
+  /**
+     * @minItems 1
+     * @maxItems 5000
+     */
+  campaignIds: string[];
+  confirm: true;
+}
+
+export interface CampaignCleanupGroup {
+  id: string;
+  telegramId: string;
+  title: string;
+}
+
+export type CampaignCleanupCandidateCategory = typeof CampaignCleanupCandidateCategory[keyof typeof CampaignCleanupCandidateCategory];
+
+
+export const CampaignCleanupCandidateCategory = {
+  sendable: 'sendable',
+  temporary: 'temporary',
+  review: 'review',
+  invalid: 'invalid',
+} as const;
+
+export interface CampaignCleanupCandidate {
+  id: string;
+  name: string;
+  category: CampaignCleanupCandidateCategory;
+  reason: string;
+  selectable: boolean;
+  groups: CampaignCleanupGroup[];
+}
+
+export interface CampaignCleanupPreview {
+  id: string;
+  jobId: string;
+  telegramAccountId: string;
+  accountName: string;
+  expiresAt: string;
+  campaigns: CampaignCleanupCandidate[];
+}
+
 export type BackgroundOperationInputKind = typeof BackgroundOperationInputKind[keyof typeof BackgroundOperationInputKind];
 
 

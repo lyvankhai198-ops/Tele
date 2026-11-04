@@ -3,7 +3,7 @@ import {campaignsTable,telegramAccountsTable} from "@workspace/db";
 import {campaignListScope} from "./campaign-list-scope";
 import {registerOperation,type OperationJob,type OperationTx} from "./operations";
 
-async function deletionStep(tx:OperationTx,job:OperationJob){
+export async function deletionStep(tx:OperationTx,job:OperationJob){
   if(job.phase==="queued"){
     const conditions=job.kind==="delete_account"
       ?and(eq(campaignsTable.ownerUserId,job.owner),or(eq(campaignsTable.telegramAccountId,job.accountId!),

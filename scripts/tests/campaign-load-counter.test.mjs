@@ -1,5 +1,6 @@
 import test from "node:test";
 import "./campaign-deletion-cache.test.mjs";
+import "./campaign-skipped-cleanup.test.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";

@@ -1,5 +1,5 @@
 import {randomUUID,createHash} from "node:crypto";
-import {and,eq,like,notInArray,sql} from "drizzle-orm";
+import {and,eq,inArray,like,notInArray,sql} from "drizzle-orm";
 import {db,systemSettingsTable,telegramAccountsTable,campaignsTable} from "@workspace/db";
 import {logger} from "./logger";
 import {campaignListScope} from "./campaign-list-scope";
@@ -57,8 +57,12 @@ export async function enqueueOperation(tx:OperationTx,input:{
   const payload={...(input.payload??{})};
   if(input.kind==="delete_campaigns"){
     const snapshot=await tx.select({id:campaignsTable.id}).from(campaignsTable).where(and(campaignListScope(input.owner,payload),
-      notInArray(campaignsTable.status,["queued","running"]),...(input.campaignId?[eq(campaignsTable.id,input.campaignId)]:[])));
+      notInArray(campaignsTable.status,["queued","running"]),...(input.campaignId?[eq(campaignsTable.id,input.campaignId)]:[]),
+      ...(Array.isArray(payload.selectedCampaignIds)?[inArray(campaignsTable.id,payload.selectedCampaignIds)]:[])));
     payload.snapshotIds=snapshot.map(row=>row.id);
+    if(Array.isArray(payload.selectedCampaignIds)&&payload.snapshotIds.length!==new Set(payload.selectedCampaignIds).size){
+      throw Error("OPERATION_SELECTION_CHANGED");
+    }
   }
   const job:OperationJob={id:input.requestId??randomUUID(),owner:input.owner,kind:input.kind,label:input.label,
     ...(input.accountId?{accountId:input.accountId}:{}),...(input.campaignId?{campaignId:input.campaignId}:{}),

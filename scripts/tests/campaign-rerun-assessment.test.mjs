@@ -68,18 +68,19 @@ const component=new vm.SourceTextModule(rendered,{context});
 await component.link(name=>name==="react"?react:runtime);await component.evaluate();
 const flatten=node=>node==null?[]:Array.isArray(node)?node.flatMap(flatten):typeof node==="object"
   ?[node,...flatten(node.props?.children)]:[String(node)];
-test("VI and EN controls show destructive warning only when enabled and wire both switches",()=>{
+test("VI and EN retain readiness control but require a separate deletion preview even for legacy flags",()=>{
   for(const language of ["vi","en"]){
     let safe=true,del=false;
     const props={language,onlySendable:true,autoDeleteInvalid:false,onOnlySendable:v=>safe=v,onAutoDelete:v=>del=v};
     let nodes=flatten(component.namespace.CampaignRerunOptions(props));
     assert.equal(nodes.filter(n=>n?.props?.role==="alert").length,0);
-    const inputs=nodes.filter(n=>n?.type==="input");assert.equal(inputs.length,2);
-    inputs[0].props.onChange({target:{checked:false}});inputs[1].props.onChange({target:{checked:true}});
-    assert.equal(safe,false);assert.equal(del,true);
+    const inputs=nodes.filter(n=>n?.type==="input");assert.equal(inputs.length,1);
+    inputs[0].props.onChange({target:{checked:false}});
+    assert.equal(safe,false);assert.equal(del,false);
     nodes=flatten(component.namespace.CampaignRerunOptions({...props,autoDeleteInvalid:true}));
-    assert.equal(nodes.filter(n=>n?.props?.role==="alert").length,1);
-    assert.ok(nodes.join(" ").includes(language==="vi"?"không thể hoàn tác":"cannot be undone"));
+    assert.equal(nodes.filter(n=>n?.props?.role==="alert").length,0);
+    assert.equal(nodes.filter(n=>n?.type==="input").length,1);
+    assert.ok(nodes.join(" ").includes(language==="vi"?"Chưa xác nhận thì không xoá":"Nothing is deleted or blocked until you confirm"));
   }
 });
 test("result copy distinguishes scheduling from actual delivery and supports both languages",()=>{

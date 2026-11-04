@@ -8,6 +8,7 @@ import {
 } from "./telegram-destination-state";
 export { destinationIdsToMarkUnavailableAfterSync } from "./telegram-destination-state";
 import { decryptSecret, encryptSecret } from "./crypto";
+import { assertCampaignDestinationsAllowed } from "./campaign-destination-blocks";
 import { requireTelegramConfiguration } from "./telegram-config";
 import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
@@ -815,11 +816,13 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
 }
 
 export async function sendTelegramMessage(accountId: string, destinationId: string, content: string, ownerUserId: string) {
+  await assertCampaignDestinationsAllowed(db,ownerUserId,accountId,[destinationId]);
   const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
     if (!destination || destination.accountId !== accountId) throw new Error("Destination does not belong to this account");
     const entity = await resolveDestinationEntity(client, destination);
+    await assertCampaignDestinationsAllowed(db,ownerUserId,accountId,[destinationId]);
     const sent = await client.sendMessage(entity, {
       message: content,
       ...(destination.topicId === null ? {} : { topMsgId: destination.topicId }),
@@ -878,6 +881,7 @@ export async function sendDirectTelegramMessage(
 }
 
 export async function forwardTelegramSavedMessage(accountId: string, destinationId: string, sourceMessageId: string, ownerUserId: string) {
+  await assertCampaignDestinationsAllowed(db,ownerUserId,accountId,[destinationId]);
   const { client, account } = await getAccountClient(accountId, ownerUserId);
   try {
     const [destination] = await db.select().from(destinationsTable).where(eq(destinationsTable.id, destinationId));
@@ -889,6 +893,7 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     }
     const savedMessagesPeer = await getTelegramSavedMessagesPeer(client);
     const forwardOnce = async () => {
+      await assertCampaignDestinationsAllowed(db,ownerUserId,accountId,[destinationId]);
       if (destination.topicId === null) {
         const messages = await client.forwardMessages(entity, {
           messages: numericSourceMessageId,

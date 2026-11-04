@@ -6,7 +6,7 @@ export type RerunDestinationEvidence = {
   permissionReason: string | null; permissionCheckedAt: Date | null;
   restrictedUntil: Date | null; pending: number; sending: number;
   uncertain: number; sent: number; failed: number; cancelled: number; attempted: number;
-  lastSentAt: Date | null; lastFailedAt: Date | null;
+  lastSentAt: Date | null; lastFailedAt: Date | null; blocked?: boolean;
 };
 export type RerunGroupAssessment = {
   id: string; name: string; category: RerunCategory; reason: string;
@@ -23,6 +23,7 @@ export function assessCampaignRerun(input: {
 }): RerunAssessment {
   const groups = input.groups.map((g): RerunGroupAssessment => {
     if (g.sending || g.uncertain) return { id:g.id, name:g.title, category:"review", reason:"uncertain_delivery" };
+    if (g.blocked) return { id:g.id, name:g.title, category:"invalid", reason:"blocked_by_cleanup" };
     if (!input.connected) return { id:g.id, name:g.title, category:"temporary", reason:"account_disconnected" };
     if (!g.exists) return { id:g.id, name:g.title, category:"review", reason:"missing_destination" };
     // Only a completed membership sync, not CHAT_WRITE_FORBIDDEN or repeated
