@@ -13,6 +13,7 @@ import { settleVerifiedOrder } from "../../artifacts/api-server/src/lib/telecamp
 import sharp from "sharp";
 import { testCampaignBulkJobs } from "./campaign-bulk-jobs.e2e";
 import { testCampaignRoundTiming } from "./campaign-round-timing.e2e";
+import { testTelegramAccountDeletion } from "./telegram-account-delete.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
@@ -163,6 +164,7 @@ try {
   phase = "E2E_CAMPAIGN_BULK_JOBS";
   await testCampaignBulkJobs({ownerId:userId,ownerCookie:userCookie,otherCookie:adminCookie,request});
   await testCampaignRoundTiming({ownerId:userId,ownerCookie:userCookie,request});
+  await testTelegramAccountDeletion({ownerId:userId,ownerCookie:userCookie,request});
   phase = "E2E_DESTINATION_MEMBERSHIP_VISIBILITY";
   const leftGroupId=randomUUID(), restrictedGroupId=randomUUID(), activeGroupId=randomUUID();
   for (const [id,canPost,reason] of [

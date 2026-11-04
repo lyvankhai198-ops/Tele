@@ -72,7 +72,7 @@ const copy = {
     items: "items",
     delete: "Delete",
     deleteAccount: "Delete Telegram account",
-    deleteConfirmation: "Delete this Telegram account? Its connected destinations will no longer be available to campaigns.",
+    deleteConfirmation: "Delete this Telegram account and ALL its campaigns and synced groups? Their sending targets will also be deleted. This cannot be undone. Other accounts will not be affected.",
     guideTitle: "Telegram account guide",
     guideDescription: "Use these steps to prepare the API information for an account you manage.",
     understood: "Got it",
@@ -166,7 +166,7 @@ const copy = {
     items: "mục",
     delete: "Xóa",
     deleteAccount: "Xóa tài khoản Telegram",
-    deleteConfirmation: "Xóa tài khoản Telegram này? Các điểm đến đã kết nối sẽ không còn dùng được trong chiến dịch.",
+    deleteConfirmation: "Xóa tài khoản Telegram này cùng TOÀN BỘ chiến dịch và nhóm đã đồng bộ của tài khoản? Các lượt gửi tương ứng cũng sẽ bị xóa. Không thể hoàn tác. Tài khoản khác không bị ảnh hưởng.",
     guideTitle: "Hướng dẫn tài khoản Telegram",
     guideDescription: "Thực hiện các bước sau để chuẩn bị API cho tài khoản bạn quản lý.",
     understood: "Đã hiểu",
@@ -655,7 +655,9 @@ export default function Accounts() {
     setDeletingId(accountId);
     deleteAccount.mutate({ accountId }, {
       onSuccess: () => {
-        void invalidateAccounts();
+        // Account deletion also removes campaigns and groups, including cached
+        // dashboard counts and selectors used by Quick Send.
+        void queryClient.invalidateQueries();
         setToast(text.deleted);
         setDeletingId(null);
       },
