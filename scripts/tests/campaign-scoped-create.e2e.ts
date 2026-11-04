@@ -13,12 +13,13 @@ export async function testCampaignScopedCreate({adminId,adminCookie,userCookie,r
   const ids:string[]=[];
   const post=(body:unknown,token=key,cookie=adminCookie)=>request("/campaigns",cookie,body,"POST",{"Idempotency-Key":token});
   try{
-    for(const account of accounts)await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status,session_string_encrypted,telegram_id) VALUES($1,$2,'scoped fixture','connected','fixture-not-a-session',$1::text)",[account,adminId]);
+    for(const account of accounts)await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status,session_encrypted,telegram_user_id) VALUES($1::uuid,$2,'scoped fixture','connected','fixture-not-a-session',$1::text)",[account,adminId]);
     await pool.query("INSERT INTO destinations(id,account_id,telegram_id,title,can_post) VALUES($1,$2,$3,'scoped fixture',true)",[destination,accounts[0],marker]);
     for(const account of accounts){
       const row=await pool.query("INSERT INTO campaigns(owner_user_id,telegram_account_id,name,content,status) VALUES($1,$2,$3,'fixture','draft') RETURNING id",[adminId,account,marker]);
       ids.push(row.rows[0].id);
     }
+    console.log("E2E_SCOPED_FIXTURES_READY");
     const scoped=await request(`/campaigns/load-manifest?telegramAccountId=${accounts[0]}`,adminCookie);
     const manifest=await scoped.json() as any;
     assert.equal(scoped.status,200,"E2E_SCOPED_MANIFEST_HTTP");
@@ -36,11 +37,13 @@ export async function testCampaignScopedCreate({adminId,adminCookie,userCookie,r
     assert.notEqual(changed.revisions[ids[0]],manifest.revisions[ids[0]],"E2E_SCOPED_REVISION_CHANGES");
     const all=await(await request("/campaigns/load-manifest",adminCookie)).json() as any;
     assert.ok(ids.every(id=>all.campaignIds.includes(id)),"E2E_SCOPED_ALL_ACCOUNTS");
+    console.log("E2E_SCOPED_READS_PASSED");
 
     const body={name:marker+"-new",content:"fixture only",telegramAccountId:accounts[0],
       destinationIds:[destination],scheduledAt:null,timezone:"UTC",repeatCount:1,
       roundDelayMinSeconds:3600,roundDelayMaxSeconds:3600,timingMode:"round",groupIntervalSeconds:0};
     const responses=await Promise.all([post(body),post(body)]);
+    console.log("E2E_SCOPED_CREATE_HTTP_"+responses.map(response=>response.status).join("_"));
     assert.ok(responses.every(response=>response.status===201),"E2E_CREATE_CONCURRENT_HTTP");
     const created=await Promise.all(responses.map(response=>response.json())) as any[];
     assert.equal(created[0].id,created[1].id,"E2E_CREATE_CONCURRENT_SAME_CAMPAIGN");
