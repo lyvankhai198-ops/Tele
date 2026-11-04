@@ -1211,6 +1211,13 @@ export default function Campaigns() {
           onClose={() => setBulkTemplateOpen(false)}
         >
           <div className="space-y-4">
+            {templateProgress.job && <p className="text-xs leading-relaxed text-slate-600">
+              {c.bulkTemplateAccount}: {templateProgress.job.telegramAccountId
+                ? ((accounts.data??[]).find(account=>account.id===templateProgress.job!.telegramAccountId)?.name ?? c.accountFallback)
+                : c.bulkTemplateAllAccounts}
+              <br/>{c.bulkTemplateLabel}: {(templates.data??[]).find(template=>template.id===templateProgress.job!.templateId)?.name
+                ?? (language==="vi"?"Mẫu đã chọn khi bắt đầu":"Template selected at the start")}
+            </p>}
             {templateProgress.job && <CampaignTemplateProgress
               job={templateProgress.job} vi={language==="vi"} waiting={templateProgress.waiting}
               problem={templateProgress.problem} onRetry={()=>void templateProgress.retry()}
