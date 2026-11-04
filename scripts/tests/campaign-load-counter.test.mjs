@@ -92,6 +92,44 @@ test("cached list is replaced only after completion and survives a failed reload
   assert.equal(client.getQueryData(options.queryKey),previous);
   client.clear();
 });
+test("stale cached data survives remount, focus and reconnect without restarting the counted load",async()=>{
+  let calls=0;
+  api.getCampaignLoadManifest=async()=>{calls++;return{campaignIds:["fresh"],total:1};};
+  api.getCampaignLoadBatch=async()=>({campaigns:[{id:"fresh"}],missingIds:[]});
+  const client=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:Infinity}}});
+  const options={...queryModule.completeCampaignQuery(client,"owner:self"),gcTime:Infinity};
+  const old=[{id:"already-complete"}];
+  client.setQueryData(options.queryKey,old,{updatedAt:Date.now()-5*60_000});
+  const observer=new QueryObserver(client,options),stop=observer.subscribe(()=>{});
+  await tick();
+  assert.equal(observer.getCurrentResult().data,old);
+  assert.equal(observer.getCurrentResult().isFetching,false);
+  assert.equal(calls,0);
+  const query=client.getQueryCache().find({queryKey:options.queryKey,exact:true});
+  assert.equal(query.isStaleByTime(options.staleTime),true);
+  assert.equal(observer.shouldFetchOnWindowFocus(),false);
+  assert.equal(observer.shouldFetchOnReconnect(),false);
+  stop();
+  const back=new QueryObserver(client,options),stopBack=back.subscribe(()=>{});
+  await tick();assert.equal(calls,0);assert.equal(back.getCurrentResult().data,old);
+  const reloaded=await queryModule.refreshCompleteCampaigns(client,"owner:self",()=>back.refetch());
+  assert.equal(calls,1);assert.equal(reloaded.data[0].id,"fresh");
+  stopBack();client.clear();
+});
+test("a mutation invalidation while away still refreshes the cached list on return",async()=>{
+  let calls=0;
+  api.getCampaignLoadManifest=async()=>{calls++;return{campaignIds:["created-while-away"],total:1};};
+  api.getCampaignLoadBatch=async()=>({campaigns:[{id:"created-while-away"}],missingIds:[]});
+  const client=new QueryClient({defaultOptions:{queries:{retry:false,gcTime:Infinity}}});
+  const options={...queryModule.completeCampaignQuery(client,"owner:self"),gcTime:Infinity};
+  client.setQueryData(options.queryKey,[{id:"before-mutation"}],{updatedAt:Date.now()-60_000});
+  await client.invalidateQueries({queryKey:api.getListCampaignsQueryKey()});
+  assert.equal(calls,0);
+  const observer=new QueryObserver(client,options),stop=observer.subscribe(()=>{});
+  await tick();await tick();
+  assert.equal(calls,1);assert.equal(observer.getCurrentResult().data[0].id,"created-while-away");
+  stop();client.clear();
+});
 test("logout/cache clear prevents later requests and cannot repopulate another user's cache",async()=>{
   const fake=fakeApi();configureFake(fake);
   const client=new QueryClient({defaultOptions:{queries:{gcTime:Infinity}}}),options={...queryModule.completeCampaignQuery(client,"first:self"),gcTime:Infinity};

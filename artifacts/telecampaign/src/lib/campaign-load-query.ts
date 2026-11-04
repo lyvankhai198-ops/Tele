@@ -17,7 +17,15 @@ export function completeCampaignQuery(client:QueryClient,scope:string){
   const key=completeCampaignKey(scope);
   const progressKey=campaignProgressKey(scope);
   return {
-    queryKey:key,enabled:Boolean(scope),retry:false as const,staleTime:30_000,gcTime:15*60_000,
+    queryKey:key,enabled:Boolean(scope),retry:false as const,staleTime:30_000,gcTime:60*60_000,
+    // Merely returning to this tab must not restart thousands of reads once
+    // staleTime expires. Real mutations still invalidate this key/prefix, and
+    // an explicit refresh still creates a new manifest and progress run.
+    refetchOnMount:(query:{state:{data:unknown;isInvalidated:boolean}})=>
+      query.state.data===undefined||query.state.isInvalidated,
+    refetchOnWindowFocus:false as const,
+    refetchOnReconnect:(query:{state:{data:unknown;isInvalidated:boolean}})=>
+      query.state.data===undefined||query.state.isInvalidated,
     queryFn:async()=>{
       const query=client.getQueryCache().find({queryKey:key,exact:true});
       const run=++sequence;
