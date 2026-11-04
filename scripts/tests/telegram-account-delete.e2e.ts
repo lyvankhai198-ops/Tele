@@ -45,7 +45,8 @@ export async function testTelegramAccountDeletion(input: {
     VALUES($1,$2,'fixture','fixture',$3)`, [log, ownerId, ids[0]]);
 
   const foreignResponse = await request(`/telegram/accounts/${foreign}`, ownerCookie, {}, "DELETE");
-  check(foreignResponse.status === 404, `E2E_ACCOUNT_DELETE_OWNER_GUARD_HTTP_${foreignResponse.status}`);
+  console.log(`E2E_ACCOUNT_DELETE_HTTP_${foreignResponse.status}`);
+  check(foreignResponse.status === 404, "E2E_ACCOUNT_DELETE_OWNER_GUARD");
   check((await request(`/telegram/accounts/${account}`, undefined, {}, "DELETE")).status === 401,
     "E2E_ACCOUNT_DELETE_AUTH_GUARD");
   // Corrupt cross-owner references must roll back, never delete another owner's
