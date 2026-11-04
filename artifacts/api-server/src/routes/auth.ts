@@ -331,7 +331,9 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     void notifySupportNewRegistration({
       userId: user.id,
       username: user.username,
-      preferredLanguage: user.preferredLanguage,
+      // The web preference supports 22 locales; existing chat content keeps
+      // its VI/EN contract without changing stored account preferences.
+      preferredLanguage: user.preferredLanguage === "vi" ? "vi" : "en",
     }).catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about new registration"));
     res.status(201).json(RegisterAuthResponse.parse(authUserResponse(authenticatedUser)));
   } catch (error) {
