@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { deleteTelegramAccountData } from "../lib/delete-telegram-account";
 import { createReadStream } from "node:fs";
 import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notExists, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -1968,35 +1969,10 @@ router.delete("/telegram/accounts/:accountId", async (req, res): Promise<void> =
     }
   }
 
-  const destinations = await db.select({ id: destinationsTable.id }).from(destinationsTable)
-    .where(eq(destinationsTable.accountId, account.id));
-  const destinationIds = destinations.map((destination) => destination.id);
-  if (destinationIds.length) {
-    const affectedTargets = await db.select({ campaignId: campaignTargetsTable.campaignId }).from(campaignTargetsTable)
-      .where(and(inArray(campaignTargetsTable.destinationId, destinationIds), inArray(campaignTargetsTable.status, ["pending", "sending"])));
-    await db.update(campaignTargetsTable).set({
-      status: "requires_review",
-      quotaReservedAt: null,
-      nextAttemptAt: null,
-      lastError: "Telegram account was removed",
-      updatedAt: new Date(),
-    }).where(and(inArray(campaignTargetsTable.destinationId, destinationIds), inArray(campaignTargetsTable.status, ["pending", "sending"])));
-    const campaignIds = [...new Set(affectedTargets.map((target) => target.campaignId))];
-    if (campaignIds.length) {
-      await db.update(campaignsTable).set({ status: "paused", updatedAt: new Date() })
-        .where(inArray(campaignsTable.id, campaignIds));
-    }
-  }
-
-  const [deleted] = await db.update(telegramAccountsTable).set({
-    status: "deleted",
-    apiHashEncrypted: null,
-    phoneEncrypted: null,
-    sessionEncrypted: null,
-    deletedAt: new Date(),
-    updatedAt: new Date(),
-  }).where(eq(telegramAccountsTable.id, account.id)).returning({ id: telegramAccountsTable.id });
-  if (!deleted) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  const deletion = await deleteTelegramAccountData(account.id, currentUserId(req));
+  if (deletion === "not_found") return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  if (deletion === "busy") return void sendError(res, 409,
+    "Tài khoản đang gửi tin. Vui lòng đợi lượt gửi kết thúc rồi xóa lại. / This account is sending a message. Wait for delivery to finish and try deleting again.");
   await recordActivity({
     ownerUserId: currentUserId(req),
     event: "account.deleted",
