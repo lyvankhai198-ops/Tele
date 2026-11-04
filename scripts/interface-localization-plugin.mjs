@@ -85,6 +85,23 @@ export default function interfaceLocalizationPlugin({ types: t }) {
       return /(?:label|title|message|copy|reason|error|hint|text)$/iu.test(name);
     });
   }
+  // Intl options are protocol enums, not presentation text, even inside a
+  // helper named dateLabel/amountLabel. Leave the locale argument eligible for
+  // the existing selected-language rewrite, but never translate its options.
+  function technicalFormatOption(path) {
+    let branch = path;
+    for (let parent = path.parentPath; parent; branch = parent, parent = parent.parentPath) {
+      if (!parent.isCallExpression() && !parent.isNewExpression()) continue;
+      const callee = parent.node.callee;
+      if (!t.isMemberExpression(callee)) continue;
+      const method = t.isIdentifier(callee.property) ? callee.property.name
+        : t.isStringLiteral(callee.property) ? callee.property.value : "";
+      const formatter = t.isIdentifier(callee.object, { name: "Intl" })
+        || ["toLocaleString", "toLocaleDateString", "toLocaleTimeString"].includes(method);
+      if (formatter && parent.node.arguments.indexOf(branch.node) > 0) return true;
+    }
+    return false;
+  }
   function localizeLeaves(path, state, node, lang = language(path)) {
     if (t.isConditionalExpression(node)) {
       node.consequent = localizeLeaves(path, state, node.consequent, lang);
@@ -164,7 +181,7 @@ export default function interfaceLocalizationPlugin({ types: t }) {
       },
       ConditionalExpression: {
         enter(path, state) {
-          if (state.skipInterfaceLocalization) return;
+          if (state.skipInterfaceLocalization || technicalFormatOption(path)) return;
           const node = path.node, lang = language(path);
           if (isEnglishTest(node.test)) {
             node.test = t.binaryExpression("===", node.test.left, t.stringLiteral("vi"));
@@ -174,7 +191,7 @@ export default function interfaceLocalizationPlugin({ types: t }) {
           }
         },
         exit(path, state) {
-          if (state.skipInterfaceLocalization || !isVietnameseTest(path.node.test)) return;
+          if (state.skipInterfaceLocalization || technicalFormatOption(path) || !isVietnameseTest(path.node.test)) return;
           const en = template(path.node.alternate), vi = template(path.node.consequent);
           if (!en || !vi) return;
           const lang = language(path);
@@ -251,7 +268,7 @@ export default function interfaceLocalizationPlugin({ types: t }) {
         },
       },
       ObjectProperty(path, state) {
-        if (state.skipInterfaceLocalization || path.node.computed) return;
+        if (state.skipInterfaceLocalization || technicalFormatOption(path) || path.node.computed) return;
         const key = t.isIdentifier(path.node.key) ? path.node.key.name
           : t.isStringLiteral(path.node.key) ? path.node.key.value : "";
         const display = displayFunction(path);
@@ -290,7 +307,7 @@ export default function interfaceLocalizationPlugin({ types: t }) {
       },
       "MemberExpression|OptionalMemberExpression": {
         exit(path, state) {
-          if (state.skipInterfaceLocalization || !path.node.computed) return;
+          if (state.skipInterfaceLocalization || technicalFormatOption(path) || !path.node.computed) return;
           const property = path.node.property;
           if (!t.isConditionalExpression(property) || !isVietnameseTest(property.test)) return;
           const pair = t.isNumericLiteral(property.consequent, { value: 0 })
