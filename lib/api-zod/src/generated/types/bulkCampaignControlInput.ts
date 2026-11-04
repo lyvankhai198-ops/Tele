@@ -7,9 +7,18 @@
  */
 import type { BulkCampaignControlInputAction } from './bulkCampaignControlInputAction';
 import type { BulkCampaignControlInputScope } from './bulkCampaignControlInputScope';
+import type { BulkCampaignControlInputStatus } from './bulkCampaignControlInputStatus';
 
 export interface BulkCampaignControlInput {
   action: BulkCampaignControlInputAction;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  telegramAccountId?: string;
+  /** @maxLength 160 */
+  search?: string;
+  status?: BulkCampaignControlInputStatus;
   scope?: BulkCampaignControlInputScope;
   /**
      * @minimum 0

@@ -742,6 +742,19 @@ export const BulkCampaignControlInputAction = {
   resume: 'resume',
 } as const;
 
+export type BulkCampaignControlInputStatus = typeof BulkCampaignControlInputStatus[keyof typeof BulkCampaignControlInputStatus];
+
+
+export const BulkCampaignControlInputStatus = {
+  all: 'all',
+  queued: 'queued',
+  running: 'running',
+  paused: 'paused',
+  completed: 'completed',
+  draft: 'draft',
+  cancelled: 'cancelled',
+} as const;
+
 export type BulkCampaignControlInputScope = typeof BulkCampaignControlInputScope[keyof typeof BulkCampaignControlInputScope];
 
 
@@ -754,6 +767,14 @@ export const BulkCampaignControlInputScope = {
 
 export interface BulkCampaignControlInput {
   action: BulkCampaignControlInputAction;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  telegramAccountId?: string;
+  /** @maxLength 160 */
+  search?: string;
+  status?: BulkCampaignControlInputStatus;
   scope?: BulkCampaignControlInputScope;
   /**
      * @minimum 0
@@ -954,6 +975,11 @@ export interface BulkDeleteCampaignsInput {
   status: BulkDeleteCampaignsInputStatus;
   /** @maxLength 160 */
   search: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  telegramAccountId?: string;
 }
 
 export type BulkDeleteCampaignsResultSkippedItem = {

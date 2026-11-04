@@ -504,7 +504,8 @@ export default function Campaigns() {
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState<"all"|"queued"|"running"|"paused"|"completed"|"draft"|"cancelled">("all");
+  const [accountFilter,setAccountFilter]=useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
@@ -529,6 +530,7 @@ export default function Campaigns() {
   const [bulkRetrying, setBulkRetrying] = useState(false);
   const bulkRequestId = useMemo(() => crypto.randomUUID(), [
     bulkResumeOpen, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
+    accountFilter,search,status,
   ]);
   const bulkControl = useBulkControlCampaigns({request: {headers: {"Idempotency-Key": bulkRequestId}}});
   const bulkJobActive = bulkJob?.status === "queued" || bulkJob?.status === "running";
@@ -603,8 +605,12 @@ export default function Campaigns() {
     const matchesStatus = status === "all"
       || campaign.status === status
       || (status === "completed" && campaign.status === "completed_with_errors");
-    return (!needle || campaign.name.toLowerCase().includes(needle)) && matchesStatus;
-  }).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [campaigns.data, search, status]);
+    return (!needle || campaign.name.toLowerCase().includes(needle)) && matchesStatus
+      && (!accountFilter || campaign.telegramAccountId===accountFilter);
+  }).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()), [campaigns.data, search, status, accountFilter]);
+  const accountFilterLabel=(accounts.data??[]).find(account=>account.id===accountFilter)?.name
+    ?? (language==="vi"?"Tất cả tài khoản":"All accounts");
+  const bulkFilter={...(accountFilter?{telegramAccountId:accountFilter}:{}),search:search.trim(),status};
   const latestCompletedCampaignId = useMemo(() => {
     const completed = (campaigns.data ?? [])
       .filter((campaign) => campaign.status === "completed" || campaign.status === "completed_with_errors")
@@ -613,7 +619,7 @@ export default function Campaigns() {
   }, [campaigns.data]);
   const bulkScopeOptions = useMemo(() => {
     const available = new Set<BulkResumeScope>();
-    for (const campaign of campaigns.data ?? []) {
+    for (const campaign of listedCampaigns) {
       if (campaign.status === "draft") available.add("draft");
       if (campaign.status === "queued") available.add("queued");
       if (campaign.status === "paused") available.add("paused");
@@ -624,7 +630,7 @@ export default function Campaigns() {
     if (status === "paused") return available.has("paused") ? ["paused" as const] : [];
     if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
     return (["draft", "queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
-  }, [campaigns.data, status]);
+  }, [listedCampaigns, status]);
   const automaticCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) =>
     campaign.name.startsWith("Tự động")
     && ["draft", "paused", "queued", "running"].includes(campaign.status)
@@ -699,14 +705,14 @@ export default function Campaigns() {
 
   async function pauseAllCampaigns() {
     if(campaignDataBlocked)return;
-    const activeCount = (campaigns.data ?? []).filter((campaign) => isActive(campaign.status)).length;
+    const activeCount = listedCampaigns.filter((campaign) => isActive(campaign.status)).length;
     if (!activeCount) {
       setToast(c.bulkNoActive);
       return;
     }
-    if (!window.confirm(c.bulkPauseConfirm(activeCount))) return;
+    if (!window.confirm(`${accountFilterLabel}\n${c.bulkPauseConfirm(activeCount)}`)) return;
     try {
-      const result = await bulkControl.mutateAsync({ data: { action: "pause" } });
+      const result = await bulkControl.mutateAsync({ data: { action: "pause",...bulkFilter } });
       await campaigns.refetch();
       setToast(c.bulkPausedResult(result.updatedCount));
     } catch (error) {
@@ -756,6 +762,7 @@ export default function Campaigns() {
       const result = await bulkControl.mutateAsync({
         data: {
           action: "resume",
+          ...bulkFilter,
           scope: bulkResumeScope,
           intervalSeconds: intervalMinutes * 60,
           scheduledAt: scheduledAt.toISOString(),
@@ -785,12 +792,13 @@ export default function Campaigns() {
     }
     if(campaignDataBlocked)return;
     if (!(campaigns.data ?? []).some((campaign) => campaign.name.startsWith("Tự động")
-      && ["draft", "paused", "queued", "running"].includes(campaign.status))) {
+      && ["draft", "paused", "queued", "running"].includes(campaign.status)
+      && (!accountFilter || campaign.telegramAccountId===accountFilter))) {
       setToast(c.bulkTemplateNoCandidates);
       return;
     }
     setBulkTemplateId("");
-    setBulkTemplateAccountId("");
+    setBulkTemplateAccountId(accountFilter);
     setBulkTemplateOpen(true);
   }
 
@@ -889,12 +897,11 @@ export default function Campaigns() {
       setToast(c.bulkNoEligible);
       return;
     }
-    if (!window.confirm(c.bulkDeleteConfirm(listedCampaigns.length))) return;
+    if (!window.confirm(`${accountFilterLabel}\n${c.bulkDeleteConfirm(listedCampaigns.length)}`)) return;
     try {
       const result = await bulkDelete.mutateAsync({
         data: {
-          status: status as "all" | "queued" | "running" | "paused" | "completed" | "draft" | "cancelled",
-          search: search.trim(),
+          ...bulkFilter,
         },
       });
       await campaigns.refetch();
@@ -910,21 +917,32 @@ export default function Campaigns() {
       !isSupportMode && <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
     }>
       <div className="mx-auto max-w-[900px]">
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
+        <div className="mb-3 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-filter-toolbar">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="text-[13px] font-extrabold text-[#334155]">{language==="vi"?"Bộ lọc chiến dịch":"Campaign filters"}</span>
+            {(accountFilter||search||status!=="all")&&<button type="button"
+              onClick={()=>{setAccountFilter("");setSearch("");setStatus("all");}}
+              className="rounded-lg px-2 py-1 text-[12px] font-bold text-[#1d3bb8] hover:bg-[#eff6ff]"
+              data-testid="campaigns-clear-filters">{language==="vi"?"Đặt lại":"Reset"}</button>}
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="relative col-span-2 min-w-0 sm:col-span-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#94a3b8]" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={c.searchPlaceholder}
+              aria-label={c.searchPlaceholder}
+              maxLength={160}
               className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white pl-10 pr-4 text-[14px] font-semibold outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
               data-testid="campaigns-search"
             />
           </div>
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="h-11 rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold text-[#334155] outline-none focus:border-[#1a2b88]"
+            onChange={(event) => setStatus(event.target.value as typeof status)}
+            aria-label={language==="vi"?"Trạng thái chiến dịch":"Campaign status"}
+            className="h-11 min-w-0 w-full rounded-xl border border-[#dbe2ea] bg-[#f8fafc] px-2.5 text-[13px] font-semibold text-[#334155] outline-none focus:border-[#1a2b88]"
             data-testid="campaigns-status"
           >
             <option value="all">{c.statusAll}</option>
@@ -933,50 +951,67 @@ export default function Campaigns() {
             <option value="paused">{c.statusPaused}</option>
             <option value="completed">{c.statusCompleted}</option>
           </select>
+          <select value={accountFilter} onChange={event=>setAccountFilter(event.target.value)}
+            aria-label={language==="vi"?"Tài khoản Telegram":"Telegram account"}
+            className="h-11 min-w-0 w-full rounded-xl border border-[#dbe2ea] bg-[#f8fafc] px-2.5 text-[13px] font-semibold text-[#334155] outline-none focus:border-[#1a2b88]"
+            data-testid="campaigns-account-filter">
+            <option value="">{language==="vi"?"Tất cả tài khoản":"All accounts"}</option>
+            {(accounts.data??[]).map(account=><option key={account.id} value={account.id}>{account.name}{account.phone?` · ${account.phone}`:""}</option>)}
+          </select>
+          </div>
+          <div className="mt-3 flex items-start justify-between gap-2 border-t border-[#f1f5f9] pt-2.5 text-[12px]">
+            <span className="min-w-0 break-words font-semibold text-[#64748b]">{accountFilterLabel}</span>
+            {campaigns.data!==undefined&&<span className="shrink-0 rounded-md bg-[#eef2ff] px-2 py-0.5 font-extrabold text-[#3730a3]"
+              data-testid="campaigns-filter-count">{listedCampaigns.length} / {campaigns.data.length}</span>}
+          </div>
         </div>
         {!isSupportMode && (
-          <div className="mb-5 grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <div className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-action-toolbar">
+            <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{language==="vi"?"Thao tác theo bộ lọc":"Actions for current filters"}</p>
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <button
               type="button"
               onClick={() => void pauseAllCampaigns()}
               disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f04444] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#dc2626] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#dbe2ea] bg-[#f8fafc] px-2 text-[12px] font-extrabold text-[#475569] transition hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="campaigns-pause-all"
             >
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleStop className="h-4 w-4" />}
-              {c.bulkPauseBtn}
+              {language==="vi"?"Dừng đã lọc":"Pause filtered"}
             </button>
             <button
               type="button"
               onClick={openBulkResume}
               disabled={(campaignDataBlocked&&!bulkJob) || bulkControl.isPending || bulkTemplate.isPending}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#1d3bb8] px-2 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="campaigns-resume-all"
             >
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {c.bulkResumeBtn}
+              {bulkJob?(language==="vi"?"Tiến độ chạy lại":"Rerun progress"):(language==="vi"?"Chạy lại đã lọc":"Rerun filtered")}
             </button>
             {isAdmin && (<button
               type="button"
               onClick={openBulkTemplate}
               disabled={(!templateProgress.job&&!templateProgress.uncertain&&campaignDataBlocked) || bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1d3bb8] bg-white px-3 text-[13px] font-extrabold text-[#1d3bb8] shadow-sm transition hover:bg-[#eff6ff] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe2ea] bg-white px-2 py-2 text-[12px] font-extrabold text-[#475569] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="campaigns-bulk-template"
             >
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {templateProgress.job || templateProgress.uncertain
-                ? (language==="vi"?"Xem tiến độ đổi mẫu":"View template progress") : c.bulkTemplateBtn}
+                ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tự động":"Auto templates")}
             </button>)}
             <button
               type="button"
               onClick={() => void removeFilteredCampaigns()}
               disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending || bulkDelete.isPending}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#dc2626] bg-white px-3 text-[13px] font-extrabold text-[#dc2626] shadow-sm transition hover:bg-[#fff1f2] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-2 py-2 text-[12px] font-extrabold text-[#be123c] transition hover:bg-[#ffe4e6] disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="campaigns-delete-filtered"
             >
               {bulkDelete.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              {c.bulkDeleteBtn}
+              {language==="vi"?"Xoá đã lọc":"Delete filtered"}
             </button>
+            </div>
+            <p className="mt-2.5 text-[11px] leading-relaxed text-[#64748b]">{language==="vi"?"Dừng, chạy lại và xoá áp dụng tài khoản, trạng thái và tên đã lọc. Đổi mẫu có phạm vi riêng để bạn kiểm tra trước.":"Pause, rerun and delete use the account, status and name filters. Template changes have a separate scope to review."}</p>
           </div>
         )}
 
@@ -1077,9 +1112,9 @@ export default function Campaigns() {
                 })}</div>
               : <EmptyState
                   icon={Plus}
-                  title={search || status !== "all" ? c.emptyFilterTitle : c.emptyTitle}
-                  detail={search || status !== "all" ? c.emptyFilterDetail : c.emptyDetail}
-                   action={!isSupportMode && !search && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
+                  title={search || status !== "all" || accountFilter ? c.emptyFilterTitle : c.emptyTitle}
+                  detail={search || status !== "all" || accountFilter ? c.emptyFilterDetail : c.emptyDetail}
+                   action={!isSupportMode && !search && !accountFilter && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
                 />}
           </CampaignListFeedback>
         </Panel>
@@ -1129,6 +1164,11 @@ export default function Campaigns() {
             )}
             {bulkJob && <CampaignRerunResults job={bulkJob} language={language} />}
             <fieldset disabled={Boolean(bulkJob) || bulkControl.isPending} className="space-y-4 disabled:opacity-60">
+              <p className="rounded-xl bg-[#eef2ff] px-3 py-2.5 text-[12px] leading-relaxed text-[#3730a3]">
+                {bulkJob
+                  ? (language==="vi"?"Tác vụ này giữ nguyên phạm vi đã chọn khi bắt đầu. Đổi bộ lọc ngoài trang không thay đổi tác vụ đang xem.":"This operation keeps its original selection. Changing page filters does not change this operation.")
+                  : `${language==="vi"?"Tài khoản":"Account"}: ${accountFilterLabel}${search.trim()?` · ${language==="vi"?"Tên chứa":"Name contains"}: ${search.trim()}`:""}`}
+              </p>
             <CampaignRerunOptions language={language} onlySendable={onlySendable}
               autoDeleteInvalid={autoDeleteInvalid} onOnlySendable={setOnlySendable} onAutoDelete={setAutoDeleteInvalid} />
             <label className="block">

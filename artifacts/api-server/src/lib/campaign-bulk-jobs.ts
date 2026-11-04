@@ -3,10 +3,11 @@ import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { activityLogsTable, campaignsTable, db, systemSettingsTable } from "@workspace/db";
 import { getRerunReports, processFinishedRerunReviews } from "./campaign-rerun-review";
 import { logger } from "./logger";
+import { campaignListScope, type CampaignListScope } from "./campaign-list-scope";
 import type { RerunAssessment } from "./campaign-rerun-assessment";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-export type CampaignBulkJob = {
+export type CampaignBulkJob = Omit<CampaignListScope,"status"> & {
   id: string; ownerUserId: string; scope: "draft" | "queued" | "paused" | "completed";
   intervalSeconds: number; startAt: string; fingerprint: string;
   ids: string[]; cursor: number; updatedCount: number;
@@ -35,14 +36,20 @@ export const bulkJobSummary = (job: CampaignBulkJob) => ({
 });
 export function registerCampaignBulkProcessor(fn: NonNullable<typeof processor>) { processor = fn; }
 
-export async function createCampaignBulkJob(input: {
+export async function createCampaignBulkJob(input: CampaignListScope & {
   ownerUserId: string; scope: CampaignBulkJob["scope"]; intervalSeconds: number;
   startAt: Date; scheduledAt: Date; requestId?: string;
   onlySendable?:boolean;autoDeleteInvalid?:boolean;
 }) {
+  const filters={
+    ...(input.telegramAccountId?{telegramAccountId:input.telegramAccountId}:{}),
+    ...(input.search?.trim()?{search:input.search.trim().toLowerCase()}:{}),
+    ...(input.status&&input.status!=="all"?{status:input.status}:{}),
+  };
   const fingerprint = createHash("sha256").update(JSON.stringify({
     scope: input.scope, intervalSeconds: input.intervalSeconds, scheduledAt: input.scheduledAt.toISOString(),
     onlySendable:input.onlySendable ?? true,autoDeleteInvalid:input.autoDeleteInvalid ?? false,
+    ...filters,
   })).digest("hex");
   const id = input.requestId ?? fingerprint;
   if (!/^[a-zA-Z0-9-]{16,80}$/.test(id)) throw new Error("CAMPAIGN_BULK_INVALID_REQUEST");
@@ -65,10 +72,11 @@ export async function createCampaignBulkJob(input: {
     if (active) return active;
     const statuses = input.scope === "completed" ? ["completed", "completed_with_errors"] : [input.scope];
     const candidates = await tx.select({id: campaignsTable.id}).from(campaignsTable).where(and(
-      eq(campaignsTable.ownerUserId, input.ownerUserId), inArray(campaignsTable.status, statuses),
+      campaignListScope(input.ownerUserId,filters), inArray(campaignsTable.status, statuses),
     )).orderBy(asc(campaignsTable.createdAt), asc(campaignsTable.id));
     const job: CampaignBulkJob = {
       id, ownerUserId: input.ownerUserId, scope: input.scope, intervalSeconds: input.intervalSeconds,
+      telegramAccountId:filters.telegramAccountId,search:filters.search,
       startAt: input.startAt.toISOString(), fingerprint, ids: candidates.map(c => c.id),
       cursor: 0, updatedCount: 0, skipped: [], status: candidates.length ? "queued" : "completed",
       error: null, createdAt: new Date().toISOString(),

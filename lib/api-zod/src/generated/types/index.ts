@@ -111,6 +111,7 @@ export * from './authUserRole';
 export * from './bulkCampaignControlInput';
 export * from './bulkCampaignControlInputAction';
 export * from './bulkCampaignControlInputScope';
+export * from './bulkCampaignControlInputStatus';
 export * from './bulkCampaignControlResult';
 export * from './bulkCampaignControlResultAction';
 export * from './bulkCampaignControlResultSkippedItem';

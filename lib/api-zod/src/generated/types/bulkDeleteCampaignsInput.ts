@@ -11,4 +11,9 @@ export interface BulkDeleteCampaignsInput {
   status: BulkDeleteCampaignsInputStatus;
   /** @maxLength 160 */
   search: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  telegramAccountId?: string;
 }
