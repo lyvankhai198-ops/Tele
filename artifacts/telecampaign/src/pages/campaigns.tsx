@@ -947,7 +947,7 @@ export default function Campaigns() {
             <button
               type="button"
               onClick={openBulkResume}
-              disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending}
+              disabled={(campaignDataBlocked&&!bulkJob) || bulkControl.isPending || bulkTemplate.isPending}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-resume-all"
             >

@@ -1,7 +1,6 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
+import { db,campaignsTable } from "@workspace/db";
 import { and,desc,eq,inArray } from "drizzle-orm";
-import { campaignsTable } from "@workspace/db/schema";
 import { GetCampaignLoadBatchQueryParams, GetCampaignLoadBatchResponse, GetCampaignLoadManifestResponse } from "@workspace/api-zod";
 import { readOnlyCampaignSummary } from "../lib/campaigns";
 

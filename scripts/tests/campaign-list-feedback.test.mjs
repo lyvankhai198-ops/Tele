@@ -52,5 +52,6 @@ test("page gates every bulk entry/submit on a complete, current dataset and uses
     assert.match(page,new RegExp(`async function ${name}\\(\\) \\{\\s+if\\(campaignDataBlocked\\)return;`));
   }
   assert.match(page,/loaded=\{campaigns\.loadProgress\.loaded\} total=\{campaigns\.loadProgress\.total\}/);
+  assert.match(page,/disabled=\{\(campaignDataBlocked&&!bulkJob\)/);
   assert.doesNotMatch(source,/<progress|animate-pulse|setTimeout|%/);
 });
