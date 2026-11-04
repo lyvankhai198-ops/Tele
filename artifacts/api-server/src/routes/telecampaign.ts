@@ -116,6 +116,7 @@ import {
   createCampaignBulkJob, getCampaignBulkJob, getActiveCampaignBulkJob,
   registerCampaignBulkProcessor, retryCampaignBulkJob,
 } from "../lib/campaign-bulk-jobs";
+import { campaignListScope } from "../lib/campaign-list-scope";
 import { getTelegramConfiguration, requireTelegramConfiguration } from "../lib/telegram-config";
 import { getPurchaseSettings } from "../lib/purchase-settings";
 import { cancelOrder, createOrder, getOrderSettings, listOrders, settleVerifiedOrder, updateOrderProof, verifiedOrderNotification } from "../lib/telecampaign-orders";
@@ -2195,7 +2196,7 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       pauseReason: "manual",
       updatedAt: now,
     }).where(and(
-      eq(campaignsTable.ownerUserId, ownerUserId),
+      campaignListScope(ownerUserId,parsed.data),
       inArray(campaignsTable.status, ["queued", "running"]),
     )).returning({ id: campaignsTable.id, name: campaignsTable.name });
 
@@ -2238,6 +2239,7 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       ownerUserId, scope, intervalSeconds, startAt, scheduledAt: requestedStart,
       requestId: req.get("Idempotency-Key"),
       onlySendable:parsed.data.onlySendable,autoDeleteInvalid:parsed.data.autoDeleteInvalid,
+      telegramAccountId:parsed.data.telegramAccountId,search:parsed.data.search,status:parsed.data.status,
     });
     return void res.status(202).json(BulkControlCampaignsResponse.parse({
       action: "resume", updatedCount: job.updatedCount, skippedCount: job.skippedCount,
@@ -2276,7 +2278,7 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
         eq(campaignsTable.id, candidateId),
         eq(campaignsTable.ownerUserId, ownerUserId),
       ));
-      const stillEligible = campaign && (
+      const stillEligible = campaign && (!job.telegramAccountId || campaign.telegramAccountId===job.telegramAccountId) && (
         scope === "completed"
           ? ["completed", "completed_with_errors"].includes(campaign.status)
           : campaign.status === scope
@@ -2486,7 +2488,7 @@ router.post("/campaigns/bulk-delete", async (req, res): Promise<void> => {
     id: campaignsTable.id,
     name: campaignsTable.name,
     status: campaignsTable.status,
-  }).from(campaignsTable).where(eq(campaignsTable.ownerUserId, ownerUserId));
+  }).from(campaignsTable).where(campaignListScope(ownerUserId,parsed.data));
   const matchesStatus = (status: string) => parsed.data.status === "all"
     || status === parsed.data.status
     || (parsed.data.status === "completed" && status === "completed_with_errors");
@@ -2513,6 +2515,7 @@ router.post("/campaigns/bulk-delete", async (req, res): Promise<void> => {
       await tx.execute(sql`SET LOCAL statement_timeout = '20s'`);
       const removed = await tx.delete(campaignsTable).where(and(
         eq(campaignsTable.ownerUserId, ownerUserId),
+        campaignListScope(ownerUserId,parsed.data),
         inArray(campaignsTable.id, deletableIds),
         notInArray(campaignsTable.status, ["queued", "running"]),
       )).returning({ id: campaignsTable.id, name: campaignsTable.name });

@@ -18,6 +18,7 @@ import { testCampaignRerunSafety } from "./campaign-rerun-safety.e2e";
 import { testCampaignTemplateAccount } from "./campaign-template-account.e2e";
 import { testTemplateJobs } from "./campaign-template-jobs.e2e";
 import { testCampaignLoadCounter } from "./campaign-load-counter.e2e";
+import { testCampaignAccountFilter } from "./campaign-account-filter.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
@@ -170,6 +171,8 @@ try {
   check(activeOnly.ok && activeResult.deletedCount === 1 && activeResult.skippedCount === 2, "E2E_DELETE_RUNNING_QUEUED_SKIPPED");
   phase = "E2E_CAMPAIGN_BULK_JOBS";
   await testCampaignBulkJobs({ownerId:userId,ownerCookie:userCookie,otherCookie:adminCookie,request});
+  phase="E2E_CAMPAIGN_ACCOUNT_FILTER";
+  await testCampaignAccountFilter({ownerId:userId,otherOwnerId:adminId,ownerCookie:userCookie,request});
   await testCampaignRoundTiming({ownerId:userId,ownerCookie:userCookie,request});
   phase = "E2E_TEMPLATE_ACCOUNT";
   await testCampaignTemplateAccount({adminId,userId,adminCookie,userCookie,request});

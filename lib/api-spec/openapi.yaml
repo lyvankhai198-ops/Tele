@@ -2616,6 +2616,9 @@ components:
       required: [action]
       properties:
         action: { type: string, enum: [pause, resume] }
+        telegramAccountId: { type: string, minLength: 1, maxLength: 160 }
+        search: { type: string, maxLength: 160 }
+        status: { type: string, enum: [all, queued, running, paused, completed, draft, cancelled] }
         scope: { type: string, enum: [draft, queued, paused, completed], default: paused }
         intervalSeconds: { type: number, minimum: 0, maximum: 259200 }
         scheduledAt: { type: ["string", "null"], format: date-time }
@@ -2747,6 +2750,7 @@ components:
       properties:
         status: { type: string, enum: [all, queued, running, paused, completed, draft, cancelled] }
         search: { type: string, maxLength: 160 }
+        telegramAccountId: { type: string, minLength: 1, maxLength: 160 }
     BulkDeleteCampaignsResult:
       type: object
       required: [deletedCount, skippedCount, skipped]

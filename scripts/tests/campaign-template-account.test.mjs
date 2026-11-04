@@ -38,6 +38,7 @@ function setup(selected="",language="en",pending=false){
     campaignDataBlocked:false,templateProgress:{job:null,uncertain:false,blocked:pending,async start(templateId,accountId){
       state.sent={templateId,...(accountId?{telegramAccountId:accountId}:{})};
     }},
+    accountFilter:"",
     campaigns:{data:fixtures,async refetch(){state.refetched++;}},
     accounts:{isLoading:false,data:[{id:"a",name:"Account A",phone:"+111"},{id:"b",name:"Account B"}]},
     templates:{data:[{id:"template",name:"Template"}]},useMemo:fn=>fn(),
@@ -82,6 +83,12 @@ test("reopening resets account scope even after the previous account had no matc
   const {context,state}=setup("missing");
   evaluate(snippets.openBulkTemplate+";openBulkTemplate();",context);
   assert.equal(state.selected,"");assert.equal(state.template,"");assert.equal(state.open,true);assert.equal(state.toast,null);
+});
+test("opening the template dialog starts with the account selected in the list filter",()=>{
+  const {context,state}=setup();
+  context.accountFilter="b";
+  evaluate(snippets.openBulkTemplate+";openBulkTemplate();",context);
+  assert.equal(state.selected,"b");
 });
 test("actual submit starts a durable operation without closing or pretending all campaigns are already changed",async()=>{
   for(const selected of ["a",""]){

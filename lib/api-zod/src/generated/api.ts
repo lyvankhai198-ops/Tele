@@ -1176,6 +1176,10 @@ export const CreateCampaignResponse = zod.object({
 })
 
 
+export const bulkControlCampaignsBodyTelegramAccountIdMax = 160;
+
+export const bulkControlCampaignsBodySearchMax = 160;
+
 export const bulkControlCampaignsBodyScopeDefault = `paused`;
 export const bulkControlCampaignsBodyIntervalSecondsMin = 0;
 export const bulkControlCampaignsBodyIntervalSecondsMax = 259200;
@@ -1186,6 +1190,9 @@ export const bulkControlCampaignsBodyConfirmAutoDeleteDefault = false;
 
 export const BulkControlCampaignsBody = zod.object({
   "action": zod.enum(['pause', 'resume']),
+  "telegramAccountId": zod.string().min(1).max(bulkControlCampaignsBodyTelegramAccountIdMax).optional(),
+  "search": zod.string().max(bulkControlCampaignsBodySearchMax).optional(),
+  "status": zod.enum(['all', 'queued', 'running', 'paused', 'completed', 'draft', 'cancelled']).optional(),
   "scope": zod.enum(['draft', 'queued', 'paused', 'completed']).default(bulkControlCampaignsBodyScopeDefault),
   "intervalSeconds": zod.number().min(bulkControlCampaignsBodyIntervalSecondsMin).max(bulkControlCampaignsBodyIntervalSecondsMax).optional(),
   "scheduledAt": zod.coerce.date().nullish(),
@@ -1571,11 +1578,14 @@ export const RetryCampaignTemplateJobResponse = zod.object({
 
 export const bulkDeleteCampaignsBodySearchMax = 160;
 
+export const bulkDeleteCampaignsBodyTelegramAccountIdMax = 160;
+
 
 
 export const BulkDeleteCampaignsBody = zod.object({
   "status": zod.enum(['all', 'queued', 'running', 'paused', 'completed', 'draft', 'cancelled']),
-  "search": zod.string().max(bulkDeleteCampaignsBodySearchMax)
+  "search": zod.string().max(bulkDeleteCampaignsBodySearchMax),
+  "telegramAccountId": zod.string().min(1).max(bulkDeleteCampaignsBodyTelegramAccountIdMax).optional()
 })
 
 export const BulkDeleteCampaignsResponse = zod.object({
