@@ -243,7 +243,7 @@ export function AppLayout({
         <div className="flex items-center justify-between px-4 py-5 border-b border-[#eef2f6]">
           <button onClick={() => navigate("/dashboard")} className="flex min-w-0 flex-1 items-center gap-3 text-left">
             <img src="/icon.png" alt="" className="h-10 w-10 shrink-0 object-contain" />
-            <span className="min-w-0 whitespace-nowrap text-[17px] font-bold tracking-[-0.02em] text-[#1a2b88] lg:hidden">Campaign Manager</span>
+            <span className="min-w-0 truncate text-[17px] font-bold tracking-[-0.02em] text-[#1a2b88] lg:hidden">Campaign Manager</span>
             <span className="hidden lg:block">
               <span className="block text-[15px] font-extrabold text-[#0f172a] tracking-tight">Telegram Campaign Manager</span>
             </span>

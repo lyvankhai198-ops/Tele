@@ -848,10 +848,12 @@ export function LanguageProvider({
   useEffect(() => {
     if (!ready) return;
     try { window.localStorage.setItem("telecampaign-language", language); } catch { /* Private browsing may deny persistence. */ }
-    document.documentElement.lang = language;
+    if (!document.documentElement.dataset.interfaceOverride) {
+      document.documentElement.lang = language;
+      document.documentElement.dataset.interfaceDirection = getInterfaceLocale(language).direction;
+    }
     // Keep navigation/layout positions fixed; only text blocks use RTL.
     document.documentElement.dir = "ltr";
-    document.documentElement.dataset.interfaceDirection = getInterfaceLocale(language).direction;
   }, [language, ready]);
 
   const changeLanguage = useCallback((nextLanguage: Language) => {
@@ -925,9 +927,12 @@ export function LanguageOverride({ language, setLanguage, children }: { language
     return () => { live = false; };
   }, [language, revision]);
   useEffect(() => {
+    activateInterfaceLanguage(language);
+    document.documentElement.dataset.interfaceOverride = language;
     document.documentElement.lang = language;
     document.documentElement.dataset.interfaceDirection = getInterfaceLocale(language).direction;
     return () => {
+      delete document.documentElement.dataset.interfaceOverride;
       activateInterfaceLanguage(parent.language);
       document.documentElement.lang = parent.language;
       document.documentElement.dataset.interfaceDirection = getInterfaceLocale(parent.language).direction;

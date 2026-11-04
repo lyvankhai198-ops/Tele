@@ -106,7 +106,7 @@ export function LanguageSelector({
       {open && (
         <div
           id={`${instanceId}-dialog`} role="dialog" aria-label={text.label}
-          className={`absolute right-0 z-[100] w-[min(19rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_12px_40px_rgba(15,23,42,0.16)] ${placement === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"}`}
+          className={`absolute right-0 z-[100] ${compact ? "w-[min(19rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]" : "w-full max-w-full"} overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_12px_40px_rgba(15,23,42,0.16)] ${placement === "top" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"}`}
           onKeyDown={(event) => {
             if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(true); }
           }}

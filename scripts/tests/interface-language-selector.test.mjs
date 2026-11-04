@@ -80,6 +80,77 @@ test("all 22 selectors render native accessible labels and keep the existing con
   }
 });
 
+test("sidebar dropdown stays within its trigger while compact auth picker retains viewport bounds", () => {
+  for (const compact of [false, true]) {
+    const h = harness("vi", { placement: "top", compact });
+    h.find(h.render(), (node) => node.type === "button")[0].props.onClick();
+    const dialog = h.find(h.render(), byRole("dialog"))[0];
+    assert.match(dialog.props.className, compact ? /max-w-\[calc\(100vw-2rem\)\]/u : /w-full max-w-full/u);
+    if (!compact) assert.doesNotMatch(dialog.props.className, /19rem/u);
+  }
+  const layout = fs.readFileSync(path.join(root, "artifacts/telecampaign/src/components/layout/AppLayout.tsx"), "utf8");
+  assert.match(layout, /min-w-0 truncate[^"]*lg:hidden">Campaign Manager/u);
+});
+
+function adminScopeHarness(role = "admin") {
+  const file = path.join(root, "artifacts/telecampaign/src/App.tsx");
+  const ast = ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const declaration = ast.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "AdminLanguageScope");
+  assert.ok(declaration);
+  const output = ts.transpileModule(`export ${declaration.getText(ast)}`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText;
+  const exports = {}, states = [], effectDeps = [], queue = [];
+  const parent = { language: "bn", setLanguage: () => { throw Error("ADMIN_MUST_NOT_WRITE_ACCOUNT_PREFERENCE"); } };
+  let stateIndex = 0, effectIndex = 0, location = "/admin";
+  const user = { id: "fixture-admin", role };
+  vm.runInNewContext(output, {
+    exports, require: () => ({ jsx: (type, props) => ({ type, props }) }),
+    useAuth: () => ({ user }), useLanguage: () => parent, useLocation: () => [location],
+    LanguageOverride: "language-override",
+    useState(initial) {
+      const i = stateIndex++;
+      if (!(i in states)) states[i] = initial;
+      return [states[i], (value) => { states[i] = typeof value === "function" ? value(states[i]) : value; }];
+    },
+    useEffect(callback, deps) {
+      const i = effectIndex++;
+      if (!effectDeps[i] || deps.some((value, index) => value !== effectDeps[i][index])) queue.push(callback);
+      effectDeps[i] = deps;
+    },
+  });
+  return {
+    parent, user,
+    render(route = location) {
+      location = route; stateIndex = 0; effectIndex = 0;
+      const result = exports.AdminLanguageScope({ children: "unchanged-content" });
+      queue.splice(0).forEach((callback) => callback());
+      return result;
+    },
+  };
+}
+
+test("admin defaults to Vietnamese without changing the customer's saved language", () => {
+  const h = adminScopeHarness();
+  assert.equal(h.render().props.language, "vi");
+  h.render().props.setLanguage("en");
+  assert.equal(h.render("/admin/tools").props.language, "en");
+  assert.equal(h.parent.language, "bn");
+  assert.equal(h.render("/dashboard"), "unchanged-content");
+  h.user.id = "another-fixture-admin"; h.render("/admin");
+  assert.equal(h.render().props.language, "vi");
+  assert.equal(h.parent.language, "bn");
+});
+
+test("admin override never applies to customer surfaces or customer feedback", () => {
+  const h = adminScopeHarness("user");
+  assert.equal(h.render("/dashboard/feedback"), "unchanged-content");
+  assert.equal(h.parent.language, "bn");
+  const admin = adminScopeHarness();
+  assert.equal(admin.render("/dashboard/feedback").props.language, "vi");
+  assert.equal(admin.render("/dashboard/campaigns"), "unchanged-content");
+});
+
 test("country search selects Bengali once and closes the picker", () => {
   const h = harness("vi");
   h.find(h.render(), (node) => node.type === "button")[0].props.onClick();
