@@ -580,7 +580,7 @@ export async function getTelegramProxyConfig(account: typeof telegramAccountsTab
   };
 }
 
-export async function syncAccountDestinations(accountId: string) {
+export async function syncAccountDestinations(accountId: string,onProgress?:(count:number)=>Promise<void>) {
   const { client, account } = await getAccountClient(accountId);
   const syncStartedAt = new Date();
   let count = 0;
@@ -627,9 +627,11 @@ export async function syncAccountDestinations(accountId: string) {
       }
       syncedDestinationKeys.add(destinationKey(values.telegramId, values.topicId));
       count += 1;
+      await onProgress?.(count);
     };
 
     for await (const dialog of (client as any).iterDialogs({})) {
+      await onProgress?.(count);
       const entity = dialog.entity as TelegramEntity;
       if (!entity || (!entity.megagroup && !entity.broadcast && !String(entity.className ?? "").includes("Chat"))) {
         continue;

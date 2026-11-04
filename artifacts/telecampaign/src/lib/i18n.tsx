@@ -606,6 +606,14 @@ const translations: Record<string, string> = {
  */
 export function localizedErrorMessage(error: unknown, language: Language, fallback: string): string {
   const message = error instanceof Error ? error.message.trim() : "";
+  if(/^HTTP (502|503|504)\b|<(!doctype|html|head|body)\b|nginx\/|(?:502|503|504).*(?:gateway|unavailable)|gateway\s*time.?out/i.test(message))
+    return language==="vi"
+      ?"Máy chủ chưa phản hồi kịp. Tác vụ có thể vẫn đang xử lý; hãy kiểm tra tiến trình trước khi thử lại."
+      :"The server did not respond in time. Work may still be running; check progress before trying again.";
+  if(/OPERATION_IN_PROGRESS/.test(message))return language==="vi"?"Chiến dịch đang được xử lý nền. Hãy đợi tiến trình hoàn tất.":"This campaign is being processed. Wait for the background operation to finish.";
+  if(/OPERATION_STOP_CAMPAIGN_FIRST/.test(message))return language==="vi"?"Hãy dừng chiến dịch trước khi xoá.":"Stop the campaign before deleting it.";
+  if(/OPERATION_NOT_FOUND/.test(message))return language==="vi"?"Không tìm thấy dữ liệu hoặc bạn không có quyền truy cập.":"The data was not found or you do not have access.";
+  if(/OPERATION_[A-Z_]+/.test(message))return language==="vi"?"Chưa xác nhận được thao tác. Hãy kiểm tra tiến trình trước khi thử lại.":"The operation could not be confirmed. Check progress before trying again.";
   const cleanMessage = message.replace(/^HTTP \d{3}(?: [^:]*)?:\s*/, "");
   const captchaMessages: Record<string, Record<Language, string>> = {
     CAPTCHA_REQUIRED: {

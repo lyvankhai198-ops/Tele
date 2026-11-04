@@ -81,6 +81,8 @@ jobs:
           node --test scripts/tests/campaign-list-feedback.test.mjs
           node --test scripts/tests/campaign-load-counter.test.mjs
           node --test scripts/tests/campaign-account-filter.test.mjs
+          node --test scripts/tests/operations.test.mjs
+          node --test scripts/tests/operations-progress.test.mjs
           npx --yes pnpm@10.26.1 run typecheck:libs
           npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
           npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck

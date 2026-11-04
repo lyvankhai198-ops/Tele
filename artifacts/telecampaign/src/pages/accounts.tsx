@@ -22,18 +22,17 @@ import {
   useConfirmTelegramLoginPassword,
   useCreateTelegramAccount,
   useCreateTelegramQrAccount,
-  useDeleteTelegramAccount,
   useGetSystemDefaults,
   useGetTelegramQrLoginStatus,
   useListTelegramAccounts,
   useStartTelegramQrLogin,
   useCancelTelegramQrLogin,
   useStartTelegramLogin,
-  useSyncTelegramDestinations,
 } from "@workspace/api-client-react";
 import QRCode from "qrcode";
 import { AppLayout, Input, Toast } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
+import {useOperations} from "@/lib/operations";
 
 const copy = {
   en: {
@@ -362,13 +361,12 @@ export default function Accounts() {
   const accounts = useListTelegramAccounts();
   const createAccount = useCreateTelegramAccount();
   const createQrAccount = useCreateTelegramQrAccount();
-  const deleteAccount = useDeleteTelegramAccount();
+  const operations=useOperations();
   const startLogin = useStartTelegramLogin();
   const confirmCode = useConfirmTelegramLoginCode();
   const confirmPassword = useConfirmTelegramLoginPassword();
   const startQrLogin = useStartTelegramQrLogin();
   const cancelQrLogin = useCancelTelegramQrLogin();
-  const sync = useSyncTelegramDestinations();
   const systemDefaults = useGetSystemDefaults();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPremiumNotice, setShowPremiumNotice] = useState(false);
@@ -653,35 +651,29 @@ export default function Accounts() {
   const removeAccount = (accountId: string) => {
     if (!window.confirm(text.deleteConfirmation)) return;
     setDeletingId(accountId);
-    deleteAccount.mutate({ accountId }, {
-      onSuccess: () => {
+    void operations.start({kind:"delete_account",accountId,confirm:true}).then(() => {
         // Account deletion also removes campaigns and groups, including cached
         // dashboard counts and selectors used by Quick Send.
         void queryClient.invalidateQueries();
-        setToast(text.deleted);
+        setToast(language==="vi"?"Đã tiếp nhận yêu cầu xoá. Xem tiến trình phía trên.":"Deletion accepted. See progress above.");
         setDeletingId(null);
-      },
-      onError: (error) => {
+      }, (error) => {
         setToast(errorMessage(error, language, text.requestFailed));
         setDeletingId(null);
-      },
-    });
+      });
   };
 
   const handleSync = (accountId: string) => {
     setSyncingId(accountId);
-    sync.mutate({ accountId }, {
-      onSuccess: (data) => {
+    void operations.start({kind:"sync_groups",accountId}).then(() => {
         void invalidateAccounts();
-        setToast(`${text.synced}: ${data.count} ${text.items}`);
+        setToast(language==="vi"?"Đã bắt đầu đồng bộ nền. Xem tiến trình phía trên.":"Background sync accepted. See progress above.");
         setSyncingId(null);
-      },
-      onError: (error) => {
+      }, (error) => {
         void invalidateAccounts();
         setToast(errorMessage(error, language, text.requestFailed));
         setSyncingId(null);
-      },
-    });
+      });
   };
 
   const helpSteps = [

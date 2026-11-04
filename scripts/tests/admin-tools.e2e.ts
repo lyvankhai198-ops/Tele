@@ -19,6 +19,7 @@ import { testCampaignTemplateAccount } from "./campaign-template-account.e2e";
 import { testTemplateJobs } from "./campaign-template-jobs.e2e";
 import { testCampaignLoadCounter } from "./campaign-load-counter.e2e";
 import { testCampaignAccountFilter } from "./campaign-account-filter.e2e";
+import {testOperations} from "./operations.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
@@ -182,6 +183,8 @@ try {
   await testCampaignLoadCounter({adminId,userId,adminCookie,userCookie,request});
   phase = "E2E_ACCOUNT_DELETE";
   await testTelegramAccountDeletion({ownerId:userId,ownerCookie:userCookie,otherOwnerId:adminId,request});
+  phase="E2E_BACKGROUND_OPERATIONS";
+  await testOperations({ownerId:userId,otherOwnerId:adminId,ownerCookie:userCookie,otherCookie:adminCookie,request});
   phase = "E2E_DESTINATION_MEMBERSHIP_VISIBILITY";
   const leftGroupId=randomUUID(), restrictedGroupId=randomUUID(), activeGroupId=randomUUID();
   for (const [id,canPost,reason] of [

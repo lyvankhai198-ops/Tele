@@ -6,7 +6,7 @@ import ts from "typescript";
 const page=fs.readFileSync(new URL("../../artifacts/telecampaign/src/pages/campaigns.tsx",import.meta.url),"utf8");
 const ast=ts.createSourceFile("campaigns.tsx",page,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),parts={};
 function visit(node){
-  if(ts.isVariableDeclaration(node)&&["listedCampaigns","bulkScopeOptions","bulkFilter","accountFilterLabel"].includes(node.name.getText(ast)))
+  if(ts.isVariableDeclaration(node)&&["listedCampaigns","bulkScopeOptions","bulkFilter","accountFilterLabel","bulkDelete"].includes(node.name.getText(ast)))
     parts[node.name.getText(ast)]="const "+node.getText(ast)+";";
   if(ts.isFunctionDeclaration(node)&&["pauseAllCampaigns","removeFilteredCampaigns","submitBulkResume"].includes(node.name?.text))
     parts[node.name.text]=node.getText(ast);
@@ -27,6 +27,8 @@ function setup({account="a",status="all",search="",language="vi",blocked=false}=
   ],sent=[],state={};
   const context={accountFilter:account,status,search,language,accounts:{data:[{id:"a",name:"A",phone:"+111"},{id:"b",name:"B"}]},
     campaigns:{data:rows,refetch:async()=>{}},useMemo:f=>f(),isActive:s=>["queued","running"].includes(s),
+    useMutation:({mutationFn})=>({isPending:false,mutateAsync:mutationFn}),
+    operations:{async start(data){sent.push({data});return{id:"operation",state:"queued"};}},
     isAdmin:true,campaignDataBlocked:blocked,bulkJob:null,bulkTemplate:{isPending:false},bulkDelete:{isPending:false,async mutateAsync(v){sent.push(v);return{deletedCount:1,skippedCount:0};}},
     bulkControl:{isPending:false,async mutateAsync(v){sent.push(v);return{updatedCount:1,skippedCount:0,job:{id:"new",status:"queued"}};}},
     templateProgress:{job:null,uncertain:false,waiting:false},details:null,bulkResumeScope:"completed",bulkIntervalMinutes:"10",
@@ -39,7 +41,7 @@ function setup({account="a",status="all",search="",language="vi",blocked=false}=
     Search:"Search",CircleStop:"Stop",Play:"Play",Pencil:"Pencil",Trash2:"Trash",LoaderCircle:"Loader",
     h:(type,props,...children)=>({type,props:props??{},children:children.flat(Infinity).filter(v=>v!==false&&v!=null)}),
   };
-  for(const key of ["listedCampaigns","bulkScopeOptions","bulkFilter","accountFilterLabel"])run(parts[key]+`;globalThis.${key}=${key};`,context);
+  for(const key of ["listedCampaigns","bulkScopeOptions","bulkFilter","accountFilterLabel","bulkDelete"])run(parts[key]+`;globalThis.${key}=${key};`,context);
   for(const key of ["pauseAllCampaigns","removeFilteredCampaigns","submitBulkResume"])run(parts[key],context);
   return{context,sent,state,rows};
 }

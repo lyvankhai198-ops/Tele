@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { campaignDeleteError } from "@/lib/campaign-delete-error";
 import { campaignBulkError } from "@/lib/campaign-bulk-error";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient,useMutation } from "@tanstack/react-query";
+import {useOperations} from "@/lib/operations";
+import type {BackgroundOperationInput} from "@workspace/api-client-react";
 import {
   Copy,
   CircleStop,
@@ -494,8 +496,10 @@ export default function Campaigns() {
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
-  const bulkDelete = useBulkDeleteCampaigns();
-  const deleteOne = useDeleteCampaign();
+  const operations=useOperations();
+  const bulkDelete=useMutation({mutationFn:()=>operations.start({kind:"delete_campaigns",confirm:true,
+    ...bulkFilter,status:bulkFilter.status as BackgroundOperationInput["status"]})});
+  const deleteOne=useMutation({mutationFn:(campaignId:string)=>operations.start({kind:"delete_campaigns",campaignId,confirm:true})});
   const templateProgress = useTemplateJob(user?.id, isAdmin, () => {
     void campaigns.refetch();
     void queryClient.invalidateQueries({queryKey:getListCalendarItemsQueryKey()});
@@ -877,14 +881,14 @@ export default function Campaigns() {
   async function remove() {
     if (!campaignToDelete || deleteOne.isPending) return;
     try {
-      await deleteOne.mutateAsync({ campaignId: campaignToDelete.id });
+      await deleteOne.mutateAsync(campaignToDelete.id);
       if (details?.id === campaignToDelete.id) setDetails(null);
       setCampaignToDelete(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: getListCampaignsQueryKey() }),
         queryClient.invalidateQueries({ queryKey: getListCalendarItemsQueryKey() }),
       ]);
-      setToast(c.toastDeleted);
+      setToast(language==="vi"?"Đã tiếp nhận yêu cầu xoá. Xem tiến trình phía trên.":"Deletion accepted. See progress above.");
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
     }
@@ -899,14 +903,9 @@ export default function Campaigns() {
     }
     if (!window.confirm(`${accountFilterLabel}\n${c.bulkDeleteConfirm(listedCampaigns.length)}`)) return;
     try {
-      const result = await bulkDelete.mutateAsync({
-        data: {
-          ...bulkFilter,
-        },
-      });
-      await campaigns.refetch();
-      if (details && result.deletedCount > 0) setDetails(null);
-      setToast(c.bulkDeleteResult(result.deletedCount, result.skippedCount));
+      await bulkDelete.mutateAsync();
+      setDetails(null);
+      setToast(language==="vi"?"Đã tiếp nhận yêu cầu xoá theo bộ lọc. Xem tiến trình phía trên.":"Filtered deletion accepted. See progress above.");
     } catch (error) {
       setToast(campaignDeleteError(error, language));
     }

@@ -8,6 +8,79 @@
 import * as zod from 'zod';
 
 
+export const ListOperationsResponseItem = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['delete_account', 'delete_campaigns', 'sync_groups', 'prepare_campaign']),
+  "label": zod.string(),
+  "accountId": zod.string().optional(),
+  "campaignId": zod.string().optional(),
+  "state": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "phase": zod.string(),
+  "processed": zod.number().int(),
+  "stageProcessed": zod.number().int().optional(),
+  "total": zod.number().int().nullable(),
+  "unit": zod.enum(['records', 'groups', 'deliveries']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListOperationsResponse = zod.array(ListOperationsResponseItem)
+
+
+export const createOperationBodySearchMax = 160;
+
+
+
+export const CreateOperationBody = zod.object({
+  "kind": zod.enum(['delete_account', 'delete_campaigns', 'sync_groups']),
+  "accountId": zod.string().uuid().optional(),
+  "campaignId": zod.string().uuid().optional(),
+  "telegramAccountId": zod.string().uuid().optional(),
+  "status": zod.enum(['all', 'queued', 'running', 'paused', 'completed', 'completed_with_errors', 'draft', 'cancelled']).optional(),
+  "search": zod.string().max(createOperationBodySearchMax).optional(),
+  "confirm": zod.boolean().optional()
+})
+
+export const CreateOperationResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['delete_account', 'delete_campaigns', 'sync_groups', 'prepare_campaign']),
+  "label": zod.string(),
+  "accountId": zod.string().optional(),
+  "campaignId": zod.string().optional(),
+  "state": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "phase": zod.string(),
+  "processed": zod.number().int(),
+  "stageProcessed": zod.number().int().optional(),
+  "total": zod.number().int().nullable(),
+  "unit": zod.enum(['records', 'groups', 'deliveries']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+export const RetryOperationParams = zod.object({
+  "operationId": zod.coerce.string()
+})
+
+export const RetryOperationResponse = zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['delete_account', 'delete_campaigns', 'sync_groups', 'prepare_campaign']),
+  "label": zod.string(),
+  "accountId": zod.string().optional(),
+  "campaignId": zod.string().optional(),
+  "state": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "phase": zod.string(),
+  "processed": zod.number().int(),
+  "stageProcessed": zod.number().int().optional(),
+  "total": zod.number().int().nullable(),
+  "unit": zod.enum(['records', 'groups', 'deliveries']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
 export const listReleaseUpdatesResponseUpdatesItemOneTitleMax = 200;
 
 export const listReleaseUpdatesResponseUpdatesItemOneViMax = 1750;

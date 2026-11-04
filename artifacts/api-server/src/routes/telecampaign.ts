@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { deleteTelegramAccountData } from "../lib/delete-telegram-account";
+import {registerOperationRoutes} from "./operations";
+import {enqueuePreparation,enqueueLargeResume} from "../lib/operation-preparation";
 import { campaignRerunAssessment, saveRerunPolicy } from "../lib/campaign-rerun-review";
 import { createReadStream } from "node:fs";
 import { and, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notExists, notInArray, or, sql } from "drizzle-orm";
@@ -852,7 +854,8 @@ router.use((req, res, next): void => {
       "groupIntervalSeconds",
     ].includes(key));
   const isGroupSync = req.method === "POST"
-    && /^\/telegram\/accounts\/[^/]+\/sync$/.test(req.path);
+    && (/^\/telegram\/accounts\/[^/]+\/sync$/.test(req.path)
+      ||(req.path==="/operations"&&req.body?.kind==="sync_groups"));
   if (req.supportSession && !isCampaignDetailsEdit && !isGroupSync && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     res.status(403).json({ error: "Phiên hỗ trợ chỉ cho phép chỉnh sửa campaign và đồng bộ nhóm." });
     return;
@@ -2278,7 +2281,7 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
         eq(campaignsTable.id, candidateId),
         eq(campaignsTable.ownerUserId, ownerUserId),
       ));
-      const stillEligible = campaign && (!job.telegramAccountId || campaign.telegramAccountId===job.telegramAccountId) && (
+      const stillEligible = campaign && !["deletion_pending","preparing_targets"].includes(campaign.pauseReason??"") && (!job.telegramAccountId || campaign.telegramAccountId===job.telegramAccountId) && (
         scope === "completed"
           ? ["completed", "completed_with_errors"].includes(campaign.status)
           : campaign.status === scope
@@ -2422,8 +2425,10 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
           delayMaxSeconds: campaign.timingMode === "round" && destinations.length > 1 ? campaign.delayMinSeconds : 0,
           roundDelayMinSeconds: campaign.roundDelayMinSeconds,
           roundDelayMaxSeconds: campaign.roundDelayMaxSeconds,
-        }).returning({ id: campaignsTable.id, name: campaignsTable.name });
-        for (const rows of campaignTargetBatches({
+        }).returning();
+        if(destinations.length*campaign.repeatCount>1000){
+          await enqueuePreparation(tx,run,destinations.map(destination=>destination.id),campaignStart,"queued");
+        }else for (const rows of campaignTargetBatches({
           campaignId: run.id, destinationIds: destinations.map(destination => destination.id),
           repeatCount: campaign.repeatCount, startAt: campaignStart, nextDelaySeconds: randomRoundDelay,
           timingMode: "round",
@@ -2543,6 +2548,8 @@ router.post("/campaigns/bulk-delete", async (req, res): Promise<void> => {
   }));
 });
 
+registerOperationRoutes(router,currentUserId);
+
 router.post("/campaigns", async (req, res): Promise<void> => {
   const parsed = CreateCampaignBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
@@ -2608,7 +2615,15 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     }
   }
   if (templateMode === "text" && !content) return void sendError(res, 400, "Choose a message template or enter campaign content.");
-  const [campaign] = await db.insert(campaignsTable).values({
+  const targetCount=destinations.length*parsed.data.repeatCount;
+  const campaign=await db.transaction(async tx=>{
+    const accountIds=[...new Set(destinations.map(destination=>destination.accountId))];
+    if(accountIds.length){
+      const usable=await tx.select({id:telegramAccountsTable.id}).from(telegramAccountsTable).where(and(
+        eq(telegramAccountsTable.ownerUserId,currentUserId(req)),inArray(telegramAccountsTable.id,accountIds),isNull(telegramAccountsTable.deletedAt))).for("update");
+      if(usable.length!==accountIds.length)throw Error("OPERATION_SOURCE_DELETED");
+    }
+  const [campaign] = await tx.insert(campaignsTable).values({
     ownerUserId: currentUserId(req),
     name: parsed.data.name,
     content,
@@ -2622,7 +2637,7 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     scheduledAt,
     scheduleAnchorAt: initialRoundStartAt,
     timezone: parsed.data.timezone,
-    status: "queued",
+    status: "draft",
     maxRetries: systemSettings.campaignDefaults.maxRetries,
     repeatCount: parsed.data.repeatCount,
     timingMode: parsed.data.timingMode,
@@ -2632,21 +2647,35 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     roundDelayMinSeconds: parsed.data.roundDelayMinSeconds,
     roundDelayMaxSeconds: parsed.data.roundDelayMaxSeconds,
   }).returning();
-  const targetRows = [...campaignTargetBatches({
-    campaignId: campaign.id, destinationIds: destinations.map(destination => destination.id),
-    repeatCount: campaign.repeatCount, startAt: initialRoundStartAt,
-    timingMode: campaign.timingMode, groupIntervalSeconds: campaign.delayMinSeconds,
-    nextDelaySeconds: () => campaign.roundDelayMinSeconds + Math.floor(Math.random() * (campaign.roundDelayMaxSeconds - campaign.roundDelayMinSeconds + 1)),
-  })].flat();
-  await db.insert(campaignTargetsTable).values(targetRows);
+    if(targetCount>1000)await enqueuePreparation(tx,campaign,destinations.map(destination=>destination.id),initialRoundStartAt,"queued");
+    else{
+      for(const rows of campaignTargetBatches({
+        campaignId:campaign.id,destinationIds:destinations.map(destination=>destination.id),
+        repeatCount:campaign.repeatCount,startAt:initialRoundStartAt,timingMode:campaign.timingMode,groupIntervalSeconds:campaign.delayMinSeconds,
+        nextDelaySeconds:()=>campaign.roundDelayMinSeconds+Math.floor(Math.random()*(campaign.roundDelayMaxSeconds-campaign.roundDelayMinSeconds+1)),
+      }))await tx.insert(campaignTargetsTable).values(rows);
+      await tx.update(campaignsTable).set({status:"queued"}).where(eq(campaignsTable.id,campaign.id));
+    }
+    return campaign;
+  });
   await recordActivity({
     event: "campaign.created",
-    message: `Created campaign "${campaign.name}" with ${targetRows.length} scheduled deliveries`,
+    message: `Created campaign "${campaign.name}" with ${targetCount} scheduled deliveries`,
     ownerUserId: currentUserId(req),
     campaignId: campaign.id,
-    metadata: { destinationCount: destinations.length, repeatCount: parsed.data.repeatCount, targetCount: targetRows.length },
+    metadata: { destinationCount: destinations.length, repeatCount: parsed.data.repeatCount, targetCount },
   });
-  res.status(201).json(CreateCampaignResponse.parse(await campaignSummary(campaign)));
+  const [ready]=await db.select().from(campaignsTable).where(eq(campaignsTable.id,campaign.id));
+  res.status(201).json(CreateCampaignResponse.parse(await campaignSummary(ready)));
+});
+
+router.use("/campaigns/:campaignId",async(req,res,next)=>{
+  if(!["POST","PATCH","DELETE"].includes(req.method)||!/^[0-9a-f-]{36}$/i.test(String(req.params.campaignId)))return next();
+  const [campaign]=await db.select({reason:campaignsTable.pauseReason}).from(campaignsTable).where(and(
+    eq(campaignsTable.id,String(req.params.campaignId)),eq(campaignsTable.ownerUserId,currentUserId(req))));
+  if(campaign&&["deletion_pending","preparing_targets"].includes(campaign.reason??""))
+    return void sendError(res,409,"OPERATION_IN_PROGRESS");
+  next();
 });
 
 router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
@@ -2748,7 +2777,9 @@ router.post("/campaigns/:campaignId/clone", async (req, res): Promise<void> => {
       roundDelayMinSeconds: sourceCampaign.roundDelayMinSeconds,
       roundDelayMaxSeconds: sourceCampaign.roundDelayMaxSeconds,
     }).returning();
-    if (clonedDestinationIds.length) {
+    if(clonedDestinationIds.length*clone.repeatCount>1000){
+      await enqueuePreparation(tx,clone,clonedDestinationIds,new Date(),"draft");
+    }else if (clonedDestinationIds.length) {
       for (const rows of campaignTargetBatches({
         campaignId: clone.id, destinationIds: clonedDestinationIds,
         repeatCount: clone.repeatCount, startAt: new Date(),
@@ -2891,6 +2922,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       const templateId = parsed.data.templateId === undefined ? lockedCampaign.templateId : parsed.data.templateId;
       const destinationIds = [...new Set(parsed.data.destinationIds
         ?? existingTargets.map((target) => target.destinationId))];
+      if(["deletion_pending","preparing_targets"].includes(lockedCampaign.pauseReason??""))throw Error("OPERATION_IN_PROGRESS");
       const repeatCount = parsed.data.repeatCount ?? lockedCampaign.repeatCount;
       const roundDelayMinSeconds = parsed.data.roundDelayMinSeconds ?? lockedCampaign.roundDelayMinSeconds;
       const roundDelayMaxSeconds = parsed.data.roundDelayMaxSeconds ?? lockedCampaign.roundDelayMaxSeconds;
@@ -2973,7 +3005,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         destination.id,
         Math.max(0, repeatCount - (sentByDestination.get(destination.id) ?? 0)),
       ]));
-      const targetRows = [...campaignTargetBatches({
+       const targetTotal=[...remainingByDestination.values()].reduce((sum,count)=>sum+count,0);
+       const targetRows = targetTotal>1000?[]:[...campaignTargetBatches({
         campaignId: lockedCampaign.id, destinationIds: destinations.map(destination => destination.id),
         repeatCount, startAt: new Date(nextDeliveryAt), nextDelaySeconds: randomGroupDelay,
         timingMode, groupIntervalSeconds, remainingByDestination,
@@ -2982,7 +3015,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
        // Editing a completed campaign starts a fresh run on the same campaign:
        // the old delivery history is replaced by a new schedule beginning at 0.
        const nextStatus = reopeningCompletedCampaign
-        ? (targetRows.length > 0 ? "queued" : "completed")
+         ? (targetTotal > 0 ? "queued" : "completed")
         : lockedCampaign.status;
       const [campaign] = await tx.update(campaignsTable).set({
         name: name.trim(),
@@ -3006,6 +3039,11 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         pauseReason: nextStatus === "queued" ? null : lockedCampaign.pauseReason,
         updatedAt: new Date(),
       }).where(eq(campaignsTable.id, lockedCampaign.id)).returning();
+       if(targetTotal>1000){
+         await enqueuePreparation(tx,campaign,destinations.map(destination=>destination.id),new Date(nextDeliveryAt),nextStatus,
+           remainingByDestination,reopeningCompletedCampaign?"all":"pending");
+         return {kind:"success" as const,campaign:{...campaign,status:"draft" as const,pauseReason:"preparing_targets"}};
+       }
        await tx.delete(campaignTargetsTable).where(
          reopeningCompletedCampaign
            ? eq(campaignTargetsTable.campaignId, lockedCampaign.id)
@@ -3083,7 +3121,25 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     ))) {
       return void sendError(res, 409, "Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission");
     }
+    if(isResumingPausedCampaign){
+      const background=await db.transaction(tx=>enqueueLargeResume(tx,existing,new Date()));
+      if(background){
+        const [preparing]=await db.select().from(campaignsTable).where(eq(campaignsTable.id,existing.id));
+        return void res.json(UpdateCampaignStatusResponse.parse(await campaignSummary(preparing)));
+      }
+    }
     if (existing.clonedFromCampaignId && existing.status === "draft") {
+      const [size]=await db.select({count:sql<number>`count(*)::int`}).from(campaignTargetsTable)
+        .where(and(eq(campaignTargetsTable.campaignId,existing.id),eq(campaignTargetsTable.status,"pending")));
+      if(size.count>1000){
+        const counts=await db.select({id:campaignTargetsTable.destinationId,count:sql<number>`count(*)::int`}).from(campaignTargetsTable)
+          .where(and(eq(campaignTargetsTable.campaignId,existing.id),eq(campaignTargetsTable.status,"pending"))).groupBy(campaignTargetsTable.destinationId);
+        const start=resolveCampaignScheduleStart(existing.scheduledAt,new Date()).roundStartAt;
+        await db.transaction(tx=>enqueuePreparation(tx,existing,counts.map(row=>row.id),start,"queued",
+          new Map(counts.map(row=>[row.id,Number(row.count)])),"pending"));
+        const [preparing]=await db.select().from(campaignsTable).where(eq(campaignsTable.id,existing.id));
+        return void res.json(UpdateCampaignStatusResponse.parse(await campaignSummary(preparing)));
+      }
       const pendingTargets = await db.select({
         id: campaignTargetsTable.id,
         destinationId: campaignTargetsTable.destinationId,
@@ -3126,7 +3182,8 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
     pauseReason: nextStatus === "paused" ? "manual" : null,
     updatedAt: scheduleRebase?.resumedAt ?? new Date(),
   })
-    .where(eq(campaignsTable.id, existing.id)).returning();
+    .where(and(eq(campaignsTable.id, existing.id),or(isNull(campaignsTable.pauseReason),notInArray(campaignsTable.pauseReason,["deletion_pending","preparing_targets"])))).returning();
+  if(!campaign)return void sendError(res,409,"OPERATION_IN_PROGRESS");
   if (nextStatus === "cancelled") {
     await db.update(campaignTargetsTable).set({ status: "cancelled", quotaReservedAt: null, updatedAt: new Date() })
       .where(and(eq(campaignTargetsTable.campaignId, campaign.id), inArray(campaignTargetsTable.status, ["pending", "sending"])));

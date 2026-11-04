@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import {OperationsProgress} from "@/components/OperationsProgress";
 import { useLocation } from "wouter";
 import {
   Activity,
@@ -465,6 +466,7 @@ export function AppLayout({
         
         <div className={`flex-1 p-4 sm:p-6 lg:p-8 ${nationalDayThemeActive ? "national-day-content" : ""}`}>
           <div className="mx-auto max-w-[1440px]">
+            <OperationsProgress/>
             {children}
           </div>
         </div>
