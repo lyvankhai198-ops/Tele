@@ -178,7 +178,7 @@ try {
   phase = "E2E_TEMPLATE_ACCOUNT";
   await testCampaignTemplateAccount({adminId,userId,adminCookie,userCookie,request});
   phase = "E2E_TEMPLATE_JOBS";
-  await testTemplateJobs({adminId,adminCookie,userCookie,request});
+  await testTemplateJobs({adminId,userId,adminCookie,userCookie,request});
   phase="E2E_CAMPAIGN_LOAD_COUNTER";
   await testCampaignLoadCounter({adminId,userId,adminCookie,userCookie,request});
   phase = "E2E_ACCOUNT_DELETE";
