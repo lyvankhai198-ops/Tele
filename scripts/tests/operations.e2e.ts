@@ -34,7 +34,7 @@ export async function testOperations(input:{
     &&(await pool.query("SELECT session_encrypted FROM telegram_accounts WHERE id=$1",[a])).rows[0].session_encrypted===null,"E2E_OP_IMMEDIATE_FENCE");
   const duplicate=await (await request("/operations",ownerCookie,body,"POST",headers)).json();
   check(duplicate.id===job.id,"E2E_OP_NO_DUPLICATE");
-  const list=async(cookie=ownerCookie)=>await (await request("/operations",cookie)).json();
+  const list=async(cookie=ownerCookie)=>await (await request("/operations",cookie,undefined,"GET")).json();
   const progress=async()=>((await list()) as any[]).find(row=>row.id===job.id);
   check(!(await list(otherCookie)).some((row:any)=>row.id===job.id),"E2E_OP_OWNER_PROGRESS");
   check(!JSON.stringify(await list()).includes("fixture-session")&&job.payload===undefined&&job.owner===undefined,"E2E_OP_PRIVATE_PAYLOAD");

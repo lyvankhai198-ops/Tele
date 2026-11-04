@@ -522,8 +522,9 @@ try {
 } catch (error) {
   console.error(phase);
   console.error(error instanceof Error && /^E2E_[A-Z_]+$/.test(error.message) ? error.message : "E2E_UNEXPECTED_ERROR");
+  if(error instanceof Error)console.error("E2E_ERROR_CLASS_"+error.name.replace(/[^A-Za-z_]/g,"").toUpperCase());
   const sqlState = (error as any)?.code;
-  if (["42703", "42P01", "22P02", "23502", "23503", "23505"].includes(sqlState)) console.error("E2E_PG_" + sqlState);
+  if (typeof sqlState==="string"&&/^[0-9A-Z]{5}$/.test(sqlState)) console.error("E2E_PG_" + sqlState);
   process.exitCode = 1;
 } finally {
   if (server) await new Promise<void>(resolve => server!.close(() => resolve()));
