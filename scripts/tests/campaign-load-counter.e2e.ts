@@ -12,7 +12,7 @@ export async function testCampaignLoadCounter({adminId,userId,adminCookie,userCo
   const created:string[]=[];
   const manifest=(cookie=adminCookie)=>request("/campaigns/load-manifest",cookie);
   const batch=(ids:string[],cookie=adminCookie)=>request("/campaigns/load-batch?ids="+encodeURIComponent(ids.join(",")),cookie);
-  await pool.query("INSERT INTO app_users(id,username,password_hash,role) VALUES($1,$2,'fixture-hash','user')",[target,prefix]);
+  await pool.query("INSERT INTO app_users(id,username,username_normalized,password_hash,role) VALUES($1,$2,$2,'fixture-hash','user')",[target,prefix]);
   await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status) VALUES($1,$2,'counter fixture','disconnected')",[account,target]);
   for(const [owner,n] of [[adminId,60],[userId,2],[target,1]] as const){
     const result=await pool.query(`INSERT INTO campaigns(owner_user_id,name,content,status,telegram_account_id)
