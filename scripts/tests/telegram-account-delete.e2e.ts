@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
-import { deleteTelegramAccountData } from "../../artifacts/api-server/src/lib/delete-telegram-account";
+import { deleteTelegramAccountData, telegramAccountWasDeleted } from "../../artifacts/api-server/src/lib/delete-telegram-account";
 import { processNextCampaignTarget } from "../../artifacts/api-server/src/lib/campaigns";
 
 export async function testTelegramAccountDeletion(input: {
@@ -44,17 +44,10 @@ export async function testTelegramAccountDeletion(input: {
   await pool.query(`INSERT INTO activity_logs(id,owner_user_id,event,message,campaign_id)
     VALUES($1,$2,'fixture','fixture',$3)`, [log, ownerId, ids[0]]);
 
-  check((await request(`/telegram/accounts/${foreign}`, ownerCookie, {}, "DELETE")).status === 404,
-    "E2E_ACCOUNT_DELETE_OWNER_GUARD");
+  const foreignResponse = await request(`/telegram/accounts/${foreign}`, ownerCookie, {}, "DELETE");
+  check(foreignResponse.status === 404, `E2E_ACCOUNT_DELETE_OWNER_GUARD_HTTP_${foreignResponse.status}`);
   check((await request(`/telegram/accounts/${account}`, undefined, {}, "DELETE")).status === 401,
     "E2E_ACCOUNT_DELETE_AUTH_GUARD");
-  await pool.query("UPDATE telegram_accounts SET delivery_lease_until=NOW()+INTERVAL '2 minutes' WHERE id=$1", [account]);
-  check((await request(`/telegram/accounts/${account}`, ownerCookie, {}, "DELETE")).status === 409,
-    "E2E_ACCOUNT_DELETE_LIVE_SEND_BUSY");
-  check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [ids])).rowCount === 5,
-    "E2E_ACCOUNT_DELETE_BUSY_PRESERVES");
-  await pool.query("UPDATE telegram_accounts SET delivery_lease_until=NULL WHERE id=$1", [account]);
-
   // Corrupt cross-owner references must roll back, never delete another owner's
   // campaign or leave this owner's campaigns partially removed.
   await pool.query(`INSERT INTO campaigns(id,owner_user_id,name,status)
@@ -68,6 +61,9 @@ export async function testTelegramAccountDeletion(input: {
     "E2E_ACCOUNT_DELETE_ATOMIC_ACCOUNT");
   await pool.query("DELETE FROM campaigns WHERE id=$1", [foreignCampaign]);
 
+  // The explicit confirmation also applies to a running campaign with a live
+  // lease. Deletion must not require the customer to pause it first.
+  await pool.query("UPDATE telegram_accounts SET delivery_lease_until=NOW()+INTERVAL '2 minutes',delivery_lease_token='fixture' WHERE id=$1", [account]);
   check((await request(`/telegram/accounts/${account}`, ownerCookie, {}, "DELETE")).ok,
     "E2E_ACCOUNT_DELETE_HTTP_SUCCESS");
   check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [ids])).rowCount === 0,
@@ -76,15 +72,16 @@ export async function testTelegramAccountDeletion(input: {
     "E2E_ACCOUNT_DELETE_TARGETS");
   check((await pool.query("SELECT id FROM destinations WHERE account_id=$1", [account])).rowCount === 0,
     "E2E_ACCOUNT_DELETE_GROUPS");
-  const [tombstone] = (await pool.query("SELECT * FROM telegram_accounts WHERE id=$1", [account])).rows;
-  check(tombstone.deleted_at && tombstone.status === "deleted" && !tombstone.api_hash_encrypted &&
-    !tombstone.phone_encrypted && !tombstone.session_encrypted, "E2E_ACCOUNT_DELETE_CREDENTIALS");
+  check((await pool.query("SELECT id FROM telegram_accounts WHERE id=$1", [account])).rowCount === 0,
+    "E2E_ACCOUNT_DELETE_CREDENTIALS");
+  check(await telegramAccountWasDeleted(account) && !await telegramAccountWasDeleted(other),
+    "E2E_ACCOUNT_DELETE_LATE_WORKER_GUARD");
   check((await pool.query("SELECT id FROM campaigns WHERE id=$1", [kept])).rowCount === 1 &&
     (await pool.query("SELECT id FROM campaign_targets WHERE campaign_id=$1", [kept])).rowCount === 1 &&
     (await pool.query("SELECT id FROM destinations WHERE id=ANY($1::uuid[])", [[otherGroup, foreignGroup]])).rowCount === 2,
     "E2E_ACCOUNT_DELETE_OTHER_ACCOUNTS_UNCHANGED");
-  check((await pool.query("SELECT id FROM activity_logs WHERE id=$1 AND campaign_id IS NULL", [log])).rowCount === 1,
-    "E2E_ACCOUNT_DELETE_LOG_POLICY_RETAINED");
+  check((await pool.query("SELECT id FROM activity_logs WHERE id=$1", [log])).rowCount === 0,
+    "E2E_ACCOUNT_DELETE_RELATED_LOGS");
   check(!await processNextCampaignTarget(account), "E2E_ACCOUNT_DELETE_WORKER_NO_SEND");
   check((await request(`/telegram/accounts/${account}`, ownerCookie, {}, "DELETE")).status === 404,
     "E2E_ACCOUNT_DELETE_REPEAT_SAFE");

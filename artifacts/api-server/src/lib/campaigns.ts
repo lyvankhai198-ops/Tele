@@ -23,6 +23,7 @@ import {
 import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
+import { telegramAccountWasDeleted } from "./delete-telegram-account";
 import {
   legacyScheduleOffsetMs,
   nextCampaignDailyStart,
@@ -1047,6 +1048,9 @@ export async function processNextCampaignTarget(accountId?: string) {
     const delivery = { pausedForQuota: false as const, persisted: Boolean(persisted) };
     if (delivery.pausedForQuota) return true;
     if (!delivery.persisted) {
+      // Explicit account deletion removes even running campaigns. A Telegram
+      // request already accepted cannot be recalled; never recreate its target.
+      if (await telegramAccountWasDeleted(job.destination.accountId)) return true;
       await markTargetForReview(
         job.target.id,
         "Telegram accepted delivery but database confirmation was interrupted; manual review is required to avoid a duplicate send.",
@@ -1110,6 +1114,9 @@ export async function processNextCampaignTarget(accountId?: string) {
       logger.error({ err: error, targetId: job.target.id }, "Delivery activity log failed after a successful send");
     }
   } catch (error) {
+    // Deleted account/targets are intentional, not ambiguous sends to retry or
+    // activity rows to recreate with now-missing foreign keys.
+    if (await telegramAccountWasDeleted(job.destination.accountId)) return true;
     if (telegramAcceptedDelivery) {
       await markTargetForReview(
         job.target.id,

@@ -1971,8 +1971,6 @@ router.delete("/telegram/accounts/:accountId", async (req, res): Promise<void> =
 
   const deletion = await deleteTelegramAccountData(account.id, currentUserId(req));
   if (deletion === "not_found") return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
-  if (deletion === "busy") return void sendError(res, 409,
-    "Tài khoản đang gửi tin. Vui lòng đợi lượt gửi kết thúc rồi xóa lại. / This account is sending a message. Wait for delivery to finish and try deleting again.");
   await recordActivity({
     ownerUserId: currentUserId(req),
     event: "account.deleted",
