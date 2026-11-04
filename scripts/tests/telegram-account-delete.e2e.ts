@@ -5,18 +5,20 @@ import { deleteTelegramAccountData, telegramAccountWasDeleted } from "../../arti
 import { processNextCampaignTarget } from "../../artifacts/api-server/src/lib/campaigns";
 
 export async function testTelegramAccountDeletion(input: {
-  ownerId: string; ownerCookie: string;
+  ownerId: string; ownerCookie: string; otherOwnerId: string;
   request: (path: string, cookie?: string, body?: unknown, method?: string) => Promise<Response>;
 }) {
   console.log("E2E_PHASE_ACCOUNT_DELETE");
-  const { ownerId, ownerCookie, request } = input;
+  const { ownerId, ownerCookie, otherOwnerId, request } = input;
   const check = (value: unknown, code: string) => assert.ok(value, code);
   const account = randomUUID(), other = randomUUID(), foreign = randomUUID();
   const group = randomUUID(), otherGroup = randomUUID(), foreignGroup = randomUUID();
   const ids = Array.from({ length: 5 }, () => randomUUID());
   const kept = randomUUID(), foreignCampaign = randomUUID();
   const log = randomUUID();
-  for (const [id, owner] of [[account, ownerId], [other, ownerId], [foreign, randomUUID()]]) {
+  // Every owner must be an existing app user: the real API deliberately blocks
+  // all authenticated workspace requests if legacy ownership is unmapped.
+  for (const [id, owner] of [[account, ownerId], [other, ownerId], [foreign, otherOwnerId]]) {
     await pool.query(`INSERT INTO telegram_accounts
       (id,owner_user_id,name,status,api_hash_encrypted,phone_encrypted,session_encrypted)
       VALUES($1,$2,'delete-fixture','connected','fixture','fixture','fixture')`, [id, owner]);
@@ -45,13 +47,13 @@ export async function testTelegramAccountDeletion(input: {
     VALUES($1,$2,'fixture','fixture',$3)`, [log, ownerId, ids[0]]);
 
   const foreignResponse = await request(`/telegram/accounts/${foreign}`, ownerCookie, {}, "DELETE");
-  check(foreignResponse.status === 404, `E2E_ACCOUNT_DELETE_OWNER_GUARD_HTTP_${foreignResponse.status}`);
+  check(foreignResponse.status === 404, "E2E_ACCOUNT_DELETE_OWNER_GUARD");
   check((await request(`/telegram/accounts/${account}`, undefined, {}, "DELETE")).status === 401,
     "E2E_ACCOUNT_DELETE_AUTH_GUARD");
   // Corrupt cross-owner references must roll back, never delete another owner's
   // campaign or leave this owner's campaigns partially removed.
   await pool.query(`INSERT INTO campaigns(id,owner_user_id,name,status)
-    VALUES($1,'foreign-fixture','foreign-fixture','paused')`, [foreignCampaign]);
+    VALUES($1,$2,'foreign-fixture','paused')`, [foreignCampaign, otherOwnerId]);
   await pool.query(`INSERT INTO campaign_targets(campaign_id,destination_id,status)
     VALUES($1,$2,'pending')`, [foreignCampaign, group]);
   await assert.rejects(() => deleteTelegramAccountData(account, ownerId));
