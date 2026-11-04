@@ -885,10 +885,8 @@ export default function Campaigns() {
       await deleteOne.mutateAsync(campaignToDelete.id);
       if (details?.id === campaignToDelete.id) setDetails(null);
       setCampaignToDelete(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getListCampaignsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getListCalendarItemsQueryKey() }),
-      ]);
+      // OperationsProgress reconciles confirmed deletions without reloading all
+      // summaries. Acceptance is not proof that the campaign is already gone.
       setToast(language==="vi"?"Đã tiếp nhận yêu cầu xoá. Xem tiến trình phía trên.":"Deletion accepted. See progress above.");
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
