@@ -777,10 +777,23 @@ paths:
       tags: [campaigns]
       parameters:
         - { name: jobId, in: path, required: true, schema: { type: string } }
-        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         "200":
           description: Persisted progress with up to 50 skip reasons from offset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
+        "404": { description: Operation not found for this administrator }
+  /campaigns/bulk-template/jobs/{jobId}/skipped/{offset}:
+    get:
+      operationId: getCampaignTemplateSkips
+      tags: [campaigns]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+        - { name: offset, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Up to 50 persisted skip reasons from the requested offset
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }

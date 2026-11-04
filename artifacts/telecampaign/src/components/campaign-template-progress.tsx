@@ -1,5 +1,5 @@
 import type { BulkCampaignTemplateResult } from "@workspace/api-client-react";
-import { getCampaignTemplateJob } from "@workspace/api-client-react";
+import { getCampaignTemplateSkips } from "@workspace/api-client-react";
 import { useEffect, useState } from "react";
 
 export function CampaignTemplateProgress({job,vi,waiting,problem,onRetry,onNew}:{
@@ -22,7 +22,7 @@ export function CampaignTemplateProgress({job,vi,waiting,problem,onRetry,onNew}:
   };
   async function page(nextOffset:number){
     setLoading(true);setPageError(false);
-    try{const result=await getCampaignTemplateJob(job.id,{offset:nextOffset});setRows(result.skipped);setOffset(nextOffset);}
+    try{const result=await getCampaignTemplateSkips(job.id,nextOffset);setRows(result.skipped);setOffset(nextOffset);}
     catch{setPageError(true);}finally{setLoading(false);}
   }
   return <section className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm" data-testid="campaign-template-progress" aria-live="polite">

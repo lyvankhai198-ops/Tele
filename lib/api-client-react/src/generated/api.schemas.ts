@@ -2819,13 +2819,6 @@ export interface AccountSummary {
   usage: AccountUsage;
 }
 
-export type GetCampaignTemplateJobParams = {
-/**
- * @minimum 0
- */
-offset?: number;
-};
-
 export type ListCalendarItemsParams = {
 from?: string;
 to?: string;

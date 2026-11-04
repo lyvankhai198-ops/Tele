@@ -1415,16 +1415,38 @@ export const GetCampaignTemplateJobParams = zod.object({
   "jobId": zod.coerce.string()
 })
 
-export const getCampaignTemplateJobQueryOffsetDefault = 0;
-export const getCampaignTemplateJobQueryOffsetMin = 0;
-
-
-
-export const GetCampaignTemplateJobQueryParams = zod.object({
-  "offset": zod.coerce.number().int().min(getCampaignTemplateJobQueryOffsetMin).default(getCampaignTemplateJobQueryOffsetDefault)
+export const GetCampaignTemplateJobResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skippedOffset": zod.number().int(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string(),
+  "defaultStatus": zod.enum(['not_applicable', 'pending', 'updated', 'skipped']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "finishedAt": zod.string().nullable(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
 })
 
-export const GetCampaignTemplateJobResponse = zod.object({
+
+export const getCampaignTemplateSkipsPathOffsetMin = 0;
+
+
+
+export const GetCampaignTemplateSkipsParams = zod.object({
+  "jobId": zod.coerce.string(),
+  "offset": zod.coerce.number().int().min(getCampaignTemplateSkipsPathOffsetMin)
+})
+
+export const GetCampaignTemplateSkipsResponse = zod.object({
   "id": zod.string(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
   "total": zod.number().int(),

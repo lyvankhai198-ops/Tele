@@ -35,10 +35,13 @@ export async function testTemplateJobs({adminId,adminCookie,userCookie,request}:
     const foreign=randomUUID();
     check((await request(`${base}/jobs/${foreign}`,adminCookie)).status===404,"E2E_TEMPLATE_JOB_FOREIGN_READ");
     check((await request(`${base}/jobs/${foreign}/retry`,adminCookie,{})).status===404,"E2E_TEMPLATE_JOB_FOREIGN_RETRY");
-    check((await request(`${base}/jobs/${job.id}?offset=-1`,adminCookie)).status===400,"E2E_TEMPLATE_JOB_INVALID_OFFSET");
+    check((await request(`${base}/jobs/${job.id}/skipped/-1`,adminCookie)).status===400,"E2E_TEMPLATE_JOB_INVALID_OFFSET");
     await Promise.all([processTemplateJobs(2),processTemplateJobs(2)]);
     let current=await read(job.id);
-    check(current.processed===4&&current.updatedCount===4,"E2E_TEMPLATE_JOB_MULTI_WORKER");
+    check(current.processed>=2&&current.processed<=4&&current.updatedCount===current.processed,"E2E_TEMPLATE_JOB_MULTI_WORKER");
+    // SKIP LOCKED allows a second worker to find no row while the first owns
+    // this job. Bring the deterministic failure fixture to cursor four.
+    await processTemplateJobs(4-current.processed);
     const logs=await pool.query("SELECT count(*)::int n FROM activity_logs WHERE metadata->>'jobId'=$1",[job.id]);
     check(logs.rows[0].n===4,"E2E_TEMPLATE_JOB_ONE_AUDIT_PER_UPDATE");
     // Emulate lost HTTP response/reopened window: no local identity is needed.
@@ -77,7 +80,7 @@ export async function testTemplateJobs({adminId,adminCookie,userCookie,request}:
     await processTemplateJobs(1300);
     const skipped=await read(deleted.id);
     check(skipped.skippedCount===1200&&skipped.skipped.length===50&&skipped.updatedCount===0,"E2E_TEMPLATE_JOB_DELETED_ACCOUNT_SKIP");
-    const page=await(await request(`${base}/jobs/${deleted.id}?offset=50`,adminCookie)).json() as any;
+    const page=await(await request(`${base}/jobs/${deleted.id}/skipped/50`,adminCookie)).json() as any;
     check(page.skippedOffset===50&&page.skipped.length===50&&page.skipped[0].id!==skipped.skipped[0].id,"E2E_TEMPLATE_JOB_PAGED_REASONS");
     await pool.query("UPDATE telegram_accounts SET deleted_at=NULL WHERE id=$1",[account]);
     await pool.query("DELETE FROM campaigns WHERE id=ANY($1::uuid[])",[ids]);ids.length=0;

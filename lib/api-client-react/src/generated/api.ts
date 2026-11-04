@@ -88,7 +88,6 @@ import type {
   DashboardSummary,
   Destination,
   GetAdminUserSupportCampaignTargetsParams,
-  GetCampaignTemplateJobParams,
   GetGroupLibraryParams,
   GroupLibraryAccess,
   HealthStatus,
@@ -3782,26 +3781,17 @@ export function useGetLatestCampaignTemplateJob<TData = Awaited<ReturnType<typeo
 
 
 
-export const getGetCampaignTemplateJobUrl = (jobId: string,
-    params?: GetCampaignTemplateJobParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getGetCampaignTemplateJobUrl = (jobId: string,) => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/campaigns/bulk-template/jobs/${jobId}?${stringifiedParams}` : `/api/campaigns/bulk-template/jobs/${jobId}`
+  return `/api/campaigns/bulk-template/jobs/${jobId}`
 }
 
-export const getCampaignTemplateJob = async (jobId: string,
-    params?: GetCampaignTemplateJobParams, options?: Parameters<typeof customFetch>[1]): Promise<BulkCampaignTemplateResult> => {
+export const getCampaignTemplateJob = async (jobId: string, options?: Parameters<typeof customFetch>[1]): Promise<BulkCampaignTemplateResult> => {
 
-  return customFetch<BulkCampaignTemplateResult>(getGetCampaignTemplateJobUrl(jobId,params),
+  return customFetch<BulkCampaignTemplateResult>(getGetCampaignTemplateJobUrl(jobId),
   {
     ...options,
     method: 'GET'
@@ -3814,25 +3804,23 @@ export const getCampaignTemplateJob = async (jobId: string,
 
 
 
-export const getGetCampaignTemplateJobQueryKey = (jobId: string,
-    params?: GetCampaignTemplateJobParams,) => {
+export const getGetCampaignTemplateJobQueryKey = (jobId: string,) => {
     return [
-    `/api/campaigns/bulk-template/jobs/${jobId}`, ...(params ? [params] : [])
+    `/api/campaigns/bulk-template/jobs/${jobId}`
     ] as const;
     }
 
 
-export const getGetCampaignTemplateJobQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError = ErrorType<void>>(jobId: string,
-    params?: GetCampaignTemplateJobParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCampaignTemplateJobQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError = ErrorType<void>>(jobId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetCampaignTemplateJobQueryKey(jobId,params);
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignTemplateJobQueryKey(jobId);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignTemplateJob>>> = ({ signal }) => getCampaignTemplateJob(jobId,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignTemplateJob>>> = ({ signal }) => getCampaignTemplateJob(jobId, { signal, ...requestOptions });
 
 
 
@@ -3847,12 +3835,87 @@ export type GetCampaignTemplateJobQueryError = ErrorType<void>
 
 
 export function useGetCampaignTemplateJob<TData = Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError = ErrorType<void>>(
- jobId: string,
-    params?: GetCampaignTemplateJobParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ jobId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateJob>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetCampaignTemplateJobQueryOptions(jobId,params,options)
+  const queryOptions = getGetCampaignTemplateJobQueryOptions(jobId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCampaignTemplateSkipsUrl = (jobId: string,
+    offset: number,) => {
+
+
+
+
+  return `/api/campaigns/bulk-template/jobs/${jobId}/skipped/${offset}`
+}
+
+export const getCampaignTemplateSkips = async (jobId: string,
+    offset: number, options?: Parameters<typeof customFetch>[1]): Promise<BulkCampaignTemplateResult> => {
+
+  return customFetch<BulkCampaignTemplateResult>(getGetCampaignTemplateSkipsUrl(jobId,offset),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignTemplateSkipsQueryKey = (jobId: string,
+    offset: number,) => {
+    return [
+    `/api/campaigns/bulk-template/jobs/${jobId}/skipped/${offset}`
+    ] as const;
+    }
+
+
+export const getGetCampaignTemplateSkipsQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignTemplateSkips>>, TError = ErrorType<void>>(jobId: string,
+    offset: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateSkips>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignTemplateSkipsQueryKey(jobId,offset);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignTemplateSkips>>> = ({ signal }) => getCampaignTemplateSkips(jobId,offset, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: jobId !== null && jobId !== undefined && offset !== null && offset !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateSkips>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignTemplateSkipsQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignTemplateSkips>>>
+export type GetCampaignTemplateSkipsQueryError = ErrorType<void>
+
+
+
+export function useGetCampaignTemplateSkips<TData = Awaited<ReturnType<typeof getCampaignTemplateSkips>>, TError = ErrorType<void>>(
+ jobId: string,
+    offset: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignTemplateSkips>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignTemplateSkipsQueryOptions(jobId,offset,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

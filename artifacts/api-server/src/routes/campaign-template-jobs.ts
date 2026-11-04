@@ -31,8 +31,8 @@ templateJobsRouter.post("/",async(req,res)=>{
 templateJobsRouter.get("/jobs/latest",async(req,res)=>{
   try {res.json(await latestTemplateJob(req.userId!));} catch(error){failure(res,error);}
 });
-templateJobsRouter.get("/jobs/:id",async(req,res)=>{
-  const offset=Number(req.query.offset ?? 0);
+templateJobsRouter.get(["/jobs/:id","/jobs/:id/skipped/:offset"],async(req,res)=>{
+  const offset=Number(req.params.offset ?? 0);
   if (!Number.isSafeInteger(offset) || offset<0) {res.status(400).json({error:"TEMPLATE_JOB_INVALID_REQUEST"});return;}
   try {
     const job=await getTemplateJob(req.userId!,String(req.params.id),offset);

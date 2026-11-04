@@ -156,7 +156,6 @@ export * from './dashboardMetricSummary';
 export * from './dashboardSummary';
 export * from './destination';
 export * from './getAdminUserSupportCampaignTargetsParams';
-export * from './getCampaignTemplateJobParams';
 export * from './getGroupLibraryParams';
 export * from './groupLibraryAccess';
 export * from './groupLibraryAccessMinimumJoinPlan';
