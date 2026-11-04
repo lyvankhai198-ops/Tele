@@ -55,6 +55,9 @@ for(const language of ["vi","en"]){
 test("empty successful responses and cached failed refreshes stay distinct from initial network failure",()=>{
   const empty=render({hasData:true,fetching:false,children:"ACTUAL EMPTY RESULT"});
   assert.match(text(empty),/ACTUAL EMPTY RESULT/);
+  const pendingEmpty=render({hasData:true,fetching:true,empty:true,children:"ACTUAL EMPTY RESULT"});
+  assert.doesNotMatch(text(pendingEmpty),/ACTUAL EMPTY RESULT/);
+  assert.match(text(pendingEmpty),/Đang kiểm tra kết quả mới/);
   const error=render({failed:true,fetching:false});
   assert.match(text(error),/không phải kết quả danh sách trống/);
   assert.doesNotMatch(text(error),/REAL CAMPAIGN DATA/);

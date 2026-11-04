@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-export function CampaignListFeedback({language,hasData,fetching,failed,filtered,children}:{
-  language:"vi"|"en";hasData:boolean;fetching:boolean;failed:boolean;filtered:boolean;children:ReactNode;
+export function CampaignListFeedback({language,hasData,fetching,failed,filtered,empty=false,children}:{
+  language:"vi"|"en";hasData:boolean;fetching:boolean;failed:boolean;filtered:boolean;empty?:boolean;children:ReactNode;
 }) {
   const vi=language==="vi";
   const initial=!hasData&&!failed;
@@ -27,14 +27,14 @@ export function CampaignListFeedback({language,hasData,fetching,failed,filtered,
           </div>
         </div>)}
       </div>
-    </> : <ViewWithData language={language} hasData={hasData} fetching={fetching} failed={failed} filtered={filtered}>
+    </> : <ViewWithData language={language} hasData={hasData} fetching={fetching} failed={failed} filtered={filtered} empty={empty}>
       {children}
     </ViewWithData>}
   </div>;
 }
 
-function ViewWithData({language,hasData,fetching,failed,filtered,children}:{
-  language:"vi"|"en";hasData:boolean;fetching:boolean;failed:boolean;filtered:boolean;children:ReactNode;
+function ViewWithData({language,hasData,fetching,failed,filtered,empty,children}:{
+  language:"vi"|"en";hasData:boolean;fetching:boolean;failed:boolean;filtered:boolean;empty:boolean;children:ReactNode;
 }) {
   const vi=language==="vi";
   if(!hasData)return <p role="status" className="px-4 py-8 text-center text-sm leading-relaxed text-slate-600">
@@ -56,6 +56,8 @@ function ViewWithData({language,hasData,fetching,failed,filtered,children}:{
         {vi?"Chưa cập nhật được dữ liệu mới; danh sách gần nhất vẫn được giữ lại.":"Fresh data is temporarily unavailable; the last available list is still displayed."}
       </p>}
     </div>
-    <div>{children}</div>
+    <div>{fetching&&empty
+      ? <p className="px-4 py-8 text-center text-sm text-slate-500">{vi?"Đang kiểm tra kết quả mới…":"Checking for fresh results…"}</p>
+      : children}</div>
   </>;
 }

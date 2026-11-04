@@ -973,7 +973,7 @@ export default function Campaigns() {
 
         <Panel className="overflow-hidden">
           <CampaignListFeedback language={language} hasData={campaigns.data!==undefined}
-            fetching={campaigns.isFetching} failed={campaigns.isError} filtered={Boolean(search.trim()||status!=="all")}>
+            fetching={campaigns.isFetching} failed={campaigns.isError} filtered={Boolean(search.trim()||status!=="all")} empty={!listedCampaigns.length}>
           {listedCampaigns.length
               ? <div className="divide-y divide-[#eef2f6]">{listedCampaigns.map((campaign) => {
                   const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
