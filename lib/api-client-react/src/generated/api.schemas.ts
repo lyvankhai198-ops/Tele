@@ -5,6 +5,88 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type BackgroundOperationInputKind = typeof BackgroundOperationInputKind[keyof typeof BackgroundOperationInputKind];
+
+
+export const BackgroundOperationInputKind = {
+  delete_account: 'delete_account',
+  delete_campaigns: 'delete_campaigns',
+  sync_groups: 'sync_groups',
+} as const;
+
+export type BackgroundOperationInputStatus = typeof BackgroundOperationInputStatus[keyof typeof BackgroundOperationInputStatus];
+
+
+export const BackgroundOperationInputStatus = {
+  all: 'all',
+  queued: 'queued',
+  running: 'running',
+  paused: 'paused',
+  completed: 'completed',
+  completed_with_errors: 'completed_with_errors',
+  draft: 'draft',
+  cancelled: 'cancelled',
+} as const;
+
+export interface BackgroundOperationInput {
+  kind: BackgroundOperationInputKind;
+  accountId?: string;
+  campaignId?: string;
+  telegramAccountId?: string;
+  status?: BackgroundOperationInputStatus;
+  /** @maxLength 160 */
+  search?: string;
+  confirm?: boolean;
+}
+
+export type BackgroundOperationKind = typeof BackgroundOperationKind[keyof typeof BackgroundOperationKind];
+
+
+export const BackgroundOperationKind = {
+  delete_account: 'delete_account',
+  delete_campaigns: 'delete_campaigns',
+  sync_groups: 'sync_groups',
+  prepare_campaign: 'prepare_campaign',
+} as const;
+
+export type BackgroundOperationState = typeof BackgroundOperationState[keyof typeof BackgroundOperationState];
+
+
+export const BackgroundOperationState = {
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type BackgroundOperationUnit = typeof BackgroundOperationUnit[keyof typeof BackgroundOperationUnit];
+
+
+export const BackgroundOperationUnit = {
+  records: 'records',
+  groups: 'groups',
+  deliveries: 'deliveries',
+} as const;
+
+export interface BackgroundOperation {
+  id: string;
+  kind: BackgroundOperationKind;
+  label: string;
+  accountId?: string;
+  campaignId?: string;
+  state: BackgroundOperationState;
+  phase: string;
+  processed: number;
+  stageProcessed?: number;
+  /** @nullable */
+  total: number | null;
+  unit: BackgroundOperationUnit;
+  /** @nullable */
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ReleaseContent {
   /**
      * @minLength 1

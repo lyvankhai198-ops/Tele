@@ -17,6 +17,39 @@ tags:
   - name: activity
   - name: admin
 paths:
+  /operations:
+    get:
+      operationId: listOperations
+      responses:
+        "200":
+          description: Owned background operations and real progress
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/BackgroundOperation"}}
+    post:
+      operationId: createOperation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/BackgroundOperationInput"}
+      responses:
+        "202":
+          description: Accepted or existing operation
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/BackgroundOperation"}
+  /operations/{operationId}/retry:
+    post:
+      operationId: retryOperation
+      parameters:
+        - {name: operationId, in: path, required: true, schema: {type: string}}
+      responses:
+        "202":
+          description: Same operation resumed from its committed checkpoint
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/BackgroundOperation"}
   /admin/release-updates:
     get:
       operationId: listReleaseUpdates
@@ -2194,6 +2227,35 @@ components:
       required: true
       schema: { type: string }
   schemas:
+    BackgroundOperationInput:
+      type: object
+      required: [kind]
+      properties:
+        kind: {type: string, enum: [delete_account, delete_campaigns, sync_groups]}
+        accountId: {type: string, format: uuid}
+        campaignId: {type: string, format: uuid}
+        telegramAccountId: {type: string, format: uuid}
+        status: {type: string, enum: [all, queued, running, paused, completed, completed_with_errors, draft, cancelled]}
+        search: {type: string, maxLength: 160}
+        confirm: {type: boolean}
+    BackgroundOperation:
+      type: object
+      required: [id, kind, label, state, phase, processed, total, unit, error, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        kind: {type: string, enum: [delete_account, delete_campaigns, sync_groups, prepare_campaign]}
+        label: {type: string}
+        accountId: {type: string}
+        campaignId: {type: string}
+        state: {type: string, enum: [queued, running, completed, failed]}
+        phase: {type: string}
+        processed: {type: integer}
+        stageProcessed: {type: integer}
+        total: {type: [integer, "null"]}
+        unit: {type: string, enum: [records, groups, deliveries]}
+        error: {type: [string, "null"]}
+        createdAt: {type: string}
+        updatedAt: {type: string}
     ReleaseContent:
       type: object
       required: [title, vi, en]

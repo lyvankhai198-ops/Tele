@@ -69,6 +69,8 @@ import type {
   AuthCaptcha,
   AuthLanguageInput,
   AuthUser,
+  BackgroundOperation,
+  BackgroundOperationInput,
   BulkCampaignControlInput,
   BulkCampaignControlResult,
   BulkCampaignTemplateInput,
@@ -188,6 +190,207 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListOperationsUrl = () => {
+
+
+
+
+  return `/api/operations`
+}
+
+export const listOperations = async ( options?: Parameters<typeof customFetch>[1]): Promise<BackgroundOperation[]> => {
+
+  return customFetch<BackgroundOperation[]>(getListOperationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOperationsQueryKey = () => {
+    return [
+    `/api/operations`
+    ] as const;
+    }
+
+
+export const getListOperationsQueryOptions = <TData = Awaited<ReturnType<typeof listOperations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOperationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOperations>>> = ({ signal }) => listOperations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOperations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOperationsQueryResult = NonNullable<Awaited<ReturnType<typeof listOperations>>>
+export type ListOperationsQueryError = ErrorType<unknown>
+
+
+
+export function useListOperations<TData = Awaited<ReturnType<typeof listOperations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOperations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOperationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateOperationUrl = () => {
+
+
+
+
+  return `/api/operations`
+}
+
+export const createOperation = async (backgroundOperationInput: BackgroundOperationInput, options?: Parameters<typeof customFetch>[1]): Promise<BackgroundOperation> => {
+
+  return customFetch<BackgroundOperation>(getCreateOperationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(backgroundOperationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateOperationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOperation>>, TError,{data: BodyType<BackgroundOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOperation>>, TError,{data: BodyType<BackgroundOperationInput>}, TContext> => {
+
+const mutationKey = ['createOperation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOperation>>, {data: BodyType<BackgroundOperationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createOperation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOperationMutationResult = NonNullable<Awaited<ReturnType<typeof createOperation>>>
+    export type CreateOperationMutationBody = BodyType<BackgroundOperationInput>
+    export type CreateOperationMutationError = ErrorType<unknown>
+
+    export const useCreateOperation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOperation>>, TError,{data: BodyType<BackgroundOperationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createOperation>>,
+        TError,
+        {data: BodyType<BackgroundOperationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateOperationMutationOptions(options));
+    }
+
+export const getRetryOperationUrl = (operationId: string,) => {
+
+
+
+
+  return `/api/operations/${operationId}/retry`
+}
+
+export const retryOperation = async (operationId: string, options?: Parameters<typeof customFetch>[1]): Promise<BackgroundOperation> => {
+
+  return customFetch<BackgroundOperation>(getRetryOperationUrl(operationId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryOperationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryOperation>>, TError,{operationId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryOperation>>, TError,{operationId: string}, TContext> => {
+
+const mutationKey = ['retryOperation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryOperation>>, {operationId: string}> = (props) => {
+          const {operationId} = props ?? {};
+
+          return  retryOperation(operationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryOperationMutationResult = NonNullable<Awaited<ReturnType<typeof retryOperation>>>
+
+    export type RetryOperationMutationError = ErrorType<unknown>
+
+    export const useRetryOperation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryOperation>>, TError,{operationId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryOperation>>,
+        TError,
+        {operationId: string},
+        TContext
+      > => {
+      return useMutation(getRetryOperationMutationOptions(options));
+    }
 
 export const getListReleaseUpdatesUrl = () => {
 
