@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { claimCampaignCompletion } from "./campaign-completion-receipt";
 import {
   bulkUpdateCampaignTemplate, getCampaignTemplateJob, getLatestCampaignTemplateJob, retryCampaignTemplateJob,
   type BulkCampaignTemplateInput, type BulkCampaignTemplateResult,
@@ -11,7 +12,6 @@ export function useTemplateJob(owner: string | undefined, enabled: boolean, onFi
   const [uncertain,setUncertain]=useState(false);
   const [problem,setProblem]=useState(false);
   const [request,setRequest]=useState<Pending|null>(null);
-  const lastFinished=useRef("");
   const completed=useRef(onFinished);completed.current=onFinished;
   const identity=useRef(owner);identity.current=owner;
   const storageKey=`telecamp-template-job:${owner ?? "anonymous"}`;
@@ -19,13 +19,11 @@ export function useTemplateJob(owner: string | undefined, enabled: boolean, onFi
   function remember(next: BulkCampaignTemplateResult) {
     setJob(next);setProblem(false);setUncertain(false);
     try {localStorage.setItem(storageKey,JSON.stringify({id:next.id}));}catch{/* private browsing */}
-    if ((next.status==="completed" || next.status==="failed") && lastFinished.current!==`${next.id}:${next.status}`) {
-      lastFinished.current=`${next.id}:${next.status}`;completed.current();
-    }
+    if(claimCampaignCompletion(owner??"","template",next))completed.current();
   }
   useEffect(()=>{
     let disposed=false;
-    setJob(null);setRequest(null);setUncertain(false);setWaiting(enabled);setProblem(false);lastFinished.current="";
+    setJob(null);setRequest(null);setUncertain(false);setWaiting(enabled);setProblem(false);
     if (!enabled || !owner) {setWaiting(false);return;}
     void(async()=>{
       try {

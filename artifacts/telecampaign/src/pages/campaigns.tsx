@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { campaignDeleteError } from "@/lib/campaign-delete-error";
 import { campaignBulkError } from "@/lib/campaign-bulk-error";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,6 +38,7 @@ import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { useTemplateJob } from "@/lib/use-template-job";
 import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
 import { CampaignListFeedback } from "@/components/campaign-list-feedback";
+import { claimCampaignCompletion, wasCampaignCompletionHandled } from "@/lib/campaign-completion-receipt";
 import { useCompleteCampaigns } from "@/lib/use-complete-campaigns";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
@@ -526,7 +527,6 @@ export default function Campaigns() {
   const [onlySendable,setOnlySendable]=useState(true);
   const [autoDeleteInvalid,setAutoDeleteInvalid]=useState(false);
   const [bulkRetrying, setBulkRetrying] = useState(false);
-  const lastBulkCompletion = useRef<string | null>(null);
   const bulkRequestId = useMemo(() => crypto.randomUUID(), [
     bulkResumeOpen, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
   ]);
@@ -547,7 +547,10 @@ export default function Campaigns() {
       try {
         const job = saved ? await getCampaignBulkJob(saved).catch(() => getActiveCampaignBulkJob())
           : await getActiveCampaignBulkJob();
-        if (!disposed && job) { rememberBulkJob(job); setBulkResumeOpen(true); }
+        if (!disposed && job) {
+          rememberBulkJob(job);
+          if(!wasCampaignCompletionHandled(bulkStorageKey,"rerun",job))setBulkResumeOpen(true);
+        }
       } catch { /* no access or no saved operation; no automatic resubmission */ }
     })();
     return () => { disposed = true; };
@@ -560,8 +563,7 @@ export default function Campaigns() {
         const next = await getCampaignBulkJob(bulkJob!.id);
         if (disposed) return;
         setBulkJob(next);
-        if ((next.status === "completed" || next.status === "failed") && lastBulkCompletion.current !== `${next.id}:${next.status}`) {
-          lastBulkCompletion.current = `${next.id}:${next.status}`;
+        if (claimCampaignCompletion(bulkStorageKey,"rerun",next)) {
           void campaigns.refetch();
           void queryClient.invalidateQueries({queryKey: getListCalendarItemsQueryKey()});
           setToast(next.status === "completed" ? c.bulkResumedResult(next.updatedCount, next.skippedCount)
