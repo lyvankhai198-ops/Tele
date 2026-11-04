@@ -1513,13 +1513,15 @@ export const RetryCampaignBulkJobResponse = zod.object({
 
 
 
+
 export const bulkUpdateCampaignTemplateBodyRequestIdRegExp = new RegExp('^[a-zA-Z0-9-]{16,80}$');
 
 
 export const BulkUpdateCampaignTemplateBody = zod.object({
   "templateId": zod.string().min(1),
+  "campaignIds": zod.array(zod.string().uuid()).min(1).describe('Explicitly selected owned campaign IDs. Never infer selection from names or filters.'),
   "requestId": zod.string().regex(bulkUpdateCampaignTemplateBodyRequestIdRegExp).optional().describe('Persist this identity before submitting and reuse it after a lost response.'),
-  "telegramAccountId": zod.string().uuid().optional().describe('Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update.')
+  "telegramAccountId": zod.string().uuid().describe('Required owned Telegram account. Every selected campaign must belong to this account. Never changes the shared future-campaign default.')
 })
 
 export const BulkUpdateCampaignTemplateResponse = zod.object({

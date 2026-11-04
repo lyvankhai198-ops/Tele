@@ -39,6 +39,7 @@ import {
 import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { useTemplateJob } from "@/lib/use-template-job";
 import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
+import { CampaignTemplateSelector } from "@/components/campaign-template-selector";
 import { CampaignListFeedback } from "@/components/campaign-list-feedback";
 import { claimCampaignCompletion, wasCampaignCompletionHandled } from "@/lib/campaign-completion-receipt";
 import { useCompleteCampaigns } from "@/lib/use-complete-campaigns";
@@ -91,13 +92,13 @@ const copy = {
     bulkStartTimeLabel: "First start time",
     bulkApply: "Run selected campaigns",
     bulkCancel: "Cancel",
-    bulkTemplateTitle: "Change automatic campaign templates",
-    bulkTemplateDetail: "Only campaigns whose name starts with “Tự động” and are Draft, Paused, Queued, or Running are included. Other campaigns are not changed.",
+    bulkTemplateTitle: "Bulk message template change",
+    bulkTemplateDetail: "Choose an account, select campaigns and preview the new template. Any campaign name or status is allowed, including completed campaigns. This does not restart campaigns or change schedules, delays or sent-message history.",
     bulkTemplateAccount: "Telegram account",
     bulkTemplateAllAccounts: "All Telegram accounts",
-    bulkTemplateAccountHint: "Only matching campaigns for this account are included. The shared default for future campaigns stays unchanged. Incompatible forward templates will be skipped.",
-    bulkTemplateAllAccountsHint: "Applies across all accounts and also changes the shared template default for future automatic campaigns. Incompatible forward templates will be skipped.",
-    bulkTemplateOwnAccountsHint: "Applies only to your eligible automatic campaigns. The system-wide default template stays unchanged.",
+    bulkTemplateAccountHint: "Only campaigns you select for this account will change. The shared default stays unchanged, including for admins. Incompatible forward templates are skipped with a reason.",
+    bulkTemplateAllAccountsHint: "Choose one Telegram account before selecting campaigns. This action never changes the shared default.",
+    bulkTemplateOwnAccountsHint: "Only explicitly selected campaigns change; the shared default stays unchanged.",
     bulkTemplateEmptyAccount: "No eligible automatic campaigns for this account.",
     bulkTemplateStatuses: "Draft, Paused, Queued and Running campaigns are checked by name prefix.",
     bulkTemplateLabel: "New message template",
@@ -248,13 +249,13 @@ const copy = {
     bulkStartTimeLabel: "Giờ bắt đầu đầu tiên",
     bulkApply: "Chạy các chiến dịch đã chọn",
     bulkCancel: "Hủy",
-    bulkTemplateTitle: "Đổi mẫu tin chiến dịch tự động",
-    bulkTemplateDetail: "Chỉ campaign có tên bắt đầu bằng “Tự động” và đang ở trạng thái Bản nháp, Tạm dừng, Đang chờ hoặc Đang chạy mới được đổi. Campaign khác không bị tác động.",
+    bulkTemplateTitle: "Đổi mẫu tin hàng loạt",
+    bulkTemplateDetail: "Chọn tài khoản, tích chiến dịch và xem trước mẫu mới. Không giới hạn tên hay trạng thái, kể cả chiến dịch đã hoàn thành. Không tự chạy lại, không đổi lịch, delay hoặc lịch sử tin đã gửi.",
     bulkTemplateAccount: "Tài khoản Telegram",
     bulkTemplateAllAccounts: "Tất cả tài khoản Telegram",
-    bulkTemplateAccountHint: "Chỉ áp dụng cho chiến dịch phù hợp của tài khoản này; không đổi mẫu mặc định chung cho chiến dịch tạo sau. Mẫu forward không đúng tài khoản sẽ được bỏ qua.",
-    bulkTemplateAllAccountsHint: "Áp dụng trên tất cả tài khoản và đổi cả mẫu mặc định chung cho chiến dịch tự động tạo sau. Mẫu forward không đúng tài khoản sẽ được bỏ qua.",
-    bulkTemplateOwnAccountsHint: "Chỉ áp dụng cho chiến dịch tự động đủ điều kiện của bạn. Không đổi mẫu mặc định chung của hệ thống.",
+    bulkTemplateAccountHint: "Chỉ đổi những chiến dịch bạn tích của tài khoản này. Không đổi mẫu mặc định chung, kể cả admin. Mẫu forward không tương thích được bỏ qua và báo lý do.",
+    bulkTemplateAllAccountsHint: "Chọn một tài khoản Telegram trước khi tích chiến dịch. Thao tác này không đổi mẫu mặc định chung.",
+    bulkTemplateOwnAccountsHint: "Chỉ đổi các chiến dịch được tích chọn; không đổi mẫu mặc định chung.",
     bulkTemplateEmptyAccount: "Tài khoản này không có chiến dịch tự động đủ điều kiện.",
     bulkTemplateStatuses: "Bản nháp, Tạm dừng, Đang chờ và Đang chạy được kiểm tra theo đúng tiền tố tên.",
     bulkTemplateLabel: "Mẫu tin nhắn mới",
@@ -587,6 +588,7 @@ export default function Campaigns() {
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateId, setBulkTemplateId] = useState("");
   const [bulkTemplateAccountId, setBulkTemplateAccountId] = useState("");
+  const [bulkTemplateCampaignIds,setBulkTemplateCampaignIds]=useState<string[]>([]);
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
     query: { enabled: Boolean(forwardCampaign?.id) } as any,
   });
@@ -637,11 +639,13 @@ export default function Campaigns() {
     if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
     return (["draft", "queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
   }, [listedCampaigns, status]);
-  const automaticCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) =>
-    campaign.name.startsWith("Tự động")
-    && ["draft", "paused", "queued", "running"].includes(campaign.status)
-    && (!bulkTemplateAccountId || campaign.telegramAccountId === bulkTemplateAccountId),
+  const templateCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) =>
+    Boolean(bulkTemplateAccountId) && campaign.telegramAccountId === bulkTemplateAccountId,
   ), [campaigns.data, bulkTemplateAccountId]);
+  const bulkSelectedIds=useMemo(()=>{
+    const available=new Set(templateCampaigns.map(campaign=>campaign.id));
+    return bulkTemplateCampaignIds.filter(id=>available.has(id));
+  },[templateCampaigns,bulkTemplateCampaignIds]);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
@@ -797,25 +801,20 @@ export default function Campaigns() {
       return;
     }
     if(campaignDataBlocked)return;
-    if (!(campaigns.data ?? []).some((campaign) => campaign.name.startsWith("Tự động")
-      && ["draft", "paused", "queued", "running"].includes(campaign.status)
-      && (!accountFilter || campaign.telegramAccountId===accountFilter))) {
-      setToast(c.bulkTemplateNoCandidates);
-      return;
-    }
     setBulkTemplateId("");
     setBulkTemplateAccountId(accountFilter);
+    setBulkTemplateCampaignIds([]);
     setBulkTemplateOpen(true);
   }
 
   async function submitBulkTemplate() {
     if(campaignDataBlocked)return;
     if (templateProgress.blocked) return;
-    if (!bulkTemplateId) {
+    if (!bulkTemplateId || !bulkTemplateAccountId || !bulkSelectedIds.length) {
       setToast(c.bulkTemplateNoTemplates);
       return;
     }
-    await templateProgress.start(bulkTemplateId, bulkTemplateAccountId);
+    await templateProgress.start(bulkTemplateId, bulkTemplateAccountId,bulkSelectedIds);
   }
 
   function requestQueue(campaign: Campaign) {
@@ -999,7 +998,7 @@ export default function Campaigns() {
             >
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {templateProgress.job || templateProgress.uncertain
-                ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tin tự động":"Auto templates")}
+                ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tin hàng loạt":"Bulk templates")}
             </button>
             <button
               type="button"
@@ -1274,7 +1273,7 @@ export default function Campaigns() {
             {templateProgress.job && <CampaignTemplateProgress
               job={templateProgress.job} vi={language==="vi"} waiting={templateProgress.waiting}
               problem={templateProgress.problem} onRetry={()=>void templateProgress.retry()}
-              onNew={()=>{templateProgress.clear();setBulkTemplateId("");setBulkTemplateAccountId("");}}
+              onNew={()=>{templateProgress.clear();setBulkTemplateId("");setBulkTemplateAccountId("");setBulkTemplateCampaignIds([]);}}
             />}
             {templateProgress.uncertain && <div className="space-y-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
               <p>{language==="vi"?"Chưa nhận được xác nhận. Đừng tạo yêu cầu mới; hãy kiểm tra hoặc gửi lại đúng yêu cầu đã lưu.":"Acceptance is unconfirmed. Do not start another operation; check progress or recover the saved request."}</p>
@@ -1284,37 +1283,30 @@ export default function Campaigns() {
             </div>}
             {!templateProgress.job && !templateProgress.uncertain && <>
             {templateProgress.problem&&<p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
-              {language==="vi"?"Chưa thể bắt đầu. Hãy kiểm tra lại tài khoản, mẫu tin và quyền quản trị trước khi thử lại.":"Could not start. Check the selected account, template and administrator permissions before retrying."}
+              {language==="vi"?"Chưa thể bắt đầu. Hãy kiểm tra lại tài khoản, mẫu tin và danh sách chiến dịch đã chọn.":"Could not start. Check the selected account, template and campaign selection."}
             </p>}
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkTemplateAccount}</span>
               <select
                 value={bulkTemplateAccountId}
-                onChange={(event) => setBulkTemplateAccountId(event.target.value)}
+                onChange={(event) => {setBulkTemplateAccountId(event.target.value);setBulkTemplateCampaignIds([]);}}
                 disabled={bulkTemplate.isPending || accounts.isLoading}
                 className="w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2.5 text-[13px] font-semibold outline-none focus:border-[#2233aa]"
                 data-testid="campaigns-bulk-template-account-select"
               >
-                <option value="">{c.bulkTemplateAllAccounts}</option>
+                <option value="">{language==="vi"?"Chọn tài khoản Telegram":"Select a Telegram account"}</option>
                 {(accounts.data ?? []).map((account) => (
                   <option key={account.id} value={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>
                 ))}
               </select>
               <p className="mt-2 text-[12px] leading-relaxed text-[#64748b]">
-                {bulkTemplateAccountId ? c.bulkTemplateAccountHint : isAdmin ? c.bulkTemplateAllAccountsHint : c.bulkTemplateOwnAccountsHint}
+                {bulkTemplateAccountId ? c.bulkTemplateAccountHint : c.bulkTemplateAllAccountsHint}
               </p>
             </label>
-            <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-[13px] font-semibold leading-relaxed text-[#1e3a8a]">
-              <p className="font-extrabold">{c.bulkTemplateScope(automaticCampaigns.length)}</p>
-              <p className="mt-1 text-[12px] font-medium">{c.bulkTemplateStatuses}</p>
-              <div className="mt-3 space-y-1 text-[12px]">
-                {automaticCampaigns.slice(0, 8).map((campaign) => (
-                  <p key={campaign.id} className="truncate">• {campaign.name}</p>
-                ))}
-                {automaticCampaigns.length > 8 && <p>{c.bulkTemplatePreviewMore(automaticCampaigns.length - 8)}</p>}
-                {!automaticCampaigns.length && <p>{c.bulkTemplateEmptyAccount}</p>}
-              </div>
-            </div>
+            {bulkTemplateAccountId&&<CampaignTemplateSelector key={bulkTemplateAccountId}
+              campaigns={templateCampaigns} selected={bulkSelectedIds} onChange={setBulkTemplateCampaignIds}
+              language={language} disabled={bulkTemplate.isPending}
+              templateNames={Object.fromEntries((templates.data??[]).map(template=>[template.id,template.name]))}/>}
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkTemplateLabel}</span>
               <select
@@ -1330,6 +1322,12 @@ export default function Campaigns() {
                 ))}
               </select>
             </label>
+            {bulkTemplateId&&(()=>{const selected=(templates.data??[]).find(template=>template.id===bulkTemplateId);return selected&&
+              <section className="rounded-xl border border-indigo-200 bg-indigo-50 p-3" data-testid="campaign-template-preview">
+                <p className="text-sm font-bold text-indigo-900">{language==="vi"?"Xem trước mẫu mới":"New template preview"} · {selected.name}</p>
+                {selected.mode==="forward"&&<p className="mt-1 text-xs text-indigo-700">{language==="vi"?"Forward — phải đúng tài khoản nguồn":"Forward — the source account must match"}</p>}
+                <p className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-sm text-slate-700">{selected.content||(language==="vi"?"Nội dung lấy từ tin nhắn nguồn.":"Content comes from the source message.")}</p>
+              </section>;})()}
             {!templates.data?.length && <p className="rounded-xl bg-[#fff7ed] px-3.5 py-3 text-[12px] font-semibold text-[#9a3412]">{c.bulkTemplateNoTemplates}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button
@@ -1343,10 +1341,10 @@ export default function Campaigns() {
               <PrimaryButton
                 type="button"
                 onClick={() => void submitBulkTemplate()}
-                disabled={campaignDataBlocked || !bulkTemplateId || bulkTemplate.isPending || !automaticCampaigns.length}
+                disabled={campaignDataBlocked || !bulkTemplateId || !bulkTemplateAccountId || bulkTemplate.isPending || !bulkSelectedIds.length}
               >
                 {bulkTemplate.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                {c.bulkTemplateApply}
+                {language==="vi"?`Đổi mẫu cho ${bulkSelectedIds.length} chiến dịch`:`Change templates for ${bulkSelectedIds.length} campaigns`}
               </PrimaryButton>
             </div>
             </>}

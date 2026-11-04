@@ -15,7 +15,7 @@ templateJobsRouter.use((req,res,next)=>{
 });
 function failure(res: any, error: unknown) {
   const code=(error as Error).message;
-  if (["TEMPLATE_JOB_ACCOUNT_NOT_FOUND","TEMPLATE_JOB_TEMPLATE_NOT_FOUND"].includes(code)) {
+  if (["TEMPLATE_JOB_ACCOUNT_NOT_FOUND","TEMPLATE_JOB_TEMPLATE_NOT_FOUND","TEMPLATE_JOB_CAMPAIGNS_NOT_FOUND"].includes(code)) {
     res.status(404).json({error:code});
   } else if (["TEMPLATE_JOB_BUSY","TEMPLATE_JOB_CONFLICT","TEMPLATE_JOB_REQUEST_CHANGED"].includes(code) ||
     ["55P03","57014","40P01","40001"].includes((error as {code?:string}).code ?? "")) {
@@ -27,7 +27,7 @@ templateJobsRouter.post("/",async(req,res)=>{
   const body=BulkUpdateCampaignTemplateBody.safeParse(req.body);
   if (!body.success) {res.status(400).json({error:"TEMPLATE_JOB_INVALID_REQUEST"});return;}
   try {
-    const job=await createTemplateJob({...body.data,owner:req.userId!,updateGlobalDefault:req.authUser?.role==="admin"});
+    const job=await createTemplateJob({...body.data,owner:req.userId!});
     res.status(202).json(job);
   } catch(error) {failure(res,error);}
 });
