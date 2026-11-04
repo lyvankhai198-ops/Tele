@@ -28,6 +28,7 @@ import { useLocation, useSearch } from "wouter";
 import { NotificationDetailModal } from "@/components/NotificationDetailModal";
 import { QuickSendWizard } from "@/components/quick-send-wizard";
 import { shouldShowQuickSend } from "@/lib/onboarding";
+import { campaignStatusSource } from "@/lib/campaign-status";
 
 export default function Dashboard() {
   const { language, t, ti } = useLanguage();
@@ -237,7 +238,7 @@ export default function Dashboard() {
                   <div key={camp.id} className="flex justify-between items-center px-6 py-4 bg-white hover:bg-[#f8fafc] transition-colors" data-testid={`campaign-${camp.id}`}>
                     <span className="text-[15px] font-extrabold text-[#1a2b88] truncate pr-4">{camp.name}</span>
                     <span className={`shrink-0 px-3.5 py-1.5 text-[11px] font-extrabold uppercase rounded-full tracking-wider ${getCampaignStatusColor(camp.status)}`}>
-                      {t(camp.status)}
+                      {t(campaignStatusSource(camp.status))}
                     </span>
                   </div>
                 ))}

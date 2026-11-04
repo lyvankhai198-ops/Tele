@@ -84,6 +84,41 @@ test("catalog loading is deduplicated and all registered source keys render", as
   }
 });
 
+test("dashboard renders API campaign statuses in all locales without changing transport data", async () => {
+  const { campaignStatusSource } = load("campaign-status");
+  const statuses = Object.freeze(["draft", "running", "paused", "completed", "failed", "scheduled"]);
+  for (const { code } of locales.interfaceLocales) {
+    await runtime.loadInterfaceCatalog(code);
+    for (const status of statuses) {
+      const label = campaignStatusSource(status);
+      assert.notEqual(label, status);
+      assert.equal(typeof runtime.interfaceText(label, code), "string");
+    }
+  }
+  assert.equal(campaignStatusSource("constructor"), "—");
+  assert.equal(campaignStatusSource("future_status"), "—");
+  const dashboard = fs.readFileSync(path.join(sourceRoot, "../pages/dashboard.tsx"), "utf8");
+  assert.match(dashboard, /t\(campaignStatusSource\(camp\.status\)\)/u);
+  assert.doesNotMatch(dashboard, /t\(camp\.status\)/u);
+});
+
+test("nested page and layout translations accept the selected locale's existing labels", async () => {
+  for (const { code } of locales.interfaceLocales) {
+    await runtime.loadInterfaceCatalog(code);
+    for (const label of ["Dashboard", "Running", "Completed", "Campaigns"]) {
+      const displayed = runtime.interfaceText(label, code);
+      assert.equal(runtime.interfaceText(displayed, code), displayed, `${code}: ${label}`);
+    }
+  }
+});
+
+test("authored notifications remain untouched but unknown system copy remains explicit", async () => {
+  await runtime.loadInterfaceCatalog("bn");
+  const authored = "Custom customer-facing announcement, not a system translation key.";
+  assert.equal(runtime.interfaceSystemNotification(authored, "bn", true), authored);
+  assert.throws(() => runtime.interfaceSystemNotification(authored, "bn", false), /MISSING_INTERFACE_TRANSLATION/u);
+});
+
 test("localized choices retain exact transport values, IDs and handlers", async () => {
   await runtime.loadInterfaceCatalog("bn");
   const handler = () => "unchanged";
