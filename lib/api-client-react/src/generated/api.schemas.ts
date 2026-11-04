@@ -526,6 +526,12 @@ export interface MessageTemplateUpdateInput {
   sourceMessageId?: string | null;
 }
 
+export interface CampaignLoadManifest {
+  campaignIds: string[];
+  /** @minimum 0 */
+  total: number;
+}
+
 export type CampaignTemplateMode = typeof CampaignTemplateMode[keyof typeof CampaignTemplateMode];
 
 
@@ -618,6 +624,11 @@ export interface Campaign {
   dailyQuota: CampaignDailyQuota;
   destinationIds: string[];
   errors: CampaignTargetError[];
+}
+
+export interface CampaignLoadBatch {
+  campaigns: Campaign[];
+  missingIds: string[];
 }
 
 export type CampaignInputTimingMode = typeof CampaignInputTimingMode[keyof typeof CampaignInputTimingMode];
@@ -2818,6 +2829,15 @@ export interface AccountSummary {
   subscription: Subscription;
   usage: AccountUsage;
 }
+
+export type GetCampaignLoadBatchParams = {
+/**
+ * Up to 25 comma-separated unique UUIDs from the load manifest
+ * @minLength 36
+ * @maxLength 924
+ */
+ids: string;
+};
 
 export type ListCalendarItemsParams = {
 from?: string;

@@ -171,6 +171,7 @@ import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib
 import { canScheduleTelegramDestination } from "../lib/telegram-errors";
 import { logger } from "../lib/logger";
 import { templateJobsRouter } from "./campaign-template-jobs";
+import { campaignListLoadingRouter } from "./campaign-list-loading";
 import {
   listUserNotifications,
   markAllUserNotificationsRead,
@@ -2179,6 +2180,7 @@ router.get("/campaigns", async (req, res): Promise<void> => {
     .where(eq(campaignsTable.ownerUserId, currentUserId(req))).orderBy(desc(campaignsTable.createdAt));
   res.json(ListCampaignsResponse.parse(await Promise.all(campaigns.map(campaignSummary))));
 });
+router.use("/campaigns",campaignListLoadingRouter);
 
 router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   const parsed = BulkControlCampaignsBody.safeParse(req.body);

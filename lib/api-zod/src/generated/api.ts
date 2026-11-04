@@ -953,6 +953,81 @@ export const DeleteMessageTemplateParams = zod.object({
 export const DeleteMessageTemplateResponse = zod.void()
 
 
+export const getCampaignLoadManifestResponseTotalMin = 0;
+
+
+
+export const GetCampaignLoadManifestResponse = zod.object({
+  "campaignIds": zod.array(zod.string().uuid()),
+  "total": zod.number().int().min(getCampaignLoadManifestResponseTotalMin)
+})
+
+
+export const getCampaignLoadBatchQueryIdsMin = 36;
+export const getCampaignLoadBatchQueryIdsMax = 924;
+
+
+
+export const GetCampaignLoadBatchQueryParams = zod.object({
+  "ids": zod.coerce.string().min(getCampaignLoadBatchQueryIdsMin).max(getCampaignLoadBatchQueryIdsMax).describe('Up to 25 comma-separated unique UUIDs from the load manifest')
+})
+
+export const getCampaignLoadBatchResponseCampaignsItemGroupIntervalSecondsMin = 0;
+export const getCampaignLoadBatchResponseCampaignsItemGroupIntervalSecondsMax = 259200;
+export const getCampaignLoadBatchResponseCampaignsItemGroupIntervalSecondsMultipleOf = 60;
+
+
+
+export const GetCampaignLoadBatchResponse = zod.object({
+  "campaigns": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "content": zod.string(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string().nullable(),
+  "templateMode": zod.enum(['text', 'forward']),
+  "templateSourceAccountId": zod.string().nullable(),
+  "templateSourceMessageId": zod.string().nullable(),
+  "clonedFromCampaignId": zod.string().nullable(),
+  "clonedFromUserId": zod.string().nullable(),
+  "cloneMode": zod.union([zod.literal('admin'),zod.literal('user'),zod.literal(null)]).nullable(),
+  "mediaUrl": zod.string().nullable(),
+  "status": zod.string(),
+  "scheduledAt": zod.coerce.date().nullable(),
+  "timezone": zod.string(),
+  "maxRetries": zod.number(),
+  "repeatCount": zod.number(),
+  "roundDelayMinSeconds": zod.number(),
+  "roundDelayMaxSeconds": zod.number(),
+  "timingMode": zod.enum(['legacy', 'round']).optional(),
+  "groupIntervalSeconds": zod.number().int().min(getCampaignLoadBatchResponseCampaignsItemGroupIntervalSecondsMin).max(getCampaignLoadBatchResponseCampaignsItemGroupIntervalSecondsMax).multipleOf(getCampaignLoadBatchResponseCampaignsItemGroupIntervalSecondsMultipleOf).optional(),
+  "createdAt": zod.coerce.date(),
+  "targetCount": zod.number(),
+  "sentCount": zod.number(),
+  "failedCount": zod.number(),
+  "completedCount": zod.number(),
+  "dailyQuota": zod.object({
+  "limit": zod.number().nullable(),
+  "used": zod.number(),
+  "remaining": zod.number().nullable(),
+  "sentToday": zod.number(),
+  "reservedToday": zod.number()
+}),
+  "destinationIds": zod.array(zod.string()),
+  "errors": zod.array(zod.object({
+  "destinationId": zod.string(),
+  "destinationTitle": zod.string(),
+  "status": zod.string(),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullable(),
+  "nextAttemptAt": zod.coerce.date().nullable(),
+  "updatedAt": zod.coerce.date()
+}))
+})),
+  "missingIds": zod.array(zod.string().uuid())
+})
+
+
 export const listCampaignsResponseGroupIntervalSecondsMin = 0;
 export const listCampaignsResponseGroupIntervalSecondsMax = 259200;
 export const listCampaignsResponseGroupIntervalSecondsMultipleOf = 60;

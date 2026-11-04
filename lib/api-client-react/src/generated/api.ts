@@ -80,6 +80,8 @@ import type {
   CampaignBulkJobProgress,
   CampaignCloneReadiness,
   CampaignInput,
+  CampaignLoadBatch,
+  CampaignLoadManifest,
   CampaignUpdateInput,
   CloneCampaignInput,
   CreateAdminLicenseKeyInput,
@@ -88,6 +90,7 @@ import type {
   DashboardSummary,
   Destination,
   GetAdminUserSupportCampaignTargetsParams,
+  GetCampaignLoadBatchParams,
   GetGroupLibraryParams,
   GroupLibraryAccess,
   HealthStatus,
@@ -3236,6 +3239,155 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getDeleteMessageTemplateMutationOptions(options));
     }
+
+export const getGetCampaignLoadManifestUrl = () => {
+
+
+
+
+  return `/api/campaigns/load-manifest`
+}
+
+export const getCampaignLoadManifest = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignLoadManifest> => {
+
+  return customFetch<CampaignLoadManifest>(getGetCampaignLoadManifestUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignLoadManifestQueryKey = () => {
+    return [
+    `/api/campaigns/load-manifest`
+    ] as const;
+    }
+
+
+export const getGetCampaignLoadManifestQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignLoadManifest>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignLoadManifest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignLoadManifestQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignLoadManifest>>> = ({ signal }) => getCampaignLoadManifest({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignLoadManifest>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignLoadManifestQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignLoadManifest>>>
+export type GetCampaignLoadManifestQueryError = ErrorType<unknown>
+
+
+
+export function useGetCampaignLoadManifest<TData = Awaited<ReturnType<typeof getCampaignLoadManifest>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignLoadManifest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignLoadManifestQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCampaignLoadBatchUrl = (params: GetCampaignLoadBatchParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/campaigns/load-batch?${stringifiedParams}` : `/api/campaigns/load-batch`
+}
+
+export const getCampaignLoadBatch = async (params: GetCampaignLoadBatchParams, options?: Parameters<typeof customFetch>[1]): Promise<CampaignLoadBatch> => {
+
+  return customFetch<CampaignLoadBatch>(getGetCampaignLoadBatchUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignLoadBatchQueryKey = (params?: GetCampaignLoadBatchParams,) => {
+    return [
+    `/api/campaigns/load-batch`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCampaignLoadBatchQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignLoadBatch>>, TError = ErrorType<void>>(params: GetCampaignLoadBatchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignLoadBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignLoadBatchQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignLoadBatch>>> = ({ signal }) => getCampaignLoadBatch(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignLoadBatch>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignLoadBatchQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignLoadBatch>>>
+export type GetCampaignLoadBatchQueryError = ErrorType<void>
+
+
+
+export function useGetCampaignLoadBatch<TData = Awaited<ReturnType<typeof getCampaignLoadBatch>>, TError = ErrorType<void>>(
+ params: GetCampaignLoadBatchParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignLoadBatch>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignLoadBatchQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListCampaignsUrl = () => {
 

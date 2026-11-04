@@ -28,7 +28,6 @@ import {
   useBulkControlCampaigns,
   useBulkDeleteCampaigns,
   useDeleteCampaign,
-  useListCampaigns,
   useListMessageTemplates,
   useListTelegramAccounts,
   useListTelegramSavedMessages,
@@ -39,6 +38,7 @@ import { CampaignFormModal } from "@/components/campaign-form-modal";
 import { useTemplateJob } from "@/lib/use-template-job";
 import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
 import { CampaignListFeedback } from "@/components/campaign-list-feedback";
+import { useCompleteCampaigns } from "@/lib/use-complete-campaigns";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
@@ -488,7 +488,8 @@ export default function Campaigns() {
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
 
-  const campaigns = useListCampaigns();
+  const campaigns = useCompleteCampaigns(user ? `${user.id}:${user.support?.targetUserId??"self"}` : "");
+  const campaignDataBlocked=campaigns.isFetching||!campaigns.data||campaigns.isError;
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
@@ -695,6 +696,7 @@ export default function Campaigns() {
   }
 
   async function pauseAllCampaigns() {
+    if(campaignDataBlocked)return;
     const activeCount = (campaigns.data ?? []).filter((campaign) => isActive(campaign.status)).length;
     if (!activeCount) {
       setToast(c.bulkNoActive);
@@ -711,6 +713,7 @@ export default function Campaigns() {
   }
 
   function openBulkResume() {
+    if(campaignDataBlocked){if(bulkJob)setBulkResumeOpen(true);return;}
     if (bulkJob && bulkJob.status !== "completed") { setBulkResumeOpen(true); return; }
     setBulkJob(null);
     setOnlySendable(true);
@@ -729,6 +732,7 @@ export default function Campaigns() {
   }
 
   async function submitBulkResume() {
+    if(campaignDataBlocked)return;
     if (bulkControl.isPending || bulkJob) return;
     const intervalMinutes = Number(bulkIntervalMinutes.trim());
     if (!bulkIntervalMinutes.trim() || !Number.isInteger(intervalMinutes) || intervalMinutes < 0 || intervalMinutes > 4320 || !bulkScheduleDate || !bulkScheduleTime) {
@@ -777,6 +781,7 @@ export default function Campaigns() {
       setBulkTemplateOpen(true);
       return;
     }
+    if(campaignDataBlocked)return;
     if (!(campaigns.data ?? []).some((campaign) => campaign.name.startsWith("Tự động")
       && ["draft", "paused", "queued", "running"].includes(campaign.status))) {
       setToast(c.bulkTemplateNoCandidates);
@@ -788,6 +793,7 @@ export default function Campaigns() {
   }
 
   async function submitBulkTemplate() {
+    if(campaignDataBlocked)return;
     if (templateProgress.blocked) return;
     if (!bulkTemplateId) {
       setToast(c.bulkTemplateNoTemplates);
@@ -875,6 +881,7 @@ export default function Campaigns() {
   }
 
   async function removeFilteredCampaigns() {
+    if(campaignDataBlocked)return;
     const deletableCount = listedCampaigns.filter((campaign) => !isActive(campaign.status)).length;
     if (!deletableCount) {
       setToast(c.bulkNoEligible);
@@ -930,7 +937,7 @@ export default function Campaigns() {
             <button
               type="button"
               onClick={() => void pauseAllCampaigns()}
-              disabled={bulkControl.isPending || bulkTemplate.isPending}
+              disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#f04444] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#dc2626] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-pause-all"
             >
@@ -940,7 +947,7 @@ export default function Campaigns() {
             <button
               type="button"
               onClick={openBulkResume}
-              disabled={bulkControl.isPending || bulkTemplate.isPending}
+              disabled={(campaignDataBlocked&&!bulkJob) || bulkControl.isPending || bulkTemplate.isPending}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] px-3 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-resume-all"
             >
@@ -950,7 +957,7 @@ export default function Campaigns() {
             {isAdmin && (<button
               type="button"
               onClick={openBulkTemplate}
-              disabled={bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
+              disabled={(!templateProgress.job&&!templateProgress.uncertain&&campaignDataBlocked) || bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1d3bb8] bg-white px-3 text-[13px] font-extrabold text-[#1d3bb8] shadow-sm transition hover:bg-[#eff6ff] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-bulk-template"
             >
@@ -961,7 +968,7 @@ export default function Campaigns() {
             <button
               type="button"
               onClick={() => void removeFilteredCampaigns()}
-              disabled={bulkControl.isPending || bulkTemplate.isPending || bulkDelete.isPending}
+              disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending || bulkDelete.isPending}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#dc2626] bg-white px-3 text-[13px] font-extrabold text-[#dc2626] shadow-sm transition hover:bg-[#fff1f2] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-delete-filtered"
             >
@@ -973,7 +980,8 @@ export default function Campaigns() {
 
         <Panel className="overflow-hidden">
           <CampaignListFeedback language={language} hasData={campaigns.data!==undefined}
-            fetching={campaigns.isFetching} failed={campaigns.isError} filtered={Boolean(search.trim()||status!=="all")} empty={!listedCampaigns.length}>
+            fetching={campaigns.isFetching} failed={campaigns.isError} empty={!listedCampaigns.length}
+            loaded={campaigns.loadProgress.loaded} total={campaigns.loadProgress.total} onRetry={()=>void campaigns.refetch()}>
           {listedCampaigns.length
               ? <div className="divide-y divide-[#eef2f6]">{listedCampaigns.map((campaign) => {
                   const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
@@ -1197,7 +1205,7 @@ export default function Campaigns() {
               >
                 {bulkJob ? language === "vi" ? "Đóng" : "Close" : c.bulkCancel}
               </button>
-              {!bulkJob && <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={bulkControl.isPending}>
+              {!bulkJob && <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={campaignDataBlocked||bulkControl.isPending}>
                 {bulkControl.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {c.bulkApply}
               </PrimaryButton>}
@@ -1292,7 +1300,7 @@ export default function Campaigns() {
               <PrimaryButton
                 type="button"
                 onClick={() => void submitBulkTemplate()}
-                disabled={!bulkTemplateId || bulkTemplate.isPending || !automaticCampaigns.length}
+                disabled={campaignDataBlocked || !bulkTemplateId || bulkTemplate.isPending || !automaticCampaigns.length}
               >
                 {bulkTemplate.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {c.bulkTemplateApply}

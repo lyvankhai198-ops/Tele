@@ -35,7 +35,7 @@ function setup(selected="",language="en",pending=false){
   const context={
     bulkTemplateAccountId:selected,bulkTemplateId:"template",bulkTemplateOpen:true,
     bulkTemplate:{isPending:pending,async mutateAsync(request){state.sent=request;return{updatedCount:2,skippedCount:1};}},
-    templateProgress:{job:null,uncertain:false,blocked:pending,async start(templateId,accountId){
+    campaignDataBlocked:false,templateProgress:{job:null,uncertain:false,blocked:pending,async start(templateId,accountId){
       state.sent={templateId,...(accountId?{telegramAccountId:accountId}:{})};
     }},
     campaigns:{data:fixtures,async refetch(){state.refetched++;}},

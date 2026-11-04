@@ -355,14 +355,17 @@ async function createDefaultSubscription(ownerUserId: string) {
   return existing;
 }
 
-export async function getSubscription(ownerUserId: string, currentTime?: Date) {
+export async function getSubscription(ownerUserId: string, currentTime?: Date, readOnly=false) {
   const [subscriptions, settings, now] = await Promise.all([
     db.select().from(subscriptionsTable)
       .where(eq(subscriptionsTable.ownerUserId, ownerUserId)).limit(1),
     getSystemSettings(),
     currentTime ? Promise.resolve(currentTime) : getDatabaseNow(),
   ]);
-  const existing = subscriptions[0] ?? await createDefaultSubscription(ownerUserId);
+  const existing = subscriptions[0] ?? (readOnly ? {
+    id:"",ownerUserId,plan:"plus",dailyQuotaExempt:false,dailyQuotaExemptDate:null,
+    dailyQuotaExemptFrom:null,dailyQuotaExemptUntil:null,startedAt:now,expiresAt:null,updatedAt:now,
+  } : await createDefaultSubscription(ownerUserId));
   const catalog = PLAN_CATALOG.map((plan) => ({ ...plan, ...settings.planContent[plan.code], ...settings.planLimits[plan.code] }));
   return toSubscriptionSummary(existing, now, catalog, settings.defaultTimezone);
 }
