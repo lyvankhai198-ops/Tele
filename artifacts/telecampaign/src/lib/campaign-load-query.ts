@@ -21,11 +21,11 @@ export function completeCampaignQuery(client:QueryClient,scope:string){
     // Merely returning to this tab must not restart thousands of reads once
     // staleTime expires. Real mutations still invalidate this key/prefix, and
     // an explicit refresh still creates a new manifest and progress run.
-    refetchOnMount:(query:{state:{data:unknown;isInvalidated:boolean}})=>
-      query.state.data===undefined||query.state.isInvalidated,
+    refetchOnMount:(query:{state:{dataUpdatedAt:number;isInvalidated:boolean}})=>
+      query.state.dataUpdatedAt===0||query.state.isInvalidated,
     refetchOnWindowFocus:false as const,
-    refetchOnReconnect:(query:{state:{data:unknown;isInvalidated:boolean}})=>
-      query.state.data===undefined||query.state.isInvalidated,
+    refetchOnReconnect:(query:{state:{dataUpdatedAt:number;isInvalidated:boolean}})=>
+      query.state.dataUpdatedAt===0||query.state.isInvalidated,
     queryFn:async()=>{
       const query=client.getQueryCache().find({queryKey:key,exact:true});
       const run=++sequence;
