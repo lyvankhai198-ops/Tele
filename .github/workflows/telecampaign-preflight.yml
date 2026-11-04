@@ -81,17 +81,8 @@ jobs:
               const setting=(await client.query("SELECT value FROM system_settings WHERE key='admin_system_settings'")).rows[0]?.value;
               const s=typeof setting==='string'?JSON.parse(setting):setting;
               console.log('background_settings='+JSON.stringify({present:!!s,autoJoin:s?.groupLibraryAutoJoinEnabled??true,autoCampaign:s?.postJoinCampaign?.enabled??false,mode:s?.postJoinCampaign?.mode??'draft',hasContent:!!s?.postJoinCampaign?.content?.trim(),startGapSeconds:s?.postJoinCampaign?.campaignStartDelaySeconds??null}));
-              const unmapped=await client.query('SELECT count(*)::int AS count FROM (SELECT owner_user_id FROM telegram_accounts UNION SELECT owner_user_id FROM campaigns) owners WHERE NOT EXISTS(SELECT 1 FROM app_users WHERE app_users.id::text=owners.owner_user_id)');
-              console.log('background_unmapped_owners='+unmapped.rows[0].count);
-              const accounts=await client.query("SELECT count(*)::int AS total,count(*) FILTER(WHERE a.status='connected' AND a.session_encrypted IS NOT NULL AND a.telegram_user_id IS NOT NULL)::int AS eligible FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text WHERE u.role='admin' AND a.deleted_at IS NULL");
-              console.log('background_admin_accounts='+JSON.stringify(accounts.rows[0]));
-              for(let pass=0;pass<2;pass++){
-              const jobs=await client.query("SELECT status,count(*)::int AS count,count(*) FILTER(WHERE next_attempt_at<=now())::int AS due,count(*) FILTER(WHERE lease_until>now())::int AS leased,max(last_attempt_at) AS last_attempt,max(updated_at) AS last_update FROM admin_group_join_jobs GROUP BY status ORDER BY status");
-              console.log('background_jobs_'+pass+'='+JSON.stringify(jobs.rows.map(x=>({...x,status:/^[a-z_]{1,24}$/.test(x.status)?x.status:'unknown'}))));
-              const recent=await client.query("SELECT row_number() OVER(ORDER BY a.created_at DESC)::int AS account_slot,a.status,a.created_at,(SELECT count(*)::int FROM admin_group_join_jobs j WHERE j.telegram_account_id=a.id) AS jobs,(SELECT count(*)::int FROM admin_group_join_jobs j WHERE j.telegram_account_id=a.id AND j.status='joined') AS joined,(SELECT count(*)::int FROM campaigns c WHERE c.telegram_account_id=a.id AND c.name LIKE 'Tự động sau khi tham gia:%') AS automatic_campaigns FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text WHERE u.role='admin' AND a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT 5");
-              console.log('background_recent_accounts_'+pass+'='+JSON.stringify(recent.rows));
-              if(pass===0)await new Promise(r=>setTimeout(r,30000));
-              }
-              }catch(e){console.log('background_sqlstate='+(/^[A-Z0-9]{5}$/.test(e.code??'')?e.code:'UNKNOWN'));process.exitCode=1;}finally{await client.end();}
+              const result=await client.query("WITH active AS(SELECT a.id,a.created_at FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text WHERE u.role='admin' AND a.deleted_at IS NULL) SELECT row_number() OVER(ORDER BY a.created_at DESC)::int AS account_slot,count(j.id)::int AS jobs,count(j.id) FILTER(WHERE j.status='joining' AND (j.lease_until IS NULL OR j.lease_until<=now()))::int AS stuck_joining,count(j.id) FILTER(WHERE j.status='joining' AND j.lease_until>now())::int AS active_leases,count(j.id) FILTER(WHERE j.status='waiting' AND j.last_error LIKE 'Telegram yêu cầu chờ%')::int AS telegram_wait_jobs,count(j.id) FILTER(WHERE j.status='waiting' AND j.next_attempt_at>now())::int AS future_wait_jobs,min(j.next_attempt_at) FILTER(WHERE j.status='waiting' AND j.next_attempt_at>now()) AS next_wait_expiry,count(j.id) FILTER(WHERE j.status='joined')::int AS joined FROM active a LEFT JOIN admin_group_join_jobs j ON j.telegram_account_id=a.id GROUP BY a.id,a.created_at ORDER BY a.created_at DESC");
+          console.log('background_queue_causes='+JSON.stringify(result.rows));
+          }catch(e){console.log('background_sqlstate='+(/^[A-Z0-9]{5}$/.test(e.code??'')?e.code:'UNKNOWN'));process.exitCode=1;}finally{await client.end();}
               NODE
           REMOTE
