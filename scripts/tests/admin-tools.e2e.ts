@@ -22,6 +22,7 @@ import { testCampaignAccountFilter } from "./campaign-account-filter.e2e";
 import {testOperations} from "./operations.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
+import { testAdminGroupJoinQueue } from "./admin-group-join-queue.e2e";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
@@ -527,6 +528,8 @@ try {
   const disabled = await request("/auth/mfa/disable", adminCookie, { password, code: codes.recoveryCodes[1] });
   check(disabled.ok, "E2E_MFA_DISABLE");
   check((await request("/admin/tools/summary", adminCookie)).status === 401, "E2E_MFA_DISABLE_REVOKES_SESSIONS");
+  phase = "E2E_GROUP_JOIN_QUEUE";
+  await testAdminGroupJoinQueue();
   console.log("E2E_ALL_PASSED");
 } catch (error) {
   console.error(phase);

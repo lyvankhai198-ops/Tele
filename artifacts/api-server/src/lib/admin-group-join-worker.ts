@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { blockedCampaignDestinationIds } from "./campaign-destination-blocks";
-import { and, asc, eq, inArray, isNull, isNotNull, lte, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import {
   adminGroupJoinJobsTable,
   appUsersTable,
@@ -21,12 +20,14 @@ import {
 } from "./telegram";
 import { getSystemSettings } from "./system-settings";
 import { recordActivity } from "./activity";
+import {
+  claimAdminGroupJoinBatch, deferAdminGroupJoinAccount, releaseAdminGroupJoinBatch,
+  type AdminGroupJoinClaim,
+} from "./admin-group-join-queue";
 
-const JOIN_BATCH_SIZE = 5;
 const JOIN_DELAY_MS = 700;
 const FLOOD_WAIT_BUFFER_MS = 60_000;
 const GENERIC_RETRY_DELAY_MS = 15 * 60_000;
-const JOB_LEASE_MS = 10 * 60_000;
 const WORKER_INTERVAL_MS = 5_000;
 const PERIODIC_GROUP_SYNC_MS = 60 * 60_000;
 
@@ -372,7 +373,9 @@ export async function scanAdminJoinedGroupsWithoutCampaign(): Promise<{
   };
 }
 
-async function processAccount(accountId: string, ownerUserId: string): Promise<void> {
+export async function processAccount(accountId: string, ownerUserId: string, telegram = {
+  getAccountClient, joinTelegramGroupWithClient, disconnectQuietly, syncAccountDestinations,
+}): Promise<void> {
   if (activeAccounts.has(accountId)) return;
   activeAccounts.add(accountId);
 
@@ -385,62 +388,15 @@ async function processAccount(accountId: string, ownerUserId: string): Promise<v
     groupTelegramId: string;
     username: string | null;
     telegramLink: string | null;
-    nextAttemptAt: Date;
     leaseToken: string;
   }> = [];
+  let claimedJobs: AdminGroupJoinClaim[] = [];
   try {
-    const now = new Date();
-    const jobs = await db.select({
-      id: adminGroupJoinJobsTable.id,
-      groupId: groupLibraryEntriesTable.id,
-      groupTitle: groupLibraryEntriesTable.title,
-      groupTelegramId: groupLibraryEntriesTable.telegramId,
-      username: groupLibraryEntriesTable.username,
-      telegramLink: sql<string | null>`null`,
-      nextAttemptAt: adminGroupJoinJobsTable.nextAttemptAt,
-    }).from(adminGroupJoinJobsTable)
-      .innerJoin(groupLibraryEntriesTable, eq(adminGroupJoinJobsTable.groupLibraryEntryId, groupLibraryEntriesTable.id))
-      .where(and(
-        eq(adminGroupJoinJobsTable.telegramAccountId, accountId),
-        inArray(adminGroupJoinJobsTable.status, ["pending", "waiting"]),
-        lte(adminGroupJoinJobsTable.nextAttemptAt, now),
-        or(
-          isNull(adminGroupJoinJobsTable.leaseUntil),
-          lt(adminGroupJoinJobsTable.leaseUntil, now),
-        ),
-      ))
-      .orderBy(asc(adminGroupJoinJobsTable.nextAttemptAt))
-      .limit(JOIN_BATCH_SIZE);
-    if (!jobs.length) return;
-
-    const claimedJobs: Array<typeof jobs[number] & { leaseToken: string }> = [];
-    for (const job of jobs) {
-      const leaseToken = randomUUID();
-      const [claimed] = await db.update(adminGroupJoinJobsTable)
-        .set({
-          status: "joining",
-          attemptCount: sql`${adminGroupJoinJobsTable.attemptCount} + 1`,
-          lastAttemptAt: now,
-          leaseToken,
-          leaseUntil: new Date(now.getTime() + JOB_LEASE_MS),
-          updatedAt: now,
-        })
-        .where(and(
-          eq(adminGroupJoinJobsTable.id, job.id),
-          inArray(adminGroupJoinJobsTable.status, ["pending", "waiting"]),
-          lte(adminGroupJoinJobsTable.nextAttemptAt, now),
-          or(
-            isNull(adminGroupJoinJobsTable.leaseUntil),
-            lt(adminGroupJoinJobsTable.leaseUntil, now),
-          ),
-        ))
-        .returning({ id: adminGroupJoinJobsTable.id });
-      if (claimed) claimedJobs.push({ ...job, leaseToken });
-    }
+    claimedJobs = await claimAdminGroupJoinBatch(accountId, ownerUserId);
     if (!claimedJobs.length) return;
 
     try {
-      ({ client } = await getAccountClient(accountId));
+      ({ client } = await telegram.getAccountClient(accountId));
       for (const [index, job] of claimedJobs.entries()) {
         if (!job.username && !job.telegramLink) {
           await updateJob(job.id, job.leaseToken, {
@@ -451,7 +407,7 @@ async function processAccount(accountId: string, ownerUserId: string): Promise<v
         }
 
         try {
-          const result = await joinTelegramGroupWithClient(client, {
+          const result = await telegram.joinTelegramGroupWithClient(client, {
             username: job.username,
             telegramLink: job.telegramLink,
           });
@@ -466,11 +422,8 @@ async function processAccount(accountId: string, ownerUserId: string): Promise<v
           const waitSeconds = floodWaitSeconds(error);
           if (waitSeconds !== null) {
             const nextAttemptAt = new Date(Date.now() + waitSeconds * 1000 + FLOOD_WAIT_BUFFER_MS);
-            await updateJob(job.id, job.leaseToken, {
-              status: "waiting",
-              nextAttemptAt,
-              lastError: `Telegram yêu cầu chờ ${waitSeconds} giây.`,
-            });
+            await deferAdminGroupJoinAccount(accountId, claimedJobs, nextAttemptAt,
+              `Telegram yêu cầu chờ ${waitSeconds} giây.`);
             logger.warn({ accountId, groupId: job.groupId, waitSeconds }, "Admin group join paused by Telegram flood wait");
             break;
           }
@@ -487,27 +440,22 @@ async function processAccount(accountId: string, ownerUserId: string): Promise<v
       }
     } catch (error) {
       const retryAt = new Date(Date.now() + GENERIC_RETRY_DELAY_MS);
-      await db.update(adminGroupJoinJobsTable)
-        .set({
-          status: "waiting",
-          nextAttemptAt: retryAt,
-          lastError: limitedErrorText(error),
-          leaseToken: null,
-          leaseUntil: null,
-          updatedAt: new Date(),
-        })
-        .where(and(
-          eq(adminGroupJoinJobsTable.telegramAccountId, accountId),
-          eq(adminGroupJoinJobsTable.status, "joining"),
-        ));
+      await deferAdminGroupJoinAccount(accountId, claimedJobs, retryAt, limitedErrorText(error));
       logger.warn({ err: error, accountId }, "Admin group join account client unavailable");
     }
   } finally {
+    // Also releases the unattempted remainder after break/exception. A crash is
+    // recovered by the persisted lease on a later tick, without needing the web.
+    try {
+      await releaseAdminGroupJoinBatch(accountId, claimedJobs);
+    } catch (error) {
+      logger.warn({ err: error, accountId }, "Admin group join batch release failed");
+    }
     if (client) {
-      await disconnectQuietly(client);
+      await telegram.disconnectQuietly(client);
       if (shouldSync) {
         try {
-          await syncAccountDestinations(accountId);
+          await telegram.syncAccountDestinations(accountId);
           const postJoinSettings = await getSystemSettings();
           for (const [index, job] of successfulJoins.entries()) {
              const [destination] = await db.select({ id: destinationsTable.id }).from(destinationsTable).where(and(
