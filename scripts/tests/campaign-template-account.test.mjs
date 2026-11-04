@@ -24,6 +24,8 @@ function page(language="vi",account="a",selected=["done"]){
     accounts:{data:[{id:"a",name:"A"},{id:"b",name:"B"}]},templates:{data:[{id:"t",name:"New template",content:"Preview content",mode:"text"}]},
     campaignDataBlocked:false,useMemo:f=>f(),setBulkTemplateAccountId:v=>{state.account=v;},setBulkTemplateCampaignIds:v=>{state.selected=v;},
     setBulkTemplateId:v=>{state.template=v;},setBulkTemplateOpen:v=>{state.open=v;},setToast:v=>{state.toast=v;}};
+  context.templateSelection=context.campaigns;
+  context.campaigns={data:context.campaigns.data.filter(row=>row.telegramAccountId===context.accountFilter)};
   run(parts.copy+`;globalThis.c=copy.${language};`+parts.templateCampaigns+";globalThis.templateCampaigns=templateCampaigns;"+parts.bulkSelectedIds+";globalThis.bulkSelectedIds=bulkSelectedIds;",context);
   return{context,state,tree:run("("+parts.modal+")",context)};
 }

@@ -57,7 +57,8 @@ test("load errors preserve old rows, never reveal staging data, and offer a read
   assert.match(text(render({failed:true,fetching:false,hasData:true})),/COMPLETE DATA/);
 });
 test("page gates every bulk entry/submit on a complete, current dataset and uses the scoped loader",()=>{
-  assert.match(page,/useCompleteCampaigns\(user \?/);
+  assert.match(page,/const campaignScope = user \?/);
+  assert.match(page,/useCompleteCampaigns\(campaignScope,accountFilter\)/);
   assert.match(page,/const campaignDataBlocked=campaigns\.isFetching\|\|!campaigns\.data\|\|campaigns\.isError/);
   for(const name of ["pauseAllCampaigns","submitBulkResume","submitBulkTemplate","removeFilteredCampaigns"]){
     assert.match(page,new RegExp(`async function ${name}\\(\\) \\{\\s+if\\(campaignDataBlocked\\)return;`));
