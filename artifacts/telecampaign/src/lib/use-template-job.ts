@@ -80,20 +80,24 @@ export function useTemplateJob(owner: string | undefined, enabled: boolean, onFi
   }
   async function recover() {
     if(request){await send(request);return;}
+    const initialOwner=owner;
     setWaiting(true);
     try {
       const latest=await getLatestCampaignTemplateJob();
+      if(identity.current!==initialOwner)return;
       if(latest)remember(latest);else{setUncertain(false);setProblem(false);}
-    }catch{setProblem(true);}finally{setWaiting(false);}
+    }catch{if(identity.current===initialOwner)setProblem(true);}
+    finally{if(identity.current===initialOwner)setWaiting(false);}
   }
   return {
     job,waiting,problem,uncertain,blocked:waiting || uncertain || active || job?.status==="failed",
     start:async(templateId:string,accountId:string)=>send({templateId,...(accountId?{telegramAccountId:accountId}:{}),requestId:crypto.randomUUID()}),
     recover,
     retry:async()=>{
-      if(!job)return;setWaiting(true);
-      try{remember(await retryCampaignTemplateJob(job.id));}catch{setProblem(true);}
-      finally{setWaiting(false);}
+      if(!job)return;const initialOwner=owner;setWaiting(true);
+      try{const next=await retryCampaignTemplateJob(job.id);if(identity.current===initialOwner)remember(next);}
+      catch{if(identity.current===initialOwner)setProblem(true);}
+      finally{if(identity.current===initialOwner)setWaiting(false);}
     },
     clear:()=>{if(waiting || active || uncertain || job?.status==="failed")return;
       setJob(null);setRequest(null);try{localStorage.removeItem(storageKey);}catch{/* private browsing */}},
