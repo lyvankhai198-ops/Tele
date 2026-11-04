@@ -10,10 +10,15 @@ export interface BulkCampaignTemplateInput {
   /** @minLength 1 */
   templateId: string;
   /**
+     * Explicitly selected owned campaign IDs. Never infer selection from names or filters.
+     * @minItems 1
+     */
+  campaignIds: string[];
+  /**
      * Persist this identity before submitting and reuse it after a lost response.
      * @pattern ^[a-zA-Z0-9-]{16,80}$
      */
   requestId?: string;
-  /** Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update. */
-  telegramAccountId?: string;
+  /** Required owned Telegram account. Every selected campaign must belong to this account. Never changes the shared future-campaign default. */
+  telegramAccountId: string;
 }

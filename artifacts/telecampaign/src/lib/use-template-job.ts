@@ -89,7 +89,7 @@ export function useTemplateJob(owner: string | undefined, enabled: boolean, onFi
   }
   return {
     job,waiting,problem,uncertain,blocked:waiting || uncertain || active || job?.status==="failed",
-    start:async(templateId:string,accountId:string)=>send({templateId,...(accountId?{telegramAccountId:accountId}:{}),requestId:crypto.randomUUID()}),
+    start:async(templateId:string,accountId:string,campaignIds:string[])=>send({templateId,telegramAccountId:accountId,campaignIds,requestId:crypto.randomUUID()}),
     recover,
     retry:async()=>{
       if(!job)return;const initialOwner=owner;setWaiting(true);

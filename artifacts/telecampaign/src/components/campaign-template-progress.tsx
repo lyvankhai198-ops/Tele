@@ -15,7 +15,7 @@ export function CampaignTemplateProgress({job,vi,waiting,problem,onRetry,onNew}:
   const reasons:Record<string,[string,string]>={
     missing_account:["Chiến dịch không có tài khoản Telegram.","Campaign has no Telegram account."],
     account_unavailable:["Tài khoản đã xoá hoặc không còn thuộc phạm vi.","Account was deleted or is no longer in scope."],
-    scope_changed:["Tên, tài khoản hoặc trạng thái chiến dịch đã thay đổi.","Campaign name, account or status changed."],
+    scope_changed:["Chiến dịch đã xoá, đang được xoá hoặc đã chuyển sang tài khoản khác.","Campaign was deleted, is being deleted or moved to another account."],
     template_unavailable:["Mẫu tin đã xoá hoặc không còn thuộc quyền quản lý.","Template was deleted or is no longer owned."],
     admin_clone_requires_forward:["Chiến dịch clone admin cần mẫu forward.","Admin clone requires a forward template."],
     forward_account_mismatch:["Mẫu forward không đúng tài khoản hoặc thiếu tin nhắn nguồn.","Forward source does not match the account or is missing."],

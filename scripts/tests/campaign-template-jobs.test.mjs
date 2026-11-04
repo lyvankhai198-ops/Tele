@@ -58,9 +58,10 @@ test("rerun completion receipts survive navigation and distinguish a retried job
   assert.match(page,/if \(claimCampaignCompletion\(bulkStorageKey,"rerun",next\)\)/);
 });
 test("actual hook saves chosen inputs and id before sending; lost response recovers the same request",async()=>{
-  const h=harness();h.answer(new Error("network"));await h.render().start("template","account");
+  const h=harness();h.answer(new Error("network"));await h.render().start("template","account",["selected-1","selected-2"]);
   assert.equal(h.render().uncertain,true);
   assert.equal(h.written[0].input.telegramAccountId,"account");
+  assert.deepEqual(Array.from(h.written[0].input.campaignIds),["selected-1","selected-2"]);
   h.answer({id:"11111111-1111-4111-8111-111111111111",status:"running"});
   await h.render().recover();
   assert.equal(h.calls.length,2);
@@ -86,16 +87,18 @@ test("progress can be reopened during processing and closed without cancelling t
   assert.match(page,/CampaignTemplateProgress/);
   assert.match(hook,/getLatestCampaignTemplateJob/);
 });
-test("worker is durable and atomic, and completion patches only the shared template field",()=>{
+test("worker is durable and atomic, and never changes shared defaults",()=>{
   assert.match(worker,/FOR UPDATE SKIP LOCKED/);
   assert.match(worker,/SET LOCAL statement_timeout/);
   assert.match(worker,/await processCampaign\(tx,job,id\)/);
   assert.match(worker,/await save\(tx,job\)/);
-  assert.match(worker,/jsonb_set/);
+  assert.doesNotMatch(worker,/jsonb_set|SYSTEM_SETTINGS_KEY|postJoinCampaign/);
   assert.doesNotMatch(worker,/api\.telegram\.org|sendMessage|updateSystemSettings\(/);
 });
-test("only shared-default work requires admin, including permission revocation after acceptance",()=>{
-  assert.match(worker,/job\.defaultStatus==="pending" && owner\.rows\[0\]\.role!=="admin"/);
+test("selected IDs are bound to the owner/account and the legacy prefix rule is absent",()=>{
+  assert.match(worker,/id=ANY\(\$3::uuid\[\]\)/);
+  assert.match(worker,/candidates\.rows\.length!==selectedIds\.length/);
   assert.doesNotMatch(worker,/WHERE id=\$1 AND role='admin'/);
-  assert.match(worker,/defaultStatus:!input\.telegramAccountId&&input\.updateGlobalDefault\?"pending":"not_applicable"/);
+  assert.doesNotMatch(worker,/name LIKE|name\.startsWith|updateGlobalDefault/);
+  assert.match(worker,/defaultStatus:"not_applicable"/);
 });

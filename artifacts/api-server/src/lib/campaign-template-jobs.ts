@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
-import { DEFAULT_SYSTEM_SETTINGS, SYSTEM_SETTINGS_KEY } from "./system-settings";
 import { logger } from "./logger";
 
 // Job, campaign mutation, audit and cursor commit together. No Telegram calls.
@@ -43,10 +42,12 @@ async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 async function save(tx: Tx, job: Job) {
   await tx.query("UPDATE system_settings SET value=$2,updated_at=now() WHERE key=$1", [key(job.owner, job.id), JSON.stringify(job)]);
 }
-export async function createTemplateJob(input: {owner: string; templateId: string; telegramAccountId?: string; requestId?: string; updateGlobalDefault?: boolean}) {
+export async function createTemplateJob(input: {owner: string; templateId: string; telegramAccountId: string; campaignIds: string[]; requestId?: string}) {
   const id = input.requestId ?? randomUUID();
   if (!validId(id)) throw Error("TEMPLATE_JOB_INVALID_REQUEST");
-  const fingerprint = createHash("sha256").update(JSON.stringify([input.templateId,input.telegramAccountId ?? null])).digest("hex");
+  const selectedIds=[...new Set(input.campaignIds)].sort();
+  if(!input.telegramAccountId || !selectedIds.length)throw Error("TEMPLATE_JOB_INVALID_REQUEST");
+  const fingerprint = createHash("sha256").update(JSON.stringify([input.templateId,input.telegramAccountId,selectedIds])).digest("hex");
   return transaction(async tx => {
     await lockOwner(tx, input.owner);
     const existing = await tx.query("SELECT value FROM system_settings WHERE key=$1", [key(input.owner,id)]);
@@ -71,12 +72,13 @@ export async function createTemplateJob(input: {owner: string; templateId: strin
     if (!templates.rows[0]) throw Error("TEMPLATE_JOB_TEMPLATE_NOT_FOUND");
     // Snapshot just ids and template text, never credentials/sessions. New campaigns
     // created after acceptance deliberately do not enter this operation.
-    const candidates = await tx.query(`SELECT id FROM campaigns WHERE owner_user_id=$1 AND name LIKE 'Tự động%'
-      AND status IN ('draft','paused','queued','running') AND ($2::uuid IS NULL OR telegram_account_id=$2)
-      ORDER BY created_at,id`, [input.owner,input.telegramAccountId ?? null]);
+    const candidates = await tx.query(`SELECT id FROM campaigns WHERE owner_user_id=$1
+      AND telegram_account_id=$2::uuid AND id=ANY($3::uuid[])
+      ORDER BY created_at,id`, [input.owner,input.telegramAccountId,selectedIds]);
+    if(candidates.rows.length!==selectedIds.length)throw Error("TEMPLATE_JOB_CAMPAIGNS_NOT_FOUND");
     const job: Job = {id,owner:input.owner,fingerprint,accountId:input.telegramAccountId ?? null,
       template:templates.rows[0],ids:candidates.rows.map(r=>r.id),cursor:0,updatedCount:0,skipped:[],
-      status:"queued",error:null,defaultStatus:!input.telegramAccountId&&input.updateGlobalDefault?"pending":"not_applicable",
+      status:"queued",error:null,defaultStatus:"not_applicable",
       createdAt:new Date().toISOString(),finishedAt:null};
     await tx.query("INSERT INTO system_settings(key,value,updated_by) VALUES($1,$2,$3)", [key(job.owner,id),JSON.stringify(job),input.owner]);
     return summary(job);
@@ -108,15 +110,14 @@ async function processCampaign(tx: Tx, job: Job, id: string) {
   const accountId = job.accountId ?? selected.rows[0]?.telegram_account_id;
   if (!accountId) return {name:"",reason:"missing_account"};
   // Account before campaign, matching deletion lock order. Recheck account id
-  // after the campaign lock, including all-account jobs.
+  // after the campaign lock, including legacy all-account jobs.
   const account = await tx.query(`SELECT id FROM telegram_accounts WHERE id=$1 AND owner_user_id=$2
     AND deleted_at IS NULL FOR SHARE`, [accountId,job.owner]);
   if (!account.rows.length) return {name:"",reason:"account_unavailable"};
-  const campaigns = await tx.query(`SELECT id,name,status,telegram_account_id,cloned_from_campaign_id,cloned_from_user_id
-    FROM campaigns WHERE id=$1 AND owner_user_id=$2 FOR UPDATE`, [id,job.owner]);
+  const campaigns = await tx.query(`SELECT id,name,status,telegram_account_id,cloned_from_campaign_id,cloned_from_user_id,
+    paused_for_deletion FROM campaigns WHERE id=$1 AND owner_user_id=$2 FOR UPDATE`, [id,job.owner]);
   const campaign = campaigns.rows[0];
-  if (!campaign || !campaign.name.startsWith("Tự động") ||
-    !["draft","paused","queued","running"].includes(campaign.status) || campaign.telegram_account_id !== accountId) {
+  if (!campaign || campaign.paused_for_deletion || campaign.telegram_account_id !== accountId) {
     return {name:campaign?.name ?? "",reason:"scope_changed"};
   }
   const template = job.template;
@@ -138,21 +139,7 @@ async function processCampaign(tx: Tx, job: Job, id: string) {
   return {name:campaign.name,reason:null};
 }
 async function finalize(tx: Tx, job: Job) {
-  if (job.defaultStatus === "pending") {
-    // No stale read/write of unrelated settings; default+completion share the
-    // same transaction. A changed/deleted template never becomes a live default.
-    const result = await tx.query<Template>(`SELECT id,content,mode,source_account_id,source_message_id FROM message_templates
-      WHERE id=$1 AND owner_user_id=$2 FOR SHARE`, [job.template.id,job.owner]);
-    if (JSON.stringify(result.rows[0]) !== JSON.stringify(job.template)) job.defaultStatus="skipped";
-    else {
-      await tx.query(`INSERT INTO system_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO NOTHING`,
-        [SYSTEM_SETTINGS_KEY,JSON.stringify(DEFAULT_SYSTEM_SETTINGS)]);
-      await tx.query(`UPDATE system_settings SET value=jsonb_set(value::jsonb,'{postJoinCampaign}',
-        COALESCE(value::jsonb->'postJoinCampaign','{}'::jsonb)||jsonb_build_object('templateId',$2::text))::text,
-        updated_by=$3,updated_at=now() WHERE key=$1`, [SYSTEM_SETTINGS_KEY,job.template.id,job.owner]);
-      job.defaultStatus="updated";
-    }
-  }
+  job.defaultStatus="not_applicable";
   job.status="completed";job.finishedAt=new Date().toISOString();job.error=null;
 }
 export async function processTemplateJobs(maxSteps = 25) {
@@ -166,10 +153,11 @@ export async function processTemplateJobs(maxSteps = 25) {
         const job = JSON.parse(result.rows[0].value) as Job;
         failed={key:result.rows[0].key,cursor:job.cursor};
         await lockOwner(tx,job.owner);
-        // Editing owned campaigns is available to customers. Only a job that
-        // also changes the shared default requires continuing admin authority.
+        // Existing and newly selected jobs only edit owned campaigns; never
+        // apply a legacy pending shared-default change after this upgrade.
+        job.defaultStatus="not_applicable";
         const owner = await tx.query("SELECT id,role FROM app_users WHERE id=$1", [job.owner]);
-        if (!owner.rows.length || (job.defaultStatus==="pending" && owner.rows[0].role!=="admin"))
+        if (!owner.rows.length)
           throw Error("TEMPLATE_JOB_ACCESS_REVOKED");
         if (job.cursor<job.ids.length) {
           const id=job.ids[job.cursor], outcome=await processCampaign(tx,job,id);
@@ -193,7 +181,7 @@ export async function processTemplateJobs(maxSteps = 25) {
         if (job.status==="completed" || job.cursor!==failed!.cursor) return;
         job.status="failed";job.error="TEMPLATE_JOB_FAILED";await save(tx,job);
       });
-      logger.warn("Automatic template job paused; committed progress is preserved");
+      logger.warn("Bulk template job paused; committed progress is preserved");
       break;
     }
   }

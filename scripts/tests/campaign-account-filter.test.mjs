@@ -65,8 +65,8 @@ test("actual template hook is enabled for customers, disabled for support and si
 for(const language of ["vi","en"])test(`${language}: customer toolbar has four working actions and the requested labels`,()=>{
   const {context,state}=setup({language,isAdmin:false}),actions=run("("+parts["campaigns-action-toolbar"]+")",context);
   for(const label of language==="vi"
-    ?["Chọn bộ lọc tương ứng để thao tác","Dừng chiến dịch","Chạy lại chiến dịch","Xoá chiến dịch","Đổi mẫu tin tự động"]
-    :["Choose the corresponding filters before taking action","Pause campaigns","Rerun campaigns","Delete campaigns","Auto templates"])
+    ?["Chọn bộ lọc tương ứng để thao tác","Dừng chiến dịch","Chạy lại chiến dịch","Xoá chiến dịch","Đổi mẫu tin hàng loạt"]
+    :["Choose the corresponding filters before taking action","Pause campaigns","Rerun campaigns","Delete campaigns","Bulk templates"])
     assert.ok(text(actions).includes(label),label);
   const button=find(actions,n=>n.props["data-testid"]==="campaigns-bulk-template");
   assert.equal(button.props.disabled,false);button.props.onClick();assert.equal(state.templateOpen,true);
