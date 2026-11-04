@@ -40,8 +40,10 @@ export async function testCampaignLoadCounter({adminId,userId,adminCookie,userCo
       check((await batch(invalid)).status===400,"E2E_CAMPAIGN_LOAD_INVALID_BATCH");
     }
     const support=await createSupportSession(adminId,target);
-    const supportCookie=adminCookie.split("; ").filter(pair=>!pair.startsWith(SUPPORT_COOKIE_NAME+"=")).join("; ")+`; ${SUPPORT_COOKIE_NAME}=${support.cookieValue}`;
-    const supportSelection=await(await manifest(supportCookie)).json() as any;
+    const supportCookie=adminCookie.split("; ").filter(pair=>!pair.startsWith(SUPPORT_COOKIE_NAME+"=")).join("; ")+`; ${SUPPORT_COOKIE_NAME}=${support.token}`;
+    const supportResponse=await manifest(supportCookie);
+    check(supportResponse.status===200,"E2E_CAMPAIGN_LOAD_SUPPORT_HTTP_"+supportResponse.status);
+    const supportSelection=await supportResponse.json() as any;
     check(supportSelection.total===1&&!supportSelection.campaignIds.some((id:string)=>own.includes(id)),"E2E_CAMPAIGN_LOAD_SUPPORT_SCOPE");
     const supportBatch=await batch(supportSelection.campaignIds,supportCookie);
     check(supportBatch.status===200,"E2E_CAMPAIGN_LOAD_SUPPORT_READ_ONLY");
