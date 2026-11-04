@@ -1,0 +1,112 @@
+{
+  "vi": {
+    "error": "Không thể tải ngôn ngữ này. Vui lòng kiểm tra kết nối của bạn và thử lại.",
+    "loading": "Đang tải ngôn ngữ…",
+    "retry": "Thử lại"
+  },
+  "en": {
+    "error": "Could not load this language. Check your connection and try again.",
+    "loading": "Loading language…",
+    "retry": "Try again"
+  },
+  "lo": {
+    "error": "ບໍ່ສາມາດໂຫຼດພາສານີ້ໄດ້. ກະລຸນາກວດສອບການເຊື່ອມຕໍ່ຂອງທ່ານແລ້ວລອງໃໝ່ອີກຄັ້ງ.",
+    "loading": "ກຳລັງໂຫຼດພາສາ…",
+    "retry": "ລອງໃໝ່"
+  },
+  "ms": {
+    "error": "Tidak dapat memuatkan bahasa ini. Sila semak sambungan anda dan cuba lagi.",
+    "loading": "Memuatkan bahasa…",
+    "retry": "Cuba lagi"
+  },
+  "ja": {
+    "error": "この言語を読み込めませんでした。接続を確認して、もう一度お試しください。",
+    "loading": "言語を読み込み中…",
+    "retry": "再試行"
+  },
+  "th": {
+    "error": "ไม่สามารถโหลดภาษานี้ได้ โปรดตรวจสอบการเชื่อมต่อของคุณแล้วลองใหม่อีกครั้ง",
+    "loading": "กำลังโหลดภาษา…",
+    "retry": "ลองใหม่อีกครั้ง"
+  },
+  "ko": {
+    "error": "이 언어를 불러올 수 없습니다. 연결 상태를 확인하고 다시 시도하세요.",
+    "loading": "언어를 불러오는 중…",
+    "retry": "다시 시도"
+  },
+  "zh-Hans": {
+    "error": "无法加载此语言。请检查您的连接并重试。",
+    "loading": "正在加载语言…",
+    "retry": "重试"
+  },
+  "zh-Hant": {
+    "error": "無法載入此語言。請檢查您的連線並重試。",
+    "loading": "正在載入語言…",
+    "retry": "重試"
+  },
+  "ru": {
+    "error": "Не удалось загрузить этот язык. Проверьте соединение и попробуйте еще раз.",
+    "loading": "Загрузка языка…",
+    "retry": "Попробовать снова"
+  },
+  "hi": {
+    "error": "यह भाषा लोड नहीं हो सकी। अपना कनेक्शन जांचें और पुनः प्रयास करें।",
+    "loading": "भाषा लोड हो रही है…",
+    "retry": "पुनः प्रयास करें"
+  },
+  "ar": {
+    "error": "تعذر تحميل هذه اللغة. يرجى التحقق من اتصالك والمحاولة مرة أخرى.",
+    "loading": "جارٍ تحميل اللغة…",
+    "retry": "حاول مرة أخرى"
+  },
+  "fil": {
+    "error": "Hindi ma-load ang wikang ito. Suriin ang iyong koneksyon at subukan muli.",
+    "loading": "Naglo-load ng wika…",
+    "retry": "Subukan muli"
+  },
+  "de": {
+    "error": "Diese Sprache konnte nicht geladen werden. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "loading": "Sprache wird geladen…",
+    "retry": "Erneut versuchen"
+  },
+  "my": {
+    "error": "ဤဘာသာစကားကို တင်၍မရပါ။ သင့်အင်တာနက်ချိတ်ဆက်မှုကို စစ်ဆေးပြီး ထပ်ကြိုးစားကြည့်ပါ။",
+    "loading": "ဘာသာစကားကို တင်နေသည်…",
+    "retry": "ထပ်ကြိုးစားပါ"
+  },
+  "ur": {
+    "error": "اس زبان کو لوڈ نہیں کیا جا سکا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+    "loading": "زبان لوڈ ہو رہی ہے…",
+    "retry": "دوبارہ کوشش کریں"
+  },
+  "si": {
+    "error": "මෙම භාෂාව පූරණය කිරීමට නොහැකි විය. කරුණාකර ඔබගේ සම්බන්ධතාවය පරීක්ෂා කර නැවත උත්සාහ කරන්න.",
+    "loading": "භාෂාව පූරණය වෙමින් පවතී…",
+    "retry": "නැවත උත්සාහ කරන්න"
+  },
+  "id": {
+    "error": "Tidak dapat memuat bahasa ini. Silakan periksa koneksi Anda dan coba lagi.",
+    "loading": "Memuat bahasa…",
+    "retry": "Coba lagi"
+  },
+  "nl": {
+    "error": "Kan deze taal niet laden. Controleer uw verbinding en probeer het opnieuw.",
+    "loading": "Taal wordt geladen…",
+    "retry": "Opnieuw proberen"
+  },
+  "sr": {
+    "error": "Није могуће учитати овај језик. Проверите везу и покушајте поново.",
+    "loading": "Учитавање језика…",
+    "retry": "Покушајте поново"
+  },
+  "hy": {
+    "error": "Հնարավոր չէ բեռնել այս լեզուն: Ստուգեք ձեր կապը և փորձեք կրկին:",
+    "loading": "Լեզուն բեռնվում է…",
+    "retry": "Փորձել կրկին"
+  },
+  "bn": {
+    "error": "এই ভাষাটি লোড করা সম্ভব হয়নি। আপনার সংযোগ পরীক্ষা করুন এবং পুনরায় চেষ্টা করুন।",
+    "loading": "ভাষা লোড হচ্ছে…",
+    "retry": "পুনরায় চেষ্টা করুন"
+  }
+}

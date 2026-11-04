@@ -703,7 +703,7 @@ function GroupCard({
 export default function AdminActiveGroupsPage({ mode = "admin" }: { mode?: "admin" | "workspace" }) {
   const isAdmin = mode === "admin";
   const { language } = useLanguage();
-  const localizedWorkspaceText = workspaceText[language];
+  const localizedWorkspaceText = workspaceText[language === "vi" ? "vi" : "en"];
   const [search, setSearch] = useState("");
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [feedbackIsError, setFeedbackIsError] = useState(false);

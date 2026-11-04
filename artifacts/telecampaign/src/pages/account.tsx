@@ -192,7 +192,7 @@ export default function Account() {
   const [, setLocation] = useLocation();
   const [now, setNow] = useState(() => Date.now());
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), MINUTE_MS);

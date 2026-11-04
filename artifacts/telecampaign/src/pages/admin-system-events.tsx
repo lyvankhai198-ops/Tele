@@ -33,7 +33,7 @@ import {
   PrimaryButton,
   Toast,
 } from "@/components/layout/AppLayout";
-import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 
 type EventFilter = "all" | AdminSystemEvent["eventType"];
 type RangeFilter = "all" | "today";
@@ -129,7 +129,7 @@ const copy = {
 
 type EventCopy = (typeof copy)["en"] | (typeof copy)["vi"];
 
-function formatDate(value: string, language: "vi" | "en") {
+function formatDate(value: string, language: Language) {
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -165,7 +165,7 @@ function eventTone(event: AdminSystemEvent) {
 
 export default function AdminSystemEventsPage() {
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const [range, setRange] = useState<RangeFilter>("all");
@@ -377,7 +377,7 @@ function EventSkeleton() {
 function EventCard({ event, text, language, onRead }: {
   event: AdminSystemEvent;
   text: EventCopy;
-  language: "vi" | "en";
+  language: Language;
   onRead: () => void;
 }) {
   const tone = eventTone(event);

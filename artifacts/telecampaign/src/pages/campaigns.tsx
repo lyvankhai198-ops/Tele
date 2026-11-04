@@ -491,7 +491,7 @@ export default function Campaigns() {
   const { user } = useAuth();
   const isSupportMode = Boolean(user?.support);
   const isAdmin = user?.role === "admin" && !isSupportMode;
-  const c = copy[language];
+  const c = copy[language === "vi" ? "vi" : "en"];
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
 

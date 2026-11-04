@@ -154,7 +154,7 @@ function formatDate(value: string | null, language: string): string {
 export default function AdminNotificationsPage() {
   const queryClient = useQueryClient();
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const { data: notifications, error, isLoading } = useListAdminNotifications();
   const createMutation = useCreateAdminNotification();
   const updateMutation = useUpdateAdminNotification();

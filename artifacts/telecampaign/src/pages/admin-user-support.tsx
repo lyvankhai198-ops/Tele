@@ -380,7 +380,7 @@ export default function AdminUserSupportPage({ userId }: { userId: string }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const [expandedCampaignIds, setExpandedCampaignIds] = useState<Set<string>>(() => new Set());
   const [cloneCampaign, setCloneCampaign] = useState<AdminUserSupportCampaign | null>(null);
   const [cloneAccountId, setCloneAccountId] = useState("");

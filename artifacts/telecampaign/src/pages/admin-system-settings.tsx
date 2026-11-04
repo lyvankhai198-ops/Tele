@@ -216,7 +216,7 @@ function LimitControl({
 
 export default function AdminSystemSettingsPage() {
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const queryClient = useQueryClient();
   const settingsQuery = useGetAdminSystemSettings();
   const update = useUpdateAdminSystemSettings();

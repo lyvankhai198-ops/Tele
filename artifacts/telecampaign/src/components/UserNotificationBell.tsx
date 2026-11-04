@@ -10,7 +10,8 @@ import {
   type UserNotification,
   type UserNotificationList,
 } from "@workspace/api-client-react";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, type Language } from "@/lib/i18n";
+import { interfaceSystemNotification } from "@/lib/interface-runtime";
 
 const copy = {
   vi: {
@@ -35,7 +36,7 @@ const copy = {
   },
 } as const;
 
-function formatDate(value: string, language: "vi" | "en") {
+function formatDate(value: string, language: Language) {
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-GB", {
     dateStyle: "short",
     timeStyle: "short",
@@ -52,7 +53,7 @@ function NotificationIcon({ kind }: { kind: UserNotification["kind"] }) {
 
 export function UserNotificationBell() {
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -181,8 +182,11 @@ export function UserNotificationBell() {
               </div>
             ) : (
               notificationsQuery.data.notifications.map((notification) => {
-                const title = language === "en" ? notification.titleEn : notification.title;
-                const body = language === "en" ? notification.bodyEn : notification.body;
+                const systemGenerated = notification.kind === "subscription" || notification.kind === "campaign";
+                const title = language === "vi" ? notification.title
+                  : interfaceSystemNotification(notification.titleEn, language, !systemGenerated);
+                const body = language === "vi" ? notification.body
+                  : interfaceSystemNotification(notification.bodyEn, language, !systemGenerated);
                 return (
                   <button
                     type="button"

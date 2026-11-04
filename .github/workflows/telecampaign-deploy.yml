@@ -80,6 +80,8 @@ jobs:
           node --test scripts/tests/campaign-template-jobs.test.mjs
           node --test scripts/tests/campaign-list-feedback.test.mjs
           node --test scripts/tests/campaign-load-counter.test.mjs
+          node --test scripts/tests/interface-locales.test.mjs scripts/tests/interface-localization-plugin.test.mjs scripts/tests/interface-catalogs.test.mjs scripts/tests/interface-language-selector.test.mjs
+          node scripts/collect-interface-catalog.mjs --check
           node --test scripts/tests/campaign-account-filter.test.mjs
           node --test scripts/tests/operations.test.mjs
           node --test scripts/tests/operations-progress.test.mjs
@@ -145,7 +147,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: candidate/artifacts/telecampaign/dist
-          key: telecamp-ui24-v1-${{ runner.os }}-${{ steps.frontend-env.outputs.hash }}-${{ hashFiles('candidate/artifacts/telecampaign/**', 'candidate/lib/api-client-react/**', 'candidate/lib/api-zod/**', 'candidate/pnpm-lock.yaml', 'candidate/pnpm-workspace.yaml', 'candidate/tsconfig.base.json', '!candidate/**/node_modules/**', '!candidate/**/dist/**', '!candidate/**/.vite/**') }}
+          key: telecamp-ui24-v1-${{ runner.os }}-${{ steps.frontend-env.outputs.hash }}-${{ hashFiles('candidate/artifacts/telecampaign/**', 'candidate/scripts/interface-localization-plugin.mjs', 'candidate/lib/api-client-react/**', 'candidate/lib/api-zod/**', 'candidate/pnpm-lock.yaml', 'candidate/pnpm-workspace.yaml', 'candidate/tsconfig.base.json', '!candidate/**/node_modules/**', '!candidate/**/dist/**', '!candidate/**/.vite/**') }}
       - name: Build and package ready-to-run runtime on GitHub
         working-directory: candidate
         env:

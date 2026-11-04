@@ -2405,7 +2405,7 @@ components:
         id: { type: string }
         username: { type: string }
         role: { type: string, enum: [user, admin] }
-        preferredLanguage: { type: string, enum: [vi, en] }
+        preferredLanguage: { type: string, enum: [vi, en, lo, ms, ja, th, ko, zh-Hans, zh-Hant, ru, hi, ar, fil, de, my, ur, si, id, nl, sr, hy, bn] }
         mustChangePassword: { type: boolean }
         support:
           type: ["object", "null"]
@@ -2426,7 +2426,7 @@ components:
         confirmPassword: { type: string, minLength: 10, maxLength: 128 }
         captchaChallengeId: { type: string, minLength: 1, maxLength: 128 }
         captchaCode: { type: string, minLength: 1, maxLength: 32 }
-        preferredLanguage: { type: string, enum: [vi, en] }
+        preferredLanguage: { type: string, enum: [vi, en, lo, ms, ja, th, ko, zh-Hans, zh-Hant, ru, hi, ar, fil, de, my, ur, si, id, nl, sr, hy, bn] }
     LoginInput:
       type: object
       required: [username, password, captchaChallengeId, captchaCode]
@@ -3776,7 +3776,7 @@ components:
       type: object
       required: [preferredLanguage]
       properties:
-        preferredLanguage: { type: string, enum: [vi, en] }
+        preferredLanguage: { type: string, enum: [vi, en, lo, ms, ja, th, ko, zh-Hans, zh-Hant, ru, hi, ar, fil, de, my, ur, si, id, nl, sr, hy, bn] }
     CreateAdminLicenseKeyInput:
       type: object
       required: [plan, durationDays, quantity, salePriceVnd]

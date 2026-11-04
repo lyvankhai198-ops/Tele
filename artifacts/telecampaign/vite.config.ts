@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
+import interfaceLocalizationPlugin from '../../scripts/interface-localization-plugin.mjs';
 
 const rawPort = process.env.PORT;
 
@@ -30,7 +31,7 @@ if (!basePath) {
 export default defineConfig({
   base: basePath,
   plugins: [
-    react(),
+    react({ babel: { plugins: [interfaceLocalizationPlugin] } }),
     tailwindcss({ optimize: false }),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== 'production' &&

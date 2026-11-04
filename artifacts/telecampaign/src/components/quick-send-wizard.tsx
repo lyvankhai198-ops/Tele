@@ -305,7 +305,7 @@ function destinationLabel(destination: Destination, generalTopic: string) {
 
 export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   const { language } = useLanguage();
-  const c = copy[language];
+  const c = copy[language === "vi" ? "vi" : "en"];
   const initialDraft = useRef(readQuickSendDraft());
   const accounts = useListTelegramAccounts();
   const destinations = useListDestinations({

@@ -117,7 +117,7 @@ function CustomerRow({ customer, index, text }: { customer: AdminLoyalCustomer; 
 
 export default function AdminRevenuePage() {
   const { language } = useLanguage();
-  const text = copy[language] as RevenueCopy;
+  const text = copy[language === "vi" ? "vi" : "en"] as RevenueCopy;
   const { data, isLoading, error } = useGetAdminRevenueInsights({
     query: {
       queryKey: getGetAdminRevenueInsightsQueryKey(),

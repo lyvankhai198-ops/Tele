@@ -1,10 +1,14 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { feedbackTranslations } from "./feedback-i18n";
+import { getInterfaceLocale, isInterfaceLanguage, type InterfaceLanguage } from "./locales";
+import { activateInterfaceLanguage, clearAnonymousInterfaceLanguage, interfaceCopy, interfaceText, isInterfaceCatalogLoaded, loadInterfaceCatalog, pendingAnonymousInterfaceLanguage, readStoredInterfaceLanguage, rememberAnonymousInterfaceLanguage } from "./interface-runtime";
+import bootstrap from "./locale-catalogs/bootstrap.json";
 
-export type Language = "vi" | "en";
+export type Language = InterfaceLanguage;
+export { interfaceCopy, interfaceText, readStoredInterfaceLanguage };
 
 /** Vietnamese translations keyed by the English source string. */
-const translations: Record<string, string> = {
+export const translations: Record<string, string> = {
   ...feedbackTranslations,
   "Announcement popups": "Thông báo popup",
   "Groups": "Nhóm",
@@ -615,7 +619,7 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
   if(/OPERATION_NOT_FOUND/.test(message))return language==="vi"?"Không tìm thấy dữ liệu hoặc bạn không có quyền truy cập.":"The data was not found or you do not have access.";
   if(/OPERATION_[A-Z_]+/.test(message))return language==="vi"?"Chưa xác nhận được thao tác. Hãy kiểm tra tiến trình trước khi thử lại.":"The operation could not be confirmed. Check progress before trying again.";
   const cleanMessage = message.replace(/^HTTP \d{3}(?: [^:]*)?:\s*/, "");
-  const captchaMessages: Record<string, Record<Language, string>> = {
+  const captchaMessages: Record<string, Record<"vi" | "en", string>> = {
     CAPTCHA_REQUIRED: {
       vi: "Mã CAPTCHA không tồn tại hoặc đã được sử dụng. Vui lòng đổi mã mới.",
       en: "The CAPTCHA is missing or was already used. Please load a new code.",
@@ -637,8 +641,8 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
       en: "Too many CAPTCHA codes were requested. Please try again in 15 minutes.",
     },
   };
-  if (captchaMessages[cleanMessage]) return captchaMessages[cleanMessage][language];
-  const recoveryMessages: Record<string, Record<Language, string>> = {
+  if (captchaMessages[cleanMessage]) return interfaceCopy(captchaMessages[cleanMessage], language);
+  const recoveryMessages: Record<string, Record<"vi" | "en", string>> = {
     "Bạn đã yêu cầu khôi phục quá nhiều lần. Vui lòng thử lại sau 15 phút": {
       vi: "Bạn đã yêu cầu khôi phục quá nhiều lần. Vui lòng thử lại sau 15 phút.",
       en: "Too many password recovery requests. Please try again in 15 minutes.",
@@ -660,8 +664,8 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
       en: "Password recovery is temporarily unavailable. Please try again later.",
     },
   };
-  if (recoveryMessages[cleanMessage]) return recoveryMessages[cleanMessage][language];
-  const purchaseOrderMessages: Record<string, Record<Language, string>> = {
+  if (recoveryMessages[cleanMessage]) return interfaceCopy(recoveryMessages[cleanMessage], language);
+  const purchaseOrderMessages: Record<string, Record<"vi" | "en", string>> = {
     MANUAL_RECEIPT_CONFIRMATION_REQUIRED: {
       vi: "Hãy xác nhận đã đối chiếu tiền thực nhận trong ngân hàng trước khi duyệt đơn VND.",
       en: "Confirm that you matched the received bank transfer before approving this VND order.",
@@ -683,7 +687,7 @@ export function localizedErrorMessage(error: unknown, language: Language, fallba
       en: "Only an activated order can be revoked.",
     },
   };
-  if (purchaseOrderMessages[cleanMessage]) return purchaseOrderMessages[cleanMessage][language];
+  if (purchaseOrderMessages[cleanMessage]) return interfaceCopy(purchaseOrderMessages[cleanMessage], language);
   if (/Every restricted destination requires a confirmed schedule at least 5 minutes after Telegram restores posting permission/i.test(cleanMessage)) {
     return language === "vi"
       ? "Mỗi nhóm đang bị hạn chế cần có lịch đã xác nhận, ít nhất 5 phút sau khi Telegram khôi phục quyền đăng."
@@ -771,6 +775,8 @@ export function localizedDeliveryErrorMessage(error: unknown, language: Language
 type LanguageContextValue = {
   language: Language;
   setLanguage: (language: Language) => void;
+  isChangingLanguage: boolean;
+  languageError: string | null;
   /** Translate a string. In VI mode returns the Vietnamese translation; in EN mode returns the key as-is. */
   t: (value: string) => string;
   /** Translate with simple {{variable}} interpolation. */
@@ -780,64 +786,171 @@ type LanguageContextValue = {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 /** Resolve {{variable}} placeholders in a string. */
-function interpolate(text: string, vars: Record<string, string | number>): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(vars[key] ?? `{{${key}}}`));
-}
-
 export function LanguageProvider({
   children,
   preferredLanguage,
   onLanguageChange,
+  ownerScope = "anonymous",
 }: {
   children: ReactNode;
   preferredLanguage?: Language;
   onLanguageChange?: (language: Language) => void | Promise<void>;
+  ownerScope?: string;
 }) {
-  const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === "undefined") return "vi";
-    return window.localStorage.getItem("telecampaign-language") === "en" ? "en" : "vi";
-  });
+  const [language, setLanguageState] = useState<Language>(readStoredInterfaceLanguage);
+  const [isChangingLanguage, setIsChangingLanguage] = useState(false);
+  const [languageError, setLanguageError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const scope = useRef(ownerScope);
+  scope.current = ownerScope;
+  const switching = useRef(false);
 
   useEffect(() => {
-    if (preferredLanguage) setLanguage(preferredLanguage);
-  }, [preferredLanguage]);
+    let live = true;
+    const pendingChoice = pendingAnonymousInterfaceLanguage();
+    if (ownerScope !== "anonymous" && pendingChoice) {
+      const requestedScope = scope.current;
+      void (async () => {
+        try {
+          await loadInterfaceCatalog(pendingChoice);
+          if (!live || scope.current !== requestedScope) return;
+          if (pendingChoice !== preferredLanguage) await onLanguageChange?.(pendingChoice);
+          if (!live || scope.current !== requestedScope) return;
+          setLanguageState(pendingChoice);
+          clearAnonymousInterfaceLanguage(pendingChoice);
+        } catch {
+          if (live && scope.current === requestedScope) {
+            setLanguageError(isInterfaceCatalogLoaded(language)
+              ? interfaceText("Could not save your language preference. Please try again.", language)
+              : bootstrap[language].error);
+          }
+        }
+      })();
+    } else if (isInterfaceLanguage(preferredLanguage)) {
+      setLanguageState(preferredLanguage);
+    }
+    return () => { live = false; };
+  }, [preferredLanguage, ownerScope]);
 
   useEffect(() => {
-    window.localStorage.setItem("telecampaign-language", language);
+    let live = true;
+    setLoadError(false);
+    if (!isInterfaceCatalogLoaded(language)) {
+      void loadInterfaceCatalog(language).then(() => {
+        if (live) setRevision((value) => value + 1);
+      }).catch(() => { if (live) setLoadError(true); });
+    }
+    return () => { live = false; };
+  }, [language, revision]);
+
+  const ready = isInterfaceCatalogLoaded(language);
+  useEffect(() => {
+    if (!ready) return;
+    try { window.localStorage.setItem("telecampaign-language", language); } catch { /* Private browsing may deny persistence. */ }
     document.documentElement.lang = language;
-  }, [language]);
+    // Keep navigation/layout positions fixed; only text blocks use RTL.
+    document.documentElement.dir = "ltr";
+    document.documentElement.dataset.interfaceDirection = getInterfaceLocale(language).direction;
+  }, [language, ready]);
 
-  const changeLanguage = (nextLanguage: Language) => {
-    setLanguage(nextLanguage);
-    void onLanguageChange?.(nextLanguage);
-  };
+  const changeLanguage = useCallback((nextLanguage: Language) => {
+    if (!isInterfaceLanguage(nextLanguage) || switching.current || (nextLanguage === language && !languageError && !pendingAnonymousInterfaceLanguage())) return;
+    const requestedScope = scope.current;
+    switching.current = true;
+    setIsChangingLanguage(true);
+    setLanguageError(null);
+    void (async () => {
+      try {
+        await loadInterfaceCatalog(nextLanguage);
+        if (scope.current !== requestedScope) return;
+        try { await onLanguageChange?.(nextLanguage); }
+        catch {
+          if (scope.current === requestedScope) setLanguageError(interfaceText("Could not save your language preference. Please try again.", language));
+          return;
+        }
+        if (scope.current !== requestedScope) return;
+        activateInterfaceLanguage(nextLanguage);
+        if (requestedScope === "anonymous") rememberAnonymousInterfaceLanguage(nextLanguage);
+        else {
+          const pendingChoice = pendingAnonymousInterfaceLanguage();
+          if (pendingChoice) clearAnonymousInterfaceLanguage(pendingChoice);
+        }
+        setLanguageState(nextLanguage);
+      } catch {
+        if (scope.current === requestedScope) setLanguageError(bootstrap[language].error);
+      } finally {
+        switching.current = false;
+        setIsChangingLanguage(false);
+      }
+    })();
+  }, [language, languageError, onLanguageChange]);
 
   const value = useMemo<LanguageContextValue>(() => ({
     language,
     setLanguage: changeLanguage,
-    t: (value: string) => language === "vi" ? (translations[value] ?? value) : value,
-    ti: (value: string, vars: Record<string, string | number>) => {
-      const translated = language === "vi" ? (translations[value] ?? value) : value;
-      return interpolate(translated, vars);
-    },
-  }), [language, onLanguageChange]);
+    isChangingLanguage,
+    languageError,
+    t: (text: string) => interfaceText(text, language),
+    ti: (text: string, vars: Record<string, string | number>) => interfaceText(text, language, vars),
+  }), [language, changeLanguage, isChangingLanguage, languageError]);
 
+  if (!ready) return (
+    <main lang={language} dir={getInterfaceLocale(language).direction}
+      className="grid min-h-screen place-items-center bg-[#f3f7fb] p-6 text-[#334155]">
+      <div role={loadError ? "alert" : "status"} aria-busy={!loadError} className="max-w-sm space-y-4 text-center">
+        {!loadError && <span aria-hidden="true" className="mx-auto block h-7 w-7 animate-spin rounded-full border-2 border-[#c7d2fe] border-t-[#4338ca] motion-reduce:animate-none" />}
+        <p>{loadError ? bootstrap[language].error : bootstrap[language].loading}</p>
+        {loadError && <button type="button" className="rounded-xl bg-[#4338ca] px-5 py-2.5 font-semibold text-white"
+          onClick={() => setRevision((value) => value + 1)}>{bootstrap[language].retry}</button>}
+      </div>
+    </main>
+  );
+  activateInterfaceLanguage(language);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
 export function LanguageOverride({ language, setLanguage, children }: { language: Language; setLanguage?: (language: Language) => void; children: ReactNode }) {
   const parent = useLanguage();
+  const [revision, setRevision] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setLoadError(false);
+    if (!isInterfaceCatalogLoaded(language)) {
+      void loadInterfaceCatalog(language).then(() => {
+        if (live) setRevision((value) => value + 1);
+      }).catch(() => { if (live) setLoadError(true); });
+    }
+    return () => { live = false; };
+  }, [language, revision]);
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.documentElement.dataset.interfaceDirection = getInterfaceLocale(language).direction;
+    return () => {
+      activateInterfaceLanguage(parent.language);
+      document.documentElement.lang = parent.language;
+      document.documentElement.dataset.interfaceDirection = getInterfaceLocale(parent.language).direction;
+    };
+  }, [language, parent.language]);
   const value = useMemo<LanguageContextValue>(() => ({
     ...parent,
     language,
     setLanguage: setLanguage ?? parent.setLanguage,
-    t: (text: string) => language === "vi" ? (translations[text] ?? text) : text,
-    ti: (text: string, vars: Record<string, string | number>) => {
-      const translated = language === "vi" ? (translations[text] ?? text) : text;
-      return interpolate(translated, vars);
-    },
+    t: (text: string) => interfaceText(text, language),
+    ti: (text: string, vars: Record<string, string | number>) => interfaceText(text, language, vars),
   }), [language, parent, setLanguage]);
 
+  if (!isInterfaceCatalogLoaded(language)) return (
+    <div role={loadError ? "alert" : "status"} lang={language} dir={getInterfaceLocale(language).direction}
+      className="grid min-h-screen place-items-center bg-[#f3f7fb] p-6 text-center text-[#334155]">
+      <div><p>{loadError ? bootstrap[language].error : bootstrap[language].loading}</p>
+        {loadError && <button type="button" className="mt-4 rounded-xl bg-[#4338ca] px-4 py-2 text-white"
+          onClick={() => setRevision((value) => value + 1)}>{bootstrap[language].retry}</button>}
+      </div>
+    </div>
+  );
+  activateInterfaceLanguage(language);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 

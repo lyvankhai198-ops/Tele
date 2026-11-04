@@ -226,7 +226,7 @@ const copy = {
 } as const;
 
 function ConnectionPrivacyNotice({ language }: { language: Language }) {
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   return (
     <aside role="note" className="mb-5 rounded-2xl border border-[#bde4f9] bg-[#f0f9ff] p-4" data-testid="telegram-connection-privacy">
       <div className="mb-2 flex items-center gap-2 text-[#075985]">
@@ -356,7 +356,7 @@ type LoginFlow = {
 
 export default function Accounts() {
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const queryClient = useQueryClient();
   const accounts = useListTelegramAccounts();
   const createAccount = useCreateTelegramAccount();

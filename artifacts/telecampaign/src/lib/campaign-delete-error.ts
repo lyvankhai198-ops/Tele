@@ -1,4 +1,6 @@
-export function campaignDeleteError(error: unknown, language: "vi" | "en"): string {
+import type { InterfaceLanguage } from "./locales";
+
+export function campaignDeleteError(error: unknown, language: InterfaceLanguage): string {
   const message = error instanceof Error ? error.message : "";
   if (message.includes("CAMPAIGN_DELETE_BUSY")) return language === "vi"
     ? "Dữ liệu đang bận. Lần xóa này đã được hủy an toàn, vui lòng thử lại sau ít giây."

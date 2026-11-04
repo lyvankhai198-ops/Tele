@@ -48,13 +48,15 @@ import FeedbackPage from '@/pages/feedback';
 import AdminPopupsPage from '@/pages/admin-popups';
 import { AnnouncementPopup } from '@/components/AnnouncementPopup';
 import { SupportChatWidget } from '@/components/support-chat-widget';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { getInterfaceLocale } from '@/lib/locales';
 
 const queryClient = new QueryClient();
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 function AuthShell({ children }: { children: ReactNode }) {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, isChangingLanguage, languageError } = useLanguage();
   return (
     <main className="min-h-screen bg-[#f3f7fb] px-4 py-8 text-[#16304a] sm:grid sm:place-items-center sm:p-8">
       <section className="mx-auto w-full max-w-[440px]">
@@ -66,37 +68,17 @@ function AuthShell({ children }: { children: ReactNode }) {
               <span className="block text-xs text-[#66809a]">{t('Telegram Campaign Manager')}</span>
             </span>
           </div>
-          <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-lg border border-[#dbe6f0] bg-white p-1 shadow-sm" aria-label={language === 'vi' ? 'Chọn ngôn ngữ' : 'Choose language'}>
-            {(['vi', 'en'] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setLanguage(option)}
-                aria-pressed={language === option}
-                className={`rounded-md px-2 py-1 text-[10px] font-extrabold tracking-wide transition ${
-                  language === option
-                    ? 'bg-[#1888e8] text-white shadow-sm'
-                    : 'text-[#7190ab] hover:bg-[#eef6fc] hover:text-[#16304a]'
-                }`}
-              >
-                {option.toUpperCase()}
-              </button>
-            ))}
+          <div className="absolute right-0 top-1/2 w-36 max-w-[48%] -translate-y-1/2">
+            <LanguageSelector language={language} onChange={setLanguage} disabled={isChangingLanguage} compact />
           </div>
         </div>
         <div className="mb-4 flex items-center justify-center gap-2 rounded-2xl border border-[#bde4f9] bg-[#eff8ff] px-3 py-2.5 text-center shadow-sm">
           <Languages className="h-4 w-4 shrink-0 text-[#1888e8]" aria-hidden="true" />
           <p className="text-[12px] font-semibold leading-5 text-[#48647c]">
-            <span>International visitors:</span>{" "}
-            <button
-              type="button"
-              onClick={() => setLanguage('en')}
-              className="font-extrabold text-[#0877d5] underline decoration-[#7dd3fc] underline-offset-2 hover:text-[#075985]"
-            >
-              Tap EN
-            </button>
+            <span>{t("Language")}: </span><bdi lang={language}>{getInterfaceLocale(language).native}</bdi>
           </p>
         </div>
+        {languageError && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{languageError}</p>}
         <div className="rounded-3xl border border-[#dbe6f0] bg-white p-6 shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-8">
           {children}
         </div>
@@ -906,15 +888,17 @@ function AdminRoute({ children }: { children: ReactNode }) {
 
 function AdminLanguageScope({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const parentLanguage = useLanguage();
   const [location] = useLocation();
-  const [adminLanguage, setAdminLanguage] = useState<Language>(user?.preferredLanguage ?? "vi");
+  const [adminLanguage, setAdminLanguage] = useState<Language>(parentLanguage.language);
   useEffect(() => {
-    if (user?.role === "admin") setAdminLanguage(user.preferredLanguage ?? "vi");
+    if (user?.role === "admin") setAdminLanguage(parentLanguage.language);
   }, [user?.id]);
+  useEffect(() => { setAdminLanguage(parentLanguage.language); }, [parentLanguage.language]);
   const adminSurface = location === "/admin" || location.startsWith("/admin/")
     || location === "/dashboard/feedback";
   return user?.role === "admin" && adminSurface
-    ? <LanguageOverride language={adminLanguage} setLanguage={setAdminLanguage}>{children}</LanguageOverride>
+    ? <LanguageOverride language={adminLanguage} setLanguage={parentLanguage.setLanguage}>{children}</LanguageOverride>
     : children;
 }
 
@@ -984,7 +968,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 
 function UserLanguageProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const persistLanguage = useCallback(async (preferredLanguage: "vi" | "en") => {
+  const persistLanguage = useCallback(async (preferredLanguage: Language) => {
     if (!user) return;
     const response = await fetch("/api/auth/language", {
       method: "PATCH",
@@ -1001,6 +985,7 @@ function UserLanguageProvider({ children }: { children: ReactNode }) {
     <LanguageProvider
       preferredLanguage={user?.preferredLanguage}
       onLanguageChange={persistLanguage}
+      ownerScope={user?.id ?? "anonymous"}
     >
       {children}
     </LanguageProvider>

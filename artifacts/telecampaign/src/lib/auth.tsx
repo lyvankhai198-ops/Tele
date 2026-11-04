@@ -7,7 +7,7 @@ import type {
   PasswordResetRequestResult,
   SupportSession,
 } from "@workspace/api-client-react";
-import { localizedErrorMessage, type Language } from "@/lib/i18n";
+import { interfaceCopy, localizedErrorMessage, readStoredInterfaceLanguage, type Language } from "@/lib/i18n";
 
 export type AuthUser = {
   id: string;
@@ -34,14 +34,13 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const serverFallback: Record<Language, string> = {
+const serverFallback = {
   en: "Could not connect to server. Please try again.",
   vi: "Không thể kết nối máy chủ. Vui lòng thử lại",
 };
 
 function currentLanguage(): Language {
-  if (typeof window === "undefined") return "vi";
-  return window.localStorage.getItem("telecampaign-language") === "en" ? "en" : "vi";
+  return readStoredInterfaceLanguage();
 }
 
 async function authRequest<T>(path: string, language: Language, init?: RequestInit): Promise<T> {
@@ -53,7 +52,7 @@ async function authRequest<T>(path: string, language: Language, init?: RequestIn
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(typeof payload?.error === "string" ? payload.error : serverFallback[language]);
+    throw new Error(typeof payload?.error === "string" ? payload.error : interfaceCopy(serverFallback, language));
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

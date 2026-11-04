@@ -15,9 +15,9 @@ function buttonInk(color: string) {
 export function PopupDialog({ popup, close, preview = false, mobile = false, previewLanguage, previewControls }: {
   popup: Popup; close: () => void; preview?: boolean; mobile?: boolean; previewLanguage?: "vi" | "en"; previewControls?: ReactNode;
 }) {
-  const context = useLanguage(), language = previewLanguage ?? context.language, text = popupCopy[language];
+  const context = useLanguage(), language = previewLanguage ?? context.language, text = popupCopy[language === "vi" ? "vi" : "en"];
   const [, navigate] = useLocation();
-  const english = language === "en";
+  const english = language !== "vi";
   const title = english ? popup.titleEn || popup.title : popup.title;
   const body = english ? popup.bodyEn || popup.body : popup.body;
   const button = english ? popup.buttonEn || popup.button : popup.button;

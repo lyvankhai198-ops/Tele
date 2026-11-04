@@ -123,6 +123,15 @@ try {
   const userLogin = await login("fixture_customer");
   check(userLogin.status === 200, "E2E_USER_LOGIN");
   const userCookie = userLogin.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
+  phase = "E2E_ALL_INTERFACE_LANGUAGES";
+  const interfaceLanguages = ["vi", "en", "lo", "ms", "ja", "th", "ko", "zh-Hans", "zh-Hant", "ru", "hi", "ar", "fil", "de", "my", "ur", "si", "id", "nl", "sr", "hy", "bn"];
+  for (const preferredLanguage of interfaceLanguages) {
+    const updated = await request("/auth/language", userCookie, { preferredLanguage }, "PATCH");
+    check(updated.status === 200, "E2E_INTERFACE_LANGUAGE_ACCEPTED");
+    check((await updated.json() as any).preferredLanguage === preferredLanguage, "E2E_INTERFACE_LANGUAGE_PERSISTED");
+  }
+  check((await request("/auth/language", userCookie, { preferredLanguage: "__proto__" }, "PATCH")).status === 400, "E2E_INVALID_INTERFACE_LANGUAGE_REJECTED");
+  check((await request("/auth/language", userCookie, { preferredLanguage: "vi" }, "PATCH")).status === 200, "E2E_INTERFACE_LANGUAGE_RESET");
   phase="E2E_RERUN_SAFETY";
   await testCampaignRerunSafety({ownerId:adminId,ownerCookie:adminCookie,
     otherOwnerId:userId,otherCookie:userCookie,request});

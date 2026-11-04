@@ -136,7 +136,7 @@ function ReleaseFields({ values, setValues, text, disabled = false }: {
 export default function AdminReleaseUpdatesPage() {
   const queryClient = useQueryClient();
   const { language } = useLanguage();
-  const text = copy[language];
+  const text = copy[language === "vi" ? "vi" : "en"];
   const list = useListReleaseUpdates({
     query: {
       queryKey: getListReleaseUpdatesQueryKey(),

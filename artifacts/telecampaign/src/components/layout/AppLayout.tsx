@@ -26,6 +26,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
+import { LanguageSelector } from "@/components/LanguageSelector";
 import { useAuth } from "@/lib/auth";
 import { useAdminBack } from "@/components/admin/AdminNavigationProvider";
 import { getListAdminSystemEventsQueryKey, useGetGroupLibraryAccess, useGetSystemDefaults, useListAdminSystemEvents } from "@workspace/api-client-react";
@@ -99,7 +100,7 @@ export function AppLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [adminGroupOpen, setAdminGroupOpen] = useState<Record<string, boolean>>({});
   const [location, setLocation] = useLocation();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, isChangingLanguage, languageError } = useLanguage();
   const { user, logout, exitSupport } = useAuth();
   const { canGoBack, goBack } = useAdminBack();
   const isSupportMode = Boolean(user?.support);
@@ -316,30 +317,10 @@ export function AppLayout({
         <div className="p-4 border-t border-[#eef2f6]">
           <div className={`border border-[#eef2f6] rounded-2xl p-2.5 bg-[#f8fafc] ${nationalDayThemeActive ? "national-day-language" : ""}`}>
             <div className="flex items-center gap-2 px-2 pb-2.5 text-[11px] font-extrabold text-[#64748b] uppercase tracking-wider">
-              NGÔN NGỮ / LANGUAGE
+              {t("Language")}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setLanguage("vi")}
-                aria-pressed={language === "vi"}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                  language === "vi" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
-                }`}
-                data-testid="language-vi"
-              >
-                VI
-              </button>
-              <button
-                onClick={() => setLanguage("en")}
-                aria-pressed={language === "en"}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-extrabold transition-all ${
-                  language === "en" ? "bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]" : "text-[#64748b] hover:text-[#0f172a] hover:bg-[#e2e8f0]/50"
-                }`}
-                data-testid="language-en"
-              >
-                EN
-              </button>
-            </div>
+            <LanguageSelector language={language} onChange={setLanguage} disabled={isChangingLanguage} placement="top" />
+            {languageError && <p role="alert" className="mt-2 text-xs text-red-700">{languageError}</p>}
           </div>
           <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Telegram Campaign Manager v2.0</div>
         </div>

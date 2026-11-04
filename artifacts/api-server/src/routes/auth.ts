@@ -331,7 +331,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     void notifySupportNewRegistration({
       userId: user.id,
       username: user.username,
-      preferredLanguage: user.preferredLanguage as "vi" | "en",
+      preferredLanguage: user.preferredLanguage,
     }).catch((error) => req.log.warn({ err: error }, "Unable to notify support bot about new registration"));
     res.status(201).json(RegisterAuthResponse.parse(authUserResponse(authenticatedUser)));
   } catch (error) {

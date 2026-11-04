@@ -1,3 +1,5 @@
+import type { InterfaceLanguage } from "@/lib/locales";
+
 export const campaignGuidance = {
   vi: {
     name: "Đặt tùy ý để bạn dễ nhận biết, không gửi tên này vào nhóm.",
@@ -62,18 +64,18 @@ export const campaignGuidance = {
 export type CampaignGuidanceField = "name" | "account" | "template" | "text" | "saved" | "destinations" | "repeat" |
   "delayMin" | "delayMax" | "groupInterval" | "legacyWarning" | "schedule" | "dateOptional" | "dateRequired" | "timeOptional" | "timeRequired";
 export function CampaignFieldNote({ language, field, id, emphasis = false }: {
-  language: "vi" | "en"; field: CampaignGuidanceField; id?: string; emphasis?: boolean;
+  language: InterfaceLanguage; field: CampaignGuidanceField; id?: string; emphasis?: boolean;
 }) {
   return <span id={id} role="note" data-guidance={field} className={`mt-1.5 block text-[12px] font-medium leading-relaxed ${emphasis ? "text-[#b45309]" : "text-[#64748b]"}`}>
-    {campaignGuidance[language][field]}
+    {campaignGuidance[language === "vi" ? "vi" : "en"][field]}
   </span>;
 }
 
 export function CampaignGroupInterval({ language, value, onChange, id = "campaign-group-interval" }: {
-  language: "vi" | "en"; value: string; onChange: (value: string) => void; id?: string;
+  language: InterfaceLanguage; value: string; onChange: (value: string) => void; id?: string;
 }) {
   return <label className="block">
-    <span className="mb-1.5 block text-[13px] font-bold text-[#334155]">{campaignGuidance[language].groupIntervalLabel}</span>
+    <span className="mb-1.5 block text-[13px] font-bold text-[#334155]">{campaignGuidance[language === "vi" ? "vi" : "en"].groupIntervalLabel}</span>
     <input type="number" min="0" max="4320" step="1" value={value}
       onChange={event => onChange(event.target.value)} aria-describedby={`${id}-note`} data-testid={id}
       className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" />
@@ -81,16 +83,16 @@ export function CampaignGroupInterval({ language, value, onChange, id = "campaig
   </label>;
 }
 
-export function GroupCountRecommendation({ language, count }: { language: "vi" | "en"; count: number }) {
+export function GroupCountRecommendation({ language, count }: { language: InterfaceLanguage; count: number }) {
   if (count < 5) return null;
   return <p role="note" data-testid="campaign-group-recommendation"
     className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-medium leading-relaxed text-amber-800">
-    {campaignGuidance[language].fiveGroupWarning}
+    {campaignGuidance[language === "vi" ? "vi" : "en"].fiveGroupWarning}
   </p>;
 }
 
-export function DelayExamples({ language }: { language: "vi" | "en" }) {
-  const text = campaignGuidance[language];
+export function DelayExamples({ language }: { language: InterfaceLanguage }) {
+  const text = campaignGuidance[language === "vi" ? "vi" : "en"];
   return <details className="mt-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3.5 text-[12px] text-[#475569]" data-testid="campaign-delay-examples">
     <summary className="cursor-pointer rounded-lg py-3 font-bold text-[#1d3bb8] outline-none focus-visible:ring-2 focus-visible:ring-[#1d3bb8]">{text.examplesTitle}</summary>
     <div className="space-y-3 pb-3.5 leading-relaxed">
