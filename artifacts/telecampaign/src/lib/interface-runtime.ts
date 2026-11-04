@@ -155,7 +155,16 @@ export function interfaceCopy<T extends { en: unknown; vi: unknown }>(copy: T, l
     if (typeof value === "string") return interfaceText(value, language);
     if (typeof value === "function") return (...args: unknown[]) => localize(value(...args));
     if (Array.isArray(value)) return value.map(localize);
-    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, localize(nested)]));
+    if (value && typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      // Choice records contain transport values as well as presentation copy.
+      // Never translate a filter value, identifier, payload or handler.
+      if (Object.prototype.hasOwnProperty.call(record, "value") && Object.prototype.hasOwnProperty.call(record, "label")) {
+        const presentation = new Set(["label", "title", "description", "hint", "disabledReason"]);
+        return Object.fromEntries(Object.entries(record).map(([key, nested]) => [key, presentation.has(key) ? localize(nested) : nested]));
+      }
+      return Object.fromEntries(Object.entries(record).map(([key, nested]) => [key, localize(nested)]));
+    }
     return value;
   }
   return localize(copy.en) as T["en"];

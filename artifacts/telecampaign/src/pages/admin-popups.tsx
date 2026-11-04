@@ -90,7 +90,7 @@ export default function AdminPopupsPage() {
       </div>
       <div className="mt-6 flex flex-wrap items-center gap-2 border-t pt-5">
         <button disabled={busy || imageBusy || !draft.title.trim() || !draft.body.trim()} onClick={() => void save()} className="rounded-xl bg-indigo-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? text.saving : text.save}</button>
-        <button onClick={() => { setPreview({ ...draft, title: draft.title || text.title, body: draft.body || text.body }); setPreviewLanguage(language); }} className="flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold"><Eye size={16} />{text.preview}</button>
+        <button onClick={() => { setPreview({ ...draft, title: draft.title || text.title, body: draft.body || text.body }); setPreviewLanguage(language === "vi" ? "vi" : "en"); }} className="flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold"><Eye size={16} />{text.preview}</button>
         <select aria-label={text.preview} value={mobile ? "mobile" : "desktop"} onChange={e => setMobile(e.target.value === "mobile")} className="rounded-xl border p-3 text-sm"><option value="desktop">{text.desktop}</option><option value="mobile">{text.mobile}</option></select>
         <button disabled={busy} onClick={() => setDraft(null)} className="rounded-xl px-4 py-3 text-sm text-slate-500">{text.cancel}</button>
       </div>
@@ -105,7 +105,7 @@ export default function AdminPopupsPage() {
           </div>{p.imageUrl && <img src={p.imageUrl} alt="" className="h-16 w-20 rounded-lg object-cover" />}
         </div>
         <div className="flex flex-wrap gap-2 border-t bg-slate-50 px-5 py-3">
-          <button className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-xs font-semibold" onClick={() => { setPreview(p); setPreviewLanguage(language); }}><Eye size={14} />{text.preview}</button>
+          <button className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-xs font-semibold" onClick={() => { setPreview(p); setPreviewLanguage(language === "vi" ? "vi" : "en"); }}><Eye size={14} />{text.preview}</button>
           <button className="flex items-center gap-1 rounded-lg border bg-white px-3 py-2 text-xs font-semibold" onClick={() => edit(p)}><Pencil size={14} />{text.edit}</button>
           <button className="ml-auto flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-red-600" onClick={async () => {
             if (!confirm(text.confirm)) return;

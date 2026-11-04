@@ -298,7 +298,7 @@ export default function Groups() {
               </label>
               <label className="relative block">
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[#dbe2ea] bg-white px-4 pr-9 text-[13px] font-bold text-[#334155] outline-none focus:border-[#1a2b88]">
-                  {statusOptions[language].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  {statusOptions[language === "vi" ? "vi" : "en"].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
               </label>

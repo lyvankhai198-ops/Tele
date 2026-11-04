@@ -84,6 +84,20 @@ test("catalog loading is deduplicated and all registered source keys render", as
   }
 });
 
+test("localized choices retain exact transport values, IDs and handlers", async () => {
+  await runtime.loadInterfaceCatalog("bn");
+  const handler = () => "unchanged";
+  const value = { accountId: "constructor", status: "active" };
+  const choice = { label: "Account", value, id: "customer-id", onSelect: handler };
+  const translated = runtime.interfaceCopy({ vi: [choice], en: [choice] }, "bn");
+  assert.equal(translated[0].label, runtime.interfaceText("Account", "bn"));
+  assert.equal(translated[0].value, value);
+  assert.equal(translated[0].id, "customer-id");
+  assert.equal(translated[0].onSelect, handler);
+  const statuses = runtime.interfaceCopy({ vi: [{ label: "Account", value: "active" }], en: [{ label: "Account", value: "active" }] }, "bn");
+  assert.equal(statuses[0].value, "active");
+});
+
 test("English-only legacy dictionaries display selected native copy; unknown optional labels stay absent", async () => {
   await runtime.loadInterfaceCatalog("bn");
   const copy = {

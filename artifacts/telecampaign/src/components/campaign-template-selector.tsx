@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import type { Campaign } from "@workspace/api-client-react";
+import type { InterfaceLanguage } from "@/lib/locales";
 
-type Props={campaigns:Campaign[];selected:string[];onChange:(ids:string[])=>void;language:"vi"|"en";templateNames:Record<string,string>;disabled?:boolean};
+type Props={campaigns:Campaign[];selected:string[];onChange:(ids:string[])=>void;language:InterfaceLanguage;templateNames:Record<string,string>;disabled?:boolean};
 export function CampaignTemplateSelector({campaigns,selected,onChange,language,templateNames,disabled=false}:Props){
   const vi=language==="vi",size=50;
   const [search,setSearch]=useState(""),[page,setPage]=useState(0);

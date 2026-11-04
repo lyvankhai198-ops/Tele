@@ -47,7 +47,7 @@ import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaig
 import { CampaignSkippedCleanup } from "@/components/campaign-skipped-cleanup";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
-import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 import { useLocation, useSearch } from "wouter";
 
 // ---------------------------------------------------------------------------
@@ -373,7 +373,7 @@ const copy = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function formatSchedule(value: Date | string | null, language: "en" | "vi") {
+function formatSchedule(value: Date | string | null, language: Language) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-US", {
     dateStyle: "short",
@@ -392,7 +392,7 @@ function localTimeInputValue(value = new Date()) {
   return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
 }
 
-function formatErrorRecordedAt(value: Date | string, language: "en" | "vi") {
+function formatErrorRecordedAt(value: Date | string, language: Language) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-GB", {
@@ -411,7 +411,7 @@ function isWaitingRetry(error: Campaign["errors"][number]) {
 
 function temporaryRestrictionCampaignNote(
   campaign: Campaign,
-  language: "en" | "vi",
+  language: Language,
   c: (typeof copy)["en"] | (typeof copy)["vi"],
 ) {
   const waiting = campaign.errors.find((error) =>

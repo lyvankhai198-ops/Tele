@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import type { InterfaceLanguage } from "@/lib/locales";
 
 export function CampaignListFeedback({language,hasData,fetching,failed,empty=false,loaded=0,total=null,updatedAt=0,onRetry,children}:{
-  language:"vi"|"en";hasData:boolean;fetching:boolean;failed:boolean;empty?:boolean;
+  language:InterfaceLanguage;hasData:boolean;fetching:boolean;failed:boolean;empty?:boolean;
   loaded?:number;total?:number|null;updatedAt?:number;onRetry?:()=>void;children:ReactNode;
 }) {
   const vi=language==="vi",waiting=fetching||(!hasData&&!failed);

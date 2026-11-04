@@ -9,7 +9,7 @@ import {
 } from "@workspace/api-client-react";
 import { Activity, AlertTriangle, CheckCircle2, Clock3, FileArchive, HardDrive, ListRestart, RadioTower, Search, ShieldCheck, ScrollText } from "lucide-react";
 import { AppLayout, EmptyState, Panel, SectionHeader, StatusBadge } from "@/components/layout/AppLayout";
-import { useLanguage } from "@/lib/i18n";
+import { useLanguage, type Language } from "@/lib/i18n";
 
 const copy = {
   en: {
@@ -112,7 +112,7 @@ const copy = {
   },
 } as const;
 
-function dateTime(value: string | null, language: "en" | "vi") {
+function dateTime(value: string | null, language: Language) {
   if (!value) return "—";
   return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en-US", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
