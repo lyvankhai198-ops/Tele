@@ -29,8 +29,8 @@ export function clearAnonymousInterfaceLanguage(expected: InterfaceLanguage): vo
 export function readStoredInterfaceLanguage(): InterfaceLanguage {
   try {
     const value = typeof window === "undefined" ? null : window.localStorage.getItem("telecampaign-language");
-    return isInterfaceLanguage(value) ? value : "vi";
-  } catch { return "vi"; }
+    return isInterfaceLanguage(value) ? value : "en";
+  } catch { return "en"; }
 }
 
 /** Legacy text-only helpers use this; new UI should pass its context language. */

@@ -63,6 +63,86 @@ function harness(initialLanguage, options = {}) {
   return { render, find, choices };
 }
 const byRole = (role) => (node) => node.props?.role === role;
+
+function loginHarness(language = "en", overrides = {}) {
+  let index = 0;
+  const states = [], calls = [];
+  const jsx = (type, props) => ({ type, props });
+  const props = {
+    username: "", password: "", otp: "", captchaCode: "", captchaLoading: false,
+    captchaError: null, error: null, submitting: false, requiresOtp: false,
+    challenge: { challengeId: "fixture", image: "data:image/svg+xml,fixture" },
+    onUsernameChange: value => calls.push(["username", value]),
+    onPasswordChange: value => calls.push(["password", value]),
+    onCaptchaChange: value => calls.push(["captcha", value]),
+    onOtpChange: value => calls.push(["otp", value]),
+    onCaptchaRefresh: () => calls.push(["refresh"]),
+    onNavigate: path => calls.push(["navigate", path]),
+    onSubmit: () => calls.push(["submit"]),
+    ...overrides,
+  };
+  const mod = compile(path.join(root, "artifacts/telecampaign/src/components/auth/LoginScreen.tsx"), name => {
+    if (name.endsWith(".css")) return {};
+    if (name === "react") return {
+      useState(initial) { const key = index++; if (!(key in states)) states[key] = initial; return [states[key], value => { states[key] = typeof value === "function" ? value(states[key]) : value; }]; },
+      useRef: () => ({ current: null }), useEffect: () => {},
+    };
+    if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
+    if (name === "lucide-react") return new Proxy({}, { get: (_, key) => key });
+    if (name.endsWith("/i18n")) return { useLanguage: () => ({
+      language, setLanguage: value => calls.push(["language", value]),
+      t: source => text(source, language), isChangingLanguage: false, languageError: null,
+    }) };
+    if (name.endsWith("/LanguageSelector")) return { LanguageSelector: "language-selector" };
+    throw Error(`Unexpected login dependency: ${name}`);
+  });
+  function find(node, predicate) {
+    if (!node || typeof node !== "object") return [];
+    if (Array.isArray(node)) return node.flatMap(child => find(child, predicate));
+    return [...(predicate(node) ? [node] : []), ...find(node.props?.children, predicate)];
+  }
+  return { render: () => { index = 0; return mod.LoginScreen(props); }, find, calls };
+}
+
+test("approved production login renders all 22 locales with real captcha and complete selector", () => {
+  for (const {code} of locales.interfaceLocales) {
+    const h = loginHarness(code), tree = h.render();
+    assert.equal(tree.props.lang, code);
+    assert.equal(h.find(tree, node => node.props?.["data-testid"] === "auth-captcha-image")[0].props.src, "data:image/svg+xml,fixture");
+    const selector = h.find(tree, node => node.type === "language-selector")[0];
+    assert.equal(selector.props.language, code);
+    assert.equal(selector.props.availableLanguages, undefined);
+    assert.equal(h.find(tree, node => node.type === "button" && node.props.type === "submit")[0].props.disabled, false);
+  }
+});
+
+test("login binds fields, password reveal, recovery navigation and 2FA to real callbacks", () => {
+  const h = loginHarness();
+  let tree = h.render();
+  h.find(tree, node => node.type === "input" && node.props.name === "username")[0].props.onChange({target:{value:"fixture_user"}});
+  h.find(tree, node => node.type === "input" && node.props.name === "password")[0].props.onChange({target:{value:"fixture_only"}});
+  h.find(tree, node => node.props?.["data-testid"] === "auth-captcha-input")[0].props.onChange({target:{value:"ab23"}});
+  h.find(tree, node => node.type === "button" && node.props["aria-label"] === "Show password")[0].props.onClick();
+  tree = h.render();
+  assert.equal(h.find(tree, node => node.type === "input" && node.props.name === "password")[0].props.type, "text");
+  for (const button of h.find(tree, node => node.type === "button" && ["/forgot-password", "/forgot-username", "/register"].some(path => node.props.onClick?.toString().includes(path)))) button.props.onClick();
+  h.find(tree, node => node.type === "button" && typeof node.props["aria-expanded"] === "boolean")[0].props.onClick();
+  tree = h.render();
+  const otp = h.find(tree, node => node.type === "input" && node.props.autoComplete === "one-time-code")[0];
+  assert.equal(otp.props.inputMode, "text");
+  otp.props.onChange({target:{value:"recovery-code"}});
+  h.find(tree, node => node.type === "form")[0].props.onSubmit({});
+  assert.deepEqual(h.calls, [["username","fixture_user"],["password","fixture_only"],["captcha","AB23"],["navigate","/forgot-password"],["navigate","/forgot-username"],["navigate","/register"],["otp","recovery-code"],["submit"]]);
+});
+
+test("login cannot submit while captcha is absent, loading, or a request is pending", () => {
+  for (const overrides of [{challenge:null},{captchaLoading:true},{submitting:true}]) {
+    const h = loginHarness("en", overrides);
+    assert.equal(h.find(h.render(), node => node.type === "button" && node.props.type === "submit")[0].props.disabled, true);
+  }
+  const source = fs.readFileSync(path.join(root,"artifacts/telecampaign/src/components/auth/LoginScreen.tsx"),"utf8");
+  assert.doesNotMatch(source, /captchaSvg|captchaCodes|demoResponse|showAccountLinkNotice|localStorage|sessionStorage|\bfetch\s*\(/u);
+});
 const event = (key, ctrlKey = false) => ({ key, ctrlKey, preventDefault() {}, stopPropagation() {} });
 
 test("all 22 selectors render native accessible labels and keep the existing control position", () => {
