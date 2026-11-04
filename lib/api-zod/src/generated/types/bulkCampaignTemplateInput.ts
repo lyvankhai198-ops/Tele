@@ -9,4 +9,6 @@
 export interface BulkCampaignTemplateInput {
   /** @minLength 1 */
   templateId: string;
+  /** Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update. */
+  telegramAccountId?: string;
 }

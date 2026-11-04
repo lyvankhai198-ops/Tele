@@ -162,6 +162,10 @@ import type {
 import { customFetch } from '../custom-fetch';
 import type { ErrorType , BodyType } from '../custom-fetch';
 
+type AwaitedInput<T> = PromiseLike<T> | T;
+
+      type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
+
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
@@ -3664,7 +3668,7 @@ export const bulkUpdateCampaignTemplate = async (bulkCampaignTemplateInput: Bulk
 
 
 
-export const getBulkUpdateCampaignTemplateMutationOptions = <TError = ErrorType<unknown>,
+export const getBulkUpdateCampaignTemplateMutationOptions = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateCampaignTemplate>>, TError,{data: BodyType<BulkCampaignTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateCampaignTemplate>>, TError,{data: BodyType<BulkCampaignTemplateInput>}, TContext> => {
 
@@ -3693,9 +3697,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type BulkUpdateCampaignTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpdateCampaignTemplate>>>
     export type BulkUpdateCampaignTemplateMutationBody = BodyType<BulkCampaignTemplateInput>
-    export type BulkUpdateCampaignTemplateMutationError = ErrorType<unknown>
+    export type BulkUpdateCampaignTemplateMutationError = ErrorType<void>
 
-    export const useBulkUpdateCampaignTemplate = <TError = ErrorType<unknown>,
+    export const useBulkUpdateCampaignTemplate = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateCampaignTemplate>>, TError,{data: BodyType<BulkCampaignTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof bulkUpdateCampaignTemplate>>,

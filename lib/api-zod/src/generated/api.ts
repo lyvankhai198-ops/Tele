@@ -1361,7 +1361,8 @@ export const RetryCampaignBulkJobResponse = zod.object({
 
 
 export const BulkUpdateCampaignTemplateBody = zod.object({
-  "templateId": zod.string().min(1)
+  "templateId": zod.string().min(1),
+  "telegramAccountId": zod.string().uuid().optional().describe('Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update.')
 })
 
 export const BulkUpdateCampaignTemplateResponse = zod.object({

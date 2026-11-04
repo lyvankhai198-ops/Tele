@@ -754,6 +754,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
+        "400": { description: Invalid template or account selection }
+        "403": { description: Administrator access required }
+        "404": { description: Template or Telegram account not found for this owner }
   /campaigns/bulk-delete:
     post:
       operationId: bulkDeleteCampaigns
@@ -2611,6 +2614,10 @@ components:
       required: [templateId]
       properties:
         templateId: { type: string, minLength: 1 }
+        telegramAccountId:
+          type: string
+          format: uuid
+          description: Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update.
     BulkCampaignTemplateResult:
       type: object
       required: [updatedCount, skippedCount, skipped]

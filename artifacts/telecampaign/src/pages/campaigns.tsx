@@ -87,11 +87,17 @@ const copy = {
     bulkApply: "Run selected campaigns",
     bulkCancel: "Cancel",
     bulkTemplateTitle: "Change automatic campaign templates",
-    bulkTemplateDetail: "Only campaigns whose name starts with “Tự động” and are Draft, Paused, or Running are included. Other campaigns are not changed.",
+    bulkTemplateDetail: "Only campaigns whose name starts with “Tự động” and are Draft, Paused, Queued, or Running are included. Other campaigns are not changed.",
+    bulkTemplateAccount: "Telegram account",
+    bulkTemplateAllAccounts: "All Telegram accounts",
+    bulkTemplateAccountHint: "Only matching campaigns for this account are included. The shared default for future campaigns stays unchanged. Incompatible forward templates will be skipped.",
+    bulkTemplateAllAccountsHint: "Applies across all accounts and also changes the shared template default for future automatic campaigns. Incompatible forward templates will be skipped.",
+    bulkTemplateEmptyAccount: "No eligible automatic campaigns for this account.",
+    bulkTemplateStatuses: "Draft, Paused, Queued and Running campaigns are checked by name prefix.",
     bulkTemplateLabel: "New message template",
     bulkTemplatePlaceholder: "Select a message template",
     bulkTemplateScope: (count: number) => `${count} automatic campaign${count === 1 ? "" : "s"} will be updated.`,
-    bulkTemplateNoCandidates: "There are no matching automatic campaigns in Draft, Paused, or Running status.",
+    bulkTemplateNoCandidates: "There are no matching automatic campaigns in Draft, Paused, Queued, or Running status.",
     bulkTemplateNoTemplates: "Create a message template before using this action.",
     bulkTemplateApply: "Change templates",
     bulkTemplateResult: (updated: number, skipped: number) => `Changed ${updated} automatic campaign${updated === 1 ? "" : "s"}${skipped ? `; ${skipped} skipped.` : "."}`,
@@ -237,11 +243,17 @@ const copy = {
     bulkApply: "Chạy các chiến dịch đã chọn",
     bulkCancel: "Hủy",
     bulkTemplateTitle: "Đổi mẫu tin chiến dịch tự động",
-    bulkTemplateDetail: "Chỉ campaign có tên bắt đầu bằng “Tự động” và đang ở trạng thái Bản nháp, Tạm dừng hoặc Đang chạy mới được đổi. Campaign khác không bị tác động.",
+    bulkTemplateDetail: "Chỉ campaign có tên bắt đầu bằng “Tự động” và đang ở trạng thái Bản nháp, Tạm dừng, Đang chờ hoặc Đang chạy mới được đổi. Campaign khác không bị tác động.",
+    bulkTemplateAccount: "Tài khoản Telegram",
+    bulkTemplateAllAccounts: "Tất cả tài khoản Telegram",
+    bulkTemplateAccountHint: "Chỉ áp dụng cho chiến dịch phù hợp của tài khoản này; không đổi mẫu mặc định chung cho chiến dịch tạo sau. Mẫu forward không đúng tài khoản sẽ được bỏ qua.",
+    bulkTemplateAllAccountsHint: "Áp dụng trên tất cả tài khoản và đổi cả mẫu mặc định chung cho chiến dịch tự động tạo sau. Mẫu forward không đúng tài khoản sẽ được bỏ qua.",
+    bulkTemplateEmptyAccount: "Tài khoản này không có chiến dịch tự động đủ điều kiện.",
+    bulkTemplateStatuses: "Bản nháp, Tạm dừng, Đang chờ và Đang chạy được kiểm tra theo đúng tiền tố tên.",
     bulkTemplateLabel: "Mẫu tin nhắn mới",
     bulkTemplatePlaceholder: "Chọn mẫu tin nhắn",
     bulkTemplateScope: (count: number) => `Sẽ cập nhật ${count} campaign tự động.`,
-    bulkTemplateNoCandidates: "Không có campaign tự động phù hợp ở trạng thái Bản nháp, Tạm dừng hoặc Đang chạy.",
+    bulkTemplateNoCandidates: "Không có campaign tự động phù hợp ở trạng thái Bản nháp, Tạm dừng, Đang chờ hoặc Đang chạy.",
     bulkTemplateNoTemplates: "Hãy tạo mẫu tin nhắn trước khi dùng thao tác này.",
     bulkTemplateApply: "Đổi mẫu tin",
     bulkTemplateResult: (updated: number, skipped: number) => `Đã đổi mẫu tin cho ${updated} campaign tự động${skipped ? `; bỏ qua ${skipped} campaign.` : "."}`,
@@ -557,6 +569,7 @@ export default function Campaigns() {
   }, [bulkJob?.id, bulkJobActive, bulkResumeOpen, language]);
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateId, setBulkTemplateId] = useState("");
+  const [bulkTemplateAccountId, setBulkTemplateAccountId] = useState("");
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
     query: { enabled: Boolean(forwardCampaign?.id) } as any,
   });
@@ -605,8 +618,9 @@ export default function Campaigns() {
   }, [campaigns.data, status]);
   const automaticCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) =>
     campaign.name.startsWith("Tự động")
-    && ["draft", "paused", "queued", "running"].includes(campaign.status),
-  ), [campaigns.data]);
+    && ["draft", "paused", "queued", "running"].includes(campaign.status)
+    && (!bulkTemplateAccountId || campaign.telegramAccountId === bulkTemplateAccountId),
+  ), [campaigns.data, bulkTemplateAccountId]);
   const detailTemplate = details?.templateId
     ? (templates.data ?? []).find((template) => template.id === details.templateId) ?? null
     : null;
@@ -753,11 +767,13 @@ export default function Campaigns() {
   }
 
   function openBulkTemplate() {
-    if (!automaticCampaigns.length) {
+    if (!(campaigns.data ?? []).some((campaign) => campaign.name.startsWith("Tự động")
+      && ["draft", "paused", "queued", "running"].includes(campaign.status))) {
       setToast(c.bulkTemplateNoCandidates);
       return;
     }
     setBulkTemplateId("");
+    setBulkTemplateAccountId("");
     setBulkTemplateOpen(true);
   }
 
@@ -767,7 +783,10 @@ export default function Campaigns() {
       return;
     }
     try {
-      const result = await bulkTemplate.mutateAsync({ data: { templateId: bulkTemplateId } });
+      const result = await bulkTemplate.mutateAsync({ data: {
+        templateId: bulkTemplateId,
+        ...(bulkTemplateAccountId ? { telegramAccountId: bulkTemplateAccountId } : {}),
+      } });
       await campaigns.refetch();
       setBulkTemplateOpen(false);
       setToast(c.bulkTemplateResult(result.updatedCount, result.skippedCount));
@@ -1193,14 +1212,33 @@ export default function Campaigns() {
           }}
         >
           <div className="space-y-4">
+            <label className="block">
+              <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkTemplateAccount}</span>
+              <select
+                value={bulkTemplateAccountId}
+                onChange={(event) => setBulkTemplateAccountId(event.target.value)}
+                disabled={bulkTemplate.isPending || accounts.isLoading}
+                className="w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2.5 text-[13px] font-semibold outline-none focus:border-[#2233aa]"
+                data-testid="campaigns-bulk-template-account-select"
+              >
+                <option value="">{c.bulkTemplateAllAccounts}</option>
+                {(accounts.data ?? []).map((account) => (
+                  <option key={account.id} value={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>
+                ))}
+              </select>
+              <p className="mt-2 text-[12px] leading-relaxed text-[#64748b]">
+                {bulkTemplateAccountId ? c.bulkTemplateAccountHint : c.bulkTemplateAllAccountsHint}
+              </p>
+            </label>
             <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-[13px] font-semibold leading-relaxed text-[#1e3a8a]">
               <p className="font-extrabold">{c.bulkTemplateScope(automaticCampaigns.length)}</p>
-              <p className="mt-1 text-[12px] font-medium">Bản nháp, Tạm dừng, Đang chờ và Đang chạy được kiểm tra theo đúng tiền tố tên.</p>
+              <p className="mt-1 text-[12px] font-medium">{c.bulkTemplateStatuses}</p>
               <div className="mt-3 space-y-1 text-[12px]">
                 {automaticCampaigns.slice(0, 8).map((campaign) => (
                   <p key={campaign.id} className="truncate">• {campaign.name}</p>
                 ))}
                 {automaticCampaigns.length > 8 && <p>{c.bulkTemplatePreviewMore(automaticCampaigns.length - 8)}</p>}
+                {!automaticCampaigns.length && <p>{c.bulkTemplateEmptyAccount}</p>}
               </div>
             </div>
             <label className="block">

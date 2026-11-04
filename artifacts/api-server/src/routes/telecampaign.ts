@@ -2481,6 +2481,15 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
 
   const ownerUserId = currentUserId(req);
+  const selectedAccountId = parsed.data.telegramAccountId;
+  if (selectedAccountId) {
+    const [account] = await db.select({ id: telegramAccountsTable.id }).from(telegramAccountsTable).where(and(
+      eq(telegramAccountsTable.id, selectedAccountId),
+      eq(telegramAccountsTable.ownerUserId, ownerUserId),
+      isNull(telegramAccountsTable.deletedAt),
+    ));
+    if (!account) return void sendError(res, 404, "Không tìm thấy tài khoản Telegram.");
+  }
   const [template] = await db.select().from(messageTemplatesTable).where(and(
     eq(messageTemplatesTable.id, parsed.data.templateId),
     eq(messageTemplatesTable.ownerUserId, ownerUserId),
@@ -2495,18 +2504,31 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
     eq(campaignsTable.ownerUserId, ownerUserId),
     like(campaignsTable.name, `${automaticPrefix}%`),
     inArray(campaignsTable.status, ["draft", "paused", "queued", "running"]),
+    selectedAccountId ? eq(campaignsTable.telegramAccountId, selectedAccountId) : undefined,
   )).orderBy(campaignsTable.createdAt);
   const skipped: Array<{ id: string; name: string; reason: string }> = [];
   const updated: Array<{ id: string; name: string }> = [];
 
   for (const candidate of candidates) {
     const result = await db.transaction(async (tx) => {
+      // Match account-deletion's lock order: account before campaign. Keep the
+      // ownership/deletion check valid until this campaign update commits.
+      if (selectedAccountId) {
+        const account = await tx.execute(sql`SELECT id FROM ${telegramAccountsTable}
+          WHERE ${telegramAccountsTable.id} = ${selectedAccountId}
+            AND ${telegramAccountsTable.ownerUserId} = ${ownerUserId}
+            AND ${telegramAccountsTable.deletedAt} IS NULL FOR SHARE`);
+        if (!account.rows.length) {
+          return { kind: "skip" as const, reason: "Tài khoản Telegram không còn thuộc phạm vi đổi mẫu tin." };
+        }
+      }
       await tx.execute(sql`SELECT 1 FROM ${campaignsTable} WHERE ${campaignsTable.id} = ${candidate.id} FOR UPDATE`);
       const [campaign] = await tx.select().from(campaignsTable).where(and(
         eq(campaignsTable.id, candidate.id),
         eq(campaignsTable.ownerUserId, ownerUserId),
       ));
       if (!campaign || !campaign.name.startsWith(automaticPrefix)
+        || (selectedAccountId && campaign.telegramAccountId !== selectedAccountId)
         || !["draft", "paused", "queued", "running"].includes(campaign.status)) {
         return { kind: "skip" as const, reason: "Campaign không còn thuộc phạm vi đổi mẫu tin." };
       }
@@ -2531,6 +2553,8 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
         updatedAt: new Date(),
       }).where(and(
         eq(campaignsTable.id, campaign.id),
+        eq(campaignsTable.ownerUserId, ownerUserId),
+        selectedAccountId ? eq(campaignsTable.telegramAccountId, selectedAccountId) : undefined,
         inArray(campaignsTable.status, ["draft", "paused", "queued", "running"]),
       )).returning({ id: campaignsTable.id, name: campaignsTable.name });
       return changed
@@ -2548,6 +2572,7 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
         level: "success",
         metadata: {
           templateId: template.id,
+          telegramAccountId: selectedAccountId ?? null,
           campaignNamePrefix: automaticPrefix,
           statuses: ["draft", "paused", "queued", "running"],
         },
@@ -2557,14 +2582,17 @@ router.post("/campaigns/bulk-template", async (req, res): Promise<void> => {
     }
   }
 
-  const settings = await getSystemSettings();
-  await updateSystemSettings({
-    ...settings,
-    postJoinCampaign: {
-      ...settings.postJoinCampaign,
-      templateId: template.id,
-    },
-  }, ownerUserId);
+  // An account-scoped edit must not change the shared default for future joins.
+  if (!selectedAccountId) {
+    const settings = await getSystemSettings();
+    await updateSystemSettings({
+      ...settings,
+      postJoinCampaign: {
+        ...settings.postJoinCampaign,
+        templateId: template.id,
+      },
+    }, ownerUserId);
+  }
 
   return void res.json(BulkUpdateCampaignTemplateResponse.parse({
     updatedCount: updated.length,
