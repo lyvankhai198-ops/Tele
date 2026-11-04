@@ -7,6 +7,7 @@
  */
 
 export type GetCampaignLoadBatchParams = {
+telegramAccountId?: string;
 /**
  * Up to 25 comma-separated unique UUIDs from the load manifest
  * @minLength 36

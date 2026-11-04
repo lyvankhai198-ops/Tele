@@ -1026,13 +1026,18 @@ export const DeleteMessageTemplateParams = zod.object({
 export const DeleteMessageTemplateResponse = zod.void()
 
 
+export const GetCampaignLoadManifestQueryParams = zod.object({
+  "telegramAccountId": zod.coerce.string().uuid().optional()
+})
+
 export const getCampaignLoadManifestResponseTotalMin = 0;
 
 
 
 export const GetCampaignLoadManifestResponse = zod.object({
   "campaignIds": zod.array(zod.string().uuid()),
-  "total": zod.number().int().min(getCampaignLoadManifestResponseTotalMin)
+  "total": zod.number().int().min(getCampaignLoadManifestResponseTotalMin),
+  "revisions": zod.record(zod.string(), zod.string()).optional()
 })
 
 
@@ -1042,6 +1047,7 @@ export const getCampaignLoadBatchQueryIdsMax = 924;
 
 
 export const GetCampaignLoadBatchQueryParams = zod.object({
+  "telegramAccountId": zod.coerce.string().uuid().optional(),
   "ids": zod.coerce.string().min(getCampaignLoadBatchQueryIdsMin).max(getCampaignLoadBatchQueryIdsMax).describe('Up to 25 comma-separated unique UUIDs from the load manifest')
 })
 
@@ -1154,6 +1160,15 @@ export const ListCampaignsResponseItem = zod.object({
 })
 export const ListCampaignsResponse = zod.array(ListCampaignsResponseItem)
 
+
+export const createCampaignHeaderIdempotencyKeyMin = 8;
+export const createCampaignHeaderIdempotencyKeyMax = 128;
+
+
+
+export const CreateCampaignHeader = zod.object({
+  "Idempotency-Key": zod.string().min(createCampaignHeaderIdempotencyKeyMin).max(createCampaignHeaderIdempotencyKeyMax).optional().describe('Stable key for retries of the same creation request; ownership scoped and committed atomically with the campaign.')
+})
 
 export const createCampaignBodyNameMax = 200;
 

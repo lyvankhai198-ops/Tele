@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { registerCampaignCleanupRoutes } from "./campaign-cleanup";
 import { assertCampaignDestinationsAllowed } from "../lib/campaign-destination-blocks";
+import {campaignCreateFingerprint,campaignCreateReplay,lockCampaignCreateRequest,saveCampaignCreateRequest} from "../lib/campaign-create-request";
 import { deleteTelegramAccountData } from "../lib/delete-telegram-account";
 import {registerOperationRoutes} from "./operations";
 import {enqueuePreparation,enqueueLargeResume} from "../lib/operation-preparation";
@@ -2556,6 +2557,20 @@ registerOperationRoutes(router,currentUserId);
 router.post("/campaigns", async (req, res): Promise<void> => {
   const parsed = CreateCampaignBody.safeParse(req.body);
   if (!parsed.success) return void sendError(res, 400, parsed.error.message);
+  const requestId=req.get("Idempotency-Key");
+  if(requestId&&!/^[a-zA-Z0-9_-]{8,128}$/.test(requestId))return void sendError(res,400,"INVALID_CAMPAIGN_REQUEST");
+  const fingerprint=campaignCreateFingerprint(parsed.data);
+  const replay=await campaignCreateReplay(db,currentUserId(req),requestId,fingerprint);
+  if(replay){
+    if(!replay.campaignId)return void sendError(res,409,"CAMPAIGN_CREATE_CONFLICT");
+    const [existing]=await db.select().from(campaignsTable).where(and(
+      eq(campaignsTable.id,replay.campaignId),eq(campaignsTable.ownerUserId,currentUserId(req)),
+    ));
+    if(!existing)return void sendError(res,410,"CAMPAIGN_REQUEST_ALREADY_COMPLETED");
+    res.setHeader("Idempotency-Replayed","true");
+    res.status(201).json(CreateCampaignResponse.parse(await campaignSummary(existing)));
+    return;
+  }
   const systemSettings = await getSystemSettings();
   const campaignSetAt = new Date();
   const { scheduledAt, roundStartAt: initialRoundStartAt } = resolveCampaignScheduleStart(
@@ -2580,6 +2595,19 @@ router.post("/campaigns", async (req, res): Promise<void> => {
     return void sendError(res, 400, "Media delivery is not supported yet; remove the attachment before starting this campaign.");
   }
   if (campaignAllowance.campaignLimit !== null && campaignAllowance.used >= campaignAllowance.campaignLimit) {
+    // The first request may have committed while allowance was being read.
+    // Its atomic receipt must win over the newly reached limit on a retry.
+    const accepted=await campaignCreateReplay(db,currentUserId(req),requestId,fingerprint);
+    if(accepted?.campaignId){
+      const [existing]=await db.select().from(campaignsTable).where(and(
+        eq(campaignsTable.id,accepted.campaignId),eq(campaignsTable.ownerUserId,currentUserId(req)),
+      ));
+      if(existing){
+        res.setHeader("Idempotency-Replayed","true");
+        res.status(201).json(CreateCampaignResponse.parse(await campaignSummary(existing)));
+        return;
+      }
+    }
     return void sendError(res, 409, `Campaign limit reached for your ${campaignAllowance.plan.toUpperCase()} plan`);
   }
   const accounts = await db.select({ id: telegramAccountsTable.id }).from(telegramAccountsTable)
@@ -2619,7 +2647,16 @@ router.post("/campaigns", async (req, res): Promise<void> => {
   }
   if (templateMode === "text" && !content) return void sendError(res, 400, "Choose a message template or enter campaign content.");
   const targetCount=destinations.length*parsed.data.repeatCount;
-  const campaign=await db.transaction(async tx=>{
+  const outcome=await db.transaction(async tx=>{
+    await lockCampaignCreateRequest(tx,currentUserId(req),requestId);
+    const replay=await campaignCreateReplay(tx,currentUserId(req),requestId,fingerprint);
+    if(replay){
+      if(!replay.campaignId)return {campaign:null,created:false,status:409};
+      const [existing]=await tx.select().from(campaignsTable).where(and(
+        eq(campaignsTable.id,replay.campaignId),eq(campaignsTable.ownerUserId,currentUserId(req)),
+      ));
+      return {campaign:existing??null,created:false,status:410};
+    }
     const accountIds=[...new Set(destinations.map(destination=>destination.accountId))];
     if(accountIds.length){
       const usable=await tx.select({id:telegramAccountsTable.id}).from(telegramAccountsTable).where(and(
@@ -2662,9 +2699,13 @@ router.post("/campaigns", async (req, res): Promise<void> => {
       }))await tx.insert(campaignTargetsTable).values(rows);
       await tx.update(campaignsTable).set({status:"queued"}).where(eq(campaignsTable.id,campaign.id));
     }
-    return campaign;
+    await saveCampaignCreateRequest(tx,currentUserId(req),requestId,fingerprint,campaign.id);
+    return {campaign,created:true,status:201};
   });
-  await recordActivity({
+  const campaign=outcome.campaign;
+  if(!campaign)return void sendError(res,outcome.status,outcome.status===409?"CAMPAIGN_CREATE_CONFLICT":"CAMPAIGN_REQUEST_ALREADY_COMPLETED");
+  if(!outcome.created)res.setHeader("Idempotency-Replayed","true");
+  if(outcome.created)await recordActivity({
     event: "campaign.created",
     message: `Created campaign "${campaign.name}" with ${targetCount} scheduled deliveries`,
     ownerUserId: currentUserId(req),

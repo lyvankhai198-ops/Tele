@@ -3,7 +3,7 @@ import {useQueryClient} from "@tanstack/react-query";
 import {LoaderCircle,CheckCircle2,AlertCircle,X} from "lucide-react";
 import {useOperations} from "@/lib/operations";
 import {useLanguage} from "@/lib/i18n";
-import {deletionSyncToken,invalidateDeletionDependencies,reconcileCampaignDeletions} from "@/lib/reconcile-campaign-deletions";
+import {deletionSyncToken,invalidateDeletionDependencies,reconcileObservedCampaigns} from "@/lib/reconcile-campaign-deletions";
 export function OperationsProgress(){
   const operations=useOperations(),{language}=useLanguage(),client=useQueryClient(),vi=language==="vi";
   const seen=useRef(new Map<string,string>()),[hidden,setHidden]=useState<string[]>([]),[retrying,setRetrying]=useState<string|null>(null),[limit,setLimit]=useState(5);
@@ -22,7 +22,7 @@ export function OperationsProgress(){
         const token=deletionSyncToken(job),scope=operations.scope;
         if(seen.current.get(job.id)===token)continue;
         seen.current.set(job.id,token);
-        void reconcileCampaignDeletions(client,scope,()=>activeScope.current===scope).then(()=>{
+        void reconcileObservedCampaigns(client,scope,()=>activeScope.current===scope).then(()=>{
           if(activeScope.current!==scope)return;
           setSyncFailed(false);
           if(job.state==="completed"){
@@ -45,7 +45,11 @@ export function OperationsProgress(){
         try{localStorage.setItem(storage+":applied",JSON.stringify([...applied,job.id].slice(-100)));}catch{}
       }
     }
-    if(invalidate)void client.invalidateQueries({predicate:q=>q.queryKey[0]!=="telecamp-operations"});
+    if(invalidate){
+      void invalidateDeletionDependencies(client);
+      const scope=operations.scope;
+      void reconcileObservedCampaigns(client,scope,()=>activeScope.current===scope).catch(()=>{});
+    }
   },[operations.data,operations.dataUpdatedAt,client,storage,operations.scope]);
   const jobs=(operations.data??[]).filter(j=>!hidden.includes(j.id));
   if(!jobs.length&&!operations.isError&&!syncFailed)return null;

@@ -5,9 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignLoadManifestRevisions } from './campaignLoadManifestRevisions';
 
 export interface CampaignLoadManifest {
   campaignIds: string[];
   /** @minimum 0 */
   total: number;
+  revisions?: CampaignLoadManifestRevisions;
 }

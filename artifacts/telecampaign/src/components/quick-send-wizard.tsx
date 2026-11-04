@@ -22,19 +22,19 @@ import {
   useCreateCampaign,
   useCreateMessageTemplate,
   getGetGroupLibraryQueryKey,
-  getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   useGetGroupLibrary,
   useGetGroupLibraryAccess,
   useGetSystemDefaults,
   useGetAccountSummary,
   useListDestinations,
-  useListCampaigns,
   useListTelegramAccounts,
   useListTelegramSavedMessages,
   useSyncTelegramDestinations,
 } from "@workspace/api-client-react";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
+import {useCompleteCampaigns} from "@/lib/use-complete-campaigns";
+import {useAuth} from "@/lib/auth";
 import {
   canChooseRestrictedDestination,
   localScheduleFields,
@@ -314,14 +314,6 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       staleTime: DESTINATION_SYNC_TTL_MS,
     },
   });
-  const campaigns = useListCampaigns({
-    query: {
-      queryKey: getListCampaignsQueryKey(),
-      refetchOnMount: "always",
-      refetchOnWindowFocus: true,
-      staleTime: 0,
-    },
-  });
   const systemDefaults = useGetSystemDefaults();
   const accountSummary = useGetAccountSummary();
   const sync = useSyncTelegramDestinations();
@@ -334,10 +326,16 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     },
   });
   const createTemplate = useCreateMessageTemplate();
-  const createCampaign = useCreateCampaign();
+  const requestId=useRef(crypto.randomUUID());
+  const createCampaign = useCreateCampaign({request:{headers:{"Idempotency-Key":requestId.current}}});
+  const submitLock=useRef(false);
+  const [submitting,setSubmitting]=useState(false);
+  const savedTemplate=useRef<{fingerprint:string;template:Awaited<ReturnType<typeof createTemplate.mutateAsync>>}|null>(null);
   const [, setLocation] = useLocation();
   const [step, setStep] = useState(1);
   const [accountId, setAccountId] = useState(initialDraft.current?.accountId ?? "");
+  const {user}=useAuth();
+  const campaigns=useCompleteCampaigns(user&&accountId?`${user.id}:${user.support?.targetUserId??"self"}`:"",accountId);
   const [destinationIds, setDestinationIds] = useState<string[]>(initialDraft.current?.destinationIds ?? []);
   const [groupSearch, setGroupSearch] = useState("");
   const [mode, setMode] = useState<SendMode>(initialDraft.current?.mode ?? "text");
@@ -410,7 +408,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
     { dateStyle: "short", timeStyle: "short" },
   ).format(value);
   const selectedMessage = (accountSavedMessages.data ?? []).find((message) => message.id === sourceMessageId);
-  const isCreating = createTemplate.isPending || createCampaign.isPending;
+  const isCreating = submitting || createTemplate.isPending || createCampaign.isPending;
 
   useEffect(() => {
     if (!accountId && connectedAccounts[0]) setAccountId(connectedAccounts[0].id);
@@ -554,6 +552,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
   }
 
   async function submit() {
+    if(submitLock.current)return;
     setFormError(null);
     if (!campaignName.trim()) return setFormError(c.validationName);
     let scheduledAt: string | null = null;
@@ -579,17 +578,20 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
       return setFormError(c.errorFallback);
     }
 
+    submitLock.current=true;setSubmitting(true);
     try {
-      const template = await createTemplate.mutateAsync({
-        data: {
+      const templateData = {
           name: campaignName.trim(),
           mode,
           content: mode === "text" ? content.trim() : selectedMessage?.text ?? "",
           sourceAccountId: mode === "forward" ? accountId : null,
           sourceMessageId: mode === "forward" ? sourceMessageId : null,
-        },
-      });
-      await createCampaign.mutateAsync({
+      };
+      const fingerprint=JSON.stringify(templateData);
+      const template=savedTemplate.current?.fingerprint===fingerprint?savedTemplate.current.template:
+        await createTemplate.mutateAsync({data:templateData});
+      savedTemplate.current={fingerprint,template};
+      const created=await createCampaign.mutateAsync({
         data: {
           name: campaignName.trim(),
           content: template.content,
@@ -605,11 +607,14 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
           groupIntervalSeconds: groupMinutes * 60,
         },
       });
+      campaigns.upsert(created);
       window.localStorage.removeItem(QUICK_SEND_DRAFT_KEY);
       await onCreated();
       setCompleted(true);
     } catch (error) {
       setFormError(localizedErrorMessage(error, language, c.errorFallback));
+    } finally {
+      submitLock.current=false;setSubmitting(false);
     }
   }
 
@@ -625,7 +630,7 @@ export function QuickSendWizard({ onClose, onCreated }: QuickSendWizardProps) {
               <p className="mt-1.5 max-w-xl text-[13px] font-medium leading-relaxed text-[#64748b]">{c.description}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="shrink-0 rounded-xl p-2 text-[#64748b] transition hover:bg-[#f1f5f9] hover:text-[#0f172a]" aria-label={c.close} data-testid="quick-send-close">
+          <button type="button" onClick={onClose} disabled={isCreating} className="shrink-0 rounded-xl p-2 text-[#64748b] transition hover:bg-[#f1f5f9] hover:text-[#0f172a]" aria-label={c.close} data-testid="quick-send-close">
             <X className="h-5 w-5" />
           </button>
         </header>

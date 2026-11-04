@@ -696,10 +696,13 @@ export interface MessageTemplateUpdateInput {
   sourceMessageId?: string | null;
 }
 
+export type CampaignLoadManifestRevisions = {[key: string]: string};
+
 export interface CampaignLoadManifest {
   campaignIds: string[];
   /** @minimum 0 */
   total: number;
+  revisions?: CampaignLoadManifestRevisions;
 }
 
 export type CampaignTemplateMode = typeof CampaignTemplateMode[keyof typeof CampaignTemplateMode];
@@ -3051,7 +3054,12 @@ export interface AccountSummary {
   usage: AccountUsage;
 }
 
+export type GetCampaignLoadManifestParams = {
+telegramAccountId?: string;
+};
+
 export type GetCampaignLoadBatchParams = {
+telegramAccountId?: string;
 /**
  * Up to 25 comma-separated unique UUIDs from the load manifest
  * @minLength 36

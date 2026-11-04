@@ -610,6 +610,8 @@ export const translations: Record<string, string> = {
  */
 export function localizedErrorMessage(error: unknown, language: Language, fallback: string): string {
   const message = error instanceof Error ? error.message.trim() : "";
+  if(/INVALID_CAMPAIGN_REQUEST|CAMPAIGN_CREATE_CONFLICT|CAMPAIGN_REQUEST_ALREADY_COMPLETED/.test(message))
+    return interfaceCopy({vi:"Yêu cầu không thể hoàn thành.",en:"The request could not be completed."},language);
   if(/^HTTP (502|503|504)\b|<(!doctype|html|head|body)\b|nginx\/|(?:502|503|504).*(?:gateway|unavailable)|gateway\s*time.?out/i.test(message))
     return language==="vi"
       ?"Máy chủ chưa phản hồi kịp. Tác vụ có thể vẫn đang xử lý; hãy kiểm tra tiến trình trước khi thử lại."
