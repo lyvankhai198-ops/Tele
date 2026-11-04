@@ -495,7 +495,19 @@ export default function Campaigns() {
   const [, setLocation] = useLocation();
   const searchParams = useSearch();
 
-  const campaigns = useCompleteCampaigns(user ? `${user.id}:${user.support?.targetUserId??"self"}` : "");
+  const campaignScope=user ? `${user.id}:${user.support?.targetUserId??"self"}` : "";
+  const [accountFilter,setAccountFilterState]=useState(()=>{
+    try{return sessionStorage.getItem(`telecamp.campaign-account:${campaignScope}`)??"";}catch{return "";}
+  });
+  function setAccountFilter(value:string){
+    if(value===accountFilter)return;
+    void queryClient.cancelQueries({queryKey:[...getListCampaignsQueryKey(),"complete-load",campaignScope,...accountFilter?[accountFilter]:[]],exact:true});
+    // An account switch cancels that staging run; merely leaving the page does not.
+    queryClient.setQueryData(["campaign-load-progress",campaignScope,...accountFilter?[accountFilter]:[]],{loaded:0,total:null,phase:"counting",run:Date.now()});
+    setAccountFilterState(value);
+    try{sessionStorage.setItem(`telecamp.campaign-account:${campaignScope}`,value);}catch{/* optional storage */}
+  }
+  const campaigns = useCompleteCampaigns(campaignScope,accountFilter);
   const campaignDataBlocked=campaigns.isFetching||!campaigns.data||campaigns.isError;
   const accounts = useListTelegramAccounts();
   const templates = useListMessageTemplates();
@@ -505,7 +517,7 @@ export default function Campaigns() {
     ...bulkFilter,status:bulkFilter.status as BackgroundOperationInput["status"]})});
   const deleteOne=useMutation({mutationFn:(campaignId:string)=>operations.start({kind:"delete_campaigns",campaignId,confirm:true})});
   const templateProgress = useTemplateJob(user?.id, Boolean(user?.id) && !isSupportMode, () => {
-    void campaigns.refetch();
+    void campaigns.sync();
     void queryClient.invalidateQueries({queryKey:getListCalendarItemsQueryKey()});
   });
   const bulkTemplate = {isPending:templateProgress.blocked};
@@ -513,7 +525,6 @@ export default function Campaigns() {
   const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all"|"queued"|"running"|"paused"|"completed"|"draft"|"cancelled">("all");
-  const [accountFilter,setAccountFilter]=useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
@@ -574,7 +585,7 @@ export default function Campaigns() {
         if (disposed) return;
         setBulkJob(next);
         if (claimCampaignCompletion(bulkStorageKey,"rerun",next)) {
-          void campaigns.refetch();
+          void campaigns.sync();
           void queryClient.invalidateQueries({queryKey: getListCalendarItemsQueryKey()});
           setToast(next.status === "completed" ? c.bulkResumedResult(next.updatedCount, next.skippedCount)
             : language === "vi" ? "Tác vụ đã dừng do lỗi. Các lượt đã tạo được giữ nguyên; không bấm tạo lại."
@@ -640,9 +651,10 @@ export default function Campaigns() {
     if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
     return (["draft", "queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
   }, [listedCampaigns, status]);
-  const templateCampaigns = useMemo(() => (campaigns.data ?? []).filter((campaign) =>
+  const templateSelection=useCompleteCampaigns(bulkTemplateOpen&&bulkTemplateAccountId?campaignScope:"",bulkTemplateAccountId);
+  const templateCampaigns = useMemo(() => (templateSelection.data ?? []).filter((campaign) =>
     Boolean(bulkTemplateAccountId) && campaign.telegramAccountId === bulkTemplateAccountId,
-  ), [campaigns.data, bulkTemplateAccountId]);
+  ), [templateSelection.data, bulkTemplateAccountId]);
   const bulkSelectedIds=useMemo(()=>{
     const available=new Set(templateCampaigns.map(campaign=>campaign.id));
     return bulkTemplateCampaignIds.filter(id=>available.has(id));
@@ -690,7 +702,6 @@ export default function Campaigns() {
 
   async function handleFormSaved() {
     const reopeningCompletedCampaign = editingCampaign?.status === "completed" || editingCampaign?.status === "completed_with_errors";
-    await Promise.all([campaigns.refetch(), templates.refetch()]);
     setShowForm(false);
     setEditingCampaign(null);
     setToast(reopeningCompletedCampaign ? c.toastReopened : editingCampaign ? c.toastUpdated : c.toastCreated);
@@ -707,7 +718,7 @@ export default function Campaigns() {
     try {
       const updatedCampaign = await updateStatus.mutateAsync({ campaignId: campaign.id, data: { status: nextStatus } });
       if (details?.id === campaign.id) setDetails(updatedCampaign);
-      await campaigns.refetch();
+      campaigns.upsert(updatedCampaign);
       setToast(nextStatus === "paused" ? c.toastPaused : c.toastResumed);
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
@@ -724,7 +735,7 @@ export default function Campaigns() {
     if (!window.confirm(`${accountFilterLabel}\n${c.bulkPauseConfirm(activeCount)}`)) return;
     try {
       const result = await bulkControl.mutateAsync({ data: { action: "pause",...bulkFilter } });
-      await campaigns.refetch();
+      await campaigns.sync();
       setToast(c.bulkPausedResult(result.updatedCount));
     } catch (error) {
       setToast(localizedErrorMessage(error, language, c.genericError));
@@ -780,7 +791,7 @@ export default function Campaigns() {
       if (result.job) {
         rememberBulkJob(result.job);
       } else {
-        await campaigns.refetch();
+        await campaigns.sync();
         setBulkResumeOpen(false);
         setToast(c.bulkResumedResult(result.updatedCount, result.skippedCount));
       }
@@ -835,7 +846,7 @@ export default function Campaigns() {
         campaignId: cloneSourceCampaign.id,
         data: { telegramAccountId: cloneTargetAccountId },
       });
-      await campaigns.refetch();
+      campaigns.upsert(clonedCampaign);
       setCloneSourceCampaign(null);
       setCloneTargetAccountId("");
       setToast(c.toastCloned);
@@ -868,7 +879,7 @@ export default function Campaigns() {
         },
       });
       await updateStatus.mutateAsync({ campaignId: forwardCampaign.id, data: { status: "queued" } });
-      await Promise.all([campaigns.refetch(), templates.refetch()]);
+      await Promise.all([campaigns.sync(), templates.refetch()]);
       setForwardCampaign(null);
       setForwardSourceMessageId("");
       setToast(c.toastResumed);

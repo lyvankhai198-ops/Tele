@@ -41,7 +41,7 @@ function load(name, mocks) {
   vm.runInNewContext(compiled[name], { exports, require:dep => {
     if (!(dep in mocks)) throw Error("UNMOCKED_IMPORT_" + dep);
     return mocks[dep];
-  }, Date, Intl, Map, Set, Number, window:mocks.window });
+  }, Date, Intl, Map, Set, Number, crypto:globalThis.crypto, window:mocks.window });
   return exports;
 }
 const guidance = load("campaign-field-guidance", {"react/jsx-runtime":{jsx,jsxs:jsx}});
@@ -82,6 +82,8 @@ function fixture(name,{language="vi",plan="pro",step=3,draft=baseDraft,editing=n
     react,"react/jsx-runtime":{jsx,jsxs:jsx},"lucide-react":other,
     "@workspace/api-client-react":api,"@/components/layout/AppLayout":other,
     "@/lib/i18n":{useLanguage:()=>({language:lang}),localizedErrorMessage:(_e,_l,f)=>f},
+    "@/lib/auth":{useAuth:()=>({user:{id:"fixture",role:"user"}})},
+    "@/lib/use-complete-campaigns":{useCompleteCampaigns:()=>({data:[],isLoading:false,isFetching:false,upsert(){}})},
     "@/components/campaign-field-guidance":guidance,
     "@/lib/telegram-restrictions":{canChooseRestrictedDestination:()=>true,temporaryRestrictionUntil:()=>null,
       suggestedRestrictionSchedule:()=>null,localScheduleFields:()=>({}),scheduleMeetsRestrictionSuggestion:()=>true},

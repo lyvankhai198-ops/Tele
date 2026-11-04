@@ -23,6 +23,7 @@ import {testOperations} from "./operations.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 import { testAdminGroupJoinQueue } from "./admin-group-join-queue.e2e";
+import { testCampaignScopedCreate } from "./campaign-scoped-create.e2e";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
@@ -191,6 +192,8 @@ try {
   await testTemplateJobs({adminId,userId,adminCookie,userCookie,request});
   phase="E2E_CAMPAIGN_LOAD_COUNTER";
   await testCampaignLoadCounter({adminId,userId,adminCookie,userCookie,request});
+  phase = "E2E_SCOPED_CREATE";
+  await testCampaignScopedCreate({adminId,adminCookie,userCookie,request});
   phase = "E2E_ACCOUNT_DELETE";
   await testTelegramAccountDeletion({ownerId:userId,ownerCookie:userCookie,otherOwnerId:adminId,request});
   phase="E2E_BACKGROUND_OPERATIONS";

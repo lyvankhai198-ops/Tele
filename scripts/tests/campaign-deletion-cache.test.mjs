@@ -14,9 +14,10 @@ function compile(file,imports,jsx=false,extra={}){
 }
 const api={getListCampaignsQueryKey:()=>["/api/campaigns"]};
 const loader=compile("../../artifacts/telecampaign/src/lib/load-complete-campaigns.ts",{"@workspace/api-client-react":api});
-const queries=compile("../../artifacts/telecampaign/src/lib/campaign-load-query.ts",{"@workspace/api-client-react":api,"./load-complete-campaigns":loader});
+const entities=compile("../../artifacts/telecampaign/src/lib/campaign-cache-entities.ts",{"@workspace/api-client-react":api});
+const queries=compile("../../artifacts/telecampaign/src/lib/campaign-load-query.ts",{"@workspace/api-client-react":api,"./load-complete-campaigns":loader,"./campaign-cache-entities":entities});
 const sync=compile("../../artifacts/telecampaign/src/lib/reconcile-campaign-deletions.ts",{
-  "@workspace/api-client-react":api,"./campaign-load-query":queries,"./load-complete-campaigns":loader,
+  "@workspace/api-client-react":api,"./campaign-load-query":queries,"./load-complete-campaigns":loader,"./campaign-cache-entities":entities,
 });
 const scope="owner:self",key=queries.completeCampaignKey(scope),progress=queries.campaignProgressKey(scope);
 const rows=Array.from({length:1133},(_,i)=>({id:`campaign-${i}`,name:`Campaign ${i}`,status:"completed"}));
@@ -151,7 +152,7 @@ function operationUi(language="vi"){
     "lucide-react":{LoaderCircle:"icon",CheckCircle2:"icon",AlertCircle:"icon",X:"icon"},
     "@/lib/operations":{useOperations:()=>operations},"@/lib/i18n":{useLanguage:()=>({language})},
     "@/lib/reconcile-campaign-deletions":{deletionSyncToken:sync.deletionSyncToken,
-      reconcileCampaignDeletions(){trace.sync++;return gate.promise;},
+      reconcileObservedCampaigns(){trace.sync++;return gate.promise;},
       invalidateDeletionDependencies(){trace.related++;return Promise.resolve();}},
   },true,{h,React:{Fragment:"fragment"},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)}});
   const render=()=>{sc=rc=ec=0;const tree=exported.OperationsProgress();const cleanups=pending.splice(0).map(fn=>fn());return{tree,cleanups};};

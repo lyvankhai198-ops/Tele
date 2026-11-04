@@ -685,6 +685,10 @@ paths:
     get:
       operationId: getCampaignLoadManifest
       tags: [campaigns]
+      parameters:
+        - name: telegramAccountId
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         "200":
           description: Read-only owner-scoped campaign selection at the start of a load
@@ -696,6 +700,9 @@ paths:
       operationId: getCampaignLoadBatch
       tags: [campaigns]
       parameters:
+        - name: telegramAccountId
+          in: query
+          schema: { type: string, format: uuid }
         - name: ids
           in: query
           required: true
@@ -723,6 +730,11 @@ paths:
     post:
       operationId: createCampaign
       tags: [campaigns]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: Stable key for retries of the same creation request; ownership scoped and committed atomically with the campaign.
+          schema: { type: string, minLength: 8, maxLength: 128 }
       requestBody:
         required: true
         content:
@@ -2654,6 +2666,9 @@ components:
       properties:
         campaignIds: { type: array, items: { type: string, format: uuid } }
         total: { type: integer, minimum: 0 }
+        revisions:
+          type: object
+          additionalProperties: { type: string }
     CampaignLoadBatch:
       type: object
       required: [campaigns, missingIds]

@@ -9,12 +9,10 @@ import {
 import type { Campaign, Destination } from "@workspace/api-client-react";
 import {
   useCreateCampaign,
-  getListCampaignsQueryKey,
   getListDestinationsQueryKey,
   useGetSystemDefaults,
   useGetAccountSummary,
   useListDestinations,
-  useListCampaigns,
   useListMessageTemplates,
   useListTelegramAccounts,
   useSyncTelegramDestinations,
@@ -31,6 +29,8 @@ import {
 } from "@/lib/telegram-restrictions";
 import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-sync";
 import { CampaignFieldNote, CampaignGroupInterval, DelayExamples, GroupCountRecommendation } from "@/components/campaign-field-guidance";
+import {useCompleteCampaigns} from "@/lib/use-complete-campaigns";
+import {useAuth} from "@/lib/auth";
 
 type CampaignForm = {
   name: string;
@@ -240,21 +240,19 @@ export function CampaignFormModal({
       staleTime: DESTINATION_SYNC_TTL_MS,
     },
   });
-  const campaigns = useListCampaigns({
-    query: {
-      queryKey: getListCampaignsQueryKey(),
-      refetchOnMount: "always",
-      refetchOnWindowFocus: true,
-      staleTime: 0,
-    },
-  });
   const templates = useListMessageTemplates();
   const systemDefaults = useGetSystemDefaults();
   const accountSummary = useGetAccountSummary();
-  const createCampaign = useCreateCampaign();
+  const requestId=useRef(crypto.randomUUID());
+  const createCampaign = useCreateCampaign({request:{headers:{"Idempotency-Key":requestId.current}}});
   const syncDestinations = useSyncTelegramDestinations();
   const updateStatus = useUpdateCampaignStatus();
   const [form, setForm] = useState<CampaignForm>(() => initialForm(editingCampaign, prefill));
+  const {user}=useAuth();
+  const campaignScope=user?`${user.id}:${user.support?.targetUserId??"self"}`:"";
+  const campaigns=useCompleteCampaigns(form.accountId?campaignScope:"",form.accountId);
+  const submitLock=useRef(false);
+  const [submitting,setSubmitting]=useState(false);
   const [groupSearch, setGroupSearch] = useState("");
   const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>("all");
   const [formError, setFormError] = useState<string | null>(null);
@@ -473,6 +471,7 @@ export function CampaignFormModal({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if(submitLock.current)return;
     setFormError(null);
     const groupIntervalMinutes = form.destinationIds.length > 1 ? Number(form.groupIntervalMinutes) : 0;
     if (!Number.isInteger(groupIntervalMinutes) || groupIntervalMinutes < 0 || groupIntervalMinutes > 4320) {
@@ -512,6 +511,7 @@ export function CampaignFormModal({
       setFormError(c.validationRestrictionSchedule(formatRestrictionTime(suggestedScheduleAt!)));
       return;
     }
+    submitLock.current=true;setSubmitting(true);
     try {
       if (editingCampaign) {
         const isAdminClonedCampaign = editingCampaign.cloneMode === "admin";
@@ -533,6 +533,7 @@ export function CampaignFormModal({
             groupIntervalSeconds: groupIntervalMinutes * 60,
           },
         });
+        campaigns.upsert(updatedCampaign);
         await onSaved(updatedCampaign);
       } else {
         const createdCampaign = await createCampaign.mutateAsync({
@@ -551,16 +552,19 @@ export function CampaignFormModal({
             groupIntervalSeconds: groupIntervalMinutes * 60,
           },
         });
+        campaigns.upsert(createdCampaign);
         await onSaved(createdCampaign);
       }
     } catch (error) {
       setFormError(localizedErrorMessage(error, language, c.genericError));
+    } finally {
+      submitLock.current=false;setSubmitting(false);
     }
   }
 
   return (
-    <Modal title={editingCampaign ? c.editTitle : c.modalTitle} onClose={onClose} wide>
-      <form className="space-y-5" onSubmit={(event) => void submit(event)}>
+    <Modal title={editingCampaign ? c.editTitle : c.modalTitle} onClose={()=>{if(!submitLock.current)onClose();}} wide>
+      <form className="space-y-5" aria-busy={submitting} onSubmit={(event) => void submit(event)}>
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldName}</span>
           <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="campaign-name" />
@@ -748,8 +752,8 @@ export function CampaignFormModal({
 
         {formError && <p className="rounded-xl bg-[#fff1f2] px-3.5 py-3 text-[13px] font-semibold text-[#be123c]">{formError}</p>}
 
-        <PrimaryButton type="submit" disabled={createCampaign.isPending || updateStatus.isPending}>
-          {(createCampaign.isPending || updateStatus.isPending) && <LoaderCircle className="h-4 w-4 animate-spin" />}
+        <PrimaryButton type="submit" disabled={submitting || createCampaign.isPending || updateStatus.isPending}>
+          {(submitting || createCampaign.isPending || updateStatus.isPending) && <LoaderCircle className="h-4 w-4 animate-spin" />}
           {editingCampaign ? c.editButton : c.createButton}
         </PrimaryButton>
       </form>

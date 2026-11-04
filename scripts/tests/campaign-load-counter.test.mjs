@@ -1,5 +1,6 @@
 import test from "node:test";
 import "./campaign-deletion-cache.test.mjs";
+import "./campaign-scoped-cache.test.mjs";
 import "./campaign-skipped-cleanup.test.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -18,8 +19,12 @@ function compile(path,imports){
 }
 const api={getListCampaignsQueryKey:()=>["/api/campaigns"]};
 const loader=compile("../../artifacts/telecampaign/src/lib/load-complete-campaigns.ts",{"@workspace/api-client-react":api});
+const entities=compile("../../artifacts/telecampaign/src/lib/campaign-cache-entities.ts",{"@workspace/api-client-react":api});
 const queryModule=compile("../../artifacts/telecampaign/src/lib/campaign-load-query.ts",{
-  "@workspace/api-client-react":api,"./load-complete-campaigns":loader,
+  "@workspace/api-client-react":api,"./load-complete-campaigns":loader,"./campaign-cache-entities":entities,
+});
+const reconciliation=compile("../../artifacts/telecampaign/src/lib/reconcile-campaign-deletions.ts",{
+  "@workspace/api-client-react":api,"./campaign-load-query":queryModule,"./load-complete-campaigns":loader,"./campaign-cache-entities":entities,
 });
 const ids=Array.from({length:60},(_,i)=>`campaign-${i}`);
 function deferred(){let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};}
@@ -108,7 +113,7 @@ test("stale cached data survives remount, focus and reconnect without restarting
   assert.equal(observer.getCurrentResult().isFetching,false);
   assert.equal(calls,0);
   const query=client.getQueryCache().find({queryKey:options.queryKey,exact:true});
-  assert.equal(query.isStaleByTime(options.staleTime),true);
+  assert.equal(query.isStaleByTime(options.staleTime),false);
   assert.equal(observer.shouldFetchOnWindowFocus(),false);
   assert.equal(observer.shouldFetchOnReconnect(),false);
   stop();
@@ -118,7 +123,7 @@ test("stale cached data survives remount, focus and reconnect without restarting
   assert.equal(calls,1);assert.equal(reloaded.data[0].id,"fresh");
   stopBack();client.clear();
 });
-test("a mutation invalidation while away still refreshes the cached list on return",async()=>{
+test("prefix invalidation does not restart a full load; delta reconciliation updates the cached list",async()=>{
   let calls=0;
   api.getCampaignLoadManifest=async()=>{calls++;return{campaignIds:["created-while-away"],total:1};};
   api.getCampaignLoadBatch=async()=>({campaigns:[{id:"created-while-away"}],missingIds:[]});
@@ -129,6 +134,8 @@ test("a mutation invalidation while away still refreshes the cached list on retu
   assert.equal(calls,0);
   const observer=new QueryObserver(client,options),stop=observer.subscribe(()=>{});
   await tick();await tick();
+  assert.equal(calls,0);assert.equal(observer.getCurrentResult().data[0].id,"before-mutation");
+  await reconciliation.reconcileCampaignDeletions(client,"owner:self");
   assert.equal(calls,1);assert.equal(observer.getCurrentResult().data[0].id,"created-while-away");
   stop();client.clear();
 });
