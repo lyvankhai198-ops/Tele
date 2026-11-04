@@ -164,6 +164,7 @@ try {
   phase = "E2E_CAMPAIGN_BULK_JOBS";
   await testCampaignBulkJobs({ownerId:userId,ownerCookie:userCookie,otherCookie:adminCookie,request});
   await testCampaignRoundTiming({ownerId:userId,ownerCookie:userCookie,request});
+  phase = "E2E_ACCOUNT_DELETE";
   await testTelegramAccountDeletion({ownerId:userId,ownerCookie:userCookie,request});
   phase = "E2E_DESTINATION_MEMBERSHIP_VISIBILITY";
   const leftGroupId=randomUUID(), restrictedGroupId=randomUUID(), activeGroupId=randomUUID();

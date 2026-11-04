@@ -44,12 +44,12 @@ export async function testTelegramAccountDeletion(input: {
   await pool.query(`INSERT INTO activity_logs(id,owner_user_id,event,message,campaign_id)
     VALUES($1,$2,'fixture','fixture',$3)`, [log, ownerId, ids[0]]);
 
-  check((await request(`/telegram/accounts/${foreign}`, ownerCookie, undefined, "DELETE")).status === 404,
+  check((await request(`/telegram/accounts/${foreign}`, ownerCookie, {}, "DELETE")).status === 404,
     "E2E_ACCOUNT_DELETE_OWNER_GUARD");
-  check((await request(`/telegram/accounts/${account}`, undefined, undefined, "DELETE")).status === 401,
+  check((await request(`/telegram/accounts/${account}`, undefined, {}, "DELETE")).status === 401,
     "E2E_ACCOUNT_DELETE_AUTH_GUARD");
   await pool.query("UPDATE telegram_accounts SET delivery_lease_until=NOW()+INTERVAL '2 minutes' WHERE id=$1", [account]);
-  check((await request(`/telegram/accounts/${account}`, ownerCookie, undefined, "DELETE")).status === 409,
+  check((await request(`/telegram/accounts/${account}`, ownerCookie, {}, "DELETE")).status === 409,
     "E2E_ACCOUNT_DELETE_LIVE_SEND_BUSY");
   check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [ids])).rowCount === 5,
     "E2E_ACCOUNT_DELETE_BUSY_PRESERVES");
@@ -68,7 +68,7 @@ export async function testTelegramAccountDeletion(input: {
     "E2E_ACCOUNT_DELETE_ATOMIC_ACCOUNT");
   await pool.query("DELETE FROM campaigns WHERE id=$1", [foreignCampaign]);
 
-  check((await request(`/telegram/accounts/${account}`, ownerCookie, undefined, "DELETE")).ok,
+  check((await request(`/telegram/accounts/${account}`, ownerCookie, {}, "DELETE")).ok,
     "E2E_ACCOUNT_DELETE_HTTP_SUCCESS");
   check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [ids])).rowCount === 0,
     "E2E_ACCOUNT_DELETE_ALL_CAMPAIGN_STATES");
@@ -86,7 +86,7 @@ export async function testTelegramAccountDeletion(input: {
   check((await pool.query("SELECT id FROM activity_logs WHERE id=$1 AND campaign_id IS NULL", [log])).rowCount === 1,
     "E2E_ACCOUNT_DELETE_LOG_POLICY_RETAINED");
   check(!await processNextCampaignTarget(account), "E2E_ACCOUNT_DELETE_WORKER_NO_SEND");
-  check((await request(`/telegram/accounts/${account}`, ownerCookie, undefined, "DELETE")).status === 404,
+  check((await request(`/telegram/accounts/${account}`, ownerCookie, {}, "DELETE")).status === 404,
     "E2E_ACCOUNT_DELETE_REPEAT_SAFE");
   console.log("E2E_ACCOUNT_DELETE_PASSED");
 }
