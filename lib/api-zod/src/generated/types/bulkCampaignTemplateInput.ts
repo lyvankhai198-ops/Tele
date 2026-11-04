@@ -9,6 +9,11 @@
 export interface BulkCampaignTemplateInput {
   /** @minLength 1 */
   templateId: string;
+  /**
+     * Persist this identity before submitting and reuse it after a lost response.
+     * @pattern ^[a-zA-Z0-9-]{16,80}$
+     */
+  requestId?: string;
   /** Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update. */
   telegramAccountId?: string;
 }

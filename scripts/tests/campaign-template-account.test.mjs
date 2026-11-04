@@ -35,13 +35,16 @@ function setup(selected="",language="en",pending=false){
   const context={
     bulkTemplateAccountId:selected,bulkTemplateId:"template",bulkTemplateOpen:true,
     bulkTemplate:{isPending:pending,async mutateAsync(request){state.sent=request;return{updatedCount:2,skippedCount:1};}},
+    templateProgress:{job:null,uncertain:false,blocked:pending,async start(templateId,accountId){
+      state.sent={templateId,...(accountId?{telegramAccountId:accountId}:{})};
+    }},
     campaigns:{data:fixtures,async refetch(){state.refetched++;}},
     accounts:{isLoading:false,data:[{id:"a",name:"Account A",phone:"+111"},{id:"b",name:"Account B"}]},
     templates:{data:[{id:"template",name:"Template"}]},useMemo:fn=>fn(),
     setBulkTemplateAccountId:v=>{state.selected=v;},setBulkTemplateId:v=>{state.template=v;},
     setBulkTemplateOpen:v=>{state.open=v;},setToast:v=>{state.toast=v;},
     localizedErrorMessage:()=>{throw Error("Unexpected failed request");},
-    Modal:"Modal",PrimaryButton:"button",LoaderCircle:"Loader",
+    React:{Fragment:"fragment"},Modal:"Modal",PrimaryButton:"button",LoaderCircle:"Loader",
     h:(type,props,...children)=>({type,props:props??{},children:children.flat(Infinity).filter(x=>x!==false&&x!=null)}),
   };
   evaluate(snippets.copy+`;globalThis.c=copy.${language};`,context);
@@ -80,11 +83,11 @@ test("reopening resets account scope even after the previous account had no matc
   evaluate(snippets.openBulkTemplate+";openBulkTemplate();",context);
   assert.equal(state.selected,"");assert.equal(state.template,"");assert.equal(state.open,true);assert.equal(state.toast,null);
 });
-test("actual submit sends the selected id, refreshes campaigns and keeps old all-account payload",async()=>{
+test("actual submit starts a durable operation without closing or pretending all campaigns are already changed",async()=>{
   for(const selected of ["a",""]){
     const {context,state}=setup(selected);
     await evaluate(snippets.submitBulkTemplate+";submitBulkTemplate();",context);
-    assert.deepEqual(JSON.parse(JSON.stringify(state.sent)),{data:{templateId:"template",...(selected?{telegramAccountId:selected}:{})}});
-    assert.equal(state.refetched,1);assert.equal(state.open,false);
+    assert.deepEqual(JSON.parse(JSON.stringify(state.sent)),{templateId:"template",...(selected?{telegramAccountId:selected}:{})});
+    assert.equal(state.refetched,0);assert.equal(state.open,true);
   }
 });

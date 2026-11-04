@@ -16,6 +16,7 @@ import { testCampaignRoundTiming } from "./campaign-round-timing.e2e";
 import { testTelegramAccountDeletion } from "./telegram-account-delete.e2e";
 import { testCampaignRerunSafety } from "./campaign-rerun-safety.e2e";
 import { testCampaignTemplateAccount } from "./campaign-template-account.e2e";
+import { testTemplateJobs } from "./campaign-template-jobs.e2e";
 import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 
@@ -171,6 +172,8 @@ try {
   await testCampaignRoundTiming({ownerId:userId,ownerCookie:userCookie,request});
   phase = "E2E_TEMPLATE_ACCOUNT";
   await testCampaignTemplateAccount({adminId,userId,adminCookie,userCookie,request});
+  phase = "E2E_TEMPLATE_JOBS";
+  await testTemplateJobs({adminId,adminCookie,userCookie,request});
   phase = "E2E_ACCOUNT_DELETE";
   await testTelegramAccountDeletion({ownerId:userId,ownerCookie:userCookie,otherOwnerId:adminId,request});
   phase = "E2E_DESTINATION_MEMBERSHIP_VISIBILITY";

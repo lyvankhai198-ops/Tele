@@ -1358,16 +1358,134 @@ export const RetryCampaignBulkJobResponse = zod.object({
 
 
 
+export const bulkUpdateCampaignTemplateBodyRequestIdRegExp = new RegExp('^[a-zA-Z0-9-]{16,80}$');
 
 
 export const BulkUpdateCampaignTemplateBody = zod.object({
   "templateId": zod.string().min(1),
+  "requestId": zod.string().regex(bulkUpdateCampaignTemplateBodyRequestIdRegExp).optional().describe('Persist this identity before submitting and reuse it after a lost response.'),
   "telegramAccountId": zod.string().uuid().optional().describe('Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update.')
 })
 
 export const BulkUpdateCampaignTemplateResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
   "updatedCount": zod.number(),
   "skippedCount": zod.number(),
+  "skippedOffset": zod.number().int(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string(),
+  "defaultStatus": zod.enum(['not_applicable', 'pending', 'updated', 'skipped']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "finishedAt": zod.string().nullable(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
+})
+
+
+export const GetLatestCampaignTemplateJobResponse = zod.union([zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skippedOffset": zod.number().int(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string(),
+  "defaultStatus": zod.enum(['not_applicable', 'pending', 'updated', 'skipped']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "finishedAt": zod.string().nullable(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
+}),zod.null()])
+
+
+export const GetCampaignTemplateJobParams = zod.object({
+  "jobId": zod.coerce.string()
+})
+
+export const GetCampaignTemplateJobResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skippedOffset": zod.number().int(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string(),
+  "defaultStatus": zod.enum(['not_applicable', 'pending', 'updated', 'skipped']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "finishedAt": zod.string().nullable(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
+})
+
+
+export const getCampaignTemplateSkipsPathOffsetMin = 0;
+
+
+
+export const GetCampaignTemplateSkipsParams = zod.object({
+  "jobId": zod.coerce.string(),
+  "offset": zod.coerce.number().int().min(getCampaignTemplateSkipsPathOffsetMin)
+})
+
+export const GetCampaignTemplateSkipsResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skippedOffset": zod.number().int(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string(),
+  "defaultStatus": zod.enum(['not_applicable', 'pending', 'updated', 'skipped']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "finishedAt": zod.string().nullable(),
+  "skipped": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "reason": zod.string()
+}))
+})
+
+
+export const RetryCampaignTemplateJobParams = zod.object({
+  "jobId": zod.coerce.string()
+})
+
+export const RetryCampaignTemplateJobResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'completed', 'failed']),
+  "total": zod.number().int(),
+  "processed": zod.number().int(),
+  "updatedCount": zod.number(),
+  "skippedCount": zod.number(),
+  "skippedOffset": zod.number().int(),
+  "telegramAccountId": zod.string().nullable(),
+  "templateId": zod.string(),
+  "defaultStatus": zod.enum(['not_applicable', 'pending', 'updated', 'skipped']),
+  "error": zod.string().nullable(),
+  "createdAt": zod.string(),
+  "finishedAt": zod.string().nullable(),
   "skipped": zod.array(zod.object({
   "id": zod.string(),
   "name": zod.string(),

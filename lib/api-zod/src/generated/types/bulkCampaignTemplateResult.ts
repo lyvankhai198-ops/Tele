@@ -5,10 +5,26 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { BulkCampaignTemplateResultDefaultStatus } from './bulkCampaignTemplateResultDefaultStatus';
 import type { BulkCampaignTemplateResultSkippedItem } from './bulkCampaignTemplateResultSkippedItem';
+import type { BulkCampaignTemplateResultStatus } from './bulkCampaignTemplateResultStatus';
 
 export interface BulkCampaignTemplateResult {
+  id: string;
+  status: BulkCampaignTemplateResultStatus;
+  total: number;
+  processed: number;
   updatedCount: number;
   skippedCount: number;
+  skippedOffset: number;
+  /** @nullable */
+  telegramAccountId: string | null;
+  templateId: string;
+  defaultStatus: BulkCampaignTemplateResultDefaultStatus;
+  /** @nullable */
+  error: string | null;
+  createdAt: string;
+  /** @nullable */
+  finishedAt: string | null;
   skipped: BulkCampaignTemplateResultSkippedItem[];
 }

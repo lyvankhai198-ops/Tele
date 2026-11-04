@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { pool } from "@workspace/db";
 import { getSystemSettings, updateSystemSettings } from "../../artifacts/api-server/src/lib/system-settings";
 import { createSupportSession, SUPPORT_COOKIE_NAME } from "../../artifacts/api-server/src/lib/support-session";
+import { processTemplateJobs } from "../../artifacts/api-server/src/lib/campaign-template-jobs";
 
 export async function testCampaignTemplateAccount(input: {
   adminId: string; userId: string; adminCookie: string; userCookie: string;
@@ -43,8 +44,13 @@ export async function testCampaignTemplateAccount(input: {
   ]);
   const clone = await campaign(a,"paused","Tự động: admin clone",adminId,true);
   const missingAccount = await campaign(null);
-  const submit = (templateId: string, accountId?: string, cookie=adminCookie) =>
-    request("/campaigns/bulk-template",cookie,{templateId,...(accountId?{telegramAccountId:accountId}:{})});
+  const submit = async(templateId: string, accountId?: string, cookie=adminCookie) => {
+    const accepted=await request("/campaigns/bulk-template",cookie,{templateId,requestId:randomUUID(),...(accountId?{telegramAccountId:accountId}:{})});
+    if(accepted.status!==202)return accepted;
+    const job=await accepted.json() as any;
+    await processTemplateJobs(100);
+    return request(`/campaigns/bulk-template/jobs/${job.id}`,cookie);
+  };
   const current = async(id:string)=>(await pool.query("SELECT template_id,telegram_account_id FROM campaigns WHERE id=$1",[id])).rows[0];
   try {
     check((await submit(text,a,"")).status===401,"E2E_TEMPLATE_ANON_DENIED");
