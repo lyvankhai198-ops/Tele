@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {randomUUID} from "node:crypto";
 import {pool} from "@workspace/db";
-import {processOperations} from "../../artifacts/api-server/src/lib/operations";
+import {processOperations,recoverDeletionOperations} from "../../artifacts/api-server/src/lib/operations";
 import {processSyncOperations} from "../../artifacts/api-server/src/lib/operation-sync";
 export async function testOperations(input:{
   ownerId:string;otherOwnerId:string;ownerCookie:string;otherCookie:string;
@@ -25,6 +25,15 @@ export async function testOperations(input:{
   }
   await pool.query("INSERT INTO campaign_targets(campaign_id,destination_id,status,next_attempt_at) SELECT $1,$2,'pending',now() FROM generate_series(1,2001)",[ca,da]);
   await pool.query("INSERT INTO activity_logs(owner_user_id,event,message,account_id,campaign_id) VALUES($1,'fixture','Fixture',$2,$3)",[ownerId,a,ca]);
+  const extra=(await pool.query(`INSERT INTO campaigns(owner_user_id,telegram_account_id,name,status,content,destination_ids,repeat_count)
+    SELECT $1,$2,$3,'running','Fixture',ARRAY[$4::uuid],1 FROM generate_series(1,41) RETURNING id`,[ownerId,a,tag,da])).rows.map(row=>row.id);
+  await pool.query(`INSERT INTO campaign_targets(campaign_id,destination_id,status,next_attempt_at)
+    SELECT c.id,$2,'pending',now() FROM campaigns c CROSS JOIN generate_series(1,2) WHERE c.id=ANY($1::uuid[])`,[extra,da]);
+  await pool.query(`INSERT INTO activity_logs(owner_user_id,event,message,campaign_id)
+    SELECT $1,'fixture',$2,c.id FROM campaigns c WHERE c.id=ANY($3::uuid[])`,[ownerId,tag+":direct",extra]);
+  await pool.query(`INSERT INTO activity_logs(owner_user_id,event,message,target_id)
+    SELECT $1,'fixture',$2,t.id FROM campaign_targets t WHERE t.campaign_id=$3 LIMIT 1001`,[ownerId,tag+":linked",ca]);
+  await pool.query("INSERT INTO activity_logs(owner_user_id,event,message,account_id,campaign_id) VALUES($1,'fixture',$2,$3,$4)",[ownerId,tag+":other",b,cb]);
   console.log("E2E_OP_FIXTURES_READY");
   check((await request("/operations",undefined,{kind:"delete_account",accountId:a,confirm:true},"POST")).status===401,"E2E_OP_AUTH");
   check((await request("/operations",ownerCookie,{kind:"delete_account",accountId:foreign,confirm:true},"POST")).status===404,"E2E_OP_FOREIGN_ACCOUNT");
@@ -45,6 +54,8 @@ export async function testOperations(input:{
   check(!JSON.stringify(await list()).includes("fixture-session")&&job.payload===undefined&&job.owner===undefined,"E2E_OP_PRIVATE_PAYLOAD");
   for(let i=0;i<8&&(await progress()).phase!=="targets";i++)await processOperations();
   check((await progress()).phase==="targets","E2E_OP_STAGE_RESTORED");
+  check(Number((await pool.query("SELECT count(*) FROM activity_logs WHERE owner_user_id=$1 AND message=ANY($2::text[])",[ownerId,[tag+":direct",tag+":linked"]])).rows[0].count)===0,"E2E_OP_BLOCK_LOGS_AND_TARGET_ONLY_LOGS");
+  check(Number((await pool.query("SELECT count(*) FROM activity_logs WHERE owner_user_id=$1 AND message=$2",[ownerId,tag+":other"])).rows[0].count)===1,"E2E_OP_OTHER_ACCOUNT_LOG_RETAINED");
   console.log("E2E_OP_TARGET_STAGE_PASSED");
   check((await request(`/campaigns/${ca}/status`,ownerCookie,{status:"queued"},"PATCH")).status===409,"E2E_OP_CANNOT_REACTIVATE_DELETING");
   const blocker=await pool.connect();
@@ -52,11 +63,11 @@ export async function testOperations(input:{
     await blocker.query("BEGIN");
     await blocker.query("SELECT id FROM campaign_targets WHERE campaign_id=$1 ORDER BY id LIMIT 1 FOR UPDATE",[ca]);
     await processOperations();
-    check((await progress()).state==="failed","E2E_OP_LOCK_FAILURE_RECOVERABLE");
+    check((await progress()).state==="queued"&&(await progress()).error==="OPERATION_AUTO_RETRY","E2E_OP_LOCK_RETRY_AUTOMATIC");
     check(Number((await pool.query("SELECT count(*) FROM campaign_targets WHERE campaign_id=$1",[ca])).rows[0].count)===2001,"E2E_OP_FAILED_CHUNK_ATOMIC");
   }finally{await blocker.query("ROLLBACK");blocker.release();}
   check((await request(`/operations/${job.id}/retry`,otherCookie,{},"POST")).status===404,"E2E_OP_RETRY_OWNER");
-  check((await request(`/operations/${job.id}/retry`,ownerCookie,{},"POST")).status===202,"E2E_OP_RETRY_SAME_JOB");
+  await new Promise(resolve=>setTimeout(resolve,2100));
   await processOperations(30);
   check((await progress()).state==="completed"&&(await progress()).processed>=2005,"E2E_OP_COMPLETED_REAL_COUNTER");
   console.log("E2E_OP_LOCK_RECOVERY_PASSED");
@@ -65,7 +76,13 @@ export async function testOperations(input:{
   check(!(await pool.query("SELECT id FROM destinations WHERE id=$1",[da])).rows.length,"E2E_OP_GROUP_REMOVED");
   check((await pool.query("SELECT id FROM destinations WHERE id=ANY($1::uuid[])",[[db,df]])).rows.length===2,"E2E_OP_SAME_TELEGRAM_ID_RETAINED");
   const bulk=await request("/operations",ownerCookie,{kind:"delete_campaigns",confirm:true,telegramAccountId:b,search:tag},"POST");
-  check(bulk.status===202,"E2E_OP_BULK_ACCEPTED");await processOperations(30);
+  check(bulk.status===202,"E2E_OP_BULK_ACCEPTED");
+  const bulkJob=await bulk.json();
+  await pool.query("UPDATE system_settings SET value=(value::jsonb||'{\"state\":\"failed\",\"error\":\"OPERATION_RETRY_REQUIRED\"}'::jsonb)::text WHERE key=$1",
+    ["telecamp_operation:"+ownerId+":"+bulkJob.id]);
+  await recoverDeletionOperations();
+  check((await list()).find((row:any)=>row.id===bulkJob.id)?.state==="queued","E2E_OP_OLD_CONFIRMED_DELETE_RECOVERED");
+  await processOperations(30);
   check(!(await pool.query("SELECT id FROM campaigns WHERE id=$1",[cb])).rows.length
     &&(await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])",[[cr,cf]])).rows.length===2,"E2E_OP_BULK_SCOPE_AND_RUNNING_GUARD");
   console.log("E2E_OP_BULK_PASSED");

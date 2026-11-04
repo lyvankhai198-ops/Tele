@@ -37,7 +37,8 @@ test("huge schedules allocate only one bounded chunk",()=>{
 });
 test("deletion is owner-scoped, checkpointed and bounded",()=>{
   const text=fs.readFileSync(new URL("operation-deletion.ts",base),"utf8");
-  for(const token of ["owner_user_id","LIMIT 1000","LIMIT 2000","LIMIT 20","LIMIT 5","deletion_pending","snapshotIds"])assert.ok(text.includes(token),token);
+  for(const token of ["owner_user_id","LIMIT 1000","LIMIT 2000","LIMIT 20","groupChunk","deletion_pending","snapshotIds","logOffset","JOIN activity_logs"])assert.ok(text.includes(token),token);
+  assert.doesNotMatch(text,/OR target_id IN/);
   assert.doesNotMatch(text,/DELETE FROM destinations WHERE telegram_id/);
 });
 test("worker rolls back failed chunks, keeps checkpoints, and has database time limits",()=>{
@@ -48,4 +49,17 @@ test("no public progress response includes the stored payload or credentials",()
   const text=fs.readFileSync(new URL("operations.ts",base),"utf8");
   assert.ok(text.includes("{payload,fingerprint,owner,...summary}"));
   assert.ok(text.includes("-'payload'-'fingerprint'-'owner'"));
+});
+test("wrapped PostgreSQL contention is retried automatically, not permanent SQL errors",()=>{
+  const text=fs.readFileSync(new URL("operations.ts",base),"utf8"),source=ts.createSourceFile("operations.ts",text,ts.ScriptTarget.Latest,true);
+  const names=["operationErrorCode","isAutomaticDeletionRetry"];
+  const functions=source.statements.filter(n=>ts.isFunctionDeclaration(n)&&names.includes(n.name?.text)).map(n=>n.getText(source)).join("\n");
+  const module={exports:{}};
+  vm.runInNewContext(ts.transpileModule(functions,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module,exports:module.exports});
+  const {operationErrorCode,isAutomaticDeletionRetry}=module.exports;
+  for(const code of ["55P03","57014","40P01","40001","08006","ECONNRESET"]){
+    assert.equal(operationErrorCode(new Error("wrapped",{cause:{code}})),code);
+    assert.equal(isAutomaticDeletionRetry(code),true);
+  }
+  for(const code of ["23503","42601","42P01","OPERATION_STEP_FAILED"])assert.equal(isAutomaticDeletionRetry(code),false);
 });

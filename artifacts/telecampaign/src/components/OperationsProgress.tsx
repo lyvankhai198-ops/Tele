@@ -39,6 +39,7 @@ export function OperationsProgress(){
     </div>}
     {jobs.slice(0,limit).map(job=>{
       const active=job.state==="queued"||job.state==="running",failed=job.state==="failed";
+      const deletion=job.kind==="delete_account"||job.kind==="delete_campaigns";
       const percent=job.total!==null&&job.total>0?Math.min(100,Math.floor(job.processed/job.total*100)):null;
       const unit=job.unit==="groups"?(vi?"nhóm":"groups"):job.unit==="deliveries"?(vi?"lượt gửi":"deliveries"):(vi?"bản ghi":"records");
       return <article key={job.id} className={`rounded-2xl border p-4 ${failed?"border-amber-200 bg-amber-50":active?"border-indigo-200 bg-indigo-50/70":"border-emerald-200 bg-emerald-50/70"}`}>
@@ -47,14 +48,19 @@ export function OperationsProgress(){
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-bold text-slate-900">{names[job.kind]}</h2>
             <p className="truncate text-xs text-slate-600">{job.label}</p>
-            <p role="status" className="mt-2 text-sm font-semibold text-slate-800">{failed?(vi?"Tạm dừng — cần tiếp tục":"Paused — resume required"):(phases[job.phase]??(vi?"Đang xác định dữ liệu liên quan":"Finding related data"))}</p>
+            <p role="status" className="mt-2 text-sm font-semibold text-slate-800">{job.error==="OPERATION_AUTO_RETRY"
+              ?(vi?"Đang chờ dữ liệu — sẽ tự tiếp tục":"Waiting for data — resuming automatically")
+              :failed?(deletion?(vi?"Xoá chưa hoàn tất — cần kiểm tra":"Deletion incomplete — needs investigation"):(vi?"Tạm dừng — cần tiếp tục":"Paused — resume required")):(phases[job.phase]??(vi?"Đang xác định dữ liệu liên quan":"Finding related data"))}</p>
             <p className="mt-1 text-xs tabular-nums text-slate-600">{job.processed.toLocaleString()}{job.total!==null?` / ${job.total.toLocaleString()}`:""} {unit}{percent!==null?` · ${percent}%`:""}</p>
             {job.phase==="reset"&&<p className="mt-1 text-xs text-slate-600">{vi?"Đã dọn":"Cleared"} {(job.stageProcessed??0).toLocaleString()} {vi?"lượt cũ":"previous deliveries"}</p>}
             {percent!==null&&<div role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-indigo-600 transition-[width]" style={{width:`${percent}%`}}/></div>}
             {(active||failed)&&<p className="mt-2 text-xs leading-relaxed text-slate-600">{failed
-              ?(vi?"Phần đã xử lý được giữ nguyên. Tiếp tục chính tác vụ này, không tạo lệnh xoá mới.":"Completed work is retained. Resume this operation instead of submitting another deletion.")
-              :(vi?"Có thể rời trang; tác vụ vẫn chạy nền. Mở lại để xem tiến trình.":"You may leave this page. Work continues in the background and progress is available when you return.")}</p>}
-            {failed&&!userReadOnly(operations.scope)&&<button disabled={retrying===job.id} className="mt-3 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold disabled:opacity-50"
+              ?deletion?(vi?"Yêu cầu xoá đã được ghi nhận và phần đã xử lý được giữ nguyên. Lỗi này cần được kiểm tra; không cần bấm tiếp tục hay gửi lại lệnh xoá.":"Your deletion request and completed work are retained. This error needs investigation; do not resume repeatedly or submit another deletion.")
+                :(vi?"Phần đã xử lý được giữ nguyên. Tiếp tục chính tác vụ này, không tạo yêu cầu mới.":"Completed work is retained. Resume this operation instead of submitting another request.")
+              :deletion
+                ?(vi?"Hệ thống tự xử lý đến khi hoàn tất; không cần bấm tiếp tục hay gửi lại yêu cầu xoá. Có thể rời trang.":"Deletion continues automatically. No resume click or duplicate request is needed. You may leave this page.")
+                :(vi?"Có thể rời trang; tác vụ vẫn chạy nền. Mở lại để xem tiến trình.":"You may leave this page. Work continues in the background and progress is available when you return.")}</p>}
+            {failed&&!deletion&&!userReadOnly(operations.scope)&&<button disabled={retrying===job.id} className="mt-3 rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-bold disabled:opacity-50"
               onClick={async()=>{setRetrying(job.id);try{await operations.retry(job.id);}catch{}finally{setRetrying(null);}}}>{retrying===job.id?(vi?"Đang tiếp tục…":"Resuming…"):(vi?"Tiếp tục tác vụ":"Resume operation")}</button>}
           </div>
           {job.state==="completed"&&<button onClick={()=>dismiss(job.id)} aria-label={vi?"Ẩn thông báo":"Dismiss"} className="rounded-lg p-1 text-slate-500"><X size={17}/></button>}

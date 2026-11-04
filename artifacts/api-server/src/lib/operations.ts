@@ -87,23 +87,54 @@ export async function failOperation(owner:string,id:string,code="OPERATION_RETRY
     WHERE key=${key(owner,id)} AND value::jsonb->>'state' IN ('queued','running')
       AND (${token??null}::text IS NULL OR value::jsonb->'payload'->>'token'=${token??null})`);
 }
+export function operationErrorCode(error:unknown):string{
+  let value=error as {code?:unknown;cause?:unknown}|undefined;
+  for(let depth=0;depth<5&&value;depth++,value=value.cause as typeof value){
+    if(typeof value.code==="string"&&/^(?:[0-9A-Z]{5}|ECONNRESET|ETIMEDOUT|ECONNREFUSED)$/.test(value.code))return value.code;
+  }
+  return "OPERATION_STEP_FAILED";
+}
+export function isAutomaticDeletionRetry(code:string){
+  return ["55P03","57014","40P01","40001","53300","57P01","ECONNRESET","ETIMEDOUT","ECONNREFUSED"].includes(code)||code.startsWith("08");
+}
+async function postponeDeletion(owner:string,id:string,code:string){
+  await db.execute(sql`UPDATE system_settings SET value=(value::jsonb||jsonb_build_object(
+    'state','queued','error','OPERATION_AUTO_RETRY','updatedAt',${new Date().toISOString()}::text,
+    'payload',(value::jsonb->'payload')||jsonb_build_object(
+      'retryCount',COALESCE((value::jsonb->'payload'->>'retryCount')::int,0)+1,
+      'retryAfter',${Date.now()}::bigint+LEAST(15000,2000*(COALESCE((value::jsonb->'payload'->>'retryCount')::int,0)+1)),
+      'groupChunk',CASE WHEN ${code}='57014' THEN GREATEST(1,COALESCE((value::jsonb->'payload'->>'groupChunk')::int,5)/2)
+        ELSE COALESCE((value::jsonb->'payload'->>'groupChunk')::int,5) END
+    )))::text,updated_at=now() WHERE key=${key(owner,id)}
+      AND value::jsonb->>'kind' IN('delete_account','delete_campaigns')
+      AND value::jsonb->>'state' IN('queued','running')`);
+}
+export async function recoverDeletionOperations(){
+  // These requests were already explicitly confirmed. Resume their saved
+  // checkpoints after deployment, without creating another deletion request.
+  await db.execute(sql`UPDATE system_settings SET value=(value::jsonb||jsonb_build_object(
+    'state','queued','error',NULL,'updatedAt',${new Date().toISOString()}::text))::text,updated_at=now()
+    WHERE key LIKE ${prefix+"%"} AND value::jsonb->>'kind' IN('delete_account','delete_campaigns')
+      AND value::jsonb->>'state'='failed' AND value::jsonb->>'error'='OPERATION_RETRY_REQUIRED'`);
+}
 let busy=false,timer:ReturnType<typeof setInterval>|undefined;
 export async function processOperations(steps=1){
   if(busy)return;busy=true;
   try{for(let i=0;i<steps;i++){
-    let identity:{owner:string;id:string}|undefined;
+    let identity:{owner:string;id:string;kind:OperationKind}|undefined;
     try{
       const worked=await db.transaction(async tx=>{
         await tx.execute(sql`SET LOCAL lock_timeout='2s'`);
         await tx.execute(sql`SET LOCAL statement_timeout='6s'`);
         const rows=await tx.execute(sql`SELECT value FROM system_settings WHERE key LIKE ${prefix+"%"}
           AND value::jsonb->>'state' IN ('queued','running') AND value::jsonb->>'kind'<>'sync_groups'
+          AND COALESCE((value::jsonb->'payload'->>'retryAfter')::bigint,0)<=${Date.now()}::bigint
           ORDER BY updated_at,key LIMIT 1 FOR UPDATE SKIP LOCKED`);
         if(!rows.rows.length)return false;
         const job=JSON.parse((rows.rows[0] as {value:string}).value) as OperationJob;
-        identity={owner:job.owner,id:job.id};
+        identity={owner:job.owner,id:job.id,kind:job.kind};
         const handler=handlers.get(job.kind);if(!handler)throw Error("OPERATION_HANDLER_MISSING");
-        job.state="running";
+        job.state="running";job.error=null;delete job.payload.retryAfter;delete job.payload.retryCount;
         if(await handler(tx,job)){
           job.state="completed";
           if(job.phase==="cancelled")job.total=null;
@@ -113,11 +144,16 @@ export async function processOperations(steps=1){
       });
       if(!worked)break;
     }catch(error){
-      if(identity)await failOperation(identity.owner,identity.id).catch(()=>{});
-      logger.warn({operationId:identity?.id,code:(error as {code?:string}).code??"OPERATION_STEP_FAILED"},"Background operation paused for retry");
+      const code=operationErrorCode(error);
+      if(identity){
+        const automatic=["delete_account","delete_campaigns"].includes(identity.kind)&&isAutomaticDeletionRetry(code);
+        await (automatic?postponeDeletion(identity.owner,identity.id,code):failOperation(identity.owner,identity.id)).catch(()=>{});
+      }
+      logger.warn({operationId:identity?.id,code},"Background operation will recover from its saved checkpoint");
       break;
     }
   }}finally{busy=false;}
 }
-export function startOperationWorker(){if(timer)return;void processOperations();timer=setInterval(()=>void processOperations(2),1000);}
+export function startOperationWorker(){if(timer)return;void recoverDeletionOperations().then(()=>processOperations()).catch(()=>{});
+  timer=setInterval(()=>void processOperations(2),1000);}
 export const operationKey=key;

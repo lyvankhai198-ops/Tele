@@ -29,13 +29,23 @@ for(const language of ["vi","en"]){
     const r=render(language,{...base,kind:"prepare_campaign",phase:"preparing",processed:500,total:1500,unit:"deliveries"});
     assert.ok(r.text.includes("33%"));assert.equal(r.nodes.find(n=>n.props.role==="progressbar").props["aria-valuenow"],33);
   });
-  test(`${language}: retry resumes the same job and a failed destructive task cannot be hidden`,async()=>{
-    const r=render(language,{...base,state:"failed"});
+  test(`${language}: non-deletion retry resumes the same job and cannot be hidden`,async()=>{
+    const r=render(language,{...base,kind:"sync_groups",state:"failed"});
     const button=r.nodes.find(n=>n.type==="button"&&!n.props["aria-label"]);assert.ok(button);await button.props.onClick();assert.deepEqual(r.calls,["fixture"]);
     assert.ok(!r.nodes.some(n=>n.props["aria-label"]===(language==="vi"?"Ẩn thông báo":"Dismiss")));
   });
 }
-test("read-only support view cannot retry another user's destructive operation",()=>{
-  const r=render("en",{...base,state:"failed"},"admin:target");
+test("read-only support view cannot retry another user's operation",()=>{
+  const r=render("en",{...base,kind:"sync_groups",state:"failed"},"admin:target");
+  assert.ok(!r.nodes.some(n=>n.type==="button"));
+});
+for(const language of ["vi","en"])test(`${language}: a blocked deletion retains its receipt without asking for repeated resume clicks`,()=>{
+  const r=render(language,{...base,state:"failed"});
+  assert.ok(!r.nodes.some(n=>n.type==="button"));
+  assert.ok(r.text.includes(language==="vi"?"cần kiểm tra":"needs investigation"));
+});
+for(const language of ["vi","en"])test(`${language}: transient deletion error continues automatically without a resume button`,()=>{
+  const r=render(language,{...base,state:"queued",error:"OPERATION_AUTO_RETRY"});
+  assert.ok(r.text.includes(language==="vi"?"tự tiếp tục":"resuming automatically"));
   assert.ok(!r.nodes.some(n=>n.type==="button"));
 });
