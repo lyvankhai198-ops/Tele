@@ -43,7 +43,7 @@ async function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
 async function save(tx: Tx, job: Job) {
   await tx.query("UPDATE system_settings SET value=$2,updated_at=now() WHERE key=$1", [key(job.owner, job.id), JSON.stringify(job)]);
 }
-export async function createTemplateJob(input: {owner: string; templateId: string; telegramAccountId?: string; requestId?: string}) {
+export async function createTemplateJob(input: {owner: string; templateId: string; telegramAccountId?: string; requestId?: string; updateGlobalDefault?: boolean}) {
   const id = input.requestId ?? randomUUID();
   if (!validId(id)) throw Error("TEMPLATE_JOB_INVALID_REQUEST");
   const fingerprint = createHash("sha256").update(JSON.stringify([input.templateId,input.telegramAccountId ?? null])).digest("hex");
@@ -76,7 +76,7 @@ export async function createTemplateJob(input: {owner: string; templateId: strin
       ORDER BY created_at,id`, [input.owner,input.telegramAccountId ?? null]);
     const job: Job = {id,owner:input.owner,fingerprint,accountId:input.telegramAccountId ?? null,
       template:templates.rows[0],ids:candidates.rows.map(r=>r.id),cursor:0,updatedCount:0,skipped:[],
-      status:"queued",error:null,defaultStatus:input.telegramAccountId?"not_applicable":"pending",
+      status:"queued",error:null,defaultStatus:!input.telegramAccountId&&input.updateGlobalDefault?"pending":"not_applicable",
       createdAt:new Date().toISOString(),finishedAt:null};
     await tx.query("INSERT INTO system_settings(key,value,updated_by) VALUES($1,$2,$3)", [key(job.owner,id),JSON.stringify(job),input.owner]);
     return summary(job);

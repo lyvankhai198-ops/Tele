@@ -4,14 +4,15 @@ import { pool } from "@workspace/db";
 import { processTemplateJobs } from "../../artifacts/api-server/src/lib/campaign-template-jobs";
 import { getSystemSettings,updateSystemSettings } from "../../artifacts/api-server/src/lib/system-settings";
 
-export async function testTemplateJobs({adminId,adminCookie,userCookie,request}:{
-  adminId:string;adminCookie:string;userCookie:string;
+export async function testTemplateJobs({adminId,userId,adminCookie,userCookie,request}:{
+  adminId:string;userId:string;adminCookie:string;userCookie:string;
   request:(path:string,cookie?:string,body?:unknown,method?:string,headers?:Record<string,string>)=>Promise<Response>;
 }){
   const check=(v:unknown,c:string)=>assert.ok(v,c);
   const base="/campaigns/bulk-template",account=randomUUID(),template=randomUUID(),prefix=`Tự động: job-${randomUUID()}`;
   const original=await getSystemSettings();
   const ids:string[]=[];
+  const ownAccounts=[randomUUID(),randomUUID()],ownTemplate=randomUUID(),ownCampaigns:string[]=[];
   await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status) VALUES($1,$2,'job fixture','disconnected')",[account,adminId]);
   await pool.query("INSERT INTO message_templates(id,owner_user_id,name,content,mode) VALUES($1,$2,'job fixture','stable snapshot','text')",[template,adminId]);
   const create=(extra={})=>request(base,adminCookie,{templateId:template,telegramAccountId:account,requestId:randomUUID(),...extra});
@@ -30,7 +31,8 @@ export async function testTemplateJobs({adminId,adminCookie,userCookie,request}:
     check((await(await create({requestId})).json() as any).id===job.id,"E2E_TEMPLATE_JOB_REPLAY_ACCEPT");
     check((await(await create()).json() as any).id===job.id,"E2E_TEMPLATE_JOB_ACTIVE_DEDUP");
     check((await create({telegramAccountId:undefined})).status===409,"E2E_TEMPLATE_JOB_CONFLICT");
-    check((await request(`${base}/jobs/${job.id}`,userCookie)).status===403,"E2E_TEMPLATE_JOB_USER_DENIED");
+    check((await request(`${base}/jobs/${job.id}`,userCookie)).status===404,"E2E_TEMPLATE_JOB_OTHER_OWNER_HIDDEN");
+    check((await request(`${base}/jobs/${job.id}/retry`,userCookie,{})).status===404,"E2E_TEMPLATE_JOB_OTHER_OWNER_RETRY_HIDDEN");
     check((await request(`${base}/jobs/${job.id}`)).status===401,"E2E_TEMPLATE_JOB_ANON_DENIED");
     const foreign=randomUUID();
     check((await request(`${base}/jobs/${foreign}`,adminCookie)).status===404,"E2E_TEMPLATE_JOB_FOREIGN_READ");
@@ -100,6 +102,36 @@ export async function testTemplateJobs({adminId,adminCookie,userCookie,request}:
     await pool.query("UPDATE message_templates SET content='changed after all-account acceptance' WHERE id=$1",[template]);
     await processTemplateJobs(100);
     check((await read(changed.id)).defaultStatus==="skipped","E2E_TEMPLATE_JOB_CHANGED_DEFAULT_SKIPPED");
+    // A regular customer can update only their own automatic campaigns.
+    const sharedBefore=await getSystemSettings();
+    for(const ownAccount of ownAccounts)
+      await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status) VALUES($1,$2,'customer fixture','disconnected')",[ownAccount,userId]);
+    await pool.query("INSERT INTO message_templates(id,owner_user_id,name,content,mode) VALUES($1,$2,'customer fixture','customer-new','text')",[ownTemplate,userId]);
+    for(const [index,status,name] of [[0,"draft","Tự động customer A"],[0,"queued","Tự động customer A2"],[1,"running","Tự động customer B"],[0,"completed","Tự động completed"],[0,"draft","Manual customer"]] as const){
+      const row=await pool.query("INSERT INTO campaigns(owner_user_id,telegram_account_id,name,status,content) VALUES($1,$2,$3,$4,'customer-original') RETURNING id",
+        [userId,ownAccounts[index],name,status]);ownCampaigns.push(row.rows[0].id);
+    }
+    const ownCreate=(extra={})=>request(base,userCookie,{templateId:ownTemplate,requestId:randomUUID(),...extra});
+    check((await ownCreate({telegramAccountId:account})).status===404,"E2E_TEMPLATE_CUSTOMER_FOREIGN_ACCOUNT");
+    check((await ownCreate({templateId:template,telegramAccountId:ownAccounts[0]})).status===404,"E2E_TEMPLATE_CUSTOMER_FOREIGN_TEMPLATE");
+    const selectedResponse=await ownCreate({telegramAccountId:ownAccounts[0]}),selected=await selectedResponse.json() as any;
+    check(selectedResponse.status===202&&selected.total===2,"E2E_TEMPLATE_CUSTOMER_ACCOUNT_ACCEPTED");
+    await processTemplateJobs(12);
+    const ownRead=async(id:string)=>(await(await request(`${base}/jobs/${id}`,userCookie)).json()) as any;
+    check((await ownRead(selected.id)).status==="completed","E2E_TEMPLATE_CUSTOMER_ACCOUNT_COMPLETED");
+    const otherAccount=await pool.query("SELECT content FROM campaigns WHERE id=$1",[ownCampaigns[2]]);
+    check(otherAccount.rows[0].content==="customer-original","E2E_TEMPLATE_CUSTOMER_ACCOUNT_SCOPE");
+    // Client-supplied privilege fields must not grant access to shared defaults.
+    const allOwnResponse=await ownCreate({updateGlobalDefault:true,owner:adminId}),allOwn=await allOwnResponse.json() as any;
+    check(allOwnResponse.status===202&&allOwn.total===3&&allOwn.defaultStatus==="not_applicable","E2E_TEMPLATE_CUSTOMER_ALL_ACCEPTED");
+    await processTemplateJobs(12);
+    const ownDone=await ownRead(allOwn.id);
+    check(ownDone.status==="completed"&&ownDone.updatedCount===3&&ownDone.defaultStatus==="not_applicable","E2E_TEMPLATE_CUSTOMER_ALL_COMPLETED");
+    const matching=await pool.query("SELECT count(*)::int n FROM campaigns WHERE id=ANY($1::uuid[]) AND content='customer-new'",[ownCampaigns]);
+    check(matching.rows[0].n===3,"E2E_TEMPLATE_CUSTOMER_ELIGIBLE_ONLY");
+    assert.deepEqual(await getSystemSettings(),sharedBefore,"E2E_TEMPLATE_CUSTOMER_SHARED_DEFAULT_PROTECTED");
+    check((await request(`${base}/jobs/${allOwn.id}`,adminCookie)).status===404,"E2E_TEMPLATE_CUSTOMER_JOB_PRIVATE");
+    console.log("E2E_TEMPLATE_CUSTOMER_ACCESS_PASSED");
     console.log("E2E_TEMPLATE_JOBS_PASSED");
   }finally{
     await updateSystemSettings(original,adminId);
@@ -107,5 +139,9 @@ export async function testTemplateJobs({adminId,adminCookie,userCookie,request}:
     await pool.query("DELETE FROM campaigns WHERE id=ANY($1::uuid[])",[ids]);
     await pool.query("DELETE FROM message_templates WHERE id=$1",[template]);
     await pool.query("DELETE FROM telegram_accounts WHERE id=$1",[account]);
+    await pool.query("DELETE FROM system_settings WHERE key LIKE $1",[`campaign_template_job:${userId}:%`]);
+    await pool.query("DELETE FROM campaigns WHERE id=ANY($1::uuid[])",[ownCampaigns]);
+    await pool.query("DELETE FROM message_templates WHERE id=$1",[ownTemplate]);
+    await pool.query("DELETE FROM telegram_accounts WHERE id=ANY($1::uuid[])",[ownAccounts]);
   }
 }

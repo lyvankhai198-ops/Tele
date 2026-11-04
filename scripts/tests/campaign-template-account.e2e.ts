@@ -54,7 +54,7 @@ export async function testCampaignTemplateAccount(input: {
   const current = async(id:string)=>(await pool.query("SELECT template_id,telegram_account_id FROM campaigns WHERE id=$1",[id])).rows[0];
   try {
     check((await submit(text,a,"")).status===401,"E2E_TEMPLATE_ANON_DENIED");
-    check((await submit(text,a,userCookie)).status===403,"E2E_TEMPLATE_USER_DENIED");
+    check((await submit(text,a,userCookie)).status===404,"E2E_TEMPLATE_OTHER_OWNER_ACCOUNT_HIDDEN");
     const support=await createSupportSession(adminId,userId);
     // Login also clears the old support cookie. Replace that empty cookie
     // rather than appending a duplicate name (cookie-parser keeps the first).

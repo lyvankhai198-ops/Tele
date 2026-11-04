@@ -97,6 +97,7 @@ const copy = {
     bulkTemplateAllAccounts: "All Telegram accounts",
     bulkTemplateAccountHint: "Only matching campaigns for this account are included. The shared default for future campaigns stays unchanged. Incompatible forward templates will be skipped.",
     bulkTemplateAllAccountsHint: "Applies across all accounts and also changes the shared template default for future automatic campaigns. Incompatible forward templates will be skipped.",
+    bulkTemplateOwnAccountsHint: "Applies only to your eligible automatic campaigns. The system-wide default template stays unchanged.",
     bulkTemplateEmptyAccount: "No eligible automatic campaigns for this account.",
     bulkTemplateStatuses: "Draft, Paused, Queued and Running campaigns are checked by name prefix.",
     bulkTemplateLabel: "New message template",
@@ -253,6 +254,7 @@ const copy = {
     bulkTemplateAllAccounts: "Tất cả tài khoản Telegram",
     bulkTemplateAccountHint: "Chỉ áp dụng cho chiến dịch phù hợp của tài khoản này; không đổi mẫu mặc định chung cho chiến dịch tạo sau. Mẫu forward không đúng tài khoản sẽ được bỏ qua.",
     bulkTemplateAllAccountsHint: "Áp dụng trên tất cả tài khoản và đổi cả mẫu mặc định chung cho chiến dịch tự động tạo sau. Mẫu forward không đúng tài khoản sẽ được bỏ qua.",
+    bulkTemplateOwnAccountsHint: "Chỉ áp dụng cho chiến dịch tự động đủ điều kiện của bạn. Không đổi mẫu mặc định chung của hệ thống.",
     bulkTemplateEmptyAccount: "Tài khoản này không có chiến dịch tự động đủ điều kiện.",
     bulkTemplateStatuses: "Bản nháp, Tạm dừng, Đang chờ và Đang chạy được kiểm tra theo đúng tiền tố tên.",
     bulkTemplateLabel: "Mẫu tin nhắn mới",
@@ -500,7 +502,7 @@ export default function Campaigns() {
   const bulkDelete=useMutation({mutationFn:()=>operations.start({kind:"delete_campaigns",confirm:true,
     ...bulkFilter,status:bulkFilter.status as BackgroundOperationInput["status"]})});
   const deleteOne=useMutation({mutationFn:(campaignId:string)=>operations.start({kind:"delete_campaigns",campaignId,confirm:true})});
-  const templateProgress = useTemplateJob(user?.id, isAdmin, () => {
+  const templateProgress = useTemplateJob(user?.id, Boolean(user?.id) && !isSupportMode, () => {
     void campaigns.refetch();
     void queryClient.invalidateQueries({queryKey:getListCalendarItemsQueryKey()});
   });
@@ -966,7 +968,7 @@ export default function Campaigns() {
         </div>
         {!isSupportMode && (
           <div className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-action-toolbar">
-            <p className="mb-2.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{language==="vi"?"Thao tác theo bộ lọc":"Actions for current filters"}</p>
+            <p className="mb-2.5 text-[12px] font-bold text-[#475569]">{language==="vi"?"Chọn bộ lọc tương ứng để thao tác":"Choose the corresponding filters before taking action"}</p>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <button
               type="button"
@@ -976,7 +978,7 @@ export default function Campaigns() {
               data-testid="campaigns-pause-all"
             >
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleStop className="h-4 w-4" />}
-              {language==="vi"?"Dừng đã lọc":"Pause filtered"}
+              {language==="vi"?"Dừng chiến dịch":"Pause campaigns"}
             </button>
             <button
               type="button"
@@ -986,9 +988,9 @@ export default function Campaigns() {
               data-testid="campaigns-resume-all"
             >
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {bulkJob?(language==="vi"?"Tiến độ chạy lại":"Rerun progress"):(language==="vi"?"Chạy lại đã lọc":"Rerun filtered")}
+              {bulkJob?(language==="vi"?"Tiến độ chạy lại":"Rerun progress"):(language==="vi"?"Chạy lại chiến dịch":"Rerun campaigns")}
             </button>
-            {isAdmin && (<button
+            <button
               type="button"
               onClick={openBulkTemplate}
               disabled={(!templateProgress.job&&!templateProgress.uncertain&&campaignDataBlocked) || bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
@@ -997,8 +999,8 @@ export default function Campaigns() {
             >
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {templateProgress.job || templateProgress.uncertain
-                ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tự động":"Auto templates")}
-            </button>)}
+                ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tin tự động":"Auto templates")}
+            </button>
             <button
               type="button"
               onClick={() => void removeFilteredCampaigns()}
@@ -1007,7 +1009,7 @@ export default function Campaigns() {
               data-testid="campaigns-delete-filtered"
             >
               {bulkDelete.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              {language==="vi"?"Xoá đã lọc":"Delete filtered"}
+              {language==="vi"?"Xoá chiến dịch":"Delete campaigns"}
             </button>
             </div>
             <p className="mt-2.5 text-[11px] leading-relaxed text-[#64748b]">{language==="vi"?"Dừng, chạy lại và xoá áp dụng tài khoản, trạng thái và tên đã lọc. Đổi mẫu có phạm vi riêng để bạn kiểm tra trước.":"Pause, rerun and delete use the account, status and name filters. Template changes have a separate scope to review."}</p>
@@ -1299,7 +1301,7 @@ export default function Campaigns() {
                 ))}
               </select>
               <p className="mt-2 text-[12px] leading-relaxed text-[#64748b]">
-                {bulkTemplateAccountId ? c.bulkTemplateAccountHint : c.bulkTemplateAllAccountsHint}
+                {bulkTemplateAccountId ? c.bulkTemplateAccountHint : isAdmin ? c.bulkTemplateAllAccountsHint : c.bulkTemplateOwnAccountsHint}
               </p>
             </label>
             <div className="rounded-xl border border-[#dbeafe] bg-[#eff6ff] p-4 text-[13px] font-semibold leading-relaxed text-[#1e3a8a]">

@@ -4,8 +4,11 @@ import { createTemplateJob, getTemplateJob, latestTemplateJob, retryTemplateJob 
 
 export const templateJobsRouter = Router();
 templateJobsRouter.use((req,res,next)=>{
-  if (req.authUser?.role !== "admin" || req.supportSession) {
-    res.status(403).json({error:"TEMPLATE_JOB_ADMIN_REQUIRED"});return;
+  if (!req.authUser) {
+    res.status(401).json({error:"AUTH_REQUIRED"});return;
+  }
+  if (req.supportSession) {
+    res.status(403).json({error:"TEMPLATE_JOB_READ_ONLY"});return;
   }
   res.setHeader("Cache-Control","no-store");
   next();
@@ -24,7 +27,7 @@ templateJobsRouter.post("/",async(req,res)=>{
   const body=BulkUpdateCampaignTemplateBody.safeParse(req.body);
   if (!body.success) {res.status(400).json({error:"TEMPLATE_JOB_INVALID_REQUEST"});return;}
   try {
-    const job=await createTemplateJob({owner:req.userId!,...body.data});
+    const job=await createTemplateJob({...body.data,owner:req.userId!,updateGlobalDefault:req.authUser?.role==="admin"});
     res.status(202).json(job);
   } catch(error) {failure(res,error);}
 });

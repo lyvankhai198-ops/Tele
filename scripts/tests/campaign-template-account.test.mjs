@@ -23,7 +23,7 @@ function evaluate(code,context){
   const js=ts.transpileModule(code,{compilerOptions:{jsx:ts.JsxEmit.React,jsxFactory:"h",target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
   return vm.runInNewContext(js,context);
 }
-function setup(selected="",language="en",pending=false){
+function setup(selected="",language="en",pending=false,isAdmin=true){
   const fixtures=[
     {id:"a1",name:"Tự động A",telegramAccountId:"a",status:"draft"},
     {id:"a2",name:"Tự động A",telegramAccountId:"a",status:"queued"},
@@ -33,7 +33,7 @@ function setup(selected="",language="en",pending=false){
   ];
   const state={selected,template:"template",open:true,toast:null,sent:null,refetched:0};
   const context={
-    bulkTemplateAccountId:selected,bulkTemplateId:"template",bulkTemplateOpen:true,
+    bulkTemplateAccountId:selected,bulkTemplateId:"template",bulkTemplateOpen:true,isAdmin,
     bulkTemplate:{isPending:pending,async mutateAsync(request){state.sent=request;return{updatedCount:2,skippedCount:1};}},
     campaignDataBlocked:false,templateProgress:{job:null,uncertain:false,blocked:pending,async start(templateId,accountId){
       state.sent={templateId,...(accountId?{telegramAccountId:accountId}:{})};
@@ -61,6 +61,11 @@ test("actual page filters the preview count/list by account, name and allowed st
   assert.deepEqual(Array.from(setup("b").preview,x=>x.id),["b1"]);
   assert.deepEqual(Array.from(setup().preview,x=>x.id),["a1","a2","b1"]);
   assert.equal(setup("missing").preview.length,0);
+});
+for(const language of ["vi","en"])test(`${language}: customer all-account scope does not claim permission to change the shared default`,()=>{
+  const {tree}=setup("",language,false,false);
+  assert.ok(text(tree).includes(language==="vi"?"Không đổi mẫu mặc định chung":"system-wide default template stays unchanged"));
+  assert.ok(!text(tree).includes(language==="vi"?"đổi cả mẫu mặc định chung":"also changes the shared template default"));
 });
 for(const language of ["vi","en"])test(`actual ${language} modal renders all/owned accounts, hint, empty state and disabled apply`,()=>{
   const {tree,state}=setup("a",language);
