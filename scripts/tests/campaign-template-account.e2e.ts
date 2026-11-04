@@ -50,7 +50,11 @@ export async function testCampaignTemplateAccount(input: {
     check((await submit(text,a,"")).status===401,"E2E_TEMPLATE_ANON_DENIED");
     check((await submit(text,a,userCookie)).status===403,"E2E_TEMPLATE_USER_DENIED");
     const support=await createSupportSession(adminId,userId);
-    check((await submit(text,a,`${adminCookie}; ${SUPPORT_COOKIE_NAME}=${support.token}`)).status===403,"E2E_TEMPLATE_SUPPORT_DENIED");
+    // Login also clears the old support cookie. Replace that empty cookie
+    // rather than appending a duplicate name (cookie-parser keeps the first).
+    const supportCookie=adminCookie.split("; ").filter(value=>!value.startsWith(SUPPORT_COOKIE_NAME+"="))
+      .concat(`${SUPPORT_COOKIE_NAME}=${support.token}`).join("; ");
+    check((await submit(text,a,supportCookie)).status===403,"E2E_TEMPLATE_SUPPORT_DENIED");
     check((await submit(text,foreign)).status===404,"E2E_TEMPLATE_FOREIGN_ACCOUNT");
     check((await submit(text,deleted)).status===404,"E2E_TEMPLATE_DELETED_ACCOUNT");
     check((await submit(text,randomUUID())).status===404,"E2E_TEMPLATE_MISSING_ACCOUNT");
