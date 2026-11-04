@@ -22,6 +22,17 @@ function all(tree,predicate){
 }
 const text=tree=>all(tree,n=>typeof n==="string").join(" ");
 for(const language of ["vi","en"]){
+  test(`${language}: completed cached list offers explicit refresh and its update time without restarting progress`,()=>{
+    let calls=0;
+    const done=render({language,hasData:true,fetching:false,updatedAt:1700000000000,onRetry:()=>calls++});
+    assert.match(text(done),language==="vi"?/Cập nhật lúc/:/Updated at/);
+    assert.match(text(done),language==="vi"?/Làm mới/:/Refresh/);
+    assert.match(text(done),/COMPLETE DATA/);
+    const button=all(done,n=>n?.props?.["data-testid"]==="campaign-list-refresh")[0];
+    button.props.onClick();assert.equal(calls,1);
+    assert.equal(all(done,n=>n?.props?.["data-testid"]==="campaign-load-counter").length,0);
+    assert.equal(all(render({language,hasData:true,fetching:true,onRetry:()=>calls++}),n=>n?.props?.["data-testid"]==="campaign-list-refresh").length,0);
+  });
   test(`${language}: only the actual count is visible until a complete dataset exists`,()=>{
     const tree=render({language}),copy=text(tree);
     assert.match(copy,language==="vi"?/Đã tải 25\/60 chiến dịch/:/Loaded 25\/60 campaigns/);
