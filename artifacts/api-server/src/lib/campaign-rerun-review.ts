@@ -32,7 +32,7 @@ export async function campaignRerunAssessment(tx: Tx, campaign: Campaign): Promi
     .groupBy(campaignTargetsTable.destinationId);
   const ids = [...new Set(campaign.destinationIds?.length ? campaign.destinationIds : counts.map(c=>c.id))];
   const rows = ids.length && account ? await tx.select().from(destinationsTable).where(and(
-    inArray(destinationsTable.id,ids),eq(destinationsTable.accountId,account.id))) : [];
+    inArray(destinationsTable.id,ids),eq(destinationsTable.accountId,account.id))).for("share") : [];
   const evidence: RerunDestinationEvidence[] = ids.map(id=>{
     const g=rows.find(row=>row.id===id), c=counts.find(row=>row.id===id);
     return { id,title:g?.title ?? id,exists:Boolean(g),canPost:g?.canPost ?? false,
