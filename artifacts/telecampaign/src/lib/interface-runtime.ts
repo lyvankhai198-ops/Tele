@@ -68,6 +68,8 @@ function canonical(source: string): string {
   return result;
 }
 
+const localizedValues = new WeakMap<object, Set<string>>();
+
 function isTechnicalText(value: string): boolean {
   return !/\p{L}/u.test(value)
     || /^(?:https?:\/\/|\/)/u.test(value)
@@ -114,6 +116,19 @@ export function interfaceText(
   let key = canonical(source.trim());
   let variables = { ...values };
   if (!Object.hasOwn(catalog, key)) {
+    // A page may pass t("Dashboard") into AppLayout, which also localizes
+    // its title. Recognize this locale's own display text without falling
+    // back to English or treating arbitrary customer text as interface copy.
+    let displayed = localizedValues.get(catalog);
+    if (!displayed) {
+      displayed = new Set(Object.values(catalog));
+      localizedValues.set(catalog, displayed);
+    }
+    if (displayed.has(source.trim())) {
+      return leading + source.trim().replace(/\{\{([^{}]+)\}\}/gu, (placeholder, name: string) => (
+        Object.hasOwn(variables, name) ? String(variables[name] ?? "") : placeholder
+      )) + trailing;
+    }
     if (isTechnicalText(source.trim())) return source;
     for (const pattern of templatePatterns()) {
       const match = pattern.expression.exec(source.trim());
@@ -180,7 +195,7 @@ export function interfaceSystemNotification(source: string, language: InterfaceL
   if (language === "en" || language === "vi") return source;
   try { return interfaceText(source, language); }
   catch (error) {
-    if (authoredContent && error instanceof Error && error.message.startsWith("MISSING_INTERFACE_TRANSLATION:")) return source;
+    if (authoredContent && error instanceof Error && error.message === "MISSING_INTERFACE_TRANSLATION") return source;
     throw error;
   }
 }
