@@ -52,7 +52,9 @@ async function authRequest<T>(path: string, language: Language, init?: RequestIn
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
-    throw new Error(typeof payload?.error === "string" ? payload.error : interfaceCopy(serverFallback, language));
+    const error = new Error(typeof payload?.error === "string" ? payload.error : interfaceCopy(serverFallback, language));
+    if (typeof payload?.code === "string") Object.assign(error, { code: payload.code });
+    throw error;
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

@@ -50,6 +50,7 @@ import { AnnouncementPopup } from '@/components/AnnouncementPopup';
 import { SupportChatWidget } from '@/components/support-chat-widget';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { getInterfaceLocale } from '@/lib/locales';
+import { LoginScreen } from '@/components/auth/LoginScreen';
 
 const queryClient = new QueryClient();
 
@@ -88,26 +89,8 @@ function AuthShell({ children }: { children: ReactNode }) {
 }
 
 function Landing() {
-  const [, setLocation] = useLocation();
-  const { user, isLoading } = useAuth();
-  const { t } = useLanguage();
-  return (
-    <AuthShell>
-      <div className="text-center">
-        <p className="text-sm font-semibold text-[#1888e8]">TeleCampaign</p>
-        <h1 className="mt-3 text-3xl font-bold tracking-[-0.04em]">{t('Controlled campaign delivery')}</h1>
-        <p className="mt-4 text-sm leading-6 text-[#66809a]">{t('Sign in to securely manage your Telegram accounts and campaigns.')}</p>
-        <button
-          type="button"
-          disabled={isLoading}
-          className="mt-7 w-full rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:opacity-60"
-          onClick={() => setLocation(user ? '/dashboard' : '/login')}
-        >
-          {isLoading ? t('Checking…') : user ? t('Go to dashboard') : t('Sign in')}
-        </button>
-      </div>
-    </AuthShell>
-  );
+  const { user } = useAuth();
+  return user ? <Redirect to="/dashboard" replace /> : <LoginPage />;
 }
 
 function AuthField({ icon: Icon, label, placeholder, type = 'text', value, onChange, autoComplete, helperText }: {
@@ -263,6 +246,7 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [otp, setOtp] = useState("");
+  const [requiresOtp, setRequiresOtp] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -278,7 +262,9 @@ function LoginPage() {
       setPassword('');
       setLocation('/dashboard', { replace: true });
     } catch (cause) {
-      setError(localizedErrorMessage(cause, language, t('Could not sign in. Please try again.')));
+      const mfaRequired = cause instanceof Error && (cause as Error & {code?: string}).code === "MFA_REQUIRED";
+      if (mfaRequired) setRequiresOtp(true);
+      setError(mfaRequired ? t("Use a 2-step verification code") : localizedErrorMessage(cause, language, t('Could not sign in. Please try again.')));
       await captcha.refresh();
     } finally {
       setSubmitting(false);
@@ -286,76 +272,15 @@ function LoginPage() {
   }
 
   return (
-    <AuthShell>
-      <div className="mb-7 text-center">
-        <h1 className="text-2xl font-bold tracking-[-0.035em]">{t('Sign in to TeleCampaign')}</h1>
-        <p className="mt-2 text-sm leading-6 text-[#6d8499]">{t('Enter your credentials to access the dashboard.')}</p>
-      </div>
-      <form className="space-y-5" onSubmit={submit}>
-        <AuthField
-          icon={UserRound}
-          label={t('Username')}
-          placeholder={t('Username placeholder')}
-          value={username}
-          onChange={setUsername}
-          autoComplete="username"
-        />
-        <AuthField
-          icon={LockKeyhole}
-          label={t('Password')}
-          placeholder={t('Password placeholder')}
-          type="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="current-password"
-        />
-        <div className="-mt-2 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => setLocation('/forgot-password')}
-            className="text-sm font-semibold text-[#147ed8] hover:underline"
-          >
-            {t('Forgot password?')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setLocation('/forgot-username')}
-            className="text-sm font-semibold text-[#147ed8] hover:underline"
-          >
-            {t('Forgot username?')}
-          </button>
-        </div>
-        <CaptchaField
-          challenge={captcha.challenge}
-          code={captcha.code}
-          onCodeChange={captcha.setCode}
-          loading={captcha.loading}
-          loadError={captcha.loadError}
-          onRefresh={() => void captcha.refresh()}
-        />
-        <label className="block text-sm font-semibold">Mã 2FA / mã khôi phục (nếu đã bật)
-          <input className="mt-2 w-full rounded-xl border p-3" autoComplete="one-time-code" value={otp} maxLength={80} onChange={event => setOtp(event.target.value)} />
-        </label>
-        <AuthError message={error} />
-        <button
-          disabled={submitting || captcha.loading || !captcha.challenge}
-          type="submit"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#1888e8] px-5 py-3 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(24,136,232,.22)] transition hover:bg-[#0877d5] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
-          {submitting ? t('Signing in…') : t('Sign in')}
-        </button>
-      </form>
-      <p className="mt-6 text-center text-sm text-[#66809a]">
-        <button
-          type="button"
-          onClick={() => setLocation('/register')}
-          className="font-semibold text-[#147ed8] hover:underline"
-        >
-          {t('No account yet? Register for free')}
-        </button>
-      </p>
-    </AuthShell>
+    <LoginScreen
+      username={username} password={password} otp={otp}
+      onUsernameChange={setUsername} onPasswordChange={setPassword} onOtpChange={setOtp}
+      challenge={captcha.challenge} captchaCode={captcha.code} onCaptchaChange={captcha.setCode}
+      captchaLoading={captcha.loading} captchaError={captcha.loadError}
+      onCaptchaRefresh={() => void captcha.refresh()}
+      error={error} submitting={submitting} requiresOtp={requiresOtp}
+      onSubmit={submit} onNavigate={setLocation}
+    />
   );
 }
 

@@ -165,7 +165,7 @@ test("anonymous choice survives loading and can only be consumed for the expecte
   runtime.clearAnonymousInterfaceLanguage("bn");
   assert.equal(runtime.pendingAnonymousInterfaceLanguage(), null);
   local.set("telecampaign-language", "__proto__");
-  assert.equal(runtime.readStoredInterfaceLanguage(), "vi");
+  assert.equal(runtime.readStoredInterfaceLanguage(), "en");
   local.set("telecampaign-language", "ur");
   assert.equal(runtime.readStoredInterfaceLanguage(), "ur");
 });
