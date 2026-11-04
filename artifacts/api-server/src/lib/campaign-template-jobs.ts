@@ -115,9 +115,9 @@ async function processCampaign(tx: Tx, job: Job, id: string) {
     AND deleted_at IS NULL FOR SHARE`, [accountId,job.owner]);
   if (!account.rows.length) return {name:"",reason:"account_unavailable"};
   const campaigns = await tx.query(`SELECT id,name,status,telegram_account_id,cloned_from_campaign_id,cloned_from_user_id,
-    paused_for_deletion FROM campaigns WHERE id=$1 AND owner_user_id=$2 FOR UPDATE`, [id,job.owner]);
+    pause_reason FROM campaigns WHERE id=$1 AND owner_user_id=$2 FOR UPDATE`, [id,job.owner]);
   const campaign = campaigns.rows[0];
-  if (!campaign || campaign.paused_for_deletion || campaign.telegram_account_id !== accountId) {
+  if (!campaign || campaign.pause_reason==="deletion_pending" || campaign.telegram_account_id !== accountId) {
     return {name:campaign?.name ?? "",reason:"scope_changed"};
   }
   const template = job.template;

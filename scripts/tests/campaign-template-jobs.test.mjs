@@ -101,4 +101,5 @@ test("selected IDs are bound to the owner/account and the legacy prefix rule is 
   assert.doesNotMatch(worker,/WHERE id=\$1 AND role='admin'/);
   assert.doesNotMatch(worker,/name LIKE|name\.startsWith|updateGlobalDefault/);
   assert.match(worker,/defaultStatus:"not_applicable"/);
+  assert.match(worker,/campaign\.pause_reason==="deletion_pending"/);
 });

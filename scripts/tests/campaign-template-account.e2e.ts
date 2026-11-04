@@ -26,6 +26,8 @@ export async function testCampaignTemplateAccount({adminId,userId,adminCookie,us
   try{
     const selected:string[]=[];
     for(const status of ["draft","paused","queued","running","completed","completed_with_errors","failed","cancelled"])selected.push(await add(a,status));
+    const deleting=await add(a,"paused");selected.push(deleting);
+    await pool.query("UPDATE campaigns SET pause_reason='deletion_pending' WHERE id=$1",[deleting]);
     const untouched=await add(a),other=await add(b),foreignCampaign=await add(foreign,"draft",userId);
     const snapshot=async()=>(await pool.query(`SELECT id,to_jsonb(c)-ARRAY['content','template_id','template_mode','template_source_account_id','template_source_message_id','updated_at'] AS data FROM campaigns c WHERE id=ANY($1::uuid[]) ORDER BY id`,[selected])).rows;
     const before=await snapshot();
@@ -41,12 +43,14 @@ export async function testCampaignTemplateAccount({adminId,userId,adminCookie,us
     check((await send([])).status===400,"E2E_TEMPLATE_SELECTION_EMPTY_REJECTED");
     check((await send(selected,{telegramAccountId:undefined})).status===400,"E2E_TEMPLATE_SELECTION_ACCOUNT_REQUIRED");
     const accepted=await send(selected),job=await accepted.json() as any;
-    check(accepted.status===202&&job.total===8,"E2E_TEMPLATE_SELECTION_ANY_NAME_AND_STATUS");
+    check(accepted.status===202&&job.total===9,"E2E_TEMPLATE_SELECTION_ANY_NAME_AND_STATUS");
     // A legacy pending default update must be neutralized as well.
     await pool.query("UPDATE system_settings SET value=jsonb_set(value::jsonb,'{defaultStatus}','\"pending\"'::jsonb)::text WHERE key=$1",[`campaign_template_job:${adminId}:${job.id}`]);
     await processTemplateJobs(30);
     const result=await read(job.id);
-    check(result.status==="completed"&&result.updatedCount===8&&result.defaultStatus==="not_applicable","E2E_TEMPLATE_SELECTION_FINISHED");
+    check(result.status==="completed","E2E_TEMPLATE_SELECTION_COMPLETED");
+    check(result.updatedCount===8&&result.defaultStatus==="not_applicable","E2E_TEMPLATE_SELECTION_FINISHED");
+    check(result.skippedCount===1&&result.skipped[0]?.id===deleting&&result.skipped[0]?.reason==="scope_changed","E2E_TEMPLATE_SELECTION_DELETE_FENCE");
     assert.deepEqual(await snapshot(),before,"E2E_TEMPLATE_SELECTION_SCHEDULE_AND_STATUS_UNCHANGED");
     check((await pool.query("SELECT count(*)::int n FROM activity_logs WHERE campaign_id=$1 AND message='historical-message'",[selected[4]])).rows[0].n===1,"E2E_TEMPLATE_SELECTION_HISTORY_UNCHANGED");
     check((await pool.query("SELECT count(*)::int n FROM campaigns WHERE id=ANY($1::uuid[]) AND content='old-content'",[[untouched,other,foreignCampaign]])).rows[0].n===3,"E2E_TEMPLATE_SELECTION_UNCHECKED_UNCHANGED");
