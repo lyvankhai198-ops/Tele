@@ -5,8 +5,16 @@ import { loadCompleteCampaigns,type CampaignLoadProgress } from "./load-complete
 export const initialCampaignLoad:CampaignLoadProgress={loaded:0,total:null,phase:"counting"};
 let sequence=0;
 export const campaignProgressKey=(scope:string)=>["campaign-load-progress",scope] as const;
+export const completeCampaignKey=(scope:string)=>[...getListCampaignsQueryKey(),"complete-load",scope] as const;
+export async function refreshCompleteCampaigns<T>(client:QueryClient,scope:string,refetch:()=>Promise<T>){
+  // An explicit refresh after a mutation needs a NEW selection, even when
+  // the very first load has no cached data yet. TanStack otherwise reuses
+  // that pending promise and can omit the just-created campaign.
+  await client.cancelQueries({queryKey:completeCampaignKey(scope),exact:true});
+  return refetch();
+}
 export function completeCampaignQuery(client:QueryClient,scope:string){
-  const key=[...getListCampaignsQueryKey(),"complete-load",scope] as const;
+  const key=completeCampaignKey(scope);
   const progressKey=campaignProgressKey(scope);
   return {
     queryKey:key,enabled:Boolean(scope),retry:false as const,staleTime:30_000,gcTime:15*60_000,

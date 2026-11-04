@@ -110,3 +110,17 @@ test("existing campaign prefix invalidation includes the atomic full-list query"
   assert.equal(client.getQueryCache().find({queryKey:options.queryKey,exact:true}).state.isInvalidated,true);
   client.clear();
 });
+test("explicit refresh during the first load includes new campaigns and supersedes the old staging run",async()=>{
+  const fake=fakeApi();configureFake(fake);
+  const client=new QueryClient({defaultOptions:{queries:{gcTime:Infinity}}});
+  const options={...queryModule.completeCampaignQuery(client,"owner:self"),gcTime:Infinity};
+  const first=client.fetchQuery(options).catch(()=>null);
+  await tick();assert.equal(fake.calls.length,2);
+  api.getCampaignLoadManifest=async()=>({campaignIds:[...ids,"newly-created"],total:61});
+  const fresh=await queryModule.refreshCompleteCampaigns(client,"owner:self",()=>client.fetchQuery(options));
+  assert.equal(fresh.length,61);assert.equal(fresh.at(-1).id,"newly-created");
+  fake.gate.resolve();await first;await tick();
+  assert.equal(client.getQueryData(options.queryKey).length,61);
+  assert.equal(client.getQueryData(queryModule.campaignProgressKey("owner:self")).loaded,61);
+  client.clear();
+});
