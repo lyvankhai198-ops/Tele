@@ -27,10 +27,15 @@ export async function enqueueOperation(tx:OperationTx,input:{
 }){
   await tx.execute(sql`SET LOCAL lock_timeout='2s'`);
   await tx.execute(sql`SET LOCAL statement_timeout='6s'`);
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"operations:"+input.owner}))`);
   const fingerprint=createHash("sha256").update(JSON.stringify([input.kind,input.accountId,input.campaignId,input.payload??{}])).digest("hex");
+  // Serialize identical requests, not every operation belonging to this owner.
+  // A broad owner lock can invert the account-row lock used by campaign creation.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"operation:"+input.owner+":"+fingerprint}))`);
   if(input.requestId&&!/^[a-zA-Z0-9-]{16,80}$/.test(input.requestId))throw Error("OPERATION_INVALID_REQUEST");
-  const existing=await tx.select().from(systemSettingsTable).where(like(systemSettingsTable.key,`${prefix}${input.owner}:%`));
+  const existing=await tx.select().from(systemSettingsTable).where(and(like(systemSettingsTable.key,`${prefix}${input.owner}:%`),
+    sql`(${systemSettingsTable.key}=${key(input.owner,input.requestId??"")}
+      OR (${systemSettingsTable.value}::jsonb->>'fingerprint'=${fingerprint}
+        AND (${systemSettingsTable.value}::jsonb->>'state'<>'completed' OR ${input.kind==="delete_account"})))`));
   for(const row of existing){
     const old=JSON.parse(row.value) as OperationJob;
     if(old.id===input.requestId){if(old.fingerprint!==fingerprint)throw Error("OPERATION_REQUEST_CHANGED");return old;}

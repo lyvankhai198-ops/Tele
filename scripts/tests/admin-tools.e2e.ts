@@ -523,8 +523,18 @@ try {
   console.error(phase);
   console.error(error instanceof Error && /^E2E_[A-Z_]+$/.test(error.message) ? error.message : "E2E_UNEXPECTED_ERROR");
   if(error instanceof Error)console.error("E2E_ERROR_CLASS_"+error.name.replace(/[^A-Za-z_]/g,"").toUpperCase());
+  if(error instanceof Error){
+    const code=error.message.match(/^(?:E2E|OPERATION)_[A-Z0-9_]+/)?.[0];
+    if(code)console.error(code);
+    for(const frame of error.stack?.split("\n").slice(1,5)??[]){
+      const name=frame.match(/\bat ([A-Za-z_$][A-Za-z0-9_.$]*)/)?.[1];
+      if(name)console.error("E2E_FRAME_"+name.replace(/[^A-Za-z0-9_]/g,"_"));
+    }
+  }
   const sqlState = (error as any)?.code;
   if (typeof sqlState==="string"&&/^[0-9A-Z]{5}$/.test(sqlState)) console.error("E2E_PG_" + sqlState);
+  const causeState=(error as any)?.cause?.code;
+  if(typeof causeState==="string"&&/^[0-9A-Z]{5}$/.test(causeState))console.error("E2E_PG_CAUSE_"+causeState);
   process.exitCode = 1;
 } finally {
   if (server) await new Promise<void>(resolve => server!.close(() => resolve()));
