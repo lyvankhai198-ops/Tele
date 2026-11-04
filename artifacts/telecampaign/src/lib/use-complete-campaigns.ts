@@ -11,7 +11,7 @@ export function useCompleteCampaigns(scope:string,account=""){
     queryKey:campaignProgressKey(scope,account),enabled:false,initialData:initialCampaignLoad,staleTime:Infinity,
   });
   // Existing prefix invalidations include this owner/support-scoped full cache.
-  const campaigns=useQuery(completeCampaignQuery(client,scope,account));
+  const campaigns=useQuery<Campaign[]>(completeCampaignQuery(client,scope,account));
   useEffect(()=>{
     if(!scope||!campaigns.data)return;
     let mounted=true;
