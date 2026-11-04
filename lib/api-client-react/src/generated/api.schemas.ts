@@ -871,9 +871,34 @@ export interface BulkCampaignControlResult {
 export interface BulkCampaignTemplateInput {
   /** @minLength 1 */
   templateId: string;
+  /**
+     * Persist this identity before submitting and reuse it after a lost response.
+     * @pattern ^[a-zA-Z0-9-]{16,80}$
+     */
+  requestId?: string;
   /** Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update. */
   telegramAccountId?: string;
 }
+
+export type BulkCampaignTemplateResultStatus = typeof BulkCampaignTemplateResultStatus[keyof typeof BulkCampaignTemplateResultStatus];
+
+
+export const BulkCampaignTemplateResultStatus = {
+  queued: 'queued',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type BulkCampaignTemplateResultDefaultStatus = typeof BulkCampaignTemplateResultDefaultStatus[keyof typeof BulkCampaignTemplateResultDefaultStatus];
+
+
+export const BulkCampaignTemplateResultDefaultStatus = {
+  not_applicable: 'not_applicable',
+  pending: 'pending',
+  updated: 'updated',
+  skipped: 'skipped',
+} as const;
 
 export type BulkCampaignTemplateResultSkippedItem = {
   id: string;
@@ -882,8 +907,22 @@ export type BulkCampaignTemplateResultSkippedItem = {
 };
 
 export interface BulkCampaignTemplateResult {
+  id: string;
+  status: BulkCampaignTemplateResultStatus;
+  total: number;
+  processed: number;
   updatedCount: number;
   skippedCount: number;
+  skippedOffset: number;
+  /** @nullable */
+  telegramAccountId: string | null;
+  templateId: string;
+  defaultStatus: BulkCampaignTemplateResultDefaultStatus;
+  /** @nullable */
+  error: string | null;
+  createdAt: string;
+  /** @nullable */
+  finishedAt: string | null;
   skipped: BulkCampaignTemplateResultSkippedItem[];
 }
 
@@ -2779,6 +2818,13 @@ export interface AccountSummary {
   subscription: Subscription;
   usage: AccountUsage;
 }
+
+export type GetCampaignTemplateJobParams = {
+/**
+ * @minimum 0
+ */
+offset?: number;
+};
 
 export type ListCalendarItemsParams = {
 from?: string;

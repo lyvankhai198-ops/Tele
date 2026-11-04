@@ -749,14 +749,55 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/BulkCampaignTemplateInput" }
       responses:
-        "200":
-          description: Bulk campaign template update result
+        "202":
+          description: Durable template update accepted; poll progress instead of resubmitting
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
         "400": { description: Invalid template or account selection }
         "403": { description: Administrator access required }
         "404": { description: Template or Telegram account not found for this owner }
+        "409": { description: Another template operation is active or the request id was reused with different inputs }
+  /campaigns/bulk-template/jobs/latest:
+    get:
+      operationId: getLatestCampaignTemplateJob
+      tags: [campaigns]
+      responses:
+        "200":
+          description: Latest operation for this administrator, including completed or failed progress
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: "#/components/schemas/BulkCampaignTemplateResult"
+                  - type: "null"
+  /campaigns/bulk-template/jobs/{jobId}:
+    get:
+      operationId: getCampaignTemplateJob
+      tags: [campaigns]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Persisted progress with up to 50 skip reasons from offset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
+        "404": { description: Operation not found for this administrator }
+  /campaigns/bulk-template/jobs/{jobId}/retry:
+    post:
+      operationId: retryCampaignTemplateJob
+      tags: [campaigns]
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Resume a failed operation from its committed cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkCampaignTemplateResult" }
+        "404": { description: Operation not found for this administrator }
   /campaigns/bulk-delete:
     post:
       operationId: bulkDeleteCampaigns
@@ -2614,16 +2655,31 @@ components:
       required: [templateId]
       properties:
         templateId: { type: string, minLength: 1 }
+        requestId:
+          type: string
+          pattern: "^[a-zA-Z0-9-]{16,80}$"
+          description: Persist this identity before submitting and reuse it after a lost response.
         telegramAccountId:
           type: string
           format: uuid
           description: Restrict existing automatic campaigns to this owned Telegram account. Omit for all accounts and the legacy shared future-campaign default update.
     BulkCampaignTemplateResult:
       type: object
-      required: [updatedCount, skippedCount, skipped]
+      required: [id, status, total, processed, updatedCount, skippedCount, skipped, skippedOffset, telegramAccountId, templateId, defaultStatus, error, createdAt, finishedAt]
       properties:
+        id: { type: string }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        total: { type: integer }
+        processed: { type: integer }
         updatedCount: { type: number }
         skippedCount: { type: number }
+        skippedOffset: { type: integer }
+        telegramAccountId: { type: [string, "null"] }
+        templateId: { type: string }
+        defaultStatus: { type: string, enum: [not_applicable, pending, updated, skipped] }
+        error: { type: [string, "null"] }
+        createdAt: { type: string }
+        finishedAt: { type: [string, "null"] }
         skipped:
           type: array
           items:

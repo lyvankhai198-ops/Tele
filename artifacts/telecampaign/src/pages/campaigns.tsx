@@ -28,7 +28,6 @@ import {
   useBulkControlCampaigns,
   useBulkDeleteCampaigns,
   useDeleteCampaign,
-  useBulkUpdateCampaignTemplate,
   useListCampaigns,
   useListMessageTemplates,
   useListTelegramAccounts,
@@ -37,6 +36,8 @@ import {
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { CampaignFormModal } from "@/components/campaign-form-modal";
+import { useTemplateJob } from "@/lib/use-template-job";
+import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
@@ -492,7 +493,11 @@ export default function Campaigns() {
   const cloneCampaign = useCloneCampaign();
   const bulkDelete = useBulkDeleteCampaigns();
   const deleteOne = useDeleteCampaign();
-  const bulkTemplate = useBulkUpdateCampaignTemplate();
+  const templateProgress = useTemplateJob(user?.id, isAdmin, () => {
+    void campaigns.refetch();
+    void queryClient.invalidateQueries({queryKey:getListCalendarItemsQueryKey()});
+  });
+  const bulkTemplate = {isPending:templateProgress.blocked};
   const updateStatus = useUpdateCampaignStatus();
   const updateTemplate = useUpdateMessageTemplate();
   const [search, setSearch] = useState("");
@@ -767,6 +772,10 @@ export default function Campaigns() {
   }
 
   function openBulkTemplate() {
+    if (templateProgress.job || templateProgress.uncertain) {
+      setBulkTemplateOpen(true);
+      return;
+    }
     if (!(campaigns.data ?? []).some((campaign) => campaign.name.startsWith("Tự động")
       && ["draft", "paused", "queued", "running"].includes(campaign.status))) {
       setToast(c.bulkTemplateNoCandidates);
@@ -778,21 +787,12 @@ export default function Campaigns() {
   }
 
   async function submitBulkTemplate() {
+    if (templateProgress.blocked) return;
     if (!bulkTemplateId) {
       setToast(c.bulkTemplateNoTemplates);
       return;
     }
-    try {
-      const result = await bulkTemplate.mutateAsync({ data: {
-        templateId: bulkTemplateId,
-        ...(bulkTemplateAccountId ? { telegramAccountId: bulkTemplateAccountId } : {}),
-      } });
-      await campaigns.refetch();
-      setBulkTemplateOpen(false);
-      setToast(c.bulkTemplateResult(result.updatedCount, result.skippedCount));
-    } catch (error) {
-      setToast(localizedErrorMessage(error, language, c.genericError));
-    }
+    await templateProgress.start(bulkTemplateId, bulkTemplateAccountId);
   }
 
   function requestQueue(campaign: Campaign) {
@@ -949,12 +949,13 @@ export default function Campaigns() {
             {isAdmin && (<button
               type="button"
               onClick={openBulkTemplate}
-              disabled={bulkControl.isPending || bulkTemplate.isPending}
+              disabled={bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1d3bb8] bg-white px-3 text-[13px] font-extrabold text-[#1d3bb8] shadow-sm transition hover:bg-[#eff6ff] disabled:cursor-not-allowed disabled:opacity-60"
               data-testid="campaigns-bulk-template"
             >
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-              {c.bulkTemplateBtn}
+              {templateProgress.job || templateProgress.uncertain
+                ? (language==="vi"?"Xem tiến độ đổi mẫu":"View template progress") : c.bulkTemplateBtn}
             </button>)}
             <button
               type="button"
@@ -1207,11 +1208,24 @@ export default function Campaigns() {
         <Modal
           title={c.bulkTemplateTitle}
           description={c.bulkTemplateDetail}
-          onClose={() => {
-            if (!bulkTemplate.isPending) setBulkTemplateOpen(false);
-          }}
+          onClose={() => setBulkTemplateOpen(false)}
         >
           <div className="space-y-4">
+            {templateProgress.job && <CampaignTemplateProgress
+              job={templateProgress.job} vi={language==="vi"} waiting={templateProgress.waiting}
+              problem={templateProgress.problem} onRetry={()=>void templateProgress.retry()}
+              onNew={()=>{templateProgress.clear();setBulkTemplateId("");setBulkTemplateAccountId("");}}
+            />}
+            {templateProgress.uncertain && <div className="space-y-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+              <p>{language==="vi"?"Chưa nhận được xác nhận. Đừng tạo yêu cầu mới; hãy kiểm tra hoặc gửi lại đúng yêu cầu đã lưu.":"Acceptance is unconfirmed. Do not start another operation; check progress or recover the saved request."}</p>
+              <button type="button" disabled={templateProgress.waiting} onClick={()=>void templateProgress.recover()} className="font-bold underline">
+                {language==="vi"?"Kiểm tra / khôi phục yêu cầu":"Check / recover request"}
+              </button>
+            </div>}
+            {!templateProgress.job && !templateProgress.uncertain && <>
+            {templateProgress.problem&&<p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+              {language==="vi"?"Chưa thể bắt đầu. Hãy kiểm tra lại tài khoản, mẫu tin và quyền quản trị trước khi thử lại.":"Could not start. Check the selected account, template and administrator permissions before retrying."}
+            </p>}
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkTemplateAccount}</span>
               <select
@@ -1275,6 +1289,12 @@ export default function Campaigns() {
                 {c.bulkTemplateApply}
               </PrimaryButton>
             </div>
+            </>}
+            {(templateProgress.job || templateProgress.uncertain) && <div className="flex justify-end">
+              <button type="button" onClick={()=>setBulkTemplateOpen(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold">
+                {language==="vi"?"Đóng":"Close"}
+              </button>
+            </div>}
           </div>
         </Modal>
       )}
