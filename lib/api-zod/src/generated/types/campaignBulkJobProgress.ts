@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CampaignBulkJobProgressStatus } from './campaignBulkJobProgressStatus';
+import type { CampaignRerunReport } from './campaignRerunReport';
+import type { CampaignRerunResult } from './campaignRerunResult';
 
 export interface CampaignBulkJobProgress {
   id: string;
@@ -16,4 +18,9 @@ export interface CampaignBulkJobProgress {
   skippedCount: number;
   /** @nullable */
   error: string | null;
+  onlySendable?: boolean;
+  autoDeleteInvalid?: boolean;
+  deletedCount?: number;
+  results?: CampaignRerunResult[];
+  reviews?: CampaignRerunReport[];
 }

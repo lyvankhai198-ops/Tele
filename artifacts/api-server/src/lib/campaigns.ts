@@ -24,6 +24,7 @@ import { logger } from "./logger";
 import { getSubscription } from "./subscriptions";
 import { getSystemSettings } from "./system-settings";
 import { telegramAccountWasDeleted } from "./delete-telegram-account";
+import { reviewFinishedRerun } from "./campaign-rerun-review";
 import {
   legacyScheduleOffsetMs,
   nextCampaignDailyStart,
@@ -779,6 +780,7 @@ async function finalizeCampaignIfTerminal(campaignId: string) {
       totalCount: terminalTargets.length,
     },
   });
+  await reviewFinishedRerun(campaignId);
 }
 
 async function markTargetForReview(targetId: string, reason: string) {

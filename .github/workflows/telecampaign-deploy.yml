@@ -75,6 +75,7 @@ jobs:
         run: |
           node --test scripts/tests/telegram-connection-privacy.test.mjs
           node --test scripts/tests/campaign-form-guidance.test.mjs
+          node --experimental-vm-modules --test scripts/tests/campaign-rerun-assessment.test.mjs
           npx --yes pnpm@10.26.1 run typecheck:libs
           npx --yes pnpm@10.26.1 --filter @workspace/telecampaign run typecheck
           npx --yes pnpm@10.26.1 --filter @workspace/api-server run typecheck

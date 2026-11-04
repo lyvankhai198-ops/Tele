@@ -37,6 +37,7 @@ import {
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { CampaignFormModal } from "@/components/campaign-form-modal";
+import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage } from "@/lib/i18n";
@@ -503,6 +504,8 @@ export default function Campaigns() {
   const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
   const [bulkScheduleTime, setBulkScheduleTime] = useState(() => localTimeInputValue());
   const [bulkJob, setBulkJob] = useState<CampaignBulkJobProgress | null>(null);
+  const [onlySendable,setOnlySendable]=useState(true);
+  const [autoDeleteInvalid,setAutoDeleteInvalid]=useState(false);
   const [bulkRetrying, setBulkRetrying] = useState(false);
   const lastBulkCompletion = useRef<string | null>(null);
   const bulkRequestId = useMemo(() => crypto.randomUUID(), [
@@ -513,6 +516,8 @@ export default function Campaigns() {
   const bulkStorageKey = `telecamp.bulk-job:${user?.id ?? ""}`;
   function rememberBulkJob(job: CampaignBulkJobProgress) {
     setBulkJob(job);
+    setOnlySendable(job.onlySendable ?? false);
+    setAutoDeleteInvalid(job.autoDeleteInvalid ?? false);
     try { localStorage.setItem(bulkStorageKey, job.id); } catch { /* storage is optional */ }
   }
   useEffect(() => {
@@ -523,13 +528,13 @@ export default function Campaigns() {
       try {
         const job = saved ? await getCampaignBulkJob(saved).catch(() => getActiveCampaignBulkJob())
           : await getActiveCampaignBulkJob();
-        if (!disposed && job) { setBulkJob(job); setBulkResumeOpen(true); }
+        if (!disposed && job) { rememberBulkJob(job); setBulkResumeOpen(true); }
       } catch { /* no access or no saved operation; no automatic resubmission */ }
     })();
     return () => { disposed = true; };
   }, [bulkStorageKey]);
   useEffect(() => {
-    if (!bulkJobActive || !bulkJob) return;
+    if (!bulkJob || (!bulkJobActive && !bulkResumeOpen)) return;
     let disposed = false;
     async function poll() {
       try {
@@ -546,10 +551,10 @@ export default function Campaigns() {
         }
       } catch { /* preserve job identity and retry reading progress, never resubmit */ }
     }
-    const timer = setInterval(() => { void poll(); }, 2000);
+    const timer = setInterval(() => { void poll(); }, bulkJobActive ? 2000 : 10000);
     void poll();
     return () => { disposed = true; clearInterval(timer); };
-  }, [bulkJob?.id, bulkJobActive, language]);
+  }, [bulkJob?.id, bulkJobActive, bulkResumeOpen, language]);
   const [bulkTemplateOpen, setBulkTemplateOpen] = useState(false);
   const [bulkTemplateId, setBulkTemplateId] = useState("");
   const cloneReadiness = useGetCampaignCloneReadiness(forwardCampaign?.id ?? "", {
@@ -688,6 +693,8 @@ export default function Campaigns() {
   function openBulkResume() {
     if (bulkJob && bulkJob.status !== "completed") { setBulkResumeOpen(true); return; }
     setBulkJob(null);
+    setOnlySendable(true);
+    setAutoDeleteInvalid(false);
     try { localStorage.removeItem(bulkStorageKey); } catch { /* optional storage */ }
     if (!bulkScopeOptions.length) {
       setToast(c.bulkNoEligible);
@@ -709,6 +716,9 @@ export default function Campaigns() {
       return;
     }
     try {
+      if (autoDeleteInvalid && !window.confirm(language==="vi"
+        ?"Chỉ xoá chiến dịch khi mọi đích đã được xác nhận không còn hợp lệ, lượt thử đã kết thúc và không có tin gửi thành công. Các lượt gửi sẽ bị xoá và không thể hoàn tác. Lỗi tạm thời và lượt chưa xác minh không bị xoá. Xác nhận bật tự dọn cho lượt này?"
+        :"Delete a campaign only when all destinations are confirmed unavailable, an attempted run has ended, and no messages succeeded. Its sending targets will be permanently deleted. Temporary errors and unverified deliveries are retained. Enable cleanup for this operation?")) return;
       const scheduledAt = new Date(`${bulkScheduleDate}T${bulkScheduleTime}:00`);
       if (Number.isNaN(scheduledAt.getTime())) {
         setToast(c.genericError);
@@ -723,6 +733,7 @@ export default function Campaigns() {
           scope: bulkResumeScope,
           intervalSeconds: intervalMinutes * 60,
           scheduledAt: scheduledAt.toISOString(),
+          onlySendable,autoDeleteInvalid,confirmAutoDelete:autoDeleteInvalid,
         },
       });
       if (result.job) {
@@ -1065,9 +1076,9 @@ export default function Campaigns() {
             {bulkJob && (
               <div role="status" aria-live="polite" className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950">
                 <strong>{language === "vi"
-                  ? bulkJob.status === "completed" ? "Đã hoàn tất" : bulkJob.status === "failed" ? "Tác vụ cần kiểm tra" : "Đang xử lý chiến dịch"
+                  ? bulkJob.status === "completed" ? "Đã tạo lịch xong" : bulkJob.status === "failed" ? "Tác vụ cần kiểm tra" : "Đang tạo lịch chạy"
                   : bulkJob.status === "completed" ? "Completed" : bulkJob.status === "failed" ? "Operation needs attention" : "Processing campaigns"}</strong>
-                <p className="mt-1">{bulkJob.processed}/{bulkJob.total} · {language === "vi" ? "Đã xử lý" : "Processed"}: {bulkJob.updatedCount} · {language === "vi" ? "Bỏ qua" : "Skipped"}: {bulkJob.skippedCount}</p>
+                <p className="mt-1">{bulkJob.processed}/{bulkJob.total} · {language === "vi" ? "Đã tạo/tiếp tục lượt" : "Created/resumed runs"}: {bulkJob.updatedCount} · {language === "vi" ? "Bỏ qua" : "Skipped"}: {bulkJob.skippedCount} · {language==="vi"?"Đã xoá":"Deleted"}: {bulkJob.deletedCount ?? 0}</p>
                 {bulkJobActive && <progress aria-label={language === "vi" ? "Tiến độ xử lý" : "Operation progress"} className="mt-3 h-2 w-full" max={Math.max(1, bulkJob.total)} value={bulkJob.processed} />}
                 <p className="mt-2 text-xs">{bulkJob.status === "failed"
                   ? language === "vi" ? "Phần đã tạo được giữ nguyên. Tiếp tục chỉ xử lý phần chưa hoàn tất." : "Created runs are preserved. Continuing processes only the unfinished part."
@@ -1084,7 +1095,10 @@ export default function Campaigns() {
                   }}>{language === "vi" ? "Tiếp tục phần chưa xử lý" : "Continue unfinished work"}</button>}
               </div>
             )}
+            {bulkJob && <CampaignRerunResults job={bulkJob} language={language} />}
             <fieldset disabled={Boolean(bulkJob) || bulkControl.isPending} className="space-y-4 disabled:opacity-60">
+            <CampaignRerunOptions language={language} onlySendable={onlySendable}
+              autoDeleteInvalid={autoDeleteInvalid} onOnlySendable={setOnlySendable} onAutoDelete={setAutoDeleteInvalid} />
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkScopeLabel}</span>
               <select

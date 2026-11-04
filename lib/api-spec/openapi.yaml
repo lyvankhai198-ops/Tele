@@ -2523,6 +2523,51 @@ components:
         scope: { type: string, enum: [draft, queued, paused, completed], default: paused }
         intervalSeconds: { type: number, minimum: 0, maximum: 259200 }
         scheduledAt: { type: ["string", "null"], format: date-time }
+        onlySendable: { type: boolean, default: true }
+        autoDeleteInvalid: { type: boolean, default: false }
+        confirmAutoDelete: { type: boolean, default: false }
+    CampaignRerunGroupAssessment:
+      type: object
+      required: [id, name, category, reason]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { type: string, enum: [sendable, temporary, review, invalid] }
+        reason: { type: string }
+    CampaignRerunAssessment:
+      type: object
+      required: [category, reason, groups, sentCount, failedCount, targetCount, canDelete]
+      properties:
+        category: { type: string, enum: [sendable, temporary, review, invalid] }
+        reason: { type: string }
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignRerunGroupAssessment" }
+        sentCount: { type: integer }
+        failedCount: { type: integer }
+        targetCount: { type: integer }
+        canDelete: { type: boolean }
+    CampaignRerunResult:
+      type: object
+      required: [id, name, outcome, reason]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        outcome: { type: string, enum: [created, resumed, skipped, deleted] }
+        reason: { type: string }
+        runId: { type: string }
+        assessment: { $ref: "#/components/schemas/CampaignRerunAssessment" }
+    CampaignRerunReport:
+      allOf:
+        - $ref: "#/components/schemas/CampaignRerunAssessment"
+        - type: object
+          required: [id, name, reviewedAt, deleted, removedDestinationCount]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            reviewedAt: { type: string, format: date-time }
+            deleted: { type: boolean }
+            removedDestinationCount: { type: integer }
     CampaignBulkJobProgress:
       type: object
       required: [id, status, total, processed, updatedCount, skippedCount, error]
@@ -2534,6 +2579,15 @@ components:
         updatedCount: { type: integer }
         skippedCount: { type: integer }
         error: { type: ["string", "null"] }
+        onlySendable: { type: boolean }
+        autoDeleteInvalid: { type: boolean }
+        deletedCount: { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignRerunResult" }
+        reviews:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignRerunReport" }
     BulkCampaignControlResult:
       type: object
       required: [action, updatedCount, skippedCount, skipped]

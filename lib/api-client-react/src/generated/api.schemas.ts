@@ -751,7 +751,74 @@ export interface BulkCampaignControlInput {
   intervalSeconds?: number;
   /** @nullable */
   scheduledAt?: string | null;
+  onlySendable?: boolean;
+  autoDeleteInvalid?: boolean;
+  confirmAutoDelete?: boolean;
 }
+
+export type CampaignRerunGroupAssessmentCategory = typeof CampaignRerunGroupAssessmentCategory[keyof typeof CampaignRerunGroupAssessmentCategory];
+
+
+export const CampaignRerunGroupAssessmentCategory = {
+  sendable: 'sendable',
+  temporary: 'temporary',
+  review: 'review',
+  invalid: 'invalid',
+} as const;
+
+export interface CampaignRerunGroupAssessment {
+  id: string;
+  name: string;
+  category: CampaignRerunGroupAssessmentCategory;
+  reason: string;
+}
+
+export type CampaignRerunAssessmentCategory = typeof CampaignRerunAssessmentCategory[keyof typeof CampaignRerunAssessmentCategory];
+
+
+export const CampaignRerunAssessmentCategory = {
+  sendable: 'sendable',
+  temporary: 'temporary',
+  review: 'review',
+  invalid: 'invalid',
+} as const;
+
+export interface CampaignRerunAssessment {
+  category: CampaignRerunAssessmentCategory;
+  reason: string;
+  groups: CampaignRerunGroupAssessment[];
+  sentCount: number;
+  failedCount: number;
+  targetCount: number;
+  canDelete: boolean;
+}
+
+export type CampaignRerunResultOutcome = typeof CampaignRerunResultOutcome[keyof typeof CampaignRerunResultOutcome];
+
+
+export const CampaignRerunResultOutcome = {
+  created: 'created',
+  resumed: 'resumed',
+  skipped: 'skipped',
+  deleted: 'deleted',
+} as const;
+
+export interface CampaignRerunResult {
+  id: string;
+  name: string;
+  outcome: CampaignRerunResultOutcome;
+  reason: string;
+  runId?: string;
+  assessment?: CampaignRerunAssessment;
+}
+
+export type CampaignRerunReport = CampaignRerunAssessment & {
+  id: string;
+  name: string;
+  reviewedAt: string;
+  deleted: boolean;
+  removedDestinationCount: number;
+};
 
 export type CampaignBulkJobProgressStatus = typeof CampaignBulkJobProgressStatus[keyof typeof CampaignBulkJobProgressStatus];
 
@@ -772,6 +839,11 @@ export interface CampaignBulkJobProgress {
   skippedCount: number;
   /** @nullable */
   error: string | null;
+  onlySendable?: boolean;
+  autoDeleteInvalid?: boolean;
+  deletedCount?: number;
+  results?: CampaignRerunResult[];
+  reviews?: CampaignRerunReport[];
 }
 
 export type BulkCampaignControlResultAction = typeof BulkCampaignControlResultAction[keyof typeof BulkCampaignControlResultAction];
