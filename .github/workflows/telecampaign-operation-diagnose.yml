@@ -1,0 +1,70 @@
+name: TeleCamp operation diagnosis (read only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telecampaign-vps-operations
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect only operation phases and bounded query timings
+        env:
+          SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          known="$(mktemp)"
+          trap 'rm -f "$known"' EXIT
+          ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
+          test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          test "$(hostname)" = vps-cd243267
+          cd /opt/telecampaign
+          set -a
+          source /etc/telecampaign/api.env
+          set +a
+          node --input-type=module <<'NODE'
+          import {createRequire} from "node:module";
+          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
+          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
+          try{
+            await client.connect();
+            await client.query("BEGIN READ ONLY");
+            await client.query("SET LOCAL statement_timeout='12s'");
+            const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
+            const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account"&&j.state!=="completed");
+            console.log("operation_phases="+JSON.stringify(jobs.map(j=>({state:j.state,phase:j.phase,processed:j.processed,campaignCount:j.payload?.ids?.length??null}))));
+            const indexes=(await client.query("SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='campaign_targets'")).rows;
+            console.log("target_destination_index="+indexes.some(r=>/\(destination_id(?:[,) ])/.test(r.indexdef)));
+            await client.query("COMMIT");
+            const j=jobs.find(j=>j.state==="failed")??jobs[0];
+            if(j){
+              await client.query("BEGIN READ ONLY");await client.query("SET LOCAL statement_timeout='12s'");
+              let text,params;
+              if(j.phase==="queued"){
+                text=`EXPLAIN(ANALYZE,FORMAT JSON,TIMING OFF) SELECT c.id FROM campaigns c WHERE c.owner_user_id=$1 AND (
+                  c.telegram_account_id=$2::uuid OR c.destination_ids && ARRAY(SELECT id FROM destinations WHERE account_id=$2::uuid)
+                  OR c.id IN(SELECT t.campaign_id FROM campaign_targets t JOIN destinations d ON d.id=t.destination_id WHERE d.account_id=$2::uuid))`;
+                params=[j.owner,j.accountId];
+              }else if(j.phase==="logs"){
+                text=`EXPLAIN(ANALYZE,FORMAT JSON,TIMING OFF) SELECT id FROM activity_logs WHERE owner_user_id=$1 AND (
+                  campaign_id=ANY($2::uuid[]) OR target_id IN(SELECT id FROM campaign_targets WHERE campaign_id=ANY($2::uuid[]))
+                  OR account_id=$3::uuid) ORDER BY id LIMIT 1000`;
+                params=[j.owner,j.payload.ids,j.accountId];
+              }
+              if(text){try{const p=(await client.query(text,params)).rows[0]["QUERY PLAN"][0];console.log("phase_probe="+JSON.stringify({phase:j.phase,executionMs:p["Execution Time"],rows:p.Plan["Actual Rows"]}));}
+                catch(e){console.log("phase_probe_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));}}
+              await client.query("ROLLBACK");
+            }
+          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
+          finally{await client.end();}
+          NODE
+          REMOTE
