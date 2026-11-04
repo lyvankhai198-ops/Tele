@@ -9,6 +9,10 @@ export async function testCampaignAccountFilter(input:{
 }){
   const {ownerId,otherOwnerId,ownerCookie,request}=input;
   const check=(value:unknown,code:string)=>assert.ok(value,code);
+  // Earlier bulk fixtures intentionally exceed PLUS limits. Account scoping is
+  // tested independently of that quota, exactly as in the bulk-job fixture.
+  const previousPlan=(await pool.query("SELECT plan FROM subscriptions WHERE owner_user_id=$1",[ownerId])).rows[0].plan;
+  await pool.query("UPDATE subscriptions SET plan='unlimited' WHERE owner_user_id=$1",[ownerId]);
   const a=randomUUID(),b=randomUUID(),foreign=randomUUID(),destination=randomUUID(),prefix=`Filter-${randomUUID()}-`;
   await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status,session_encrypted) VALUES($1,$4,'Filter A','connected','test-only-no-real-session'),($2,$4,'Filter B','connected','test-only-no-real-session'),($3,$5,'Foreign','connected','test-only-no-real-session')",[a,b,foreign,ownerId,otherOwnerId]);
   await pool.query("INSERT INTO destinations(id,account_id,title,telegram_id,can_post) VALUES($1,$2,'Filter destination','-1000000999',true)",[destination,a]);
@@ -48,6 +52,9 @@ export async function testCampaignAccountFilter(input:{
   const changed=await request("/campaigns/bulk-control",ownerCookie,{...body,telegramAccountId:b},"POST",header);
   check(changed.status===409,"E2E_ACCOUNT_FILTER_RERUN_IDEMPOTENCY_SCOPE");
   for(let i=0;i<3;i++)await processCampaignBulkJobs(2);
+  const progress=await (await request(`/campaigns/bulk-control/jobs/${result.job.id}`,ownerCookie)).json();
+  check(progress.status!=="failed","E2E_ACCOUNT_FILTER_RERUN_PROCESSOR");
+  check(progress.skippedCount===0,"E2E_ACCOUNT_FILTER_RERUN_NOT_SKIPPED");
   const clones=await pool.query("SELECT cloned_from_campaign_id,telegram_account_id FROM campaigns WHERE cloned_from_campaign_id=ANY($1::uuid[])",[[ids[7],ids[8]]]);
   check(clones.rows.length===1&&clones.rows[0].cloned_from_campaign_id===ids[7]
     &&clones.rows[0].telegram_account_id===a,"E2E_ACCOUNT_FILTER_RERUN_ONLY_SELECTED_ACCOUNT");
@@ -56,4 +63,5 @@ export async function testCampaignAccountFilter(input:{
   await pool.query("DELETE FROM campaigns WHERE owner_user_id=ANY($1::text[]) AND name LIKE $2",[[ownerId,otherOwnerId],prefix+"%"]);
   await pool.query("DELETE FROM destinations WHERE id=$1",[destination]);
   await pool.query("DELETE FROM telegram_accounts WHERE id=ANY($1::uuid[])",[[a,b,foreign]]);
+  await pool.query("UPDATE subscriptions SET plan=$2 WHERE owner_user_id=$1",[ownerId,previousPlan]);
 }
