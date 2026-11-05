@@ -33,7 +33,7 @@ function setup({account="a",status="all",search="",language="vi",blocked=false,i
     operations:{async start(data){sent.push({data});return{id:"operation",state:"queued"};}},
     isAdmin,campaignDataBlocked:blocked,bulkJob:null,bulkTemplate:{isPending:false},bulkDelete:{isPending:false,async mutateAsync(v){sent.push(v);return{deletedCount:1,skippedCount:0};}},
     bulkControl:{isPending:false,async mutateAsync(v){sent.push(v);return{updatedCount:1,skippedCount:0,job:{id:"new",status:"queued"}};}},
-    templateProgress:{job:null,uncertain:false,waiting:false},details:null,bulkResumeScope:"completed",bulkIntervalMinutes:"10",
+    templateProgress:{job:null,uncertain:false,waiting:false},details:null,bulkResumeAccountId:account,bulkResumeScope:"completed",bulkIntervalMinutes:"10",
     bulkScheduleDate:"2026-12-01",bulkScheduleTime:"10:00",bulkStorageKey:"fixture",bulkRequestId:"fixture",onlySendable:true,autoDeleteInvalid:false,
     c:{searchPlaceholder:"Search",statusAll:"All",statusDraft:"Draft",statusQueued:"Queued",statusRunning:"Running",statusPaused:"Paused",statusCompleted:"Completed",
       bulkPauseConfirm:n=>String(n),bulkDeleteConfirm:n=>String(n),bulkPausedResult:()=>"",bulkDeleteResult:()=>"",bulkNoActive:"No active",bulkNoEligible:"No eligible"},
@@ -95,4 +95,15 @@ test("loading still blocks all campaign-changing actions",async()=>{
   const h=setup({blocked:true});
   for(const handler of ["pauseAllCampaigns","removeFilteredCampaigns","submitBulkResume"])await h.context[handler]();
   assert.equal(h.sent.length,0);
+});
+test("rerun account is mandatory and overrides the outer page account",async()=>{
+  const h=setup({status:"completed"});
+  h.context.bulkResumeAccountId="";
+  await h.context.submitBulkResume();
+  assert.equal(h.sent.length,0);
+  h.context.bulkResumeAccountId="b";
+  await h.context.submitBulkResume();
+  assert.equal(h.sent.length,1);
+  assert.equal(h.sent[0].data.telegramAccountId,"b");
+  assert.equal(h.context.accountFilter,"a");
 });
