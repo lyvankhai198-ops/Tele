@@ -43,6 +43,8 @@ const copy = {
     loadErrorDetail: "Please check your access rights or try again later.",
     searchPlaceholder: "Search by username...",
     filterAllPlans: "All Plans",
+    filterAllStatuses: "All statuses",
+    filterStatusLabel: "Subscription status",
     tableUser: "User & Role",
     tableSubscription: "Subscription",
     tableLimits: "Current Limits",
@@ -102,6 +104,8 @@ const copy = {
     loadErrorDetail: "Vui lòng kiểm tra lại quyền truy cập hoặc thử lại sau.",
     searchPlaceholder: "Tìm theo tên tài khoản...",
     filterAllPlans: "Tất cả các gói",
+    filterAllStatuses: "Tất cả trạng thái",
+    filterStatusLabel: "Trạng thái gói dịch vụ",
     tableUser: "Người dùng & Vai trò",
     tableSubscription: "Gói dịch vụ",
     tableLimits: "Giới hạn hiện tại",
@@ -174,6 +178,7 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [planFilter, setPlanFilter] = useState<PlanCode | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active">("all");
 
   const [toastMessage, setToastMessage] = useState<{ text: string; isError?: boolean } | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
@@ -194,11 +199,14 @@ export default function AdminUsersPage() {
     ...(planFilter !== "all" ? { plan: planFilter } : {}),
   };
 
-  const { data: users, isLoading, error } = useListAdminUsers(queryParams, {
+  const { data: userRows, isLoading, error } = useListAdminUsers(queryParams, {
     query: {
       queryKey: getListAdminUsersQueryKey(queryParams),
     },
   });
+  const users = statusFilter === "active"
+    ? userRows?.filter((user) => user.subscription.status === "active")
+    : userRows;
   const selectedUserId = editingUser?.id ?? "";
   const { data: selectedUser } = useGetAdminUser(selectedUserId, {
     query: {
@@ -361,7 +369,7 @@ export default function AdminUsersPage() {
         detail={text.pageDetail}
       />
 
-      <Panel className="mb-6 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#f8fafc]">
+      <Panel className="mb-6 p-4 flex flex-col lg:flex-row items-center justify-between gap-4 bg-[#f8fafc]">
         <div className="flex-1 flex w-full max-w-sm items-center gap-3 rounded-xl border border-[#cbd5e1] bg-white px-3.5 py-2.5 focus-within:border-[#1a2b88] focus-within:ring-2 focus-within:ring-[#1a2b88]/10 transition-all">
           <Search className="h-[18px] w-[18px] text-[#64748b]" />
           <input
@@ -372,7 +380,7 @@ export default function AdminUsersPage() {
             placeholder={text.searchPlaceholder}
           />
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="grid w-full grid-cols-[16px_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[16px_minmax(0,1fr)_minmax(0,1fr)] lg:w-auto lg:grid-cols-[16px_auto_auto]">
           <Filter className="h-4 w-4 text-[#64748b]" />
           <select
             value={planFilter}
@@ -383,6 +391,15 @@ export default function AdminUsersPage() {
             <option value="pro">Pro</option>
             <option value="unlimited">Unlimited</option>
             <option value="plus">Plus</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | "active")}
+            aria-label={text.filterStatusLabel}
+            className="col-start-2 min-w-0 rounded-xl border border-[#cbd5e1] bg-white px-4 py-2.5 text-[14px] font-bold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10 sm:col-start-auto"
+          >
+            <option value="all">{text.filterAllStatuses}</option>
+            <option value="active">{text.statusActive}</option>
           </select>
         </div>
       </Panel>
