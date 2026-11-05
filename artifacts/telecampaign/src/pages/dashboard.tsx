@@ -309,13 +309,13 @@ export default function Dashboard() {
 
 function DashboardMetricCard({ label, value, icon: Icon, iconColor, iconBg }: any) {
   return (
-    <div className="flex min-h-[116px] min-w-0 cursor-default flex-wrap items-center gap-x-2 gap-y-3 rounded-3xl border border-[#eef2f6] bg-white p-3.5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#cbd5e1] sm:min-h-0 sm:flex-nowrap sm:gap-4 sm:p-5" data-testid={`metric-${label}`}>
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14 ${iconBg} ${iconColor}`}>
+    <div className="bg-white border border-[#eef2f6] rounded-3xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center gap-4 hover:border-[#cbd5e1] transition-colors cursor-default" data-testid={`metric-${label}`}>
+      <span className={`h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-2xl flex items-center justify-center ${iconBg} ${iconColor}`}>
         <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
       </span>
-      <div className="min-w-0 flex-1 basis-20 sm:basis-auto">
-        <div className="mb-1.5 break-words text-[28px] font-extrabold leading-none tracking-tight text-[#0f172a] tabular-nums sm:text-3xl">{value}</div>
-        <div className="break-words text-[14px] font-bold leading-snug text-[#64748b] sm:text-[13px]">{label}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] leading-none mb-1.5 tracking-tight">{value}</div>
+        <div className="text-[12px] sm:text-[13px] font-bold text-[#64748b] leading-tight truncate">{label}</div>
       </div>
     </div>
   );
