@@ -1,4 +1,4 @@
-name: TeleCamp operation diagnosis (read only)
+name: TeleCamp T A join diagnosis (read only)
 on:
   workflow_dispatch:
 permissions:
@@ -32,32 +32,66 @@ jobs:
           source /etc/telecampaign/api.env
           set +a
           node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
+          import { createRequire } from "node:module";
+          const require = createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
+          const { Client } = require("pg");
+          const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000 });
+          try {
             await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
+            await client.query("BEGIN READ ONLY");
+            await client.query("SET LOCAL statement_timeout='10s'");
+            const accounts = (await client.query(`SELECT a.id,a.name,a.status,a.created_at,a.last_sync_at,a.cooldown_until
+              FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text
+              WHERE u.role='admin' AND a.deleted_at IS NULL AND a.name='T A'`)).rows;
+            for (const account of accounts) {
+              const p = [account.id];
+              console.log("TA_ACCOUNT=" + JSON.stringify({
+                name: account.name, status: account.status, createdAt: account.created_at,
+                lastSyncAt: account.last_sync_at, cooldownUntil: account.cooldown_until,
+              }));
+              const queries = {
+                queue: `SELECT status,count(*)::int AS count,min(created_at) AS oldest_job,
+                  max(created_at) AS newest_job,min(last_attempt_at) AS first_recorded_attempt,
+                  max(last_attempt_at) AS latest_attempt,max(joined_at) AS latest_join,
+                  min(attempt_count)::int AS min_attempts,max(attempt_count)::int AS max_attempts,
+                  sum(attempt_count)::int AS total_attempts,
+                  count(*) FILTER (WHERE attempt_count=0)::int AS never_attempted,
+                  max(next_attempt_at) FILTER (WHERE status='waiting') AS resume_at
+                  FROM admin_group_join_jobs WHERE telegram_account_id=$1 GROUP BY status ORDER BY status`,
+                recent_joins: `SELECT to_char(joined_at AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24:00') AS hour_vn,
+                  count(*)::int AS joined
+                  FROM admin_group_join_jobs WHERE telegram_account_id=$1 AND joined_at>now()-interval '48 hours'
+                  GROUP BY 1 ORDER BY 1 DESC LIMIT 24`,
+                recent_attempts: `SELECT to_char(last_attempt_at AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24:00') AS hour_vn,
+                  status,count(*)::int AS jobs,max(attempt_count)::int AS max_attempts
+                  FROM admin_group_join_jobs WHERE telegram_account_id=$1 AND last_attempt_at>now()-interval '48 hours'
+                  GROUP BY 1,2 ORDER BY 1 DESC,status LIMIT 30`,
+                waits: `SELECT
+                  CASE WHEN last_error ILIKE '%yêu cầu chờ%' THEN 'telegram_flood_wait'
+                    WHEN last_error ILIKE '%FLOOD%' THEN 'telegram_flood_wait'
+                    ELSE 'other' END AS reason,
+                  substring(last_error from '([0-9]+) giây') AS wait_seconds,
+                  count(*)::int AS jobs,min(updated_at) AS first_updated,max(updated_at) AS last_updated,
+                  min(next_attempt_at) AS earliest_resume,max(next_attempt_at) AS latest_resume
+                  FROM admin_group_join_jobs WHERE telegram_account_id=$1 AND status='waiting'
+                  GROUP BY 1,2 ORDER BY count(*) DESC`,
+                library_age: `SELECT to_char(g.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh','YYYY-MM-DD') AS added_day,
+                  count(*)::int AS groups,count(*) FILTER (WHERE j.status='waiting')::int AS waiting
+                  FROM group_library_entries g LEFT JOIN admin_group_join_jobs j
+                  ON j.group_library_entry_id=g.id AND j.telegram_account_id=$1
+                  GROUP BY 1 ORDER BY 1 DESC LIMIT 12`,
+              };
+              for (const [label, sql] of Object.entries(queries)) {
+                console.log("TA_" + label.toUpperCase() + "=" + JSON.stringify((await client.query(sql, p)).rows));
               }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
             }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
+            console.log("TA_CAPTURED_AT=" + new Date().toISOString());
+            await client.query("ROLLBACK");
+          } catch (error) {
+            console.log("TA_ERROR=" + (/^[0-9A-Z]{5}$/.test(error.code ?? "") ? error.code : "safe_failure"));
+            process.exitCode = 1;
+          } finally {
+            await client.end();
+          }
           NODE
           REMOTE
