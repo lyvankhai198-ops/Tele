@@ -77,7 +77,7 @@ export default function Settings() {
             <SectionHeader
               eyebrow={t("Account information")}
               title={t("Account")}
-              detail={t("Your username is used to sign in to TeleCampaign.")}
+              detail={t("Your username is used to sign in to Telecampaign.")}
             />
             <div className="flex items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#e8edff] text-[#1a2b88]">

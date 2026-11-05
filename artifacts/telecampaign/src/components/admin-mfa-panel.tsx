@@ -51,7 +51,7 @@ export function AdminMfaPanel() {
         <input required type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className={inputClass} />
       </label>
       {setup && <div className="space-y-2 rounded-xl bg-blue-50 p-4 text-sm">
-        <p>Thêm tài khoản TeleCamp vào ứng dụng Authenticator bằng khóa thiết lập dưới đây, hoặc mở liên kết trên thiết bị có ứng dụng. Không chụp/gửi khóa cho người khác.</p>
+        <p>Thêm tài khoản Telecampaign vào ứng dụng Authenticator bằng khóa thiết lập dưới đây, hoặc mở liên kết trên thiết bị có ứng dụng. Không chụp/gửi khóa cho người khác.</p>
         <input aria-label="Khóa thiết lập 2FA" readOnly value={setup.secret} className={`${inputClass} font-mono`} />
         <a className="inline-block font-bold text-blue-800 underline" href={setup.uri}>Mở ứng dụng Authenticator</a>
         <button type="button" className="ml-4 underline" onClick={() => { setSetup(null); setCode(""); }}>Hủy thiết lập</button>

@@ -9,11 +9,22 @@ const drafts = path.join(root, "scripts/locale-drafts");
 const output = path.join(root, "artifacts/telecampaign/src/lib/locale-catalogs");
 const codes = ["vi", "en", "lo", "ms", "ja", "th", "ko", "zh-Hans", "zh-Hant", "ru", "hi", "ar", "fil", "de", "my", "ur", "si", "id", "nl", "sr", "hy", "bn"];
 const catalogs = new Map(codes.map((code) => [code, new Map()]));
+// Normalize only curated interface copy, never customer content or technical IDs.
+// Retain legacy source keys so older server messages remain recognizable.
+const displayBrand = (value) => value.replace(/\bTele(?:\s+)?Camp(?:aign)?\b/gu, "Telecampaign");
 // Committed catalogs are curated source. Local authoring drafts are optional
 // incremental overrides, not a prerequisite for reproducing a release.
 for (const code of codes) {
   const file = path.join(output, `${code}.json`);
-  if (fs.existsSync(file)) catalogs.set(code, new Map(Object.entries(JSON.parse(fs.readFileSync(file, "utf8")))));
+  if (fs.existsSync(file)) {
+    const entries = Object.entries(JSON.parse(fs.readFileSync(file, "utf8")));
+    const catalog = new Map(entries);
+    for (const [key, value] of entries) {
+      const normalizedKey = displayBrand(key);
+      if (!catalog.has(normalizedKey)) catalog.set(normalizedKey, displayBrand(value));
+    }
+    catalogs.set(code, catalog);
+  }
 }
 const repairsPath = path.join(drafts, "repairs.json");
 const repairs = new Map((fs.existsSync(repairsPath) ? JSON.parse(fs.readFileSync(repairsPath, "utf8")) : [])
@@ -65,7 +76,7 @@ for (const code of codes) {
 fs.mkdirSync(output, { recursive: true });
 for (const code of codes) {
   const catalog = catalogs.get(code);
-  fs.writeFileSync(path.join(output, `${code}.json`), JSON.stringify(Object.fromEntries(source.sources.map((key) => [key, catalog.get(key)])), null, 2) + "\n");
+  fs.writeFileSync(path.join(output, `${code}.json`), JSON.stringify(Object.fromEntries(source.sources.map((key) => [key, displayBrand(catalog.get(key))])), null, 2) + "\n");
 }
 fs.writeFileSync(path.join(output, "aliases.json"), JSON.stringify(source.aliases, null, 2) + "\n");
 console.log(JSON.stringify({ locales: codes.length, messagesPerLocale: source.sources.length, placeholders: "passed" }));

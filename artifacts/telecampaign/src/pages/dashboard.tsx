@@ -115,21 +115,19 @@ export default function Dashboard() {
         <div>
           <p className="national-day-page-kicker">
             <span aria-hidden="true" />
-            {language === "vi" ? "Trung tâm điều phối" : "Command center"}
+            {t("Dashboard")}
           </p>
           <h1 id="national-day-dashboard-title">
-            {language === "vi" ? "Chào buổi sáng." : "Good morning."}
-            <strong>{language === "vi" ? " Giữ nhịp kết nối." : " Keep connection moving."}</strong>
+            {t("Telecampaign")}
+            <strong>{t("Campaign management")}</strong>
           </h1>
           <p>
-            {language === "vi"
-              ? "Mọi thứ cần để gửi đúng thông điệp, đến đúng nhóm, trong tuần lễ Quốc khánh."
-              : "Everything you need to send the right message to the right groups during National Day week."}
+            {t("Connect your Telegram accounts, plan your sends, and keep an eye on delivery — all from one considered workspace.")}
           </p>
         </div>
         <button type="button" onClick={() => setLocation("/dashboard/campaigns")}>
           <Megaphone className="h-4 w-4" />
-          {language === "vi" ? "Xem chiến dịch" : "View campaigns"}
+          {t("Campaigns")}
           <ArrowRight className="h-4 w-4" />
         </button>
       </section>
@@ -311,13 +309,13 @@ export default function Dashboard() {
 
 function DashboardMetricCard({ label, value, icon: Icon, iconColor, iconBg }: any) {
   return (
-    <div className="bg-white border border-[#eef2f6] rounded-3xl p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center gap-4 hover:border-[#cbd5e1] transition-colors cursor-default" data-testid={`metric-${label}`}>
-      <span className={`h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-2xl flex items-center justify-center ${iconBg} ${iconColor}`}>
-        <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
+    <div className="flex min-w-0 cursor-default items-center gap-2 rounded-3xl border border-[#eef2f6] bg-white p-3 shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-colors hover:border-[#cbd5e1] sm:gap-4 sm:p-5" data-testid={`metric-${label}`}>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl sm:h-14 sm:w-14 ${iconBg} ${iconColor}`}>
+        <Icon className="h-5 w-5 sm:h-7 sm:w-7" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-2xl sm:text-3xl font-extrabold text-[#0f172a] leading-none mb-1.5 tracking-tight">{value}</div>
-        <div className="text-[12px] sm:text-[13px] font-bold text-[#64748b] leading-tight truncate">{label}</div>
+        <div className="mb-1.5 text-xl font-extrabold leading-none tracking-tight text-[#0f172a] sm:text-3xl">{value}</div>
+        <div className="break-words text-[12px] font-bold leading-snug text-[#64748b] sm:text-[13px]">{label}</div>
       </div>
     </div>
   );
