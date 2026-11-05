@@ -859,8 +859,18 @@ router.use((req, res, next): void => {
   const isGroupSync = req.method === "POST"
     && (/^\/telegram\/accounts\/[^/]+\/sync$/.test(req.path)
       ||(req.path==="/operations"&&req.body?.kind==="sync_groups"));
-  if (req.supportSession && !isCampaignDetailsEdit && !isGroupSync && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-    res.status(403).json({ error: "Phiên hỗ trợ chỉ cho phép chỉnh sửa campaign và đồng bộ nhóm." });
+  const isCampaignControl = (req.method === "POST" && (
+    req.path === "/campaigns"
+    || (req.path === "/campaigns/bulk-control" && ["pause", "resume"].includes(req.body?.action))
+    || /^\/campaigns\/bulk-control\/jobs\/[^/]+\/(?:retry|cleanup-preview|cleanup-confirm)$/.test(req.path)
+    || (req.path === "/operations" && req.body?.kind === "delete_campaigns")
+  )) || (req.method === "DELETE" && /^\/campaigns\/[^/]+$/.test(req.path))
+    || (req.method === "PATCH" && /^\/campaigns\/[^/]+$/.test(req.path)
+      && req.body && typeof req.body === "object" && !Array.isArray(req.body)
+      && Object.keys(req.body).length === 1
+      && ["paused", "queued"].includes(req.body.status));
+  if (req.supportSession && !isCampaignDetailsEdit && !isGroupSync && !isCampaignControl && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    res.status(403).json({ error: "Thao tác này không được phép trong phiên hỗ trợ." });
     return;
   }
   next();

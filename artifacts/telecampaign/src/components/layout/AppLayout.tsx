@@ -426,8 +426,8 @@ export function AppLayout({
                   </p>
                   <p className="mt-0.5 text-xs font-medium text-[#956c2c]">
                     {language === "vi"
-                      ? "Có thể chỉnh sửa campaign và đồng bộ nhóm; các thao tác chạy, dừng, xóa và quản trị vẫn bị khóa."
-                      : "Campaigns can be edited and groups synced; run, pause, delete, and admin actions remain locked."}
+                      ? "Chọn bộ lọc tương ứng để thao tác"
+                      : "Choose the corresponding filters before taking action"}
                   </p>
                 </div>
               </div>

@@ -550,11 +550,11 @@ export default function Campaigns() {
   const [bulkRetrying, setBulkRetrying] = useState(false);
   const bulkRequestId = useMemo(() => crypto.randomUUID(), [
     bulkResumeOpen, bulkResumeAccountId, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
-    accountFilter,search,status,
+    accountFilter,search,status,campaignScope,
   ]);
   const bulkControl = useBulkControlCampaigns({request: {headers: {"Idempotency-Key": bulkRequestId}}});
   const bulkJobActive = bulkJob?.status === "queued" || bulkJob?.status === "running";
-  const bulkStorageKey = `telecamp.bulk-job:${user?.id ?? ""}`;
+  const bulkStorageKey = `telecamp.bulk-job:${isSupportMode ? campaignScope : user?.id ?? ""}`;
   function rememberBulkJob(job: CampaignBulkJobProgress) {
     setBulkJob(job);
     setBulkResumeAccountId(job.telegramAccountId??"");
@@ -565,6 +565,9 @@ export default function Campaigns() {
   useEffect(() => {
     let disposed = false;
     let saved: string | null = null;
+    setBulkJob(null);
+    setBulkResumeOpen(false);
+    setBulkResumeAccountId("");
     try { saved = localStorage.getItem(bulkStorageKey); } catch { /* private browser mode */ }
     void (async () => {
       try {
@@ -921,7 +924,7 @@ export default function Campaigns() {
 
   return (
     <AppLayout activePage="campaigns" title={c.pageTitle} hideUpgrade headerAction={
-      !isSupportMode && <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
+      <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
     }>
       <div className="mx-auto max-w-[900px]">
         <div className="mb-3 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-filter-toolbar">
@@ -972,8 +975,7 @@ export default function Campaigns() {
               data-testid="campaigns-filter-count">{listedCampaigns.length} / {campaigns.data.length}</span>}
           </div>
         </div>
-        {!isSupportMode && (
-          <div className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-action-toolbar">
+        <div className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-action-toolbar">
             <p className="mb-2.5 text-[12px] font-bold text-[#475569]">{language==="vi"?"Chọn bộ lọc tương ứng để thao tác":"Choose the corresponding filters before taking action"}</p>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
             <button
@@ -996,7 +998,7 @@ export default function Campaigns() {
               {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
               {bulkJob?(language==="vi"?"Tiến độ chạy lại":"Rerun progress"):(language==="vi"?"Chạy lại chiến dịch":"Rerun campaigns")}
             </button>
-            <button
+            {!isSupportMode && <button
               type="button"
               onClick={openBulkTemplate}
               disabled={(!templateProgress.job&&!templateProgress.uncertain&&campaignDataBlocked) || bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
@@ -1006,7 +1008,7 @@ export default function Campaigns() {
               {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
               {templateProgress.job || templateProgress.uncertain
                 ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tin hàng loạt":"Bulk templates")}
-            </button>
+            </button>}
             <button
               type="button"
               onClick={() => void removeFilteredCampaigns()}
@@ -1018,9 +1020,8 @@ export default function Campaigns() {
               {language==="vi"?"Xoá chiến dịch":"Delete campaigns"}
             </button>
             </div>
-            <p className="mt-2.5 text-[11px] leading-relaxed text-[#64748b]">{language==="vi"?"Dừng, chạy lại và xoá áp dụng tài khoản, trạng thái và tên đã lọc. Đổi mẫu có phạm vi riêng để bạn kiểm tra trước.":"Pause, rerun and delete use the account, status and name filters. Template changes have a separate scope to review."}</p>
+            {!isSupportMode && <p className="mt-2.5 text-[11px] leading-relaxed text-[#64748b]">{language==="vi"?"Dừng, chạy lại và xoá áp dụng tài khoản, trạng thái và tên đã lọc. Đổi mẫu có phạm vi riêng để bạn kiểm tra trước.":"Pause, rerun and delete use the account, status and name filters. Template changes have a separate scope to review."}</p>}
           </div>
-        )}
 
         <Panel className="overflow-hidden">
           <CampaignListFeedback language={language} hasData={campaigns.data!==undefined}
@@ -1063,11 +1064,7 @@ export default function Campaigns() {
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2">
                         <button onClick={() => setDetails(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] text-[14px] font-extrabold text-[#0f172a] hover:bg-[#f8fafc]"><Eye className="h-[17px] w-[17px]" />{c.detailsBtn}</button>
-                        {isSupportMode
-                          ? (campaign.status === "draft" || campaign.status === "paused" || campaign.status === "completed" || campaign.status === "completed_with_errors")
-                            ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
-                            : <span className="h-10" />
-                          : isActive(campaign.status)
+                        {isActive(campaign.status)
                           ? <button onClick={() => void changeCampaignStatus(campaign, "paused")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f04444] text-[14px] font-extrabold text-white hover:bg-[#dc2626]"><CirclePause className="h-[17px] w-[17px]" />{c.pauseBtn}</button>
                           : campaign.status === "draft"
                              ? <div className="grid grid-cols-2 gap-2">
@@ -1085,12 +1082,11 @@ export default function Campaigns() {
                                ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
                             : <span className="h-10" />}
                       </div>
-                        {!isSupportMode && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            {!isSupportMode && <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
                               {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
                               {c.cloneBtn}
-                            </button>
+                            </button>}
                             <button
                               type="button"
                               onClick={() => isActive(campaign.status) ? setToast(c.deleteActiveHint) : setCampaignToDelete(campaign)}
@@ -1103,7 +1099,6 @@ export default function Campaigns() {
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
-                        )}
                        {campaign.cloneMode === "admin" && campaign.status === "draft" && (
                         <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
                           {c.clonedDraft}
@@ -1121,7 +1116,7 @@ export default function Campaigns() {
                   icon={Plus}
                   title={search || status !== "all" || accountFilter ? c.emptyFilterTitle : c.emptyTitle}
                   detail={search || status !== "all" || accountFilter ? c.emptyFilterDetail : c.emptyDetail}
-                   action={!isSupportMode && !search && !accountFilter && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
+                   action={!search && !accountFilter && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
                 />}
           </CampaignListFeedback>
         </Panel>
