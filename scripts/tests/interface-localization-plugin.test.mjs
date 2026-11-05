@@ -4,6 +4,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
+import vm from "node:vm";
 import plugin from "../interface-localization-plugin.mjs";
 
 const require = createRequire(import.meta.url);
@@ -65,6 +66,29 @@ test("context components localize static JSX without inventing a language bindin
   assert.ok(catalog.some((entry) => entry.source === "Account settings"));
   assert.ok(catalog.some((entry) => entry.source === "Search accounts"));
   assert.doesNotMatch(output, /\blanguage\b/u);
+});
+
+test("Unicode translation keys survive generated JSX and the JavaScript build", () => {
+  let ts;
+  try { ts = require("typescript"); }
+  catch {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+    ts = require(path.join(root, "node_modules/.pnpm/typescript@5.9.3/node_modules/typescript"));
+  }
+  for (const source of ["Xác thực hai bước cho admin", "Cài đặt & bảo mật", "إعدادات الحساب", "অ্যাকাউন্ট সেটিংস"]) {
+    const { output, catalog } = compile(`export function Header() { return <h1>${source}</h1>; }`);
+    assert.ok(catalog.some((entry) => entry.source === source));
+    const javascript = ts.transpileModule(output, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, jsxFactory: "jsx" },
+    }).outputText;
+    const exports = {};
+    vm.runInNewContext(javascript, {
+      exports,
+      require: () => ({ InterfaceText: ({ source: key }) => key }),
+      jsx: (type, props, ...children) => typeof type === "function" ? type(props) : children.join(""),
+    });
+    assert.equal(exports.Header(), source);
+  }
 });
 
 test("locale formatting uses the actual selected language and CSS branches stay untouched", () => {
