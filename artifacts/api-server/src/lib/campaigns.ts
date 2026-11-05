@@ -679,8 +679,50 @@ export async function readOnlyCampaignSummary(campaign: typeof campaignsTable.$i
   return buildCampaignSummary(campaign,true);
 }
 
-async function buildCampaignSummary(campaign: typeof campaignsTable.$inferSelect,readOnly:boolean) {
-  const [targets, subscription, settings] = await Promise.all([
+type CampaignSummaryInputs = {
+  targets: Array<{target: typeof campaignTargetsTable.$inferSelect; destinationTitle: string}>;
+  subscription: Awaited<ReturnType<typeof getSubscription>>;
+  settings: Awaited<ReturnType<typeof getSystemSettings>>;
+};
+
+// Request-local sharing only: keep permissions/quota fresh and never let a
+// subscription or campaign from one owner leak into another owner's summary.
+export async function readOnlyCampaignSummaries(campaigns: Array<typeof campaignsTable.$inferSelect>) {
+  if (!campaigns.length) return [];
+  const [subscriptions, settings] = await Promise.all([
+    Promise.all([...new Set(campaigns.map(campaign => campaign.ownerUserId))].map(async owner =>
+      [owner, await getSubscription(owner, undefined, true)] as const)),
+    getSystemSettings(),
+  ]);
+  const byOwner = new Map(subscriptions);
+  const summaries: Awaited<ReturnType<typeof readOnlyCampaignSummary>>[] = [];
+  // Keep the existing five-campaign memory bound, but fetch each chunk in one
+  // query instead of issuing a separate target query for every campaign.
+  for (let start = 0; start < campaigns.length; start += 5) {
+    const chunk = campaigns.slice(start, start + 5);
+    const targets = await db.select({
+      target: campaignTargetsTable,
+      destinationTitle: destinationsTable.title,
+    }).from(campaignTargetsTable)
+      .innerJoin(destinationsTable, eq(campaignTargetsTable.destinationId, destinationsTable.id))
+      .where(inArray(campaignTargetsTable.campaignId, chunk.map(campaign => campaign.id)));
+    const byCampaign = new Map<string, CampaignSummaryInputs["targets"]>();
+    for (const row of targets) {
+      const rows = byCampaign.get(row.target.campaignId) ?? [];
+      rows.push(row);
+      byCampaign.set(row.target.campaignId, rows);
+    }
+    summaries.push(...await Promise.all(chunk.map(campaign => buildCampaignSummary(campaign, true, {
+      targets: byCampaign.get(campaign.id) ?? [],
+      subscription: byOwner.get(campaign.ownerUserId)!,
+      settings,
+    }))));
+  }
+  return summaries;
+}
+
+async function buildCampaignSummary(campaign: typeof campaignsTable.$inferSelect,readOnly:boolean,inputs?:CampaignSummaryInputs) {
+  const [targets, subscription, settings] = inputs ? [inputs.targets, inputs.subscription, inputs.settings] as const : await Promise.all([
     db.select({
     target: campaignTargetsTable,
     destinationTitle: destinationsTable.title,
