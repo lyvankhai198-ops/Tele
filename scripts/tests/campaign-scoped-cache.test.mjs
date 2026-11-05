@@ -89,21 +89,24 @@ test("a creation response during the first load is retained when its older manif
   assert.equal(c.getQueryData(options.queryKey).length,2);
   c.clear();
 });
-test("actual campaign submit stays locked after the POST until its completion handler returns",async()=>{
+test("actual campaign submit prevents duplicates while posting and while its progress popup remains open",async()=>{
   const file=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaign-form-modal.tsx",import.meta.url),"utf8");
   const source=ts.createSourceFile("form.tsx",file,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   let node;function find(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==="submit")node=n;else ts.forEachChild(n,find);}find(source);
-  const post=deferred(),saved=deferred(),busy=[];let count=0;
-  const context={submitLock:{current:false},setSubmitting:value=>busy.push(value),setFormError:()=>{},
+  const post=deferred(),busy=[];let count=0,savedCalls=0;
+  const context={submitLock:{current:false},createdCampaign:null,setCreatedCampaign:value=>{context.createdCampaign=value;},
+    setSubmitting:value=>busy.push(value),setFormError:()=>{},
     form:{name:"fixture",accountId:"a",templateId:"t",destinationIds:["d"],repeatCount:"300",roundDelayMinSeconds:"3600",roundDelayMaxSeconds:"3600",groupIntervalMinutes:"0",scheduleDate:""},
     language:"en",c:{},suggestedScheduleAt:null,scheduleMeetsRestrictionSuggestion:()=>true,editingCampaign:null,
     createCampaign:{mutateAsync:()=>{count++;return post.promise;}},selectedTemplate:{content:"fixture"},
-    systemDefaults:{data:{defaultTimezone:"UTC"}},campaigns:{upsert:()=>{}},onSaved:()=>saved.promise,
+    systemDefaults:{data:{defaultTimezone:"UTC"}},campaigns:{upsert:()=>{}},onSaved:()=>{savedCalls++;},
     localizedErrorMessage:()=>"",Intl,Date};
   vm.runInNewContext(ts.transpileModule(node.getText(source)+";globalThis.run=submit;",{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
   const first=context.run({preventDefault(){}});await context.run({preventDefault(){}});
   assert.equal(count,1);assert.equal(context.submitLock.current,true);assert.deepEqual(busy,[true]);
-  post.resolve(row("created"));await tick();
-  await context.run({preventDefault(){}});assert.equal(count,1);assert.equal(context.submitLock.current,true);
-  saved.resolve();await first;assert.equal(context.submitLock.current,false);assert.deepEqual(busy,[true,false]);
+  post.resolve(row("created"));await first;
+  assert.equal(context.createdCampaign.id,"created");
+  assert.equal(savedCalls,0,"receiving the campaign must not close its progress popup");
+  await context.run({preventDefault(){}});assert.equal(count,1);
+  assert.equal(context.submitLock.current,false);assert.deepEqual(busy,[true,false]);
 });
