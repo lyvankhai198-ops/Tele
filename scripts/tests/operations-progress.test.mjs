@@ -7,6 +7,8 @@ const source=fs.readFileSync(new URL("../../artifacts/telecampaign/src/component
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const creationSource=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaign-creation-progress.tsx",import.meta.url),"utf8");
 const compiledCreation=ts.transpileModule(creationSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+const deletionSource=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaign-deletion-progress.tsx",import.meta.url),"utf8");
+const compiledDeletion=ts.transpileModule(deletionSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const node=(type,props)=>({type,props:props??{}});
 
 function createEnvironment(){
@@ -34,6 +36,7 @@ function createEnvironment(){
 }
 
 function render(language,jobs,scope="owner:self",environment=createEnvironment(),creation=null){
+  const deletion=creation&&"initialJob" in creation;
   const module={exports:{}},calls=[],slots=[],effects=new Map(),client={invalidateQueries(){}};
   let cursor=0,dirty=false,queuedEffects=[],current={nodes:[],text:""};
   const useState=initial=>{
@@ -67,13 +70,13 @@ function render(language,jobs,scope="owner:self",environment=createEnvironment()
       reconcileObservedCampaigns:()=>Promise.resolve(),
     }
     :{AlertCircle:"Alert",CheckCircle2:"Complete",ChevronDown:"Chevron",Clock3:"History",LoaderCircle:"Loader",X:"Close"};
-  vm.runInNewContext(creation?compiledCreation:compiled,{module,exports:module.exports,require,Map,Date:environment.date,Math,JSON,Error,setTimeout:environment.setTimeout,clearTimeout:environment.clearTimeout,localStorage:environment.localStorage});
+  vm.runInNewContext(deletion?compiledDeletion:creation?compiledCreation:compiled,{module,exports:module.exports,require,Map,Date:environment.date,Math,JSON,Error,setTimeout:environment.setTimeout,clearTimeout:environment.clearTimeout,localStorage:environment.localStorage});
 
   const flush=()=>{
     let loops=0;
     do{
       dirty=false;cursor=0;queuedEffects=[];
-      const tree=creation?module.exports.CampaignCreationProgress(creation):module.exports.OperationsProgress(),nodes=[];
+      const tree=deletion?module.exports.CampaignDeletionProgress(creation):creation?module.exports.CampaignCreationProgress(creation):module.exports.OperationsProgress(),nodes=[];
       const visit=value=>{
         if(Array.isArray(value))return value.forEach(visit);
         if(value&&typeof value==="object"){nodes.push(value);if(!value.props.hidden)visit(value.props.children);}
@@ -202,6 +205,36 @@ test("creation popup preserves failure reasons and retries the same operation",a
 test("read-only support view cannot retry another user's operation",()=>{
   const r=render("en",[{...base,kind:"sync_groups",state:"failed"}],"admin:target").click("operations-disclosure");
   assert.ok(!r.nodes.some(item=>item.props["data-testid"]==="resume-fixture"));
+});
+test("deletion stays in its popup, follows the exact job, and does not auto-close",()=>{
+  let closed=0;
+  const initial={...base,id:"selected-deletion",kind:"delete_campaigns",processed:0,total:null};
+  const props={initialJob:initial,label:"Selected campaign",error:null,onClose:()=>closed++};
+  const job={...initial,processed:20,total:40};
+  const active=render("en",[job,{...job,id:"other",state:"completed",processed:40}],"owner:self",createEnvironment(),props);
+  assert.ok(active.text.includes("Deleting…")&&active.text.includes("50%"));
+  assert.equal(active.nodes.find(n=>n.props.role==="progressbar").props["aria-valuenow"],50);
+  const completed={...job,state:"completed",phase:"completed",processed:40};
+  const done=render("en",[completed],"owner:self",createEnvironment(),props);
+  done.advance(6000);
+  assert.ok(done.text.includes("Completed")&&done.text.includes("100%"));
+  assert.equal(closed,0);
+  done.click("campaign-deletion-close");assert.equal(closed,1);
+  const exterior=render("en",[job]);
+  assert.equal(exterior.find("operations-disclosure"),undefined);
+  exterior.click("operations-history-toggle");
+  assert.ok(exterior.find("operation-selected-deletion"));
+});
+test("deletion popup never invents percentages before totals arrive and retains failure reasons",()=>{
+  const props={initialJob:null,label:"Filtered account",error:null,onClose(){}};
+  const pending=render("en",[],"owner:self",createEnvironment(),props);
+  assert.equal(pending.find("campaign-deletion-close").props.disabled,true);
+  assert.equal(pending.nodes.find(n=>n.props.role==="progressbar").props["aria-valuenow"],undefined);
+  const failed={...base,id:"failed-delete",kind:"delete_campaigns",state:"failed",error:"57014"};
+  const failure=render("en",[failed],"owner:self",createEnvironment(),{...props,initialJob:failed});
+  assert.ok(failure.text.includes("57014"));
+  assert.equal(failure.find("campaign-deletion-close").props.disabled,false);
+  assert.ok(!failure.nodes.some(n=>n.props["data-testid"]?.startsWith("resume-")),"never repeat a deletion command to resume it");
 });
 test("clear all removes only completed history and persists through polling and navigation",()=>{
   const environment=createEnvironment();

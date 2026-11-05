@@ -71,8 +71,9 @@ export function OperationsProgress(){
 
   const allJobs=operations.data??[];
   const scopeReceipts=receipts.scope===storage?receipts:{scope:storage,hidden:[]};
-  const activeJobs=allJobs.filter(job=>job.kind!=="prepare_campaign"&&(job.state==="queued"||job.state==="running"));
-  const failedJobs=allJobs.filter(job=>job.state==="failed");
+  const popupJob=(job:Operation)=>job.kind==="prepare_campaign"||job.kind==="delete_campaigns";
+  const activeJobs=allJobs.filter(job=>!popupJob(job)&&(job.state==="queued"||job.state==="running"));
+  const failedJobs=allJobs.filter(job=>!popupJob(job)&&job.state==="failed");
   const recentCompletions=allJobs.filter(job=>job.state==="completed"&&!scopeReceipts.hidden.includes(job.id));
   const otherJobs=allJobs.filter(job=>job.state!=="queued"&&job.state!=="running"&&job.state!=="failed"&&job.state!=="completed");
   const earlierJobs=allJobs.filter(job=>job.state!=="completed");

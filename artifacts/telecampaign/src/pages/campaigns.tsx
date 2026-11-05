@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { campaignDeleteError } from "@/lib/campaign-delete-error";
 import { campaignBulkError } from "@/lib/campaign-bulk-error";
 import { useQueryClient,useMutation } from "@tanstack/react-query";
 import {useOperations} from "@/lib/operations";
-import type {BackgroundOperationInput} from "@workspace/api-client-react";
+import type {BackgroundOperation,BackgroundOperationInput} from "@workspace/api-client-react";
 import {
   Copy,
   CircleStop,
@@ -37,6 +37,7 @@ import {
   useUpdateCampaignStatus,
 } from "@workspace/api-client-react";
 import { CampaignFormModal } from "@/components/campaign-form-modal";
+import { CampaignDeletionProgress } from "@/components/campaign-deletion-progress";
 import { useTemplateJob } from "@/lib/use-template-job";
 import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
 import { CampaignTemplateSelector } from "@/components/campaign-template-selector";
@@ -512,8 +513,7 @@ export default function Campaigns() {
   const templates = useListMessageTemplates();
   const cloneCampaign = useCloneCampaign();
   const operations=useOperations();
-  const bulkDelete=useMutation({mutationFn:()=>operations.start({kind:"delete_campaigns",confirm:true,
-    ...bulkFilter,status:bulkFilter.status as BackgroundOperationInput["status"]})});
+  const bulkDelete=useMutation({mutationFn:(filter:Omit<BackgroundOperationInput,"kind"|"confirm">)=>operations.start({kind:"delete_campaigns",confirm:true,...filter})});
   const deleteOne=useMutation({mutationFn:(campaignId:string)=>operations.start({kind:"delete_campaigns",campaignId,confirm:true})});
   const templateProgress = useTemplateJob(user?.id, Boolean(user?.id) && !isSupportMode, () => {
     void campaigns.sync();
@@ -528,6 +528,8 @@ export default function Campaigns() {
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
   const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null);
+  const [deletionProgress,setDeletionProgress]=useState<{label:string;job:BackgroundOperation|null;error:string|null}|null>(null);
+  const deletionSubmitLock=useRef(false);
   const [highlightedCampaignId, setHighlightedCampaignId] = useState<string | null>(null);
   const [templatePreview, setTemplatePreview] = useState<MessageTemplate | null>(null);
   const [forwardPreviewSource, setForwardPreviewSource] = useState<{ accountId: string; messageId: string } | null>(null);
@@ -881,33 +883,44 @@ export default function Campaigns() {
   }
 
   async function remove() {
-    if (!campaignToDelete || deleteOne.isPending) return;
+    if (!campaignToDelete || deleteOne.isPending || deletionSubmitLock.current || deletionProgress) return;
+    const selected=campaignToDelete;
+    deletionSubmitLock.current=true;
+    setDeletionProgress({label:selected.name,job:null,error:null});
+    setCampaignToDelete(null);
     try {
-      await deleteOne.mutateAsync(campaignToDelete.id);
-      if (details?.id === campaignToDelete.id) setDetails(null);
-      setCampaignToDelete(null);
+      const job=await deleteOne.mutateAsync(selected.id);
+      if (details?.id === selected.id) setDetails(null);
+      setDeletionProgress({label:selected.name,job,error:null});
       // OperationsProgress reconciles confirmed deletions without reloading all
       // summaries. Acceptance is not proof that the campaign is already gone.
-      setToast(language==="vi"?"Đã tiếp nhận yêu cầu xoá. Xem tiến trình phía trên.":"Deletion accepted. See progress above.");
     } catch (error) {
-      setToast(localizedErrorMessage(error, language, c.genericError));
+      setDeletionProgress({label:selected.name,job:null,error:campaignDeleteError(error,language)});
+    } finally {
+      deletionSubmitLock.current=false;
     }
   }
 
   async function removeFilteredCampaigns() {
-    if(campaignDataBlocked)return;
+    if(campaignDataBlocked||bulkDelete.isPending||deletionSubmitLock.current||deletionProgress)return;
     const deletableCount = listedCampaigns.filter((campaign) => !isActive(campaign.status)).length;
     if (!deletableCount) {
       setToast(c.bulkNoEligible);
       return;
     }
     if (!window.confirm(`${accountFilterLabel}\n${c.bulkDeleteConfirm(listedCampaigns.length)}`)) return;
+    const label=accountFilterLabel;
+    const filter={...bulkFilter,status:bulkFilter.status as BackgroundOperationInput["status"]};
+    deletionSubmitLock.current=true;
+    setDeletionProgress({label,job:null,error:null});
     try {
-      await bulkDelete.mutateAsync();
+      const job=await bulkDelete.mutateAsync(filter);
       setDetails(null);
-      setToast(language==="vi"?"Đã tiếp nhận yêu cầu xoá theo bộ lọc. Xem tiến trình phía trên.":"Filtered deletion accepted. See progress above.");
+      setDeletionProgress({label,job,error:null});
     } catch (error) {
-      setToast(campaignDeleteError(error, language));
+      setDeletionProgress({label,job:null,error:campaignDeleteError(error,language)});
+    } finally {
+      deletionSubmitLock.current=false;
     }
   }
 
@@ -1500,6 +1513,12 @@ export default function Campaigns() {
         </Modal>
       )}
 
+       {deletionProgress&&<Modal title={c.deleteTitle} onClose={()=>{
+         if(!deletionSubmitLock.current)setDeletionProgress(null);
+       }}>
+         <CampaignDeletionProgress initialJob={deletionProgress.job} label={deletionProgress.label} error={deletionProgress.error}
+           onClose={()=>{if(!deletionSubmitLock.current)setDeletionProgress(null);}}/>
+       </Modal>}
        {campaignToDelete && (
          <Modal title={c.deleteTitle} description={c.deleteWarning(campaignToDelete.name)} onClose={() => {
            if (!deleteOne.isPending) setCampaignToDelete(null);
