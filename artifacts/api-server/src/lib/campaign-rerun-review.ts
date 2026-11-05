@@ -3,17 +3,18 @@ import { db, campaignsTable, campaignTargetsTable, destinationsTable, telegramAc
   systemSettingsTable } from "@workspace/db";
 import { assessCampaignRerun, type RerunAssessment, type RerunDestinationEvidence } from "./campaign-rerun-assessment";
 import { blockedCampaignDestinationIds } from "./campaign-destination-blocks";
+import { pruneUnavailableRerunGroups } from "./campaign-rerun-pruning";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Campaign = typeof campaignsTable.$inferSelect;
-export type RerunPolicy = { onlySendable: boolean; autoDeleteInvalid: boolean; jobId: string };
+export type RerunPolicy = { onlySendable: boolean; autoDeleteInvalid: boolean; jobId: string; retryAll?: boolean };
 export type RerunReport = RerunAssessment & {
   id: string; name: string; reviewedAt: string; deleted: boolean; removedDestinationCount: number;
 };
 const policyKey = (owner:string,id:string)=>`campaign_rerun_policy:${owner}:${id}`;
 const reportPrefix = (owner:string,jobId:string)=>`campaign_rerun_review:${owner}:${jobId}:`;
 
-export async function campaignRerunAssessment(tx: Tx, campaign: Campaign): Promise<RerunAssessment> {
+export async function campaignRerunAssessment(tx: Tx, campaign: Campaign, options:{retryAll?:boolean}={}): Promise<RerunAssessment> {
   const [account] = campaign.telegramAccountId ? await tx.select({
     id:telegramAccountsTable.id, status:telegramAccountsTable.status, session:telegramAccountsTable.sessionEncrypted,
   }).from(telegramAccountsTable).where(and(eq(telegramAccountsTable.id,campaign.telegramAccountId),
@@ -29,6 +30,7 @@ export async function campaignRerunAssessment(tx: Tx, campaign: Campaign): Promi
     attempted:sql<number>`count(*) filter (where attempts>0)::int`,
     lastSentAt:sql<Date|null>`max(coalesce(sent_at,updated_at)) filter (where status='sent')`,
     lastFailedAt:sql<Date|null>`max(updated_at) filter (where status='failed')`,
+    lastError:sql<string|null>`(array_agg(last_error ORDER BY updated_at DESC) filter (where status='failed' AND last_error IS NOT NULL))[1]`,
   }).from(campaignTargetsTable).where(eq(campaignTargetsTable.campaignId,campaign.id))
     .groupBy(campaignTargetsTable.destinationId);
   const ids = [...new Set(campaign.destinationIds?.length ? campaign.destinationIds : counts.map(c=>c.id))];
@@ -38,7 +40,7 @@ export async function campaignRerunAssessment(tx: Tx, campaign: Campaign): Promi
   const evidence: RerunDestinationEvidence[] = ids.map(id=>{
     const g=rows.find(row=>row.id===id), c=counts.find(row=>row.id===id);
     return { id,title:g?.title ?? id,exists:Boolean(g),canPost:g?.canPost ?? false,blocked:blocked.has(id),
-      permissionReason:g?.permissionReason ?? null,permissionCheckedAt:g?.permissionCheckedAt ?? null,
+      permissionReason:g?.permissionReason ?? null,permissionCheckedAt:g?.permissionCheckedAt ?? null,lastError:c?.lastError??null,
       restrictedUntil:g?.restrictedUntil ?? null,pending:c?.pending ?? 0,sending:c?.sending ?? 0,
       uncertain:c?.uncertain ?? 0,sent:c?.sent ?? 0,failed:c?.failed ?? 0,cancelled:c?.cancelled ?? 0,
       attempted:c?.attempted ?? 0,
@@ -52,11 +54,11 @@ export async function campaignRerunAssessment(tx: Tx, campaign: Campaign): Promi
       sent:c.sent,failed:c.failed,cancelled:c.cancelled,attempted:c.attempted,lastSentAt:null,lastFailedAt:null});
   }
   const result=assessCampaignRerun({connected:Boolean(account?.status==="connected" && account.session),
-    groups:evidence,terminal:["completed","completed_with_errors","cancelled"].includes(campaign.status)});
+    groups:evidence,terminal:["completed","completed_with_errors","cancelled"].includes(campaign.status),retryAll:options.retryAll});
   const sentCount=counts.reduce((n,c)=>n+c.sent,0);
   return {...result,sentCount,failedCount:counts.reduce((n,c)=>n+c.failed,0),
     targetCount:counts.reduce((n,c)=>n+c.sent+c.failed+c.cancelled+c.pending+c.sending+c.uncertain,0),
-    canDelete:result.canDelete && sentCount===0 && counts.every(c=>!c.pending && !c.sending && !c.uncertain)};
+    canDelete:options.retryAll?result.canDelete:result.canDelete && sentCount===0 && counts.every(c=>!c.pending && !c.sending && !c.uncertain)};
 }
 
 export async function saveRerunPolicy(tx:Tx, owner:string, id:string, policy:RerunPolicy) {
@@ -73,13 +75,15 @@ export async function reviewFinishedRerun(campaignId:string) {
     if (!row) return;
     const policy=JSON.parse(row.value) as RerunPolicy & {reviewed:boolean};
     if (policy.reviewed) return;
-    const assessment=await campaignRerunAssessment(tx,campaign);
+    const assessment=await campaignRerunAssessment(tx,campaign,{retryAll:policy.retryAll});
     const pending=await tx.select({id:campaignTargetsTable.id}).from(campaignTargetsTable).where(and(
       eq(campaignTargetsTable.campaignId,campaign.id),inArray(campaignTargetsTable.status,["pending","sending"]))).limit(1);
     if (pending.length) return;
-    // Historical autoDeleteInvalid flags must not bypass the new preview and
-    // selected confirmation. Reviewing delivery results is now read-only.
-    const deleted=false, removedDestinationCount=0;
+    // Historical flags remain read-only. Only the new, explicitly confirmed
+    // retry-all policy may prune groups that have concrete posting-denial evidence.
+    const {deleted,removedDestinationCount}=policy.retryAll&&policy.autoDeleteInvalid
+      ?await pruneUnavailableRerunGroups(tx,campaign,assessment,policy.jobId)
+      :{deleted:false,removedDestinationCount:0};
     const report:RerunReport={...assessment,id:campaign.id,name:campaign.name,reviewedAt:new Date().toISOString(),
       deleted,removedDestinationCount};
     await tx.insert(systemSettingsTable).values({
