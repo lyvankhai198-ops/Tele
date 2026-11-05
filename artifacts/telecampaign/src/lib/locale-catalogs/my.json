@@ -353,6 +353,7 @@
   "Claimed": "တောင်းဆိုပြီး",
   "Classification does not delete anything. Choose an account, review the reasons, then select campaigns to delete.": "အမျိုးအစားခွဲခြင်းသည် မည်သည့်အရာကိုမျှ မဖျက်ပါ။ အကောင့်တစ်ခု ရွေးချယ်ပါ၊ အကြောင်းရင်းများကို သုံးသပ်ပါ၊ ထို့နောက် ဖျက်ပစ်ရန် ကမ်ပိန်းများကို ရွေးချယ်ပါ။",
   "Clear": "ရှင်းလင်းမည်",
+  "Clear all": "အားလုံးရှင်းလင်းရန်",
   "Clear all selections": "ရွေးချယ်မှုများအားလုံးကို ရှင်းလင်းမည်",
   "Clear both dates to remove the quota schedule.": "ခွဲတမ်း အချိန်ဇယားကို ဖယ်ရှားရန် ရက်စွဲနှစ်ခုလုံးကို ရှင်းလင်းပါ။",
   "Clear records of deliveries, warnings, and account actions. Open any record to see its context and technical details.": "ပေးပို့မှုများ၊ သတိပေးချက်များနှင့် အကောင့်လုပ်ဆောင်ချက်များ၏ မှတ်တမ်းများကို ရှင်းလင်းပါ။ ၎င်း၏ အကြောင်းအရာနှင့် နည်းပညာပိုင်းဆိုင်ရာ အသေးစိတ်အချက်အလက်များကို ကြည့်ရှုရန် မှတ်တမ်းတစ်ခုခုကို ဖွင့်ပါ။",

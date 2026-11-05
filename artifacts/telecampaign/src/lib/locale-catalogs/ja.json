@@ -353,6 +353,7 @@
   "Claimed": "請求済み",
   "Classification does not delete anything. Choose an account, review the reasons, then select campaigns to delete.": "分類は何も削除しません。アカウントを選択し、理由を確認してから削除するキャンペーンを選択してください。",
   "Clear": "クリア",
+  "Clear all": "すべて消去",
   "Clear all selections": "すべての選択を解除",
   "Clear both dates to remove the quota schedule.": "クォータスケジュールを削除するには両方の日付をクリアしてください。",
   "Clear records of deliveries, warnings, and account actions. Open any record to see its context and technical details.": "配信、警告、アカウントアクションの記録をクリアします。レコードを開くと、コンテキストと技術的な詳細が表示されます。",

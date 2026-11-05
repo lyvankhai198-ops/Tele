@@ -353,6 +353,7 @@
   "Claimed": "已申领",
   "Classification does not delete anything. Choose an account, review the reasons, then select campaigns to delete.": "分类不会删除任何内容。选择一个账户，审查原因，然后选择要删除的活动。",
   "Clear": "清除",
+  "Clear all": "全部清除",
   "Clear all selections": "清除所有选择",
   "Clear both dates to remove the quota schedule.": "清除两个日期以删除配额排期。",
   "Clear records of deliveries, warnings, and account actions. Open any record to see its context and technical details.": "清除投递、警告和账户操作记录。打开任何记录以查看其上下文和技术细节。",

@@ -2004,6 +2004,7 @@
   "Xóa popup này và ảnh đính kèm? Khách sẽ không còn thấy nội dung này.": "Delete this popup and its image? Customers will no longer see it.",
   "Xóa tài khoản Telegram": "Delete Telegram account",
   "Xóa tài khoản Telegram này cùng TOÀN BỘ chiến dịch (kể cả đang chạy), nhóm đã đồng bộ và lịch sử gửi liên quan? Hệ thống sẽ ngừng gửi mới. Tin đã gửi sang Telegram không thể thu hồi. Không thể hoàn tác. Tài khoản khác không bị ảnh hưởng.": "Delete this Telegram account and ALL related campaigns (including running campaigns), synced groups and sending history? New sends will stop. A message already sent to Telegram cannot be recalled. This cannot be undone. Other accounts will not be affected.",
+  "Xoá tất cả": "Clear all",
   "Xóa tất cả theo bộ lọc": "Delete all filtered",
   "Xóa thông báo này? Media sẽ không còn hiển thị.": "Delete this notification? Its media file will no longer be shown.",
   "Xoá và chặn nhóm": "Delete and block groups",
