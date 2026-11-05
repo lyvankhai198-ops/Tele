@@ -642,7 +642,7 @@ export default function Campaigns() {
   const bulkScopeOptions = useMemo<BulkResumeScope[]>(() => {
     // Scope choices cannot depend on campaigns loaded for a different account.
     if (status === "draft" || status === "queued" || status === "paused") return [status];
-    if (status === "completed" || status === "completed_with_errors") return ["completed" as const];
+    if (status === "completed") return ["completed" as const];
     return status === "all" ? (["draft", "queued", "paused", "completed"] as const).slice() : [];
   }, [status]);
   const templateSelection=useCompleteCampaigns(bulkTemplateOpen&&bulkTemplateAccountId?campaignScope:"",bulkTemplateAccountId);
