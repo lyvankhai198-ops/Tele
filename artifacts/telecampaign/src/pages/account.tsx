@@ -4,6 +4,7 @@ import { UsersRound, Megaphone, MessageSquare, AlertCircle, LoaderCircle, Refres
 import { AppLayout, QuietButton } from "@/components/layout/AppLayout";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TierEmblem } from "@/components/account/TierEmblem";
+import { PlanDiscovery } from "@/components/account/PlanDiscovery";
 import { getGetAccountSummaryQueryKey, useGetAccountSummary, type AccountUsage } from "@workspace/api-client-react";
 import { useLanguage, interfaceCopy, interfaceText, type Language } from "@/lib/i18n";
 import "@/components/account/membership.css";
@@ -288,6 +289,7 @@ export default function Account() {
           </div>
         </section>
       </section>
+      <PlanDiscovery plan={displayPlan} />
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
         <DialogContent className="tc-membership border-0 bg-transparent p-0 shadow-none sm:max-w-[420px]">
           <div className="member-modal max-h-[85dvh] overflow-y-auto">
