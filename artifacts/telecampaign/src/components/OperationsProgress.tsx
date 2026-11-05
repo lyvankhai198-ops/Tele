@@ -125,7 +125,7 @@ export function OperationsProgress(){
               :failed?(deletion?(vi?"Xoá chưa hoàn tất — cần kiểm tra":"Deletion incomplete — needs investigation"):(vi?"Tạm dừng — cần tiếp tục":"Paused — resume required"))
                 :job.kind==="prepare_campaign"?(vi?"Đang tạo...":"Creating…")
                   :deletion?(vi?"Đang xóa…":"Deleting…"):(phases[job.phase]??(vi?"Đang xác định dữ liệu liên quan":"Finding related data"))}</p>
-          {percent!==null&&<p className="mt-1 text-xs tabular-nums text-slate-600">{percent}%</p>}
+          {percent!==null&&<p className="mt-1 text-xs tabular-nums text-slate-600">{`${percent}%`}</p>}
           {(active||percent!==null)&&<div role="progressbar" aria-valuenow={percent??undefined} aria-valuemin={0} aria-valuemax={100} className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full bg-indigo-600 transition-[width] ${percent===null?"animate-pulse":""}`} style={{width:percent===null?"30%":`${percent}%`}}/></div>}
           {failed&&<p className="mt-2 text-xs leading-relaxed text-slate-600">{deletion
             ?(vi?"Yêu cầu xoá đã được ghi nhận và phần đã xử lý được giữ nguyên. Lỗi này cần được kiểm tra; không cần bấm tiếp tục hay gửi lại lệnh xoá.":"Your deletion request and completed work are retained. This error needs investigation; do not resume repeatedly or submit another deletion.")

@@ -27,7 +27,7 @@ export function CampaignCreationProgress({campaign,name,onClose}:{
         <p role="status" className="text-sm font-bold">{completed?t("Completed"):failed?t("Tác vụ cần kiểm tra"):t("Creating…")}</p>
       </div>
       <p className="mt-2 truncate text-sm text-slate-600">{campaign?.name??name}</p>
-      {percent!==null&&<p className="mt-3 text-right text-xs font-semibold tabular-nums">{percent}%</p>}
+      {percent!==null&&<p className="mt-3 text-right text-xs font-semibold tabular-nums">{`${percent}%`}</p>}
       <div role="progressbar" aria-label={t("Create campaign")} aria-valuemin={0} aria-valuemax={100}
         aria-valuenow={percent??undefined} className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
         <div className={`h-full bg-indigo-600 transition-[width] ${percent===null&&!failed?"animate-pulse":""}`}
