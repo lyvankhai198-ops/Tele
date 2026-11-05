@@ -131,11 +131,35 @@ test("single-delete acceptance does not invalidate/refetch the list or mark a ro
   const source=fs.readFileSync(new URL("../../artifacts/telecampaign/src/pages/campaigns.tsx",import.meta.url),"utf8");
   const ast=ts.createSourceFile("page.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let remove;
   function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==="remove")remove=n.getText(ast);ts.forEachChild(n,visit);}visit(ast);
-  const trace=[],context={campaignToDelete:{id:"selected"},deleteOne:{isPending:false,mutateAsync:async id=>trace.push(id)},details:null,
+  const trace=[],accepted={id:"deletion-job",state:"queued"},context={campaignToDelete:{id:"selected",name:"Selected campaign"},
+    deletionSubmitLock:{current:false},deletionProgress:null,
+    deleteOne:{isPending:false,mutateAsync:async id=>{trace.push(id);return accepted;}},details:null,
+    setDeletionProgress:value=>{context.deletionProgress=value;},
     setCampaignToDelete:()=>{},setDetails:()=>{},setToast:t=>trace.push(t),language:"vi",
     queryClient:{invalidateQueries:()=>{throw Error("FULL_RELOAD");}},localizedErrorMessage:()=>{throw Error("DELETE_FAILED");}};
   vm.runInNewContext(ts.transpileModule(remove+";globalThis.run=remove;",{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
-  await context.run();assert.equal(trace[0],"selected");assert.ok(trace[1].includes("Đã tiếp nhận"));
+  await context.run();assert.deepEqual(trace,["selected"]);
+  assert.equal(context.deletionProgress.job.id,accepted.id);
+  assert.equal(context.deletionProgress.label,"Selected campaign");
+  assert.equal(context.deletionSubmitLock.current,false);
+  await context.run();assert.deepEqual(trace,["selected"],"an open progress popup cannot submit deletion again");
+});
+test("filtered deletion snapshots its scope and displays the accepted job without reloading the list",async()=>{
+  const source=fs.readFileSync(new URL("../../artifacts/telecampaign/src/pages/campaigns.tsx",import.meta.url),"utf8");
+  const ast=ts.createSourceFile("page.tsx",source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let remove;
+  function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==="removeFilteredCampaigns")remove=n.getText(ast);ts.forEachChild(n,visit);}visit(ast);
+  const received=[],context={campaignDataBlocked:false,deletionSubmitLock:{current:false},deletionProgress:null,
+    bulkFilter:{telegramAccountId:"selected-account",status:"paused",search:"match"},accountFilterLabel:"Selected account",
+    listedCampaigns:[{status:"paused"}],isActive:()=>false,c:{bulkDeleteConfirm:()=>"Confirm deletion"},
+    window:{confirm:()=>true},setDetails:()=>{},setToast:()=>{throw Error("Unexpected exterior toast");},
+    setDeletionProgress:value=>{context.deletionProgress=value;},
+    bulkDelete:{isPending:false,mutateAsync:async filter=>{received.push(filter);context.bulkFilter.telegramAccountId="different-account";return{id:"filtered-job",state:"queued"};}},
+    queryClient:{invalidateQueries:()=>{throw Error("FULL_RELOAD");}}};
+  vm.runInNewContext(ts.transpileModule(remove+";globalThis.run=removeFilteredCampaigns;",{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,context);
+  await context.run();assert.equal(received[0].telegramAccountId,"selected-account");
+  assert.equal(received[0].status,"paused");assert.equal(received[0].search,"match");
+  assert.equal(context.deletionProgress.job.id,"filtered-job");
+  await context.run();assert.equal(received.length,1);
 });
 function operationUi(language="vi"){
   const gate=deferred(),storage=new Map(),states=[],refs=[],deps=[],pending=[],trace={sync:0,global:0,related:0,refetch:0};
