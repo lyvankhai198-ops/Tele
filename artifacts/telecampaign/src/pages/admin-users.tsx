@@ -44,7 +44,6 @@ const copy = {
     searchPlaceholder: "Search by username...",
     filterAllPlans: "All Plans",
     filterAllStatuses: "All statuses",
-    filterStatusLabel: "Subscription status",
     tableUser: "User & Role",
     tableSubscription: "Subscription",
     tableLimits: "Current Limits",
@@ -105,7 +104,6 @@ const copy = {
     searchPlaceholder: "Tìm theo tên tài khoản...",
     filterAllPlans: "Tất cả các gói",
     filterAllStatuses: "Tất cả trạng thái",
-    filterStatusLabel: "Trạng thái gói dịch vụ",
     tableUser: "Người dùng & Vai trò",
     tableSubscription: "Gói dịch vụ",
     tableLimits: "Giới hạn hiện tại",
@@ -395,7 +393,7 @@ export default function AdminUsersPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as "all" | "active")}
-            aria-label={text.filterStatusLabel}
+            aria-label={text.filterAllStatuses}
             className="col-start-2 min-w-0 rounded-xl border border-[#cbd5e1] bg-white px-4 py-2.5 text-[14px] font-bold text-[#0f172a] outline-none focus:border-[#1a2b88] focus:ring-2 focus:ring-[#1a2b88]/10 sm:col-start-auto"
           >
             <option value="all">{text.filterAllStatuses}</option>
