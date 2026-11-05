@@ -2973,9 +2973,6 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       if (existingTargets.some((target) => target.status === "sending")) {
         return { kind: "error" as const, status: 409, message: "Please wait for the current delivery to finish before editing this campaign" };
       }
-      if (resumingEditedSchedule && existingTargets.some(target => target.status === "requires_review")) {
-        return { kind: "error" as const, status: 409, message: "Verify uncertain deliveries before rescheduling this campaign to avoid duplicate messages" };
-      }
 
       const name = parsed.data.name ?? lockedCampaign.name;
       const telegramAccountId = parsed.data.telegramAccountId === undefined ? lockedCampaign.telegramAccountId : parsed.data.telegramAccountId;
