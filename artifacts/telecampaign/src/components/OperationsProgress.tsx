@@ -114,9 +114,12 @@ export function OperationsProgress(){
   const recentCompletions=allJobs.filter(job=>job.state==="completed"
     &&!scopeReceipts.hidden.includes(job.id)&&!scopeReceipts.autoHidden.includes(job.id));
   const otherJobs=allJobs.filter(job=>job.state!=="queued"&&job.state!=="running"&&job.state!=="failed"&&job.state!=="completed");
+  const earlierJobs=allJobs.filter(job=>job.state!=="completed");
+  const completedJobs=allJobs.filter(job=>job.state==="completed"&&!scopeReceipts.hidden.includes(job.id));
+  const hasHistory=earlierJobs.length>0||completedJobs.length>0;
   const hasTaskBar=activeJobs.length>0||failedJobs.length>0||recentCompletions.length>0;
   useEffect(()=>{if(!hasTaskBar)setExpanded(false);},[hasTaskBar]);
-  if(!allJobs.length&&!operations.isError&&!syncFailed)return null;
+  if(!hasHistory&&!operations.isError&&!syncFailed)return null;
 
   const names:Record<string,string>=vi
     ?{delete_account:"Xoá tài khoản Telegram",delete_campaigns:"Xoá chiến dịch",sync_groups:"Đồng bộ nhóm",prepare_campaign:"Chuẩn bị lượt gửi"}
@@ -129,13 +132,20 @@ export function OperationsProgress(){
     setReceipts(current=>({... (current.scope===storage?current:scopeReceipts),hidden:next}));
     try{localStorage.setItem(storage,JSON.stringify(next));}catch{}
   };
+  const clearCompleted=()=>{
+    const ids=completedJobs.map(job=>job.id);
+    setReceipts(current=>{
+      const base=current.scope===storage?current:scopeReceipts;
+      const hidden=[...new Set([...base.hidden,...ids])];
+      try{localStorage.setItem(storage,JSON.stringify(hidden));}catch{}
+      return {...base,hidden};
+    });
+  };
   const countSummary=vi
     ?`${activeJobs.length} đang chạy · ${recentCompletions.length} đã hoàn tất · ${failedJobs.length} cần chú ý`
     :`${activeJobs.length} active · ${recentCompletions.length} completed · ${failedJobs.length} need attention`;
   const detailsLabel=vi?"Xem chi tiết":"View details";
   const historyLabel=vi?"Tác vụ gần đây":"Recent tasks";
-  const earlierJobs=allJobs.filter(job=>job.state!=="completed");
-  const completedJobs=allJobs.filter(job=>job.state==="completed");
 
   const renderJob=(job:Operation)=> {
     const active=job.state==="queued"||job.state==="running",failed=job.state==="failed";
@@ -195,7 +205,7 @@ export function OperationsProgress(){
         </button>
       </div>
     </div>}
-    {!hasTaskBar&&!!allJobs.length&&<div className="flex justify-end">
+    {!hasTaskBar&&hasHistory&&<div className="flex justify-end">
       <button type="button" data-testid="operations-history-toggle" aria-expanded={showHistory} aria-controls="operations-progress-history"
         onClick={()=>setShowHistory(value=>!value)} className="rounded-md px-2 py-1 text-xs text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">{historyLabel}</button>
     </div>}
@@ -207,11 +217,15 @@ export function OperationsProgress(){
       </section>}
       {!activeJobs.length&&!failedJobs.length&&!otherJobs.length&&!recentCompletions.length&&<p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{vi?"Đã hoàn tất":"Completed"}</p>}
     </div>
-    <div id="operations-progress-history" data-testid="operations-progress-history" hidden={!showHistory} className="mt-2 max-h-[min(60dvh,28rem)] space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white/70 p-2">
-      {allJobs.length
+    <div id="operations-progress-history" data-testid="operations-progress-history" hidden={!showHistory||!hasHistory} className="mt-2 max-h-[min(60dvh,28rem)] space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white/70 p-2">
+      {hasHistory
         ?<>{earlierJobs.map(renderJob)}
           {!!completedJobs.length&&<section aria-label={vi?"Đã hoàn tất":"Completed"} className="space-y-2">
-            <h3 className="px-1 pt-2 text-xs font-bold uppercase tracking-wide text-slate-500">{vi?"Đã hoàn tất":"Completed"}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{vi?"Đã hoàn tất":"Completed"}</h3>
+              <button type="button" data-testid="operations-clear-completed" onClick={clearCompleted}
+                className="min-h-10 rounded-lg px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-600">{vi?"Xoá tất cả":"Clear all"}</button>
+            </div>
             {completedJobs.map(renderJob)}
           </section>}</>
         :<p className="p-2 text-sm text-slate-600">{vi?"Đã hoàn tất":"Completed"}</p>}

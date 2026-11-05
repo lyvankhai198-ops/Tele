@@ -169,6 +169,36 @@ test("read-only support view cannot retry another user's operation",()=>{
   const r=render("en",[{...base,kind:"sync_groups",state:"failed"}],"admin:target").click("operations-disclosure");
   assert.ok(!r.nodes.some(item=>item.props["data-testid"]==="resume-fixture"));
 });
+test("clear all removes only completed history and persists through polling and navigation",()=>{
+  const environment=createEnvironment();
+  const completed={...base,id:"completed",state:"completed",phase:"completed"};
+  const running={...base,id:"running",state:"running"};
+  const failed={...base,id:"failed",state:"failed"};
+  const jobs=[completed,running,failed];
+  const first=render("vi",jobs,"owner:self",environment).click("operations-history-toggle");
+  first.advance(6000);
+  assert.ok(first.find("operation-completed"),"history is not automatically deleted after five seconds");
+  first.click("operations-clear-completed");
+  assert.equal(first.find("operation-completed"),undefined);
+  assert.ok(first.find("operation-running"));
+  assert.ok(first.find("operation-failed"));
+  assert.equal(first.find("operations-clear-completed"),undefined);
+  first.rerender();
+  assert.equal(first.find("operation-completed"),undefined);
+  first.unmount();
+  const returned=render("vi",jobs,"owner:self",environment).click("operations-history-toggle");
+  assert.equal(returned.find("operation-completed"),undefined);
+  assert.ok(returned.find("operation-running"));
+  assert.ok(returned.find("operation-failed"));
+  assert.ok(render("vi",jobs,"other:self",environment).click("operations-history-toggle").find("operation-completed"),
+    "clearing history must not affect another account scope");
+});
+test("clearing the last completed task removes the empty history control",()=>{
+  const r=render("en",[{...base,state:"completed",phase:"completed"}]).click("operations-history-toggle");
+  r.click("operations-clear-completed");
+  assert.equal(r.find("operations-history-toggle"),undefined);
+  assert.equal(r.find("operations-disclosure"),undefined);
+});
 for(const language of ["vi","en"])test(`${language}: a blocked deletion remains a persistent needs-attention task`,()=>{
   const r=render(language,[{...base,state:"failed"}]).click("operations-disclosure");
   assert.ok(!r.nodes.some(item=>item.props["data-testid"]==="resume-fixture"));

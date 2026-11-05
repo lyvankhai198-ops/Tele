@@ -353,6 +353,7 @@
   "Claimed": "อ้างสิทธิ์แล้ว",
   "Classification does not delete anything. Choose an account, review the reasons, then select campaigns to delete.": "การจำแนกประเภทไม่ได้ลบอะไร เลือกบัญชี ตรวจสอบเหตุผล จากนั้นเลือกแคมเปญที่จะลบ",
   "Clear": "ล้าง",
+  "Clear all": "ລຶບທັງໝົດ",
   "Clear all selections": "ล้างการเลือกทั้งหมด",
   "Clear both dates to remove the quota schedule.": "ล้างวันที่ทั้งสองเพื่อลบตารางโควตา",
   "Clear records of deliveries, warnings, and account actions. Open any record to see its context and technical details.": "ล้างบันทึกการส่ง คำเตือน และการกระทำของบัญชี เปิดบันทึกใดๆ เพื่อดูบริบทและรายละเอียดทางเทคนิค",

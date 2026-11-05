@@ -353,6 +353,7 @@
   "Claimed": "Преузето",
   "Classification does not delete anything. Choose an account, review the reasons, then select campaigns to delete.": "Класификација не брише ништа. Изаберите налог, прегледајте разлоге, затим изаберите кампање за брисање.",
   "Clear": "Обриши",
+  "Clear all": "Обриши све",
   "Clear all selections": "Обриши све селекције",
   "Clear both dates to remove the quota schedule.": "Обришите оба датума да бисте уклонили распоред квота.",
   "Clear records of deliveries, warnings, and account actions. Open any record to see its context and technical details.": "Обришите евиденције испорука, упозорења и акција налога. Отворите било који запис да бисте видели његов контекст и техничке детаље.",
