@@ -46,7 +46,7 @@ import { AppLayout, EmptyState, Modal, Panel, SectionHeader } from "@/components
 import { useLanguage } from "@/lib/i18n";
 
 const text = {
-  title: "Thư Viện Nhóm",
+  title: "Thư viện nhóm",
   subtitle: "Chỉ lưu nhóm mới từ campaign đang chạy của tất cả user.",
   search: "Tìm theo tên nhóm hoặc username...",
   savedGroups: "Nhóm đã lưu",

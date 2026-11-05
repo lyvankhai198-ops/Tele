@@ -57,6 +57,14 @@ const locales = load("locales");
 const runtime = load("interface-runtime");
 const placeholders = (value) => [...value.matchAll(/\{\{[^{}]+\}\}/gu)].map((match) => match[0]).sort();
 
+test("admin active-groups page title is registered for the shared layout translator", async () => {
+  const page = fs.readFileSync(path.join(root, "artifacts/telecampaign/src/pages/admin-active-groups.tsx"), "utf8");
+  const title = page.match(/const text = \{\s*title: "([^"]+)"/u)?.[1];
+  assert.ok(title, "Read the actual admin title passed to AppLayout");
+  await runtime.loadInterfaceCatalog("vi");
+  assert.equal(runtime.interfaceText(title, "vi"), "Thư viện nhóm");
+});
+
 test("all 22 catalogs cover the complete UI and retain every interpolation token", () => {
   for (const locale of locales.interfaceLocales) {
     const catalog = JSON.parse(fs.readFileSync(path.join(sourceRoot, "locale-catalogs", `${locale.code}.json`), "utf8"));
