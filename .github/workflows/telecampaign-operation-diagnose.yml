@@ -1,4 +1,4 @@
-name: TeleCamp operation diagnosis (read only)
+name: VPS CPU RAM and disk snapshot (read only)
 on:
   workflow_dispatch:
 permissions:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install SSH helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Read project CPU, RAM and disk counters
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
         shell: bash
@@ -24,40 +24,142 @@ jobs:
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = vps-cd243267
-          cd /opt/telecampaign
-          set -a
-          source /etc/telecampaign/api.env
-          set +a
-          node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
-          NODE
-          REMOTE
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
+          import socket
+          assert socket.gethostname() == 'vps-cd243267', 'UNEXPECTED_HOST'
+          """Read resource counters and directory sizes; never inspect environments."""
+          import datetime
+          import json
+          import os
+          import subprocess
+          import time
+          
+          
+          def emit(kind, value):
+              print("RESOURCE_" + kind + "=" + json.dumps(value, ensure_ascii=False), flush=True)
+          
+          
+          def command(args, timeout=25):
+              try:
+                  p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+                  return p.stdout
+              except (OSError, subprocess.TimeoutExpired):
+                  return ""
+          
+          
+          def project(cwd):
+              for prefix in ("/opt/", "/var/www/", "/srv/", "/root/"):
+                  if cwd.startswith(prefix):
+                      return prefix + cwd[len(prefix):].split("/")[0]
+              if cwd.startswith("/home/"):
+                  parts = cwd.split("/")
+                  if len(parts) >= 4:
+                      depth = 5 if parts[3] in ("apps", "projects") and len(parts) >= 5 else 4
+                      return "/".join(parts[:depth])
+              return None
+          
+          
+          def snapshot():
+              result = {}
+              for entry in os.scandir("/proc"):
+                  if not entry.name.isdigit():
+                      continue
+                  try:
+                      with open(entry.path + "/stat") as f:
+                          raw = f.read()
+                      fields = raw[raw.rfind(")") + 2:].split()
+                      result[int(entry.name)] = {
+                          "name": raw[raw.find("(") + 1:raw.rfind(")")],
+                          "ticks": int(fields[11]) + int(fields[12]),
+                          "start": int(fields[19]),
+                          "rss": int(fields[21]) * os.sysconf("SC_PAGE_SIZE"),
+                          "cwd": os.readlink(entry.path + "/cwd"),
+                      }
+                  except (OSError, ValueError, IndexError):
+                      continue
+              return result
+          
+          
+          before = snapshot()
+          started = time.monotonic()
+          time.sleep(5)
+          after = snapshot()
+          elapsed = time.monotonic() - started
+          hz = os.sysconf("SC_CLK_TCK")
+          apps = {}
+          system = {}
+          for pid, row in after.items():
+              old = before.get(pid)
+              cpu = 0.0
+              if old and old["start"] == row["start"]:
+                  cpu = max(0, row["ticks"] - old["ticks"]) / hz / elapsed * 100
+              root = project(row["cwd"])
+              bucket = apps if root else system
+              key = root or row["name"]
+              item = bucket.setdefault(key, {"cpu_percent": 0.0, "rss_bytes": 0, "processes": 0})
+              item["cpu_percent"] += cpu
+              item["rss_bytes"] += row["rss"]
+              item["processes"] += 1
+          
+          memory = {}
+          with open("/proc/meminfo") as f:
+              for line in f:
+                  key, value = line.split(":", 1)
+                  if key in ("MemTotal", "MemAvailable", "SwapTotal", "SwapFree"):
+                      memory[key] = int(value.strip().split()[0]) * 1024
+          disk = os.statvfs("/")
+          emit("HOST", {
+              "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "cpus": os.cpu_count(), "load": os.getloadavg(), "memory": memory,
+              "root_bytes": disk.f_blocks * disk.f_frsize,
+              "root_used_bytes": (disk.f_blocks - disk.f_bfree) * disk.f_frsize,
+              "root_available_bytes": disk.f_bavail * disk.f_frsize,
+              "cpu_sample_seconds": round(elapsed, 2),
+              "cpu_unit": "100 percent equals one CPU core",
+              "memory_unit": "sum of process RSS; shared pages may be counted more than once",
+          })
+          for path, item in sorted(apps.items(), key=lambda v: -v[1]["rss_bytes"]):
+              emit("APP", {"path": path, **item})
+          for name, item in sorted(system.items(), key=lambda v: -v[1]["rss_bytes"])[:12]:
+              emit("SYSTEM", {"name": name, **item})
+          
+          units = command(["systemctl", "list-units", "--type=service", "--state=running",
+                           "--no-pager", "--no-legend"])
+          for line in units.splitlines():
+              unit = line.split()[0]
+              raw = command(["systemctl", "show", unit, "--no-pager",
+                             "--property=WorkingDirectory,MainPID,MemoryCurrent"])
+              data = dict(v.split("=", 1) for v in raw.splitlines() if "=" in v)
+              if project(data.get("WorkingDirectory", "")):
+                  emit("SERVICE", {"unit": unit, **data})
+          
+          # Low-priority metadata scans only; no file contents, cleanup or database writes.
+          paths = [p for p in (
+              "/opt", "/var/www", "/srv", "/home/ubuntu", "/root", "/var/lib/telecampaign",
+              "/var/backups", "/var/log", "/var/lib/postgresql",
+          ) if os.path.isdir(p)]
+          raw = command(["ionice", "-c", "3", "nice", "-n", "19", "du", "-x", "-B1",
+                         "--max-depth=2", *paths], timeout=95)
+          sizes = []
+          for line in raw.splitlines():
+              parts = line.split("\t", 1)
+              if len(parts) == 2 and parts[0].isdigit():
+                  sizes.append({"path": parts[1], "bytes": int(parts[0])})
+          emit("DISK", sorted(sizes, key=lambda v: -v["bytes"])[:65])
+          
+          raw = command(["sudo", "-n", "-u", "postgres", "psql", "-X", "-A", "-t",
+                         "-v", "ON_ERROR_STOP=1", "-c",
+                         "BEGIN READ ONLY; SET LOCAL statement_timeout='10s'; "
+                         "SELECT json_build_object('database',datname,'bytes',pg_database_size(oid)) "
+                         "FROM pg_database WHERE NOT datistemplate "
+                         "ORDER BY pg_database_size(oid) DESC; COMMIT;"], timeout=25)
+          for line in raw.splitlines():
+              if line.startswith("{"):
+                  try:
+                      emit("DATABASE", json.loads(line))
+                  except ValueError:
+                      pass
+          if not raw.strip():
+              emit("DATABASE_STATUS", "unavailable; no credentials requested or printed")
+          
+          PY
