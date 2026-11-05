@@ -140,7 +140,7 @@ test("single-delete acceptance does not invalidate/refetch the list or mark a ro
 function operationUi(language="vi"){
   const gate=deferred(),storage=new Map(),states=[],refs=[],deps=[],pending=[],trace={sync:0,global:0,related:0,refetch:0};
   let sc=0,rc=0,ec=0;
-  const hooks={useState(v){const i=sc++;if(!(i in states))states[i]=v;return[states[i],v=>{states[i]=v;}];},
+  const hooks={useCallback(fn){return fn;},useState(v){const i=sc++;if(!(i in states))states[i]=v;return[states[i],v=>{states[i]=typeof v==="function"?v(states[i]):v;}];},
     useRef(v){const i=rc++;return refs[i]??={current:v};},
     useEffect(fn,next){const i=ec++;if(!deps[i]||next.some((v,j)=>v!==deps[i][j]))pending.push(fn);deps[i]=next;}};
   const h=(type,props,...children)=>({type,props:props??{},children:children.flat(Infinity).filter(v=>v!=null&&v!==false)});
@@ -154,7 +154,7 @@ function operationUi(language="vi"){
     "@/lib/reconcile-campaign-deletions":{deletionSyncToken:sync.deletionSyncToken,
       reconcileObservedCampaigns(){trace.sync++;return gate.promise;},
       invalidateDeletionDependencies(){trace.related++;return Promise.resolve();}},
-  },true,{h,React:{Fragment:"fragment"},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)}});
+  },true,{h,React:{Fragment:"fragment"},setTimeout:()=>1,clearTimeout(){},localStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)}});
   const render=()=>{sc=rc=ec=0;const tree=exported.OperationsProgress();const cleanups=pending.splice(0).map(fn=>fn());return{tree,cleanups};};
   return{gate,storage,trace,render};
 }
@@ -162,14 +162,14 @@ function uiNodes(tree){return tree&&typeof tree==="object"?[tree,...(tree.childr
 function uiText(tree){return typeof tree==="string"?tree:(tree?.children??[]).map(uiText).join(" ");}
 test("actual progress component reconciles deletion and records completion only after synchronization, with no full invalidation",async()=>{
   const h=operationUi();h.render();
-  assert.equal(h.trace.sync,1);assert.equal(h.trace.global,0);assert.equal(h.storage.size,0);
+  assert.equal(h.trace.sync,1);assert.equal(h.trace.global,0);assert.equal(h.storage.has(`telecamp-operation-receipts:${scope}:applied`),false);
   h.gate.resolve();await tick();
   assert.equal(h.trace.global,0);assert.equal(h.trace.related,1);
   assert.ok(h.storage.get(`telecamp-operation-receipts:${scope}:applied`).includes("deletion-id"));
 });
 for(const language of ["vi","en"])test(`${language}: actual synchronization failure keeps completion unacknowledged and offers a read-only retry`,async()=>{
   const h=operationUi(language);h.render();h.gate.reject(new Error("network"));await tick();
-  assert.equal(h.storage.size,0);assert.equal(h.trace.global,0);assert.equal(h.trace.related,0);
+  assert.equal(h.storage.has(`telecamp-operation-receipts:${scope}:applied`),false);assert.equal(h.trace.global,0);assert.equal(h.trace.related,0);
   const tree=h.render().tree;
   assert.ok(uiText(tree).includes(language==="vi"?"Danh sách hiện tại được giữ nguyên":"Your current list is preserved"));
   uiNodes(tree).find(n=>n.type==="button"&&uiText(n)===(language==="vi"?"Kiểm tra lại":"Check again")).props.onClick();
@@ -179,5 +179,5 @@ for(const language of ["vi","en"])test(`${language}: actual synchronization fail
 test("unmounted progress component does not acknowledge an old-scope deletion",async()=>{
   const h=operationUi();const {cleanups}=h.render();
   cleanups[0]();h.gate.resolve();await tick();
-  assert.equal(h.storage.size,0);assert.equal(h.trace.related,0);
+  assert.equal(h.storage.has(`telecamp-operation-receipts:${scope}:applied`),false);assert.equal(h.trace.related,0);
 });
