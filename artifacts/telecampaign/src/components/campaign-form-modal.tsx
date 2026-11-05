@@ -31,6 +31,7 @@ import { DESTINATION_SYNC_TTL_MS, destinationSyncIsFresh } from "@/lib/telegram-
 import { CampaignFieldNote, CampaignGroupInterval, DelayExamples, GroupCountRecommendation } from "@/components/campaign-field-guidance";
 import {useCompleteCampaigns} from "@/lib/use-complete-campaigns";
 import {useAuth} from "@/lib/auth";
+import {CampaignCreationProgress} from "@/components/campaign-creation-progress";
 
 type CampaignForm = {
   name: string;
@@ -253,6 +254,7 @@ export function CampaignFormModal({
   const campaigns=useCompleteCampaigns(form.accountId?campaignScope:"",form.accountId);
   const submitLock=useRef(false);
   const [submitting,setSubmitting]=useState(false);
+  const [createdCampaign,setCreatedCampaign]=useState<Campaign|null>(null);
   const [groupSearch, setGroupSearch] = useState("");
   const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>("all");
   const [formError, setFormError] = useState<string | null>(null);
@@ -471,7 +473,7 @@ export function CampaignFormModal({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if(submitLock.current)return;
+    if(submitLock.current||createdCampaign)return;
     setFormError(null);
     const groupIntervalMinutes = form.destinationIds.length > 1 ? Number(form.groupIntervalMinutes) : 0;
     if (!Number.isInteger(groupIntervalMinutes) || groupIntervalMinutes < 0 || groupIntervalMinutes > 4320) {
@@ -556,7 +558,7 @@ export function CampaignFormModal({
           },
         });
         campaigns.upsert(createdCampaign);
-        await onSaved(createdCampaign);
+        setCreatedCampaign(createdCampaign);
       }
     } catch (error) {
       setFormError(localizedErrorMessage(error, language, c.genericError));
@@ -566,7 +568,13 @@ export function CampaignFormModal({
   }
 
   return (
-    <Modal title={editingCampaign ? c.editTitle : c.modalTitle} onClose={()=>{if(!submitLock.current)onClose();}} wide>
+    <Modal title={editingCampaign ? c.editTitle : c.modalTitle} onClose={()=>{
+      if(submitLock.current)return;
+      if(createdCampaign)void onSaved(createdCampaign);else onClose();
+    }} wide>
+      {!editingCampaign&&(submitting||createdCampaign)
+        ?<CampaignCreationProgress campaign={createdCampaign} name={form.name} onClose={()=>{if(createdCampaign)void onSaved(createdCampaign);}}/>
+        :(
       <form className="space-y-5" aria-busy={submitting} onSubmit={(event) => void submit(event)}>
         <label className="block">
           <span className="mb-2 block text-[14px] font-bold text-[#0f172a]">{c.fieldName}</span>
@@ -760,6 +768,7 @@ export function CampaignFormModal({
           {editingCampaign ? c.editButton : c.createButton}
         </PrimaryButton>
       </form>
+      )}
     </Modal>
   );
 }

@@ -75,7 +75,8 @@ export async function listOperations(owner:string){
   const rows=await db.select({value:sql<string>`(${systemSettingsTable.value}::jsonb-'payload'-'fingerprint'-'owner')::text`})
     .from(systemSettingsTable).where(like(systemSettingsTable.key,`${prefix}${owner}:%`));
   const jobs=rows.map(row=>JSON.parse(row.value) as ReturnType<typeof operationSummary>).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-  return [...jobs.filter(j=>j.state!=="completed"),...jobs.filter(j=>j.state==="completed").slice(0,5)];
+  // Completion history stays available until the viewer explicitly clears it.
+  return [...jobs.filter(j=>j.state!=="completed"),...jobs.filter(j=>j.state==="completed")];
 }
 export async function retryOperation(owner:string,id:string){
   return db.transaction(async tx=>{
