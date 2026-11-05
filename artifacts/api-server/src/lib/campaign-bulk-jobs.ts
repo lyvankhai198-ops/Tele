@@ -17,6 +17,7 @@ export type CampaignBulkJob = Omit<CampaignListScope,"status"> & {
   error: string | null; createdAt: string;
   onlySendable?: boolean; autoDeleteInvalid?: boolean; deletedCount?: number;
   permissionSyncId?: string; permissionsVerified?: boolean;
+  permissionAccountId?: string; permissionAccountIds?: string[];
   results?: Array<{id:string;name:string;outcome:"created"|"resumed"|"skipped"|"deleted";
     reason:string;runId?:string;assessment?:RerunAssessment}>;
 };
@@ -86,17 +87,27 @@ export async function createCampaignBulkJob(input: CampaignListScope & {
         eq(telegramAccountsTable.ownerUserId,input.ownerUserId),sql`${telegramAccountsTable.deletedAt} IS NULL`)) : [];
     if (input.telegramAccountId && !account) throw Error("CAMPAIGN_BULK_ACCOUNT_NOT_FOUND");
     const statuses = input.scope === "completed" ? ["completed", "completed_with_errors"] : [input.scope];
-    const candidates = await tx.select({id: campaignsTable.id}).from(campaignsTable).where(and(
+    const candidates = await tx.select({id: campaignsTable.id,telegramAccountId:campaignsTable.telegramAccountId}).from(campaignsTable).where(and(
       campaignListScope(input.ownerUserId,filters), inArray(campaignsTable.status, statuses),
     )).orderBy(asc(campaignsTable.createdAt), asc(campaignsTable.id));
-    const permissionSyncId = input.requireFreshPermissions && account && candidates.length
-      ? await preparePermissions(tx,input.ownerUserId,account) : undefined;
+    const candidateAccountIds=[...new Set(candidates.map(candidate=>candidate.telegramAccountId).filter((id):id is string=>Boolean(id)))];
+    const verificationAccounts=input.requireFreshPermissions&&candidateAccountIds.length
+      ? account ? [account] : await tx.select({id:telegramAccountsTable.id,name:telegramAccountsTable.name})
+        .from(telegramAccountsTable).where(and(eq(telegramAccountsTable.ownerUserId,input.ownerUserId),
+          inArray(telegramAccountsTable.id,candidateAccountIds),sql`${telegramAccountsTable.deletedAt} IS NULL`))
+        .orderBy(asc(telegramAccountsTable.id))
+      : [];
+    const firstVerificationAccount=verificationAccounts[0];
+    const permissionSyncId=firstVerificationAccount
+      ? await preparePermissions(tx,input.ownerUserId,firstVerificationAccount) : undefined;
     const job: CampaignBulkJob = {
       id, ownerUserId: input.ownerUserId, scope: input.scope, intervalSeconds: input.intervalSeconds,
       telegramAccountId:filters.telegramAccountId,search:filters.search,
       startAt: input.startAt.toISOString(), fingerprint, ids: candidates.map(c => c.id),
       cursor: 0, updatedCount: 0, skipped: [], status: candidates.length ? "queued" : "completed",
-      ...(permissionSyncId ? {permissionSyncId,permissionsVerified:false} : {}),
+      ...(permissionSyncId ? {permissionSyncId,permissionsVerified:false,
+        permissionAccountId:firstVerificationAccount!.id,
+        permissionAccountIds:verificationAccounts.slice(1).map(account=>account.id)} : {}),
       error: null, createdAt: new Date().toISOString(),
       onlySendable:input.onlySendable ?? true,autoDeleteInvalid:false,
       deletedCount:0,results:[],
@@ -139,9 +150,9 @@ export async function retryCampaignBulkJob(owner: string, id: string) {
             verification.state="queued"; verification.error=null;
             await saveOperation(tx,verification);
           }
-        } else if (job.telegramAccountId) {
+        } else if (job.permissionAccountId || job.telegramAccountId) {
           const [account]=await tx.select({id:telegramAccountsTable.id,name:telegramAccountsTable.name})
-            .from(telegramAccountsTable).where(and(eq(telegramAccountsTable.id,job.telegramAccountId),
+            .from(telegramAccountsTable).where(and(eq(telegramAccountsTable.id,(job.permissionAccountId??job.telegramAccountId)!),
               eq(telegramAccountsTable.ownerUserId,owner),sql`${telegramAccountsTable.deletedAt} IS NULL`));
           if (!account) throw Error("CAMPAIGN_BULK_ACCOUNT_NOT_FOUND");
           job.permissionSyncId=await preparePermissions(tx,owner,account);
@@ -189,6 +200,18 @@ export async function processCampaignBulkJobs(maxSteps = 10) {
             if (state !== "completed") {
               job.status = "failed";
               job.error = "CAMPAIGN_BULK_PERMISSION_SYNC_FAILED";
+              await tx.update(systemSettingsTable).set({value:JSON.stringify(job),updatedAt:new Date()})
+                .where(eq(systemSettingsTable.key,row.key));
+              return true;
+            }
+            while(job.permissionAccountIds?.length){
+              const nextAccountId=job.permissionAccountIds.shift()!;
+              const [account]=await tx.select({id:telegramAccountsTable.id,name:telegramAccountsTable.name})
+                .from(telegramAccountsTable).where(and(eq(telegramAccountsTable.id,nextAccountId),
+                  eq(telegramAccountsTable.ownerUserId,job.ownerUserId),sql`${telegramAccountsTable.deletedAt} IS NULL`));
+              if(!account)continue;
+              job.permissionSyncId=await preparePermissions(tx,job.ownerUserId,account);
+              job.permissionAccountId=account.id;
               await tx.update(systemSettingsTable).set({value:JSON.stringify(job),updatedAt:new Date()})
                 .where(eq(systemSettingsTable.key,row.key));
               return true;

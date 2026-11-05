@@ -33,7 +33,7 @@ function setup({account="a",status="all",search="",language="vi",blocked=false,i
     operations:{async start(data){sent.push({data});return{id:"operation",state:"queued"};}},
     isAdmin,isSupportMode,campaignDataBlocked:blocked,bulkJob:null,bulkTemplate:{isPending:false},bulkDelete:{isPending:false,async mutateAsync(v){sent.push(v);return{deletedCount:1,skippedCount:0};}},
     bulkControl:{isPending:false,async mutateAsync(v){sent.push(v);return{updatedCount:1,skippedCount:0,job:{id:"new",status:"queued"}};}},
-    templateProgress:{job:null,uncertain:false,waiting:false},details:null,bulkResumeAccountId:account,bulkResumeScope:"completed",bulkIntervalMinutes:"10",
+    templateProgress:{job:null,uncertain:false,waiting:false},details:null,bulkResumeAccountId:account,bulkResumeSearch:search,bulkResumeScope:"completed",bulkIntervalMinutes:"10",
     bulkScheduleDate:"2026-12-01",bulkScheduleTime:"10:00",bulkStorageKey:"fixture",bulkRequestId:"fixture",onlySendable:true,autoDeleteInvalid:false,
     c:{searchPlaceholder:"Search",statusAll:"All",statusDraft:"Draft",statusQueued:"Queued",statusRunning:"Running",statusPaused:"Paused",statusCompleted:"Completed",
       bulkPauseConfirm:n=>String(n),bulkDeleteConfirm:n=>String(n),bulkPausedResult:()=>"",bulkDeleteResult:()=>"",bulkNoActive:"No active",bulkNoEligible:"No eligible"},
@@ -54,7 +54,7 @@ test("account, status and literal name filters intersect; completed includes err
   assert.deepEqual(Array.from(setup({status:"completed"}).context.listedCampaigns,x=>x.id),["a2"]);
   assert.equal(setup({account:"missing"}).context.listedCampaigns.length,0);
   assert.equal(setup({search:"%_"}).context.listedCampaigns.length,0);
-  assert.equal(setup({status:"running"}).context.bulkScopeOptions.length,0);
+  assert.deepEqual(Array.from(setup({status:"running"}).context.bulkScopeOptions),["completed","paused","queued"]);
 });
 function text(tree){return typeof tree==="string"?tree:(tree?.children??[]).map(text).join(" ");}
 test("actual template hook is enabled for customers, disabled for support and signed-out viewers",()=>{
@@ -96,14 +96,16 @@ test("loading still blocks all campaign-changing actions",async()=>{
   for(const handler of ["pauseAllCampaigns","removeFilteredCampaigns","submitBulkResume"])await h.context[handler]();
   assert.equal(h.sent.length,0);
 });
-test("rerun account is mandatory and overrides the outer page account",async()=>{
+test("rerun dialog supports all accounts and overrides outer page filters",async()=>{
   const h=setup({status:"completed"});
   h.context.bulkResumeAccountId="";
   await h.context.submitBulkResume();
-  assert.equal(h.sent.length,0);
+  assert.equal(h.sent.length,1);
+  assert.equal("telegramAccountId" in h.sent[0].data,false);
+  assert.equal(h.sent[0].data.status,"completed");
   h.context.bulkResumeAccountId="b";
   await h.context.submitBulkResume();
-  assert.equal(h.sent.length,1);
-  assert.equal(h.sent[0].data.telegramAccountId,"b");
+  assert.equal(h.sent.length,2);
+  assert.equal(h.sent[1].data.telegramAccountId,"b");
   assert.equal(h.context.accountFilter,"a");
 });
