@@ -3,7 +3,7 @@ import { db,campaignsTable } from "@workspace/db";
 import { and,desc,inArray } from "drizzle-orm";
 import { GetCampaignLoadBatchQueryParams, GetCampaignLoadBatchResponse, GetCampaignLoadManifestQueryParams, GetCampaignLoadManifestResponse } from "@workspace/api-zod";
 import { campaignListScope } from "../lib/campaign-list-scope";
-import { readOnlyCampaignSummary } from "../lib/campaigns";
+import { readOnlyCampaignSummaries } from "../lib/campaigns";
 
 // Mounted after the existing authentication/support read-only middleware.
 export const campaignListLoadingRouter=Router();
@@ -32,12 +32,7 @@ campaignListLoadingRouter.get("/load-batch",async(req,res)=>{
   ));
   const byId=new Map(rows.map(row=>[row.id,row]));
   const ordered=ids.flatMap(id=>{const row=byId.get(id);return row?[row]:[];});
-  const summaries:Awaited<ReturnType<typeof readOnlyCampaignSummary>>[]=[];
-  // Bound DB fan-out as well as HTTP payload size; never fan out thousands
-  // of campaignSummary calls into the shared database pool.
-  for(let start=0;start<ordered.length;start+=5){
-    summaries.push(...await Promise.all(ordered.slice(start,start+5).map(readOnlyCampaignSummary)));
-  }
+  const summaries=await readOnlyCampaignSummaries(ordered);
   res.json(GetCampaignLoadBatchResponse.parse({
     campaigns:summaries,missingIds:ids.filter(id=>!byId.has(id)),
   }));
