@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import {OperationsProgress} from "@/components/OperationsProgress";
 import { useLocation } from "wouter";
 import {
@@ -213,7 +213,7 @@ export function AppLayout({
           <span className={highlighted ? `flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${selected ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700 group-hover:bg-indigo-200"}` : "shrink-0"}>
             <Icon className={`h-[18px] w-[18px] ${highlighted ? "" : selected ? (nationalDayThemeActive ? "national-day-nav-icon-selected" : "text-[#1a2b88]") : (nationalDayThemeActive ? "national-day-nav-icon" : "text-[#64748b] group-hover:text-[#1a2b88]")}`} strokeWidth={selected ? 2.5 : 2} />
           </span>
-          <span className="min-w-0 flex-1">{t(item.label)}</span>
+          <span className="min-w-0 flex-1 break-words">{t(item.label)}</span>
           {highlighted && <ChevronRight aria-hidden="true" className={`h-4 w-4 shrink-0 ${selected ? "text-indigo-200" : "text-indigo-400"}`} />}
         </button>
       );
@@ -243,12 +243,12 @@ export function AppLayout({
         <div className="flex items-center justify-between px-4 py-5 border-b border-[#eef2f6]">
           <button onClick={() => navigate("/dashboard")} className="flex min-w-0 flex-1 items-center gap-3 text-left">
             <img src="/icon.png" alt="" className="h-10 w-10 shrink-0 object-contain" />
-            <span className="min-w-0 truncate text-[17px] font-bold tracking-[-0.02em] text-[#1a2b88] lg:hidden">Campaign Manager</span>
-            <span className="hidden lg:block">
-              <span className="block text-[15px] font-extrabold text-[#0f172a] tracking-tight">Telegram Campaign Manager</span>
+            <span className="min-w-0 truncate text-[17px] font-bold tracking-[-0.02em] text-[#1a2b88] lg:hidden">{t("Telecampaign")}</span>
+            <span className="hidden min-w-0 lg:block">
+              <span className="block break-words text-[15px] font-extrabold tracking-tight text-[#0f172a]">{t("Telecampaign")}</span>
             </span>
           </button>
-          <button onClick={() => setMobileOpen(false)} className="shrink-0 rounded-lg p-2 text-[#64748b] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Close sidebar')}>
+          <button onClick={() => setMobileOpen(false)} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#64748b] transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] lg:hidden" aria-label={t('Close sidebar')}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -301,7 +301,7 @@ export function AppLayout({
                             }`}
                             data-testid={`nav-admin-${entry.key}`}>
                             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${selected ? "bg-[#167b91]" : "bg-[#a8bbc3]"}`} />
-                            <span className="min-w-0 flex-1">{entry.label}</span>
+                            <span className="min-w-0 flex-1 break-words">{entry.label}</span>
                             {selected && <span className="h-1.5 w-1.5 rounded-full bg-[#167b91]" aria-hidden="true" />}
                           </button>
                         );
@@ -322,7 +322,7 @@ export function AppLayout({
             <LanguageSelector language={language} onChange={setLanguage} disabled={isChangingLanguage} placement="top" />
             {languageError && <p role="alert" className="mt-2 text-xs text-red-700">{languageError}</p>}
           </div>
-          <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">Telegram Campaign Manager v2.0</div>
+          <div className="mt-5 mb-2 text-center text-[11px] font-bold text-[#94a3b8]">{t("Telecampaign")}</div>
         </div>
       </aside>
 
@@ -330,23 +330,23 @@ export function AppLayout({
       
       <main className={`min-h-[100dvh] lg:pl-[280px] flex flex-col ${nationalDayThemeActive ? "national-day-main" : ""}`}>
         <header className={`sticky top-0 z-20 border-b border-[#eef2f6] bg-white/95 backdrop-blur-xl ${nationalDayThemeActive ? "national-day-header" : ""}`}>
-          <div className="flex min-h-[72px] items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-[#475569] hover:bg-[#f1f5f9] lg:hidden transition-colors" aria-label={t('Open menu')}>
+          <div className="flex min-h-[72px] flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 sm:px-6 lg:flex-nowrap lg:px-8">
+            <div className="flex min-w-[9rem] flex-1 items-center gap-2 sm:gap-3">
+              <button onClick={() => setMobileOpen(true)} className="shrink-0 rounded-lg p-2 text-[#475569] transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] lg:hidden" aria-label={t('Open menu')}>
                 <Menu className="h-6 w-6" />
               </button>
-                <h1 aria-label={t(title)} title={t(title)} className="text-[19px] font-extrabold text-[#0f172a] hidden sm:block tracking-tight">{t(title)}</h1>
-               <h1 aria-label={t(title)} title={t(title)} className={`text-[19px] font-extrabold text-[#0f172a] sm:hidden tracking-tight ${isAdminSection ? "min-w-0 max-w-[190px] break-words leading-tight line-clamp-2" : ""}`}>{t(title)}</h1>
+                <h1 aria-label={t(title)} title={t(title)} className="hidden min-w-0 break-words text-[19px] font-extrabold tracking-tight text-[#0f172a] sm:block">{t(title)}</h1>
+               <h1 aria-label={t(title)} title={t(title)} className={`min-w-0 text-[16px] font-extrabold leading-tight tracking-tight text-[#0f172a] sm:hidden ${isAdminSection ? "max-w-[190px] break-words line-clamp-2" : "max-w-[calc(100vw-7rem)] break-words line-clamp-2"}`}>{t(title)}</h1>
             </div>
             
-             <div className="flex items-center gap-3 sm:gap-4">
+             <div className="ml-auto flex max-w-full min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-3">
               {headerAction}
                 <UserNotificationBell />
                {isAdminSection && user?.role === "admin" && !isSupportMode && (
                  <button
                    type="button"
                    onClick={() => setLocation("/admin/system-events")}
-                   className={`relative grid h-10 w-10 place-items-center rounded-xl border transition-colors ${
+                    className={`relative grid h-11 w-11 shrink-0 place-items-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] ${
                      location === "/admin/system-events"
                        ? "border-[#b8d9d5] bg-[#e8f1f0] text-[#075e68]"
                        : "border-[#dfe7ea] bg-[#fcfdfd] text-[#61727b] hover:border-[#b8d9d5] hover:bg-[#f4faf9] hover:text-[#075e68]"
@@ -365,12 +365,12 @@ export function AppLayout({
                )}
               {!hideUpgrade && !isSupportMode && <button
                 onClick={() => setLocation("/upgrade")}
-                 className={`bg-[#1a2b88] hover:bg-[#152473] text-white text-[13px] font-extrabold px-5 py-2.5 rounded-xl transition-all shadow-sm active:scale-95 ${nationalDayThemeActive ? "national-day-upgrade" : ""}`}
+                  className={`min-h-10 shrink-0 rounded-xl bg-[#1a2b88] px-3 py-2 text-[12px] font-extrabold text-white shadow-sm transition-all hover:bg-[#152473] active:scale-95 sm:px-5 sm:text-[13px] ${nationalDayThemeActive ? "national-day-upgrade" : ""}`}
                 data-testid="header-upgrade"
               >
                 {t("Upgrade")}
               </button>}
-              <button onClick={() => void signOut()} className="rounded-xl p-2.5 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors" aria-label={t('Sign out')} data-testid="header-logout">
+              <button onClick={() => void signOut()} className="shrink-0 rounded-xl p-2.5 text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91]" aria-label={t('Sign out')} data-testid="header-logout">
                 <LogOut className="h-[22px] w-[22px]" />
               </button>
             </div>
@@ -402,10 +402,6 @@ export function AppLayout({
                 <p className="mt-1 text-[11px] font-medium text-[#f9e9ba]">
                   {language === "vi" ? "Đang ở chế độ vận hành lễ — các giới hạn an toàn vẫn được giữ nguyên." : "Ceremonial operations mode is active — safety limits remain unchanged."}
                 </p>
-              </div>
-              <div className="national-day-hero-status">
-                <ShieldCheck className="h-4 w-4" />
-                <span>{language === "vi" ? "ĐÃ XÁC MINH" : "VERIFIED MODE"}</span>
               </div>
             </div>
           </section>
@@ -457,7 +453,7 @@ export function AppLayout({
 }
 
 export function Panel({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
-  return <section id={id} className={`rounded-3xl border border-[#eef2f6] bg-white shadow-sm ${className}`}>{children}</section>;
+  return <section id={id} className={`min-w-0 rounded-3xl border border-[#eef2f6] bg-white shadow-sm ${className}`}>{children}</section>;
 }
 
 export function SectionHeader({ eyebrow, title, detail, action }: { eyebrow?: string; title: string; detail?: string; action?: ReactNode }) {
@@ -485,7 +481,7 @@ export function StatusBadge({ status, label }: { status: "active" | "connected" 
     warning: "border-[#fef08a] bg-[#fffbeb] text-[#d97706]",
     restricted: "border-[#ffe4e6] bg-[#fff1f2] text-[#e11d48]",
   }[status];
-  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] ${styles}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{label ?? status}</span>;
+  return <span className={`inline-flex max-w-full items-center gap-1.5 whitespace-normal break-words rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] ${styles}`}><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />{label ?? status}</span>;
 }
 
 export function MetricCard({ label, value, change, icon: Icon, tone = "blue" }: { label: string; value: string; change: string; icon: typeof Activity; tone?: "blue" | "warm" | "green" | "red" }) {
@@ -503,15 +499,24 @@ export function MetricCard({ label, value, change, icon: Icon, tone = "blue" }: 
 }
 
 export function Toast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
-  return <div className="fixed bottom-6 right-6 z-[70] flex max-w-[calc(100vw-3rem)] items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white px-5 py-4 text-[14px] font-bold text-[#0f172a] shadow-xl"><span className="h-2.5 w-2.5 rounded-full bg-[#10b981]" />{message}<button onClick={onDismiss} className="ml-3 text-[#64748b] hover:text-[#0f172a] transition-colors" aria-label="Dismiss"><X className="h-4 w-4" /></button></div>;
+  return <div className="fixed bottom-3 left-3 right-3 z-[70] flex max-w-[calc(100vw-1.5rem)] items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-3 text-[14px] font-bold text-[#0f172a] shadow-xl sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-[calc(100vw-3rem)] sm:px-5 sm:py-4"><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#10b981]" /><span className="min-w-0 flex-1 break-words">{message}</span><button onClick={onDismiss} className="ml-1 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91]" aria-label="Dismiss"><X className="h-4 w-4" /></button></div>;
 }
 
 export function Modal({ title, description, children, onClose, wide = false }: { title: string; description?: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-[#0f172a]/30 p-4 backdrop-blur-sm"><div className={`max-h-[92dvh] w-full overflow-y-auto rounded-3xl border border-[#eef2f6] bg-white shadow-2xl ${wide ? "max-w-2xl" : "max-w-lg"}`}><div className="flex items-start justify-between border-b border-[#eef2f6] px-6 py-6 sm:px-8"><div><h2 className="text-[19px] font-extrabold text-[#0f172a]">{title}</h2>{description && <p className="mt-2 max-w-lg text-[14px] font-medium text-[#64748b] leading-relaxed">{description}</p>}</div><button onClick={onClose} className="rounded-xl p-2 text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition-colors"><X className="h-5 w-5" /></button></div><div className="p-6 sm:p-8">{children}</div></div></div>;
+  const titleId = useId();
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-[#0f172a]/30 p-3 backdrop-blur-sm sm:p-4">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className={`flex max-h-[calc(100dvh-1.5rem)] w-full min-w-0 flex-col overflow-hidden rounded-3xl border border-[#eef2f6] bg-white shadow-2xl sm:max-h-[92dvh] ${wide ? "max-w-2xl" : "max-w-lg"}`}>
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#eef2f6] px-4 py-4 sm:px-8 sm:py-6">
+        <div className="min-w-0"><h2 id={titleId} className="break-words text-[19px] font-extrabold text-[#0f172a]">{title}</h2>{description && <p className="mt-2 max-w-lg break-words text-[14px] font-medium leading-relaxed text-[#64748b]">{description}</p>}</div>
+        <button onClick={onClose} aria-label={title} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91]"><X className="h-5 w-5" /></button>
+      </div>
+      <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain p-4 sm:p-8">{children}</div>
+    </div>
+  </div>;
 }
 
 export function Input({ label, value, onChange, placeholder, type = "text", inputMode, autoComplete, min, max, step }: { label?: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search"; autoComplete?: string; min?: number; max?: number; step?: number }) {
-  return <label className="block">{label && <span className="mb-2.5 block text-[13px] font-bold text-[#475569]">{label}</span>}<input type={type} inputMode={inputMode} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} min={min} max={max} step={step} className="w-full rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3.5 text-[15px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 transition-all" /></label>;
+  return <label className="block min-w-0">{label && <span className="mb-2.5 block break-words text-[13px] font-bold text-[#475569]">{label}</span>}<input type={type} inputMode={inputMode} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} min={min} max={max} step={step} className="h-12 w-full min-w-0 rounded-2xl border border-[#cbd5e1] bg-white px-4 text-[15px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10 focus-visible:ring-4 transition-all" /></label>;
 }
 
 export function PrimaryButton({ children, onClick, type = "button", disabled = false }: { children: ReactNode; onClick?: () => void; type?: "button" | "submit"; disabled?: boolean }) {
@@ -527,7 +532,7 @@ export function EmptyState({ icon: Icon, title, detail, action }: { icon: typeof
 }
 
 export function PageIntro({ kicker, heading, detail, action }: { kicker: string; heading: string; detail: string; action?: ReactNode }) {
-  return <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><div className="mb-3.5 flex items-center gap-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[#1a2b88]"><span className="h-2 w-2 rounded-full bg-[#f59e0b]" />{kicker}</div><h1 className="text-[36px] font-extrabold tracking-tight text-[#0f172a] sm:text-[44px]">{heading}</h1><p className="mt-3.5 max-w-2xl text-[16px] font-medium text-[#475569] leading-relaxed">{detail}</p></div>{action}</div>;
+  return <div className="mb-8 flex min-w-0 flex-col gap-5 sm:mb-10 lg:flex-row lg:items-end lg:justify-between"><div className="min-w-0"><div className="mb-3.5 flex flex-wrap items-center gap-2.5 text-[12px] font-extrabold uppercase tracking-wider text-[#1a2b88]"><span className="h-2 w-2 shrink-0 rounded-full bg-[#f59e0b]" />{kicker}</div><h1 className="break-words text-[clamp(1.75rem,7vw,2.75rem)] font-extrabold tracking-tight text-[#0f172a]">{heading}</h1><p className="mt-3.5 max-w-2xl break-words text-[16px] font-medium leading-relaxed text-[#475569]">{detail}</p></div><div className="max-w-full shrink-0">{action}</div></div>;
 }
 
 export const addIcon = Plus;

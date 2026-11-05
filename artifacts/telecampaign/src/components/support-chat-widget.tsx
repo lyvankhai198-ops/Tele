@@ -157,7 +157,7 @@ export function SupportChatWidget() {
     return null;
   }
 
-  const title = language === "vi" ? "Hỗ trợ TeleCampaign" : "TeleCampaign support";
+  const title = language === "vi" ? "Hỗ trợ Telecampaign" : "Telecampaign support";
   const placeholder = language === "vi" ? "Nhập câu hỏi của bạn…" : "Type your question…";
   const welcomeMessage = language === "en"
     ? "Hello! Feel free to send us a message. Our support team will get back to you as soon as possible."

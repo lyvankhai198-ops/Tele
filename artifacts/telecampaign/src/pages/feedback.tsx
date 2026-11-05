@@ -63,7 +63,7 @@ export default function FeedbackPage() {
       await load();
     } catch (e) { setError(feedbackErrorKey(e, "Could not save changes. Please try again.")); }
   }
-  return <AppLayout activePage="feedback" title={t("Feedback & discussion")} subtitle={t("Help improve TeleCamp. Support chat remains available separately.")} hideUpgrade>
+  return <AppLayout activePage="feedback" title={t("Feedback & discussion")} subtitle={t("Help improve Telecampaign. Support chat remains available separately.")} hideUpgrade>
     {error && <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{t(error)}</div>}
     {notice && <div role="status" className="mb-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700">{t(notice)}</div>}
     <div className="grid gap-3 sm:grid-cols-2">
@@ -71,7 +71,7 @@ export default function FeedbackPage() {
         className={`rounded-2xl border p-5 text-left shadow-sm ${kind === value ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-white"}`}>
         <span className="text-2xl">💡</span>
         <h2 className="mt-2 font-extrabold text-slate-900">{t(kinds[value])}</h2>
-        <p className="mt-1 text-sm text-slate-500">{t("What would you like TeleCamp to add?")}</p>
+        <p className="mt-1 text-sm text-slate-500">{t("What would you like Telecampaign to add?")}</p>
       </button>)}
       {groupUrl ? <a href={groupUrl} target="_blank" rel="noopener noreferrer" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <span className="text-2xl">💬</span><h2 className="mt-2 font-extrabold text-slate-900">{t("Join the discussion group")} ↗</h2><p className="mt-1 text-sm text-slate-500">{t("Share ideas and experience with the community.")}</p>

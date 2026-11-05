@@ -94,7 +94,7 @@ export function LanguageSelector({
         aria-label={text.label} aria-haspopup="dialog" aria-expanded={open}
         aria-controls={open ? `${instanceId}-dialog` : undefined}
         onClick={() => { if (open) close(); else { setQuery(""); setActive(0); setOpen(true); } }}
-        className={`flex w-full min-h-10 items-center justify-between gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2 text-sm font-semibold text-[#334155] shadow-sm transition-colors hover:border-[#a5b4fc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6366f1] disabled:cursor-wait disabled:opacity-60 ${compact ? "max-w-[180px]" : ""}`}
+         className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2 text-sm font-semibold text-[#334155] shadow-sm transition-colors hover:border-[#9aa8cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] disabled:cursor-wait disabled:opacity-60 ${compact ? "max-w-[180px]" : ""}`}
         data-testid="language-selector"
       >
         <span className="flex min-w-0 items-center gap-2">
@@ -145,7 +145,7 @@ export function LanguageSelector({
                 onPointerMove={() => setActive(index)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => choose(locale.code)}
-                className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${locale.code === language ? "bg-[#eef2ff] font-bold text-[#4338ca]" : active === index ? "bg-[#f1f5f9] text-[#0f172a]" : "text-[#334155] hover:bg-[#f8fafc]"}`}
+               className={`flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${locale.code === language ? "bg-[#eef2fa] font-bold text-[#1a2b88]" : active === index ? "bg-[#f1f5f9] text-[#0f172a]" : "text-[#334155] hover:bg-[#f8fafc]"}`}
               >
                 <span aria-hidden="true" className="shrink-0">{locale.flag}</span>
                 <bdi className="min-w-0 flex-1 whitespace-normal break-words" lang={locale.code}>{locale.native}</bdi>

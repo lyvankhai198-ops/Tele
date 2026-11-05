@@ -169,7 +169,7 @@ test("sidebar dropdown stays within its trigger while compact auth picker retain
     if (!compact) assert.doesNotMatch(dialog.props.className, /19rem/u);
   }
   const layout = fs.readFileSync(path.join(root, "artifacts/telecampaign/src/components/layout/AppLayout.tsx"), "utf8");
-  assert.match(layout, /min-w-0 truncate[^"]*lg:hidden">Campaign Manager/u);
+  assert.match(layout, /min-w-0 truncate[^"]*lg:hidden">\{t\("Telecampaign"\)\}/u);
 });
 
 function adminScopeHarness(role = "admin") {

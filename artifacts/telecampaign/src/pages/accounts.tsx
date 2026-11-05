@@ -37,8 +37,8 @@ import {useOperations} from "@/lib/operations";
 const copy = {
   en: {
     connectionPrivacyTitle: "Before you connect",
-    connectionPrivacyPurpose: "Connecting lets TeleCamp sync your groups and send campaigns according to your settings.",
-    connectionPrivacyPassword: "TeleCamp does not store your Telegram / 2FA password. If requested, it is used only to authenticate with Telegram.",
+    connectionPrivacyPurpose: "Connecting lets Telecampaign sync your groups and send campaigns according to your settings.",
+    connectionPrivacyPassword: "Telecampaign does not store your Telegram / 2FA password. If requested, it is used only to authenticate with Telegram.",
     connectionPrivacySession: "Your login session is stored encrypted to keep the connection active.",
     connectionPrivacyRevoke: "You can revoke this session at any time in Telegram → Settings → Devices.",
     requestFailed: "The request could not be completed.",
@@ -123,14 +123,14 @@ const copy = {
     qrWaiting: "Waiting for Telegram to confirm the scan...",
     qrTwoFactor: "Telegram accepted the QR scan. Enter your 2FA password to finish.",
     qrExpired: "This QR code has expired. Generate a new one to try again.",
-    qrAlreadyLinked: "This Telegram account is already logged in to another TeleCampaign session. Sign in to that session or ask an administrator to release the link.",
+    qrAlreadyLinked: "This Telegram account is already logged in to another Telecampaign session. Sign in to that session or ask an administrator to release the link.",
     qrCancel: "Cancel",
     qrRegenerate: "Generate new QR",
   },
   vi: {
     connectionPrivacyTitle: "Trước khi kết nối",
-    connectionPrivacyPurpose: "Kết nối giúp TeleCamp đồng bộ nhóm và gửi chiến dịch theo cấu hình của bạn.",
-    connectionPrivacyPassword: "TeleCamp không lưu mật khẩu Telegram / 2FA của bạn. Mật khẩu (nếu được yêu cầu) chỉ dùng để xác thực với Telegram.",
+    connectionPrivacyPurpose: "Kết nối giúp Telecampaign đồng bộ nhóm và gửi chiến dịch theo cấu hình của bạn.",
+    connectionPrivacyPassword: "Telecampaign không lưu mật khẩu Telegram / 2FA của bạn. Mật khẩu (nếu được yêu cầu) chỉ dùng để xác thực với Telegram.",
     connectionPrivacySession: "Phiên đăng nhập được lưu dưới dạng mã hóa để duy trì kết nối.",
     connectionPrivacyRevoke: "Bạn có thể thu hồi phiên bất cứ lúc nào tại Telegram → Cài đặt → Thiết bị.",
     requestFailed: "Yêu cầu không thể hoàn thành.",
@@ -215,7 +215,7 @@ const copy = {
     qrWaiting: "Đang chờ Telegram xác nhận quét mã...",
     qrTwoFactor: "Telegram đã nhận mã QR. Nhập mật khẩu 2FA để hoàn tất.",
     qrExpired: "Mã QR đã hết hạn. Hãy tạo mã mới để thử lại.",
-    qrAlreadyLinked: "Tài khoản Telegram này đã đăng nhập ở một phiên TeleCampaign khác. Hãy dùng phiên đó hoặc nhờ quản trị viên gỡ liên kết.",
+    qrAlreadyLinked: "Tài khoản Telegram này đã đăng nhập ở một phiên Telecampaign khác. Hãy dùng phiên đó hoặc nhờ quản trị viên gỡ liên kết.",
     qrCancel: "Hủy",
     qrRegenerate: "Tạo mã QR mới",
   },
@@ -296,19 +296,19 @@ function AccountsDialog({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4">
+    <div className="fixed inset-0 z-50 grid place-items-center p-2 sm:p-4">
       <button aria-label="Close dialog overlay" className="absolute inset-0 bg-[#0f172a]/40 backdrop-blur-sm" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description?descriptionId:undefined} tabIndex={-1} data-testid={testId} className={`relative flex max-h-[calc(100dvh-2rem)] w-full ${size === "small" ? "max-w-sm" : "max-w-lg"} flex-col overflow-hidden rounded-3xl border border-[#e2e8f0] bg-white shadow-2xl`}>
-        <div className="flex items-start justify-between border-b border-[#eef2f6] px-5 py-5 sm:px-7">
-          <div className="pr-4">
-            <h2 id={titleId} className="text-[19px] font-extrabold tracking-tight text-[#0f172a]">{title}</h2>
-            {description&&<p id={descriptionId} className="mt-2 text-[14px] font-medium leading-relaxed text-[#64748b]">{description}</p>}
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description?descriptionId:undefined} tabIndex={-1} data-testid={testId} className={`relative flex max-h-[calc(100dvh-1rem)] w-full min-w-0 ${size === "small" ? "max-w-sm" : "max-w-lg"} flex-col overflow-hidden rounded-3xl border border-[#e2e8f0] bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]`}>
+        <div className="flex shrink-0 items-start justify-between border-b border-[#eef2f6] px-5 py-5 sm:px-7">
+          <div className="min-w-0 pr-2 sm:pr-4">
+            <h2 id={titleId} className="break-words text-[19px] font-extrabold tracking-tight text-[#0f172a]">{title}</h2>
+            {description&&<p id={descriptionId} className="mt-2 break-words text-[14px] font-medium leading-relaxed text-[#64748b]">{description}</p>}
           </div>
-          <button onClick={onClose} aria-label="Close dialog" className="shrink-0 rounded-xl p-2 text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a]" data-testid={`${testId}-close`}>
+          <button onClick={onClose} aria-label="Close dialog" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91]" data-testid={`${testId}-close`}>
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="overflow-y-auto p-5 sm:p-7">{children}</div>
+        <div className="min-h-0 min-w-0 overflow-y-auto overscroll-contain p-4 sm:p-7">{children}</div>
       </div>
     </div>
   );

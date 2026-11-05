@@ -65,8 +65,8 @@ function AuthShell({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-3">
             <img src="/icon.png" alt="" className="h-11 w-11 shrink-0 object-contain" />
             <span className="hidden sm:block">
-               <span className="block text-lg font-bold tracking-[-0.03em]">Telegram Campaign Manager</span>
-              <span className="block text-xs text-[#66809a]">{t('Telegram Campaign Manager')}</span>
+               <span className="block text-lg font-bold tracking-[-0.03em]">{t("Telecampaign")}</span>
+              <span className="block text-xs text-[#66809a]">{t("Campaign management")}</span>
             </span>
           </div>
           <div className="absolute right-0 top-1/2 w-36 max-w-[48%] -translate-y-1/2">
@@ -769,8 +769,8 @@ function SubscriptionGate({ children }: { children: ReactNode }) {
       ? 'Thời gian dùng thử hoặc gói dịch vụ của bạn đã hết hạn.'
       : 'Your trial or subscription has expired.';
     const guidance = language === 'vi'
-      ? 'Kích hoạt license key PLUS, PRO hoặc UNLIMITED để tiếp tục dùng TeleCampaign.'
-      : 'Activate a PLUS, PRO, or UNLIMITED license key to continue using TeleCampaign.';
+      ? 'Kích hoạt license key PLUS, PRO hoặc UNLIMITED để tiếp tục dùng Telecampaign.'
+      : 'Activate a PLUS, PRO, or UNLIMITED license key to continue using Telecampaign.';
     return (
       <main className="grid min-h-screen place-items-center bg-[#f3f7fb] px-4 py-8 text-[#16304a]">
         <section className="w-full max-w-[500px] rounded-3xl border border-[#dbe6f0] bg-white p-7 text-center shadow-[0_18px_50px_rgba(31,73,110,.12)] sm:p-10">

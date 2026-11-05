@@ -57,7 +57,7 @@ export default function SupportPage() {
             {t("Contact support")}
           </div>
           <h1 className="text-[36px] font-extrabold tracking-tight text-[#0f172a] sm:text-[44px]">{t("Support")}</h1>
-          <p className="mt-3.5 text-[16px] font-medium leading-relaxed text-[#475569]">{t("Reach the TeleCampaign team through an available support channel.")}</p>
+          <p className="mt-3.5 text-[16px] font-medium leading-relaxed text-[#475569]">{t("Reach the Telecampaign team through an available support channel.")}</p>
         </div>
 
         {channels.length === 0 ? (
