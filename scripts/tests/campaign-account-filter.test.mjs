@@ -19,7 +19,7 @@ function visit(node){
   ts.forEachChild(node,visit);
 }visit(ast);
 function run(source,context){return vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.React,jsxFactory:"h",module:ts.ModuleKind.None,target:ts.ScriptTarget.ES2022}}).outputText,context);}
-function setup({account="a",status="all",search="",language="vi",blocked=false,isAdmin=true}={}){
+function setup({account="a",status="all",search="",language="vi",blocked=false,isAdmin=true,isSupportMode=false}={}){
   const rows=[
     {id:"a1",telegramAccountId:"a",name:"News A",status:"running",createdAt:"2026-01-01"},
     {id:"a2",telegramAccountId:"a",name:"News A",status:"completed_with_errors",createdAt:"2026-01-02"},
@@ -31,7 +31,7 @@ function setup({account="a",status="all",search="",language="vi",blocked=false,i
     campaigns:{data:rows,refetch:async()=>{}},useMemo:f=>f(),isActive:s=>["queued","running"].includes(s),
     useMutation:({mutationFn})=>({isPending:false,mutateAsync:mutationFn}),
     operations:{async start(data){sent.push({data});return{id:"operation",state:"queued"};}},
-    isAdmin,campaignDataBlocked:blocked,bulkJob:null,bulkTemplate:{isPending:false},bulkDelete:{isPending:false,async mutateAsync(v){sent.push(v);return{deletedCount:1,skippedCount:0};}},
+    isAdmin,isSupportMode,campaignDataBlocked:blocked,bulkJob:null,bulkTemplate:{isPending:false},bulkDelete:{isPending:false,async mutateAsync(v){sent.push(v);return{deletedCount:1,skippedCount:0};}},
     bulkControl:{isPending:false,async mutateAsync(v){sent.push(v);return{updatedCount:1,skippedCount:0,job:{id:"new",status:"queued"}};}},
     templateProgress:{job:null,uncertain:false,waiting:false},details:null,bulkResumeAccountId:account,bulkResumeScope:"completed",bulkIntervalMinutes:"10",
     bulkScheduleDate:"2026-12-01",bulkScheduleTime:"10:00",bulkStorageKey:"fixture",bulkRequestId:"fixture",onlySendable:true,autoDeleteInvalid:false,
