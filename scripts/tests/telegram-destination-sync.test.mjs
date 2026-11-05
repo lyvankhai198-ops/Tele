@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
+import { telegramPostingPermissionSnapshot } from "../../artifacts/api-server/src/lib/telegram-posting-permissions.ts";
 import {
   destinationIdsToMarkUnavailableAfterSync, isLeftTelegramEntity,
   UNAVAILABLE_TELEGRAM_DESTINATION_REASON as missing,
@@ -52,7 +53,7 @@ function fixture(rows,dialogs,options={}) {
     destinationIdsToMarkUnavailableAfterSync,isLeftTelegramEntity,UNAVAILABLE_TELEGRAM_DESTINATION_REASON:missing,
     getAccountClient:async()=>({client,account:{id:"one",ownerUserId:"owner-one"}}),
     telegramId:entity=>String(entity.id),displayTitle:entity=>entity.title??"Fixture",
-    canPostToEntity:entity=>entity.canPost!==false,postingRestrictionUntil:()=>null,
+    telegramPostingPermissionSnapshot,canPostToEntity:entity=>entity.canPost!==false,postingRestrictionUntil:()=>null,
     listForumTopics:async()=>{if(options.topicError)throw Error("fixture topic failure");return options.topics??[];},
     recordActivity:async event=>state.events.push(event),
     isTelegramSessionRevoked:()=>false,invalidateTelegramSession:()=>assert.fail("Not a revoked session"),
@@ -79,7 +80,7 @@ test("explicit left/kicked/forbidden dialogs cannot be re-added as current membe
   }
 });
 test("posting restrictions alone do not remove a group",async()=>{
-  const f=fixture([row("restricted","1")],[{id:1,megagroup:true,canPost:false}]);
+  const f=fixture([row("restricted","1")],[{id:1,megagroup:true,bannedRights:{sendPlain:true,untilDate:0}}]);
   await f.sync();
   assert.equal(f.state.rows[0].canPost,false);
   assert.notEqual(f.state.rows[0].permissionReason,missing);

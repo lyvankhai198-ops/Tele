@@ -2224,6 +2224,9 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   }
 
   const scope = parsed.data.scope ?? "paused";
+  if (!parsed.data.telegramAccountId) {
+    return void sendError(res,400,"Chọn tài khoản Telegram");
+  }
   // Legacy auto-delete inputs are accepted but never execute deletion. Cleanup
   // now requires a fresh preview and an explicitly selected confirmation.
   const intervalSeconds = parsed.data.intervalSeconds;
@@ -2245,6 +2248,7 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
       requestId: req.get("Idempotency-Key"),
       onlySendable:parsed.data.onlySendable,autoDeleteInvalid:parsed.data.autoDeleteInvalid,
       telegramAccountId:parsed.data.telegramAccountId,search:parsed.data.search,status:parsed.data.status,
+      requireFreshPermissions:true,
     });
     return void res.status(202).json(BulkControlCampaignsResponse.parse({
       action: "resume", updatedCount: job.updatedCount, skippedCount: job.skippedCount,
@@ -2301,6 +2305,8 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
       if(assessment.groups.length&&assessment.groups.every(group=>group.reason==="blocked_by_cleanup")){
         return {kind:"skip" as const,name:campaign.name,reason:"blocked_by_cleanup",assessment};
       }
+      if (assessment.category==="invalid") return {kind:"skip" as const,name:campaign.name,
+        reason:assessment.reason,assessment};
       if (job.onlySendable && assessment.category!=="sendable") return {
         kind:"skip" as const,name:campaign.name,reason:assessment.reason,assessment};
 
@@ -2365,7 +2371,7 @@ registerCampaignBulkProcessor(async (tx, job, candidateId) => {
           ? campaign.destinationIds
           : fallbackTargets.map((target) => target.destinationId),
       )];
-      const blockedIds=new Set(assessment.groups.filter(group=>group.reason==="blocked_by_cleanup").map(group=>group.id));
+      const blockedIds=new Set(assessment.groups.filter(group=>group.category==="invalid").map(group=>group.id));
       destinationIds=destinationIds.filter(id=>!blockedIds.has(id));
       if (job.onlySendable) {
         const eligibleIds=new Set(assessment.groups.filter(g=>g.category==="sendable").map(g=>g.id));

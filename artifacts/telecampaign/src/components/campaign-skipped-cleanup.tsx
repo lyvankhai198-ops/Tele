@@ -146,6 +146,9 @@ export function CampaignSkippedCleanup({ jobId, accounts, initialAccountId = "",
               <small className="mt-1 block font-normal text-slate-600">{rowReason(row.reason, language)}</small>
             </span>
           </label>
+          {Boolean(row.keptGroupCount) && <p className="ml-6 mt-2 text-xs font-semibold text-emerald-700">
+            {vi ? "Giữ chiến dịch và các nhóm hợp lệ:" : "Keep campaign and valid groups:"} {row.keptGroupCount}
+          </p>}
           {row.groups.length > 0 && <details className="ml-6 mt-2 text-xs text-slate-600">
             <summary className="cursor-pointer">{vi ? "Nhóm sẽ bị chặn nếu chọn xoá" : "Groups blocked if deleted"} ({row.groups.length})</summary>
             <ul className="mt-1 space-y-1">{row.groups.map(group => <li key={group.id}>{group.title}</li>)}</ul>
@@ -159,8 +162,8 @@ export function CampaignSkippedCleanup({ jobId, accounts, initialAccountId = "",
         : <div role="alert" className="space-y-3 rounded-xl border border-rose-300 bg-rose-50 p-3">
           <p className="text-sm font-bold text-rose-900">{vi ? "Xác nhận xoá" : "Confirm deletion"} {selected.size} {vi ? "chiến dịch" : "campaigns"} · {preview.accountName}</p>
           <p className="text-xs leading-relaxed text-rose-800">{vi
-            ? `Mất các lượt gửi và dữ liệu liên quan, không thể hoàn tác. ${groupCount} nhóm sẽ bị chặn trên tài khoản này, kể cả khi nằm trong chiến dịch khác. Không ảnh hưởng tài khoản khác. Tin đã bắt đầu gửi trước khi xác nhận không thể thu hồi.`
-            : `Delivery records and related data will be permanently removed. ${groupCount} groups will be blocked on this account, including in other campaigns. Other accounts are unaffected. Sends already started before confirmation cannot be recalled.`}</p>
+            ? `${groupCount} nhóm đã chọn sẽ bị chặn trên tài khoản này, kể cả khi nằm trong chiến dịch khác. Chiến dịch còn nhóm hợp lệ được giữ lại; chỉ xoá chiến dịch không còn nhóm hợp lệ cùng dữ liệu liên quan, không thể hoàn tác. Không ảnh hưởng tài khoản khác. Tin đã bắt đầu gửi không thể thu hồi.`
+            : `${groupCount} selected groups will be blocked on this account, including in other campaigns. Campaigns with valid groups are retained; only campaigns without valid groups and their related records are permanently deleted. Other accounts are unaffected. Sends already started cannot be recalled.`}</p>
           <div className="grid grid-cols-2 gap-2">
             <button type="button" disabled={pending} onClick={() => setConfirming(false)} className="rounded-lg border border-slate-200 bg-white p-2 font-semibold">{vi ? "Quay lại lựa chọn" : "Back to selection"}</button>
             <button type="button" disabled={pending || expired} onClick={confirm} className="rounded-lg bg-rose-600 p-2 font-bold text-white disabled:opacity-50">

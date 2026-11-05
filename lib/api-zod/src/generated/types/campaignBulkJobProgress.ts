@@ -5,12 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CampaignBulkJobProgressPhase } from './campaignBulkJobProgressPhase';
 import type { CampaignBulkJobProgressStatus } from './campaignBulkJobProgressStatus';
 import type { CampaignRerunReport } from './campaignRerunReport';
 import type { CampaignRerunResult } from './campaignRerunResult';
 
 export interface CampaignBulkJobProgress {
   id: string;
+  /** @nullable */
+  telegramAccountId?: string | null;
+  phase?: CampaignBulkJobProgressPhase;
   status: CampaignBulkJobProgressStatus;
   total: number;
   processed: number;

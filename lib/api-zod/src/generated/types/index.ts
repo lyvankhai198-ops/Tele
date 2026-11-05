@@ -134,6 +134,7 @@ export * from './bulkDeleteCampaignsResultSkippedItem';
 export * from './calendarItem';
 export * from './campaign';
 export * from './campaignBulkJobProgress';
+export * from './campaignBulkJobProgressPhase';
 export * from './campaignBulkJobProgressStatus';
 export * from './campaignCleanupCandidate';
 export * from './campaignCleanupCandidateCategory';

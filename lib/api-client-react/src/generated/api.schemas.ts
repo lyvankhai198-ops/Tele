@@ -41,6 +41,8 @@ export interface CampaignCleanupCandidate {
   category: CampaignCleanupCandidateCategory;
   reason: string;
   selectable: boolean;
+  /** @minimum 0 */
+  keptGroupCount?: number;
   groups: CampaignCleanupGroup[];
 }
 
@@ -1025,6 +1027,14 @@ export type CampaignRerunReport = CampaignRerunAssessment & {
   removedDestinationCount: number;
 };
 
+export type CampaignBulkJobProgressPhase = typeof CampaignBulkJobProgressPhase[keyof typeof CampaignBulkJobProgressPhase];
+
+
+export const CampaignBulkJobProgressPhase = {
+  checking_permissions: 'checking_permissions',
+  campaigns: 'campaigns',
+} as const;
+
 export type CampaignBulkJobProgressStatus = typeof CampaignBulkJobProgressStatus[keyof typeof CampaignBulkJobProgressStatus];
 
 
@@ -1037,6 +1047,9 @@ export const CampaignBulkJobProgressStatus = {
 
 export interface CampaignBulkJobProgress {
   id: string;
+  /** @nullable */
+  telegramAccountId?: string | null;
+  phase?: CampaignBulkJobProgressPhase;
   status: CampaignBulkJobProgressStatus;
   total: number;
   processed: number;

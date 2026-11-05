@@ -24,11 +24,14 @@ import { testReleaseUpdates } from "./release-updates.e2e";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "../../artifacts/api-server/src/lib/telegram-destination-state";
 import { testAdminGroupJoinQueue } from "./admin-group-join-queue.e2e";
 import { testCampaignScopedCreate } from "./campaign-scoped-create.e2e";
+import { registerCampaignBulkPermissionPreparation } from "../../artifacts/api-server/src/lib/campaign-bulk-jobs";
 
 const url = new URL(process.env.DATABASE_URL!);
 if (url.hostname !== "127.0.0.1" || url.pathname !== "/telecamp_test" || process.env.TELECAMPAIGN_E2E_ONLY !== "1") {
   throw Error("E2E_UNSAFE_DATABASE_REFUSED");
 }
+// Rights are seeded deterministically; fixtures must never connect to Telegram.
+registerCampaignBulkPermissionPreparation(async () => undefined);
 process.env.SESSION_SECRET = randomBytes(32).toString("hex");
 process.env.TELECAMPAIGN_SUPPORT_BOT_TOKEN = randomBytes(20).toString("hex");
 process.env.SEPAY_WEBHOOK_SECRET = randomBytes(32).toString("hex");

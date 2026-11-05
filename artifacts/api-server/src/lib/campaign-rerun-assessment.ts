@@ -1,4 +1,5 @@
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON } from "./telegram-destination-state";
+import { isLongPostingRestriction } from "./telegram-posting-permissions";
 
 export type RerunCategory = "sendable" | "temporary" | "review" | "invalid";
 export type RerunDestinationEvidence = {
@@ -19,13 +20,16 @@ export type RerunAssessment = {
 
 /** No text matching on arbitrary Telegram errors can authorize deletion. */
 export function assessCampaignRerun(input: {
-  connected: boolean; groups: RerunDestinationEvidence[]; terminal: boolean;
+  connected: boolean; groups: RerunDestinationEvidence[]; terminal: boolean; now?: number;
 }): RerunAssessment {
   const groups = input.groups.map((g): RerunGroupAssessment => {
     if (g.sending || g.uncertain) return { id:g.id, name:g.title, category:"review", reason:"uncertain_delivery" };
     if (g.blocked) return { id:g.id, name:g.title, category:"invalid", reason:"blocked_by_cleanup" };
     if (!input.connected) return { id:g.id, name:g.title, category:"temporary", reason:"account_disconnected" };
     if (!g.exists) return { id:g.id, name:g.title, category:"review", reason:"missing_destination" };
+    if (isLongPostingRestriction(g, input.now)) {
+      return { id:g.id, name:g.title, category:"invalid", reason:"posting_restricted_long_term" };
+    }
     // Only a completed membership sync, not CHAT_WRITE_FORBIDDEN or repeated
     // network errors, proves this account no longer has this destination.
     if (!g.canPost && g.permissionCheckedAt && !g.restrictedUntil
@@ -54,7 +58,8 @@ export function assessCampaignRerun(input: {
   const reason = !groups.length ? "no_destination"
     : category === "sendable" ? (groups.every(g=>g.reason==="delivery_confirmed") ? "delivery_confirmed" : "ready_destinations")
     : category === "review" ? "uncertain_delivery"
-    : category === "invalid" ? "membership_unavailable" : "temporary_failure";
+    : category === "invalid" ? (groups.some(g=>g.reason==="posting_restricted_long_term")
+      ? "posting_restricted_long_term" : "membership_unavailable") : "temporary_failure";
   return { category, reason, groups, sentCount, failedCount, targetCount,
     canDelete: input.terminal && category==="invalid" && targetCount>0 && sentCount===0
       && input.groups.some(g=>g.attempted>0)

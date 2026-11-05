@@ -1293,6 +1293,8 @@ export const BulkControlCampaignsResponse = zod.object({
   "action": zod.enum(['pause', 'resume']),
   "job": zod.object({
   "id": zod.string(),
+  "telegramAccountId": zod.string().uuid().nullish(),
+  "phase": zod.enum(['checking_permissions', 'campaigns']).optional(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
   "total": zod.number().int(),
   "processed": zod.number().int(),
@@ -1356,6 +1358,8 @@ export const BulkControlCampaignsResponse = zod.object({
 
 export const GetActiveCampaignBulkJobResponse = zod.union([zod.object({
   "id": zod.string(),
+  "telegramAccountId": zod.string().uuid().nullish(),
+  "phase": zod.enum(['checking_permissions', 'campaigns']).optional(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
   "total": zod.number().int(),
   "processed": zod.number().int(),
@@ -1415,6 +1419,8 @@ export const GetCampaignBulkJobParams = zod.object({
 
 export const GetCampaignBulkJobResponse = zod.object({
   "id": zod.string(),
+  "telegramAccountId": zod.string().uuid().nullish(),
+  "phase": zod.enum(['checking_permissions', 'campaigns']).optional(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
   "total": zod.number().int(),
   "processed": zod.number().int(),
@@ -1481,6 +1487,10 @@ export const CreateCampaignCleanupPreviewBody = zod.object({
   "telegramAccountId": zod.string().uuid()
 })
 
+export const createCampaignCleanupPreviewResponseCampaignsItemKeptGroupCountMin = 0;
+
+
+
 export const CreateCampaignCleanupPreviewResponse = zod.object({
   "id": zod.string().uuid(),
   "jobId": zod.string(),
@@ -1493,6 +1503,7 @@ export const CreateCampaignCleanupPreviewResponse = zod.object({
   "category": zod.enum(['sendable', 'temporary', 'review', 'invalid']),
   "reason": zod.string(),
   "selectable": zod.boolean(),
+  "keptGroupCount": zod.number().int().min(createCampaignCleanupPreviewResponseCampaignsItemKeptGroupCountMin).optional(),
   "groups": zod.array(zod.object({
   "id": zod.string().uuid(),
   "telegramId": zod.string(),
@@ -1545,6 +1556,8 @@ export const RetryCampaignBulkJobParams = zod.object({
 
 export const RetryCampaignBulkJobResponse = zod.object({
   "id": zod.string(),
+  "telegramAccountId": zod.string().uuid().nullish(),
+  "phase": zod.enum(['checking_permissions', 'campaigns']).optional(),
   "status": zod.enum(['queued', 'running', 'completed', 'failed']),
   "total": zod.number().int(),
   "processed": zod.number().int(),

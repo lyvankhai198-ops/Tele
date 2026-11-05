@@ -23,13 +23,24 @@ export async function testCampaignBulkJobs(input: {
   }
   const header={"Idempotency-Key":randomUUID()};
   const start=new Date(Date.now()+86400000).toISOString();
-  const body={action:"resume",scope:"completed",intervalSeconds:600,scheduledAt:start};
+  const body={action:"resume",telegramAccountId:account,scope:"completed",intervalSeconds:600,scheduledAt:start};
+  check((await request("/campaigns/bulk-control",ownerCookie,{...body,telegramAccountId:undefined})).status===400,
+    "E2E_BULK_ACCOUNT_REQUIRED");
   const before=Date.now();
   const accepted=await request("/campaigns/bulk-control",ownerCookie,body,"POST",header);
   const initial=await accepted.json() as any;
   check(accepted.status===202 && initial.job && Date.now()-before<5000,"E2E_BULK_ACCEPTED_WITHOUT_WAITING");
   const id=initial.job.id;
   const progress=async()=>await (await request(`/campaigns/bulk-control/jobs/${id}`,ownerCookie)).json() as any;
+  const permissionId=randomUUID(),permissionKey=`telecamp_operation:${ownerId}:${permissionId}`;
+  await pool.query("INSERT INTO system_settings(key,value) VALUES($1,$2)",
+    [permissionKey,JSON.stringify({state:"queued"})]);
+  await pool.query(`UPDATE system_settings SET value=(value::jsonb||$2::jsonb)::text WHERE key=$1`,
+    [`campaign_bulk_job:${ownerId}:${id}`,JSON.stringify({permissionSyncId:permissionId,permissionsVerified:false})]);
+  await processCampaignBulkJobs(30);
+  check((await progress()).processed===0 && (await progress()).phase==="checking_permissions",
+    "E2E_BULK_WAITS_FOR_FRESH_PERMISSIONS");
+  await pool.query("UPDATE system_settings SET value=$2 WHERE key=$1",[permissionKey,JSON.stringify({state:"completed"})]);
   check(initial.job.total===15 && initial.job.processed===0,"E2E_BULK_SNAPSHOT");
   const same=await request("/campaigns/bulk-control",ownerCookie,body,"POST",header);
   check((await same.json() as any).job.id===id,"E2E_BULK_DUPLICATE_SUBMIT_SAME_JOB");
@@ -90,5 +101,6 @@ export async function testCampaignBulkJobs(input: {
   check(finalCount.rows[0].n===15,"E2E_BULK_COMPLETED_RETRY_NO_DUPLICATE");
   const changed=await request("/campaigns/bulk-control",ownerCookie,{...body,intervalSeconds:0},"POST",header);
   check(changed.status===409,"E2E_BULK_IDEMPOTENCY_PAYLOAD_GUARD");
+  await pool.query("DELETE FROM system_settings WHERE key=$1",[permissionKey]);
   await pool.query("UPDATE subscriptions SET plan='plus' WHERE owner_user_id=$1",[ownerId]);
 }
