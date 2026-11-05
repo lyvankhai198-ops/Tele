@@ -101,6 +101,7 @@ function fixture(name,{language="vi",plan="pro",step=3,draft=baseDraft,editing=n
     "@/lib/i18n":{useLanguage:()=>({language:lang}),localizedErrorMessage:(_e,_l,f)=>f},
     "@/lib/auth":{useAuth:()=>({user:{id:"fixture",role:"user"}})},
     "@/lib/use-complete-campaigns":{useCompleteCampaigns:()=>({data:[],isLoading:false,isFetching:false,upsert(){}})},
+    "@/components/campaign-creation-progress":{CampaignCreationProgress:()=>null},
     "@/components/campaign-field-guidance":guidance,
     "@/lib/telegram-restrictions":{canChooseRestrictedDestination:()=>true,temporaryRestrictionUntil:()=>null,
       suggestedRestrictionSchedule:()=>null,localScheduleFields:()=>({}),scheduleMeetsRestrictionSuggestion:()=>true},
