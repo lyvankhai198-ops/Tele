@@ -51,7 +51,9 @@ export default function interfaceLocalizationPlugin({ types: t }) {
     const name = requestImport(state, "InterfaceText").name;
     return t.jsxElement(
       t.jsxOpeningElement(t.jsxIdentifier(name), [
-        t.jsxAttribute(t.jsxIdentifier("source"), t.stringLiteral(source)),
+        // Babel escapes newly generated Unicode strings. JSX attribute quotes
+        // treat those escapes literally; an expression preserves the actual key.
+        t.jsxAttribute(t.jsxIdentifier("source"), t.jsxExpressionContainer(t.stringLiteral(source))),
         ...(values ? [t.jsxAttribute(t.jsxIdentifier("values"), t.jsxExpressionContainer(values))] : []),
       ], true),
       null, [], true,
