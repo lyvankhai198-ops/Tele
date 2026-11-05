@@ -274,7 +274,6 @@
   "Campaigns (Active / Total)": "แคมเปญ (ใช้งาน / ทั้งหมด)",
   "Campaigns and reasons": "แคมเปญและเหตุผล",
   "Campaigns are limited to destinations where your account has explicit posting permission.": "แคมเปญจำกัดเฉพาะปลายทางที่บัญชีของคุณได้รับอนุญาตให้โพสต์โดยชัดแจ้ง",
-  "Campaigns can be edited and groups synced; run, pause, delete, and admin actions remain locked.": "แคมเปญสามารถแก้ไขและซิงค์กลุ่มได้ การดำเนินการ รัน หยุดชั่วคราว ลบ และการกระทำของผู้ดูแลระบบยังคงถูกล็อค",
   "Campaigns could not be deleted. Refresh the list and try again.": "ไม่สามารถลบแคมเปญได้ รีเฟรชรายการแล้วลองใหม่อีกครั้ง",
   "Campaigns to run": "แคมเปญที่จะรัน",
   "Campaigns using this group": "แคมเปญที่ใช้กลุ่มนี้",

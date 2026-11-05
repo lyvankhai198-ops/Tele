@@ -376,7 +376,6 @@
   "Có nhóm còn sẵn sàng để gửi.": "There are destinations ready for sending.",
   "Có nhóm đang chọn không còn quyền đăng. Hãy bỏ chọn tất cả nhóm có nhãn đỏ trước khi lưu để chiến dịch tiếp tục với các nhóm khác.": "A selected group no longer has posting permission. Deselect every group marked in red before saving so the campaign can continue with the other groups.",
   "Có quyền đăng": "Can post",
-  "Có thể chỉnh sửa campaign và đồng bộ nhóm; các thao tác chạy, dừng, xóa và quản trị vẫn bị khóa.": "Campaigns can be edited and groups synced; run, pause, delete, and admin actions remain locked.",
   "Có thể đóng cửa sổ; tác vụ vẫn tiếp tục. Không bấm chạy lại để tránh tạo trùng.": "You can close this dialog; processing continues. Do not submit again to avoid duplicate runs.",
   "Có thể đóng cửa sổ. Tác vụ vẫn tiếp tục; không cần gửi yêu cầu mới. Mẫu tin được cố định theo lúc bắt đầu.": "You may close this window. Processing continues; do not submit again. Template content is fixed at the start.",
   "Có thể rời trang; tác vụ vẫn chạy nền. Mở lại để xem tiến trình.": "You may leave this page. Work continues in the background and progress is available when you return.",

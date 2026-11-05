@@ -1,4 +1,4 @@
-test("support-session editing accepts timing fields without broadening existing permissions", async () => {
+test("support-session campaign controls stay explicitly allowlisted", async () => {
   const fsModule = await import("node:fs");
   const vmModule = await import("node:vm");
   const source = fsModule.readFileSync(new URL("../../artifacts/api-server/src/routes/telecampaign.ts", import.meta.url), "utf8");
@@ -7,10 +7,10 @@ test("support-session editing accepts timing fields without broadening existing 
   assert.ok(start >= 0 && end > start);
   const guard = vmModule.runInNewContext("let guard;const router={use(fn){guard=fn}};"
     + source.slice(start, end).replace(": void =>", " =>") + ";guard;");
-  const allowed = (body, support = true, method = "PATCH") => {
+  const allowed = (body, support = true, method = "PATCH", path = "/campaigns/fixture") => {
     let passed = false;
     const res = {status(){return this;},json(){}};
-    guard({body,supportSession:support?{}:undefined,method,path:"/campaigns/fixture"},res,()=>{passed=true;});
+    guard({body,supportSession:support?{}:undefined,method,path},res,()=>{passed=true;});
     return passed;
   };
   assert.equal(allowed({name:"edited",timingMode:"round",groupIntervalSeconds:300}),true);
@@ -18,6 +18,23 @@ test("support-session editing accepts timing fields without broadening existing 
   assert.equal(allowed({timingMode:"round",status:"queued"}),false);
   assert.equal(allowed({timingMode:"round"},true,"POST"),false);
   assert.equal(allowed({timingMode:"round"},false),true);
+  assert.equal(allowed({status:"queued"}),true);
+  assert.equal(allowed({status:"paused"}),true);
+  assert.equal(allowed({status:"cancelled"}),false);
+  assert.equal(allowed({},true,"POST","/campaigns"),true);
+  assert.equal(allowed({action:"resume"},true,"POST","/campaigns/bulk-control"),true);
+  assert.equal(allowed({action:"pause"},true,"POST","/campaigns/bulk-control"),true);
+  assert.equal(allowed({action:"unknown"},true,"POST","/campaigns/bulk-control"),false);
+  assert.equal(allowed({kind:"delete_campaigns"},true,"POST","/operations"),true);
+  assert.equal(allowed({kind:"delete_account"},true,"POST","/operations"),false);
+  assert.equal(allowed({},true,"DELETE","/campaigns/fixture"),true);
+  assert.equal(allowed({},true,"DELETE","/telegram/accounts/fixture"),false);
+  assert.equal(allowed({},true,"POST","/operations/fixture/retry"),false);
+  assert.equal(allowed({},true,"POST","/campaigns/bulk-control/jobs/fixture/retry"),true);
+  assert.equal(allowed({},true,"POST","/campaigns/bulk-control/jobs/fixture/cleanup-preview"),true);
+  assert.equal(allowed({},true,"POST","/campaigns/bulk-control/jobs/fixture/cleanup-confirm"),true);
+  assert.equal(allowed({},true,"POST","/campaigns/bulk-template"),false);
+  assert.equal(allowed({},true,"POST","/campaigns/fixture/clone"),false);
 });
 import test from "node:test";
 import assert from "node:assert/strict";

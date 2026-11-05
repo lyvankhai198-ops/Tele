@@ -274,7 +274,6 @@
   "Campaigns (Active / Total)": "キャンペーン (アクティブ / 合計)",
   "Campaigns and reasons": "キャンペーンと理由",
   "Campaigns are limited to destinations where your account has explicit posting permission.": "キャンペーンは、アカウントが明示的な投稿権限を持つ配信先に限定されます。",
-  "Campaigns can be edited and groups synced; run, pause, delete, and admin actions remain locked.": "キャンペーンは編集可能でグループも同期できますが、実行、一時停止、削除、管理アクションはロックされたままです。",
   "Campaigns could not be deleted. Refresh the list and try again.": "キャンペーンを削除できませんでした。リストを更新して再試行してください。",
   "Campaigns to run": "実行するキャンペーン",
   "Campaigns using this group": "このグループを使用するキャンペーン",
