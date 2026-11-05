@@ -9,6 +9,8 @@ import {
   useGetPurchaseOrderSettings, useListPurchaseOrders, useCreatePurchaseOrder, useSubmitPurchaseOrderProof, useCancelPurchaseOrder, getListPurchaseOrdersQueryKey
 } from "@workspace/api-client-react";
 import QRCode from "qrcode";
+import { TierEmblem } from "@/components/account/TierEmblem";
+import "@/components/account/upgrade.css";
 
 const planOrder: Record<string, number> = { plus: 1, pro: 2, unlimited: 3 };
 
@@ -71,8 +73,24 @@ const OrderCountdown = ({ createdAt, onExpire }: { createdAt: string, onExpire?:
 export default function Upgrade() {
   const { language, t } = useLanguage();
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: summary, isLoading, isError } = useGetUpgradeSummary();
+  const [highlightedPlan, setHighlightedPlan] = useState<string | null>(null);
+  useEffect(() => {
+    const target = new URLSearchParams(window.location.search).get("plan");
+    if (!target || !summary?.plans.some((plan) => plan.code === target)) {
+      setHighlightedPlan(null);
+      return;
+    }
+    setHighlightedPlan(target);
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`upgrade-${target}`)?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [summary?.plans, location]);
   const { data: purchaseSettings } = useGetPurchaseOrderSettings();
   const { data: purchaseOrders, refetch: refetchPurchaseOrders } = useListPurchaseOrders({
     query: {
@@ -659,11 +677,12 @@ export default function Upgrade() {
 
   return (
     <AppLayout activePage="upgrade" title={t("Upgrade plan")}>
-      <div className="max-w-[1100px] mx-auto py-6 sm:py-10" data-testid="upgrade-page">
+      <div className="tc-upgrade upgrade-page mx-auto py-6 sm:py-8" data-testid="upgrade-page">
 
-        <div className="mb-10 max-w-2xl">
-          <h1 className="text-[32px] sm:text-[40px] font-extrabold text-[#0f172a] tracking-tight mb-4 leading-tight">{t("Upgrade plan")}</h1>
-          <p className="text-[16px] font-medium text-[#475569] leading-relaxed">
+        <div className="upgrade-head">
+          <div className="upgrade-kicker"><span translate="no">Telecampaign</span><span aria-hidden="true">·</span>{t("Subscription")}</div>
+          <h1 className="upgrade-title">{t("Upgrade plan")}</h1>
+          <p className="upgrade-lead">
             {subscriptionExpired
                 ? (language === "vi"
                 ? "Thời hạn đã kết thúc. Chọn gói và thanh toán để gia hạn trực tiếp, không cần mua key mới."
@@ -673,7 +692,7 @@ export default function Upgrade() {
         </div>
 
         {/* Current Plan Banner */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 mb-12 shadow-sm border border-[#eef2f6] relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6" data-testid="current-plan-banner">
+        <div className="current-plan" data-testid="current-plan-banner">
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-3">
               <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#64748b]">{t("Your current plan")}</span>
@@ -707,17 +726,16 @@ export default function Upgrade() {
           <div className="relative z-10 w-full md:w-auto shrink-0">
             <button
               onClick={() => document.getElementById("activation-section")?.scrollIntoView({ behavior: "smooth" })}
-              className="w-full md:w-auto bg-white border-2 border-[#e2e8f0] text-[#0f172a] px-6 py-3.5 rounded-xl font-extrabold text-[14px] hover:border-[#cbd5e1] hover:bg-[#f8fafc] transition-all active:scale-95"
+              className="current-action"
             >
               {language === "vi" ? "Gia hạn / Kích hoạt key" : "Renew / Activate key"}
             </button>
           </div>
 
-          <Shield className="absolute -right-8 -bottom-8 h-48 w-48 text-[#f8fafc] pointer-events-none" strokeWidth={1} />
         </div>
 
         {/* Plans Grid */}
-        <div className="mb-8 flex flex-col gap-3 rounded-2xl border border-[#dbe4f5] bg-[#f8faff] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="my-5 flex flex-col gap-3 rounded-2xl border border-[#dbe4f5] bg-[#f8faff] p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[13px] font-extrabold uppercase tracking-wider text-[#1a2b88]">
               {language === "vi" ? "Bạn muốn thực hiện thao tác nào?" : "What would you like to do?"}
@@ -745,35 +763,12 @@ export default function Upgrade() {
             </button>
           </div>
         </div>
-        <div id="purchase-plans" className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 mb-16">
+        <div id="purchase-plans" className="plan-grid mb-10">
           {sortedPlans.map((plan) => {
             const thisLevel = planOrder[plan.code] || 0;
             const isCurrent = !subscriptionExpired && subscription.plan === plan.code;
             const isLower = !subscriptionExpired && thisLevel < currentPlanLevel;
             const planBlocked = checkoutOrderType === "license" ? (isCurrent || isLower) : isLower;
-
-            const isPro = plan.code === "pro";
-            const isUnlimited = plan.code === "unlimited";
-
-            const bgClass = isPro
-              ? "bg-[#1a2b88] text-white ring-4 ring-[#1a2b88]/20 ring-offset-2"
-              : isUnlimited
-              ? "bg-[#0f172a] text-white"
-              : "bg-white text-[#0f172a] border border-[#eef2f6]";
-            const titleColor = isPro || isUnlimited ? "text-white" : "text-[#0f172a]";
-            const subtitleColor = isPro ? "text-[#93c5fd]" : isUnlimited ? "text-[#94a3b8]" : "text-[#64748b]";
-            const checkColor = isPro ? "text-[#60a5fa]" : isUnlimited ? "text-[#e2e8f0]" : "text-[#10b981]";
-            const dividerColor = isPro ? "border-[#3143aa]" : isUnlimited ? "border-[#1e293b]" : "border-[#f1f5f9]";
-
-            const btnDisabledClass =
-              isPro || isUnlimited
-                ? "bg-white/10 text-white/40 cursor-not-allowed"
-                : "bg-[#f1f5f9] text-[#94a3b8] cursor-not-allowed";
-            const btnActiveClass = isPro
-              ? "bg-white text-[#1a2b88] hover:bg-[#eff6ff] shadow-lg"
-              : isUnlimited
-              ? "bg-white text-[#0f172a] hover:bg-[#f8fafc] shadow-lg"
-              : "bg-[#1a2b88] text-white hover:bg-[#152473] shadow-md";
 
             const features = language === "vi" ? plan.features : plan.featuresEn;
 
@@ -785,50 +780,45 @@ export default function Upgrade() {
             const canPurchase = hasPrice && (language === "vi" ? hasVndDest : hasUsdtDest);
 
             return (
-              <div
+              <article
                 key={plan.code}
-                className={`rounded-[32px] p-8 flex flex-col relative ${bgClass} shadow-sm transition-transform duration-300 ${isPro ? "md:-translate-y-4" : ""}`}
+                id={`upgrade-${plan.code}`}
+                data-tier={plan.code}
+                className={`plan-card${highlightedPlan === plan.code ? " selected" : ""}`}
                 data-testid={`plan-card-${plan.code}`}
               >
-                {isPro && (
-                  <div className="absolute top-0 right-8 bg-[#3b82f6] text-white text-[10px] font-extrabold uppercase tracking-[0.15em] py-2 px-5 rounded-b-xl shadow-sm">
-                    {t("Recommended")}
+                <div className="plan-card-top">
+                  <div>
+                    <div className="member-label" translate="no">VIP<span aria-hidden="true"> · </span>Telecampaign</div>
+                    <h3 className="member-plan">{plan.name}</h3>
+                    <div className={`tier-mark${isCurrent ? " current" : ""}`}>
+                      {isCurrent ? t("Your current plan") : plan.code === "pro" ? t("Recommended") : t("Subscription")}
+                    </div>
                   </div>
-                )}
-
-                <h3 className={`text-[26px] font-extrabold mb-2 uppercase tracking-tight ${titleColor}`}>{plan.name}</h3>
-                <p className={`text-[14px] font-medium mb-8 min-h-[42px] leading-relaxed ${subtitleColor}`}>
+                  <TierEmblem tier={plan.code} />
+                </div>
+                <p className="plan-tagline">
                   {language === "vi" ? plan.tagline : plan.taglineEn}
                 </p>
-
-                <div className="mb-8">
-                  <div className={`text-[32px] font-extrabold tracking-tight ${titleColor}`}>
-                    {plan.accountLimit ? `${plan.accountLimit}` : t("Unlimited")}
-                    {plan.accountLimit && (
-                      <span className={`text-[16px] font-bold ml-1 ${subtitleColor}`}>{t("accounts (abbrev)")}</span>
-                    )}
+                <div className="plan-facts">
+                  <div className="plan-fact">
+                    <span>{t("Telegram Accounts")}</span>
+                    <strong>{plan.accountLimit ? `${plan.accountLimit} ${t("accounts (abbrev)")}` : t("Unlimited")}</strong>
                   </div>
-                  <div className={`text-[13px] font-bold mt-2 uppercase tracking-wider ${subtitleColor} flex items-center justify-between`}>
-                    <span>{t("Valid for {n} days").replace("{n}", String(purchaseSettings?.durationsDays?.[plan.code.toUpperCase()] || plan.durationDays))}</span>
-                    {hasPrice ? (
-                      <span className={`text-[15px] ${titleColor}`}>
-                        {language === "vi" ? formatVnd(priceVnd) : formatUsdt(priceUsdt)}
-                      </span>
-                    ) : (
-                      <span className={`text-[12px] opacity-70 ${titleColor}`}>
-                        {t("Price unavailable")}
-                      </span>
-                    )}
+                  <div className="plan-fact">
+                    <span>{t("Duration")}</span>
+                    <strong>{t("Valid for {n} days").replace("{n}", String(purchaseSettings?.durationsDays?.[plan.code.toUpperCase()] || plan.durationDays))}</strong>
+                  </div>
+                  <div className="plan-fact price">
+                    <span>{t("Price")}</span>
+                    <strong>{hasPrice ? (language === "vi" ? formatVnd(priceVnd) : formatUsdt(priceUsdt)) : t("Price unavailable")}</strong>
                   </div>
                 </div>
-
-                <div className={`border-t ${dividerColor} mb-8`} />
-
-                <ul className="space-y-4 mb-10 flex-1">
+                <ul className="plan-features">
                   {features.map((feature, i) => (
-                    <li key={i} className="flex gap-3.5 text-[14px] font-bold items-start">
-                      <Check className={`h-5 w-5 shrink-0 ${checkColor}`} strokeWidth={2.5} />
-                      <span className={titleColor}>{feature}</span>
+                    <li key={i}>
+                      <Check size={15} aria-hidden="true" />
+                      <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -844,16 +834,14 @@ export default function Upgrade() {
                     }
                   }}
                   data-testid={`button-select-plan-${plan.code}`}
-                  className={`w-full py-4 rounded-xl font-extrabold transition-all active:scale-[0.98] ${
-                      planBlocked || !canPurchase || activeAutomatedOrder ? btnDisabledClass : btnActiveClass
-                  }`}
+                  className="plan-cta"
                 >
                   {checkoutOrderType === "renewal" && isCurrent ? (language === "vi" ? "Gia hạn gói này" : "Renew this plan") : isLower ? t("Already included") : hasPrice && !canPurchase
                     ? language === "vi" ? "Chưa có thông tin thanh toán" : "Payment details pending"
                     : activeAutomatedOrder ? (language === "vi" ? "Đang có đơn thanh toán chờ xử lý" : "Pending payment order")
                     : checkoutOrderType === "renewal" ? (language === "vi" ? "Chọn gói để gia hạn" : "Select plan to renew") : t("Select this plan")}
                 </button>
-              </div>
+              </article>
             );
           })}
         </div>
