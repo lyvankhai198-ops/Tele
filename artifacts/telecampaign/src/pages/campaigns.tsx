@@ -902,7 +902,8 @@ export default function Campaigns() {
   }
 
   async function removeFilteredCampaigns() {
-    if(campaignDataBlocked||bulkDelete.isPending||deletionSubmitLock.current||deletionProgress)return;
+    if(campaignDataBlocked)return;
+    if(bulkDelete.isPending||deletionSubmitLock.current||deletionProgress)return;
     const deletableCount = listedCampaigns.filter((campaign) => !isActive(campaign.status)).length;
     if (!deletableCount) {
       setToast(c.bulkNoEligible);
