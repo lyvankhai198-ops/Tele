@@ -154,11 +154,11 @@ export async function testCampaignSkippedCleanup(input: {
   const persisted=(await pool.query("SELECT value FROM system_settings WHERE key=$1",[jobKey])).rows[0];
   const sourceJob=JSON.parse(persisted.value);
   sourceJob.ids.push(partialOnly);sourceJob.skipped.push({...sourceJob.skipped[0],id:partialOnly});
-  sourceJob.results.push({...sourceJob.results[0],sourceId:partialOnly});
+  sourceJob.results.push({...sourceJob.results[0],id:partialOnly});
   await pool.query("UPDATE system_settings SET value=$2 WHERE key=$1",[jobKey,JSON.stringify(sourceJob)]);
   const partialPreview=await preview();
   const partialResponse=await confirm(partialPreview.id,[partialOnly]);
-  const partialOperation=(await partialResponse.json() as any).operation;
+  const partialOperation=await partialResponse.json() as any;
   check(partialResponse.status===202 && partialOperation.state==="completed" && partialOperation.unit==="groups",
     "E2E_CLEANUP_PARTIAL_ONLY_ALREADY_COMPLETED");
   check((await pool.query("SELECT destination_ids FROM campaigns WHERE id=$1",[partialOnly])).rows[0].destination_ids.join()===ready,

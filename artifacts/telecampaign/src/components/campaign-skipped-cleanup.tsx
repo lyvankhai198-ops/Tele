@@ -160,7 +160,7 @@ export function CampaignSkippedCleanup({ jobId, accounts, initialAccountId = "",
       {!confirming ? <button type="button" disabled={!selected.size || selected.size>5000 || pending || expired} onClick={() => setConfirming(true)}
         className="w-full rounded-xl bg-rose-600 p-3 font-bold text-white disabled:opacity-50">{vi ? "Xem xác nhận xoá" : "Review deletion"} ({selected.size})</button>
         : <div role="alert" className="space-y-3 rounded-xl border border-rose-300 bg-rose-50 p-3">
-          <p className="text-sm font-bold text-rose-900">{vi ? "Xác nhận xoá" : "Confirm deletion"} {selected.size} {vi ? "chiến dịch" : "campaigns"} · {preview.accountName}</p>
+          <p className="text-sm font-bold text-rose-900">{vi ? "Xác nhận xoá" : "Confirm deletion"} {preview.campaigns.filter(row=>selected.has(row.id) && !row.keptGroupCount).length} {vi ? "chiến dịch" : "campaigns"} · {preview.accountName}</p>
           <p className="text-xs leading-relaxed text-rose-800">{vi
             ? `${groupCount} nhóm đã chọn sẽ bị chặn trên tài khoản này, kể cả khi nằm trong chiến dịch khác. Chiến dịch còn nhóm hợp lệ được giữ lại; chỉ xoá chiến dịch không còn nhóm hợp lệ cùng dữ liệu liên quan, không thể hoàn tác. Không ảnh hưởng tài khoản khác. Tin đã bắt đầu gửi không thể thu hồi.`
             : `${groupCount} selected groups will be blocked on this account, including in other campaigns. Campaigns with valid groups are retained; only campaigns without valid groups and their related records are permanently deleted. Other accounts are unaffected. Sends already started cannot be recalled.`}</p>
