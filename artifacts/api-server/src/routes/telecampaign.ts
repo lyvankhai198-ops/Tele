@@ -2959,6 +2959,9 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
        if (!["draft", "paused", "completed", "completed_with_errors"].includes(lockedCampaign.status)) {
          return { kind: "error" as const, status: 409, message: "Only draft, paused, or completed campaigns can be edited" };
       }
+      const resumingEditedSchedule = lockedCampaign.status === "paused"
+        && parsed.data.scheduledAt !== undefined
+        && (parsed.data.scheduledAt?.getTime() ?? null) !== (lockedCampaign.scheduledAt?.getTime() ?? null);
 
       await tx.execute(sql`SELECT 1 FROM ${campaignTargetsTable} WHERE ${campaignTargetsTable.campaignId} = ${lockedCampaign.id} FOR UPDATE`);
       const existingTargets = await tx.select({
@@ -2969,6 +2972,9 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         .where(eq(campaignTargetsTable.campaignId, lockedCampaign.id));
       if (existingTargets.some((target) => target.status === "sending")) {
         return { kind: "error" as const, status: 409, message: "Please wait for the current delivery to finish before editing this campaign" };
+      }
+      if (resumingEditedSchedule && existingTargets.some(target => target.status === "requires_review")) {
+        return { kind: "error" as const, status: 409, message: "Verify uncertain deliveries before rescheduling this campaign to avoid duplicate messages" };
       }
 
       const name = parsed.data.name ?? lockedCampaign.name;
@@ -2998,12 +3004,19 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
         return { kind: "error" as const, status: 400, message: "Gói PLUS giới hạn tối đa 300 lần lặp cho mỗi chiến dịch." };
       }
 
-      const [account] = await tx.select({ id: telegramAccountsTable.id }).from(telegramAccountsTable).where(and(
+      const [account] = await tx.select({
+        id: telegramAccountsTable.id,
+        status: telegramAccountsTable.status,
+        sessionEncrypted: telegramAccountsTable.sessionEncrypted,
+      }).from(telegramAccountsTable).where(and(
         eq(telegramAccountsTable.id, telegramAccountId),
         eq(telegramAccountsTable.ownerUserId, ownerUserId),
         isNull(telegramAccountsTable.deletedAt),
       ));
       if (!account) return { kind: "error" as const, status: 404, message: "Telegram account not found" };
+      if (resumingEditedSchedule && (!account.sessionEncrypted || account.status !== "connected")) {
+        return { kind: "error" as const, status: 409, message: "The campaign Telegram account must be connected before it can run." };
+      }
       const [template] = await tx.select().from(messageTemplatesTable).where(and(
         eq(messageTemplatesTable.id, templateId),
         eq(messageTemplatesTable.ownerUserId, ownerUserId),
@@ -3011,6 +3024,22 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
       if (!template) return { kind: "error" as const, status: 404, message: "Message template not found" };
       if (campaignCloneMode(lockedCampaign) !== "admin" && template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
         return { kind: "error" as const, status: 409, message: "Forward templates must use the Telegram account that owns the saved message" };
+      }
+      if (resumingEditedSchedule) {
+        if (campaignCloneMode(lockedCampaign) === "admin" && template.mode !== "forward") {
+          return { kind: "error" as const, status: 409, message: "A cloned campaign must use a Saved Message forward template." };
+        }
+        if (template.mode === "forward" && (template.sourceAccountId !== telegramAccountId || !template.sourceMessageId)) {
+          return { kind: "error" as const, status: 409, message: "Select a Saved Message from this campaign's Telegram account before running." };
+        }
+        try {
+          await assertCampaignDestinationsAllowed(tx, ownerUserId, telegramAccountId, destinationIds);
+        } catch (error) {
+          if (error instanceof Error && error.message === "CAMPAIGN_DESTINATION_BLOCKED") {
+            return { kind: "error" as const, status: 409, message: error.message };
+          }
+          throw error;
+        }
       }
       const editSetAt = new Date();
       const requestedScheduledAt = parsed.data.scheduledAt === undefined
@@ -3053,7 +3082,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
        const nextDeliveryAt = Math.max(
         configuredRoundStartAt.getTime(),
         editSetAt.getTime(),
-         firstDeliveryAfterLastSend,
+         resumingEditedSchedule ? Number.NEGATIVE_INFINITY : firstDeliveryAfterLastSend,
       );
       const remainingByDestination = new Map(destinations.map((destination) => [
         destination.id,
@@ -3068,7 +3097,7 @@ router.patch("/campaigns/:campaignId", async (req, res): Promise<void> => {
 
        // Editing a completed campaign starts a fresh run on the same campaign:
        // the old delivery history is replaced by a new schedule beginning at 0.
-       const nextStatus = reopeningCompletedCampaign
+       const nextStatus = reopeningCompletedCampaign || resumingEditedSchedule
          ? (targetTotal > 0 ? "queued" : "completed")
         : lockedCampaign.status;
       const [campaign] = await tx.update(campaignsTable).set({

@@ -515,6 +515,9 @@ export function CampaignFormModal({
     try {
       if (editingCampaign) {
         const isAdminClonedCampaign = editingCampaign.cloneMode === "admin";
+        const originalSchedule = initialForm(editingCampaign);
+        const scheduleUnchanged = form.scheduleDate === originalSchedule.scheduleDate
+          && form.scheduleTime === originalSchedule.scheduleTime;
         const updatedCampaign = await updateStatus.mutateAsync({
           campaignId: editingCampaign.id,
           data: {
@@ -524,7 +527,7 @@ export function CampaignFormModal({
               templateId: form.templateId,
             }),
             destinationIds: form.destinationIds,
-            scheduledAt,
+            scheduledAt: scheduleUnchanged ? editingCampaign.scheduledAt : scheduledAt,
             timezone: systemDefaults.data?.defaultTimezone ?? (Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh"),
             repeatCount: values[0],
             roundDelayMinSeconds: values[1],
