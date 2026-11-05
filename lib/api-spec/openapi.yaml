@@ -2311,6 +2311,7 @@ components:
         category: {type: string, enum: [sendable, temporary, review, invalid]}
         reason: {type: string}
         selectable: {type: boolean}
+        keptGroupCount: {type: integer, minimum: 0}
         groups:
           type: array
           items: {$ref: "#/components/schemas/CampaignCleanupGroup"}
@@ -2836,6 +2837,8 @@ components:
       required: [id, status, total, processed, updatedCount, skippedCount, error]
       properties:
         id: { type: string }
+        telegramAccountId: {type: [string, "null"], format: uuid}
+        phase: {type: string, enum: [checking_permissions, campaigns]}
         status: { type: string, enum: [queued, running, completed, failed] }
         total: { type: integer }
         processed: { type: integer }

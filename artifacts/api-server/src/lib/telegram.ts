@@ -14,6 +14,7 @@ import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 import { logger } from "./logger";
+import { telegramPostingPermissionSnapshot } from "./telegram-posting-permissions";
 import {
   TelegramPostingPermissionError,
   telegramSendRestrictionIsActive,
@@ -36,10 +37,12 @@ type TelegramEntity = {
   };
   bannedRights?: {
     sendMessages?: boolean;
+    sendPlain?: boolean;
     untilDate?: number;
   };
   defaultBannedRights?: {
     sendMessages?: boolean;
+    sendPlain?: boolean;
     untilDate?: number;
   };
 };
@@ -640,7 +643,7 @@ export async function syncAccountDestinations(accountId: string,onProgress?:(cou
       if (isLeftTelegramEntity(entity)) continue;
       const id = telegramId(entity);
       if (!id) continue;
-      const canPost = canPostToEntity(entity);
+      const { canPost, permissionReason, restrictedUntil } = telegramPostingPermissionSnapshot(entity);
       syncedTelegramIds.add(id);
       await upsertDestination({
         telegramId: id,
@@ -651,8 +654,8 @@ export async function syncAccountDestinations(accountId: string,onProgress?:(cou
         kind: entity.broadcast ? "channel" : entity.forum ? "forum" : "group",
         memberCount: entity.participantsCount ?? null,
         canPost,
-        permissionReason: canPost ? "Posting permission available" : "Posting is restricted by Telegram",
-        restrictedUntil: canPost ? null : postingRestrictionUntil(entity),
+        permissionReason,
+        restrictedUntil,
       });
 
       if (!entity.forum || entity.broadcast) {
@@ -683,8 +686,8 @@ export async function syncAccountDestinations(accountId: string,onProgress?:(cou
                 ? "Topic is closed by Telegram"
                 : topic.hidden
                   ? "Topic is hidden by Telegram"
-                  : "Posting is restricted by Telegram",
-            restrictedUntil: topicCanPost ? null : postingRestrictionUntil(entity),
+                  : permissionReason,
+            restrictedUntil: topicCanPost ? null : restrictedUntil,
           });
         }
       } catch (error) {

@@ -14,5 +14,7 @@ export interface CampaignCleanupCandidate {
   category: CampaignCleanupCandidateCategory;
   reason: string;
   selectable: boolean;
+  /** @minimum 0 */
+  keptGroupCount?: number;
   groups: CampaignCleanupGroup[];
 }

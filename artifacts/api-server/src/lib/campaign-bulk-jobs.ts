@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
-import { activityLogsTable, campaignsTable, db, systemSettingsTable } from "@workspace/db";
+import { activityLogsTable, campaignsTable, db, systemSettingsTable, telegramAccountsTable } from "@workspace/db";
+import { enqueueOperation, saveOperation, type OperationJob } from "./operations";
 import { getRerunReports, processFinishedRerunReviews } from "./campaign-rerun-review";
 import { logger } from "./logger";
 import { campaignListScope, type CampaignListScope } from "./campaign-list-scope";
@@ -15,6 +16,7 @@ export type CampaignBulkJob = Omit<CampaignListScope,"status"> & {
   status: "queued" | "running" | "completed" | "failed";
   error: string | null; createdAt: string;
   onlySendable?: boolean; autoDeleteInvalid?: boolean; deletedCount?: number;
+  permissionSyncId?: string; permissionsVerified?: boolean;
   results?: Array<{id:string;name:string;outcome:"created"|"resumed"|"skipped"|"deleted";
     reason:string;runId?:string;assessment?:RerunAssessment}>;
 };
@@ -30,16 +32,22 @@ const prefix = "campaign_bulk_job:";
 const keyFor = (owner: string, id: string) => `${prefix}${owner}:${id}`;
 export const bulkJobSummary = (job: CampaignBulkJob) => ({
   id: job.id, status: job.status, total: job.ids.length, processed: job.cursor,
+  telegramAccountId: job.telegramAccountId ?? null,
+  phase: job.permissionSyncId && !job.permissionsVerified ? "checking_permissions" : "campaigns",
   updatedCount: job.updatedCount, skippedCount: job.skipped.length, error: job.error,
   onlySendable: job.onlySendable ?? false, autoDeleteInvalid: job.autoDeleteInvalid ?? false,
   deletedCount:job.deletedCount ?? 0,results:job.results ?? [],reviews:[],
 });
 export function registerCampaignBulkProcessor(fn: NonNullable<typeof processor>) { processor = fn; }
+let preparePermissions = async (tx: Tx, owner: string, account: {id:string;name:string}) =>
+  (await enqueueOperation(tx,{owner,kind:"sync_groups",accountId:account.id,label:account.name})).id as string | undefined;
+/** Network-free dependency injection for isolated PostgreSQL fixtures. */
+export function registerCampaignBulkPermissionPreparation(fn: typeof preparePermissions) { preparePermissions = fn; }
 
 export async function createCampaignBulkJob(input: CampaignListScope & {
   ownerUserId: string; scope: CampaignBulkJob["scope"]; intervalSeconds: number;
   startAt: Date; scheduledAt: Date; requestId?: string;
-  onlySendable?:boolean;autoDeleteInvalid?:boolean;
+  onlySendable?:boolean;autoDeleteInvalid?:boolean;requireFreshPermissions?:boolean;
 }) {
   const filters={
     ...(input.telegramAccountId?{telegramAccountId:input.telegramAccountId}:{}),
@@ -69,16 +77,26 @@ export async function createCampaignBulkJob(input: CampaignListScope & {
       .where(like(systemSettingsTable.key, `${prefix}${input.ownerUserId}:%`));
     const active = rows.map(row => JSON.parse(row.value) as CampaignBulkJob)
       .find(job => job.status !== "completed");
-    if (active) return active;
+    if (active) {
+      if (active.telegramAccountId !== input.telegramAccountId) throw Error("CAMPAIGN_BULK_BUSY");
+      return active;
+    }
+    const [account] = input.telegramAccountId ? await tx.select({id:telegramAccountsTable.id,name:telegramAccountsTable.name})
+      .from(telegramAccountsTable).where(and(eq(telegramAccountsTable.id,input.telegramAccountId),
+        eq(telegramAccountsTable.ownerUserId,input.ownerUserId),sql`${telegramAccountsTable.deletedAt} IS NULL`)) : [];
+    if (input.telegramAccountId && !account) throw Error("CAMPAIGN_BULK_ACCOUNT_NOT_FOUND");
     const statuses = input.scope === "completed" ? ["completed", "completed_with_errors"] : [input.scope];
     const candidates = await tx.select({id: campaignsTable.id}).from(campaignsTable).where(and(
       campaignListScope(input.ownerUserId,filters), inArray(campaignsTable.status, statuses),
     )).orderBy(asc(campaignsTable.createdAt), asc(campaignsTable.id));
+    const permissionSyncId = input.requireFreshPermissions && account && candidates.length
+      ? await preparePermissions(tx,input.ownerUserId,account) : undefined;
     const job: CampaignBulkJob = {
       id, ownerUserId: input.ownerUserId, scope: input.scope, intervalSeconds: input.intervalSeconds,
       telegramAccountId:filters.telegramAccountId,search:filters.search,
       startAt: input.startAt.toISOString(), fingerprint, ids: candidates.map(c => c.id),
       cursor: 0, updatedCount: 0, skipped: [], status: candidates.length ? "queued" : "completed",
+      ...(permissionSyncId ? {permissionSyncId,permissionsVerified:false} : {}),
       error: null, createdAt: new Date().toISOString(),
       onlySendable:input.onlySendable ?? true,autoDeleteInvalid:false,
       deletedCount:0,results:[],
@@ -112,6 +130,23 @@ export async function retryCampaignBulkJob(owner: string, id: string) {
     if (!row) return null;
     const job = JSON.parse(row.value) as CampaignBulkJob;
     if (job.status === "failed") {
+      if (job.permissionSyncId && !job.permissionsVerified) {
+        const [record] = await tx.select().from(systemSettingsTable)
+          .where(eq(systemSettingsTable.key,`telecamp_operation:${owner}:${job.permissionSyncId}`)).for("update");
+        if (record) {
+          const verification=JSON.parse(record.value) as OperationJob;
+          if (verification.state==="failed") {
+            verification.state="queued"; verification.error=null;
+            await saveOperation(tx,verification);
+          }
+        } else if (job.telegramAccountId) {
+          const [account]=await tx.select({id:telegramAccountsTable.id,name:telegramAccountsTable.name})
+            .from(telegramAccountsTable).where(and(eq(telegramAccountsTable.id,job.telegramAccountId),
+              eq(telegramAccountsTable.ownerUserId,owner),sql`${telegramAccountsTable.deletedAt} IS NULL`));
+          if (!account) throw Error("CAMPAIGN_BULK_ACCOUNT_NOT_FOUND");
+          job.permissionSyncId=await preparePermissions(tx,owner,account);
+        }
+      }
       job.status = "queued";
       job.error = null;
       await tx.update(systemSettingsTable).set({value: JSON.stringify(job), updatedAt: new Date()})
@@ -132,14 +167,34 @@ export async function processCampaignBulkJobs(maxSteps = 10) {
         const processed = await db.transaction(async tx => {
           await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
           await tx.execute(sql`SET LOCAL statement_timeout = '15s'`);
-          const result = await tx.execute(sql`SELECT key,value FROM ${systemSettingsTable}
-            WHERE key LIKE ${prefix + "%"} AND (value::jsonb->>'status') IN ('queued','running')
-            ORDER BY updated_at,key LIMIT 1 FOR UPDATE SKIP LOCKED`);
+          const result = await tx.execute(sql`SELECT pending.key,pending.value FROM ${systemSettingsTable} pending
+            WHERE pending.key LIKE ${prefix + "%"} AND (pending.value::jsonb->>'status') IN ('queued','running')
+              AND (NOT (pending.value::jsonb ? 'permissionSyncId')
+                OR pending.value::jsonb->>'permissionsVerified'='true'
+                OR NOT EXISTS (SELECT 1 FROM ${systemSettingsTable} verification
+                  WHERE verification.key='telecamp_operation:'||(pending.value::jsonb->>'ownerUserId')||':'||(pending.value::jsonb->>'permissionSyncId'))
+                OR EXISTS (SELECT 1 FROM ${systemSettingsTable} verification
+                  WHERE verification.key='telecamp_operation:'||(pending.value::jsonb->>'ownerUserId')||':'||(pending.value::jsonb->>'permissionSyncId')
+                    AND verification.value::jsonb->>'state' IN ('completed','failed')))
+            ORDER BY pending.updated_at,pending.key LIMIT 1 FOR UPDATE OF pending SKIP LOCKED`);
           const row = result.rows[0] as {key: string; value: string} | undefined;
           if (!row) return false;
           failedKey = row.key;
           const job = JSON.parse(row.value) as CampaignBulkJob;
           failedCursor = job.cursor;
+          if (job.permissionSyncId && !job.permissionsVerified) {
+            const [verification] = await tx.select({value:systemSettingsTable.value}).from(systemSettingsTable)
+              .where(eq(systemSettingsTable.key,`telecamp_operation:${job.ownerUserId}:${job.permissionSyncId}`));
+            const state = verification ? JSON.parse(verification.value).state : "failed";
+            if (state !== "completed") {
+              job.status = "failed";
+              job.error = "CAMPAIGN_BULK_PERMISSION_SYNC_FAILED";
+              await tx.update(systemSettingsTable).set({value:JSON.stringify(job),updatedAt:new Date()})
+                .where(eq(systemSettingsTable.key,row.key));
+              return true;
+            }
+            job.permissionsVerified = true;
+          }
           const sourceId = job.ids[job.cursor];
           const handled = await processor!(tx, job, sourceId);
           job.results ??= [];

@@ -13,6 +13,7 @@ export const rerunReason = (reason:string, language:Language) => {
     membership_needs_refresh:["Cần đồng bộ nhóm lại để xác nhận trạng thái mới nhất.","Sync groups again to confirm the latest membership status."],
     membership_unavailable:["Đồng bộ nhóm đã xác nhận tài khoản không còn đích gửi này.","Group synchronization confirmed this destination is no longer available to this account."],
     blocked_by_cleanup:["Nhóm đã bị chặn trên tài khoản này sau khi xác nhận xoá chiến dịch.","This group was blocked on this account after confirmed campaign deletion."],
+    posting_restricted_long_term:["Quyền Telegram đã được xác minh: còn hạn chế đăng từ 30 ngày trở lên hoặc vô thời hạn.","Verified Telegram rights: posting is restricted for at least 30 more days or indefinitely."],
     delivery_confirmed:["Đã có bằng chứng gửi thành công.","Confirmed successful delivery exists."],
     ready_not_tested:["Nhóm sẵn sàng nhưng chưa có lần gửi thành công; không phải bảo đảm gửi được.","Ready but not yet successfully tested; delivery is not guaranteed."],
     ready_destinations:["Có nhóm còn sẵn sàng để gửi.","There are destinations ready for sending."],

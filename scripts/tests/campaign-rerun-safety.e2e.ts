@@ -49,7 +49,7 @@ export async function testCampaignRerunSafety(input:{
   const foreign=await seed("foreign",[],"completed",otherOwnerId,foreignAccount);
   const foreignBefore=(await pool.query("SELECT row_to_json(c) value FROM campaigns c WHERE id=$1",[foreign])).rows[0].value;
   const at=new Date(Date.now()+3600000).toISOString();
-  const body={action:"resume",scope:"completed",intervalSeconds:60,scheduledAt:at};
+  const body={action:"resume",telegramAccountId:account,scope:"completed",intervalSeconds:60,scheduledAt:at};
   const token=randomUUID();
   const accepted=await request("/campaigns/bulk-control",ownerCookie,body,"POST",{"Idempotency-Key":token});
   const initial=(await accepted.json() as any).job;

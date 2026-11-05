@@ -539,6 +539,7 @@ export default function Campaigns() {
   const [cloneTargetAccountId, setCloneTargetAccountId] = useState("");
   const [cloneError, setCloneError] = useState<string | null>(null);
   const [bulkResumeOpen, setBulkResumeOpen] = useState(false);
+  const [bulkResumeAccountId, setBulkResumeAccountId] = useState("");
   const [bulkResumeScope, setBulkResumeScope] = useState<BulkResumeScope>("paused");
   const [bulkIntervalMinutes, setBulkIntervalMinutes] = useState("");
   const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
@@ -548,7 +549,7 @@ export default function Campaigns() {
   const [autoDeleteInvalid,setAutoDeleteInvalid]=useState(false);
   const [bulkRetrying, setBulkRetrying] = useState(false);
   const bulkRequestId = useMemo(() => crypto.randomUUID(), [
-    bulkResumeOpen, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
+    bulkResumeOpen, bulkResumeAccountId, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
     accountFilter,search,status,
   ]);
   const bulkControl = useBulkControlCampaigns({request: {headers: {"Idempotency-Key": bulkRequestId}}});
@@ -556,6 +557,7 @@ export default function Campaigns() {
   const bulkStorageKey = `telecamp.bulk-job:${user?.id ?? ""}`;
   function rememberBulkJob(job: CampaignBulkJobProgress) {
     setBulkJob(job);
+    setBulkResumeAccountId(job.telegramAccountId??"");
     setOnlySendable(job.onlySendable ?? false);
     setAutoDeleteInvalid(job.autoDeleteInvalid ?? false);
     try { localStorage.setItem(bulkStorageKey, job.id); } catch { /* storage is optional */ }
@@ -637,20 +639,12 @@ export default function Campaigns() {
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
     return completed[0]?.id ?? null;
   }, [campaigns.data]);
-  const bulkScopeOptions = useMemo(() => {
-    const available = new Set<BulkResumeScope>();
-    for (const campaign of listedCampaigns) {
-      if (campaign.status === "draft") available.add("draft");
-      if (campaign.status === "queued") available.add("queued");
-      if (campaign.status === "paused") available.add("paused");
-      if (campaign.status === "completed" || campaign.status === "completed_with_errors") available.add("completed");
-    }
-    if (status === "draft") return available.has("draft") ? ["draft" as const] : [];
-    if (status === "queued") return available.has("queued") ? ["queued" as const] : [];
-    if (status === "paused") return available.has("paused") ? ["paused" as const] : [];
-    if (status === "completed") return available.has("completed") ? ["completed" as const] : [];
-    return (["draft", "queued", "paused", "completed"] as const).filter((scope) => available.has(scope));
-  }, [listedCampaigns, status]);
+  const bulkScopeOptions = useMemo<BulkResumeScope[]>(() => {
+    // Scope choices cannot depend on campaigns loaded for a different account.
+    if (status === "draft" || status === "queued" || status === "paused") return [status];
+    if (status === "completed" || status === "completed_with_errors") return ["completed" as const];
+    return status === "all" ? (["draft", "queued", "paused", "completed"] as const).slice() : [];
+  }, [status]);
   const templateSelection=useCompleteCampaigns(bulkTemplateOpen&&bulkTemplateAccountId?campaignScope:"",bulkTemplateAccountId);
   const templateCampaigns = useMemo(() => (templateSelection.data ?? []).filter((campaign) =>
     Boolean(bulkTemplateAccountId) && campaign.telegramAccountId === bulkTemplateAccountId,
@@ -746,6 +740,7 @@ export default function Campaigns() {
     if(campaignDataBlocked){if(bulkJob)setBulkResumeOpen(true);return;}
     if (bulkJob && bulkJob.status !== "completed") { setBulkResumeOpen(true); return; }
     setBulkJob(null);
+    setBulkResumeAccountId(accountFilter);
     setOnlySendable(true);
     setAutoDeleteInvalid(false);
     try { localStorage.removeItem(bulkStorageKey); } catch { /* optional storage */ }
@@ -764,6 +759,10 @@ export default function Campaigns() {
   async function submitBulkResume() {
     if(campaignDataBlocked)return;
     if (bulkControl.isPending || bulkJob) return;
+    if (!bulkResumeAccountId) {
+      setToast(language==="vi"?"Chọn tài khoản Telegram":"Choose a Telegram account");
+      return;
+    }
     const intervalMinutes = Number(bulkIntervalMinutes.trim());
     if (!bulkIntervalMinutes.trim() || !Number.isInteger(intervalMinutes) || intervalMinutes < 0 || intervalMinutes > 4320 || !bulkScheduleDate || !bulkScheduleTime) {
       setToast(c.genericError);
@@ -782,6 +781,7 @@ export default function Campaigns() {
         data: {
           action: "resume",
           ...bulkFilter,
+          telegramAccountId: bulkResumeAccountId,
           scope: bulkResumeScope,
           intervalSeconds: intervalMinutes * 60,
           scheduledAt: scheduledAt.toISOString(),
@@ -1156,6 +1156,8 @@ export default function Campaigns() {
                 {bulkJobActive && <progress aria-label={language === "vi" ? "Tiến độ xử lý" : "Operation progress"} className="mt-3 h-2 w-full" max={Math.max(1, bulkJob.total)} value={bulkJob.processed} />}
                 <p className="mt-2 text-xs">{bulkJob.status === "failed"
                   ? language === "vi" ? "Phần đã tạo được giữ nguyên. Tiếp tục chỉ xử lý phần chưa hoàn tất." : "Created runs are preserved. Continuing processes only the unfinished part."
+                  : bulkJob.phase==="checking_permissions" && bulkJobActive
+                    ? language==="vi"?"Đang xác minh quyền gửi nhóm trên tài khoản đã chọn.":"Checking group posting permissions on the selected account."
                   : bulkJobActive
                     ? language === "vi" ? "Có thể đóng cửa sổ; tác vụ vẫn tiếp tục. Không bấm chạy lại để tránh tạo trùng." : "You can close this dialog; processing continues. Do not submit again to avoid duplicate runs."
                     : language === "vi" ? "Đã xử lý xong tác vụ này." : "This operation is complete."}</p>
@@ -1170,14 +1172,23 @@ export default function Campaigns() {
               </div>
             )}
             {bulkJob && <CampaignRerunResults job={bulkJob} language={language} />}
-            {bulkJob?.status==="completed" && bulkJob.skippedCount>0 && <CampaignSkippedCleanup
-              key={bulkJob.id} jobId={bulkJob.id} accounts={accounts.data??[]} initialAccountId={accountFilter}
+            {bulkJob?.status==="completed" && (bulkJob.skippedCount>0 || bulkJob.results?.some(row=>row.assessment?.groups.some(group=>group.category==="invalid"))) && <CampaignSkippedCleanup
+              key={bulkJob.id} jobId={bulkJob.id} accounts={(accounts.data??[]).filter(account=>!bulkResumeAccountId || account.id===bulkResumeAccountId)} initialAccountId={bulkResumeAccountId}
               language={language} onAccepted={()=>setBulkResumeOpen(false)} />}
             <fieldset disabled={Boolean(bulkJob) || bulkControl.isPending} className="space-y-4 disabled:opacity-60">
+              {!bulkJob && <label className="block text-sm font-semibold">
+                {language==="vi"?"Tài khoản Telegram":"Telegram account"}
+                <select value={bulkResumeAccountId} onChange={event=>setBulkResumeAccountId(event.target.value)}
+                  required data-testid="campaigns-rerun-account"
+                  className="mt-2 h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3 text-sm outline-none focus:border-[#1a2b88]">
+                  <option value="">{language==="vi"?"Chọn tài khoản Telegram":"Choose a Telegram account"}</option>
+                  {(accounts.data??[]).map(account=><option key={account.id} value={account.id}>{account.name}{account.username?` · @${account.username}`:""}</option>)}
+                </select>
+              </label>}
               <p className="rounded-xl bg-[#eef2ff] px-3 py-2.5 text-[12px] leading-relaxed text-[#3730a3]">
                 {bulkJob
                   ? (language==="vi"?"Tác vụ này giữ nguyên phạm vi đã chọn khi bắt đầu. Đổi bộ lọc ngoài trang không thay đổi tác vụ đang xem.":"This operation keeps its original selection. Changing page filters does not change this operation.")
-                  : `${language==="vi"?"Tài khoản":"Account"}: ${accountFilterLabel}${search.trim()?` · ${language==="vi"?"Tên chứa":"Name contains"}: ${search.trim()}`:""}`}
+                  : `${language==="vi"?"Tài khoản":"Account"}: ${(accounts.data??[]).find(account=>account.id===bulkResumeAccountId)?.name??(language==="vi"?"Chọn tài khoản Telegram":"Choose a Telegram account")}${search.trim()?` · ${language==="vi"?"Tên chứa":"Name contains"}: ${search.trim()}`:""}`}
               </p>
             <CampaignRerunOptions language={language} onlySendable={onlySendable}
               autoDeleteInvalid={autoDeleteInvalid} onOnlySendable={setOnlySendable} onAutoDelete={setAutoDeleteInvalid} />
@@ -1257,7 +1268,7 @@ export default function Campaigns() {
               >
                 {bulkJob ? language === "vi" ? "Đóng" : "Close" : c.bulkCancel}
               </button>
-              {!bulkJob && <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={campaignDataBlocked||bulkControl.isPending}>
+              {!bulkJob && <PrimaryButton type="button" onClick={() => void submitBulkResume()} disabled={!bulkResumeAccountId||campaignDataBlocked||bulkControl.isPending}>
                 {bulkControl.isPending && <LoaderCircle className="h-4 w-4 animate-spin" />}
                 {c.bulkApply}
               </PrimaryButton>}

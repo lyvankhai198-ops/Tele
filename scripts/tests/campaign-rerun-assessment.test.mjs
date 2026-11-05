@@ -4,10 +4,12 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { stripTypeScriptTypes, createRequire } from "node:module";
 import { UNAVAILABLE_TELEGRAM_DESTINATION_REASON as unavailable } from "../../artifacts/api-server/src/lib/telegram-destination-state.ts";
+import { isLongPostingRestriction, telegramPostingPermissionSnapshot, LONG_POSTING_RESTRICTION_MS,
+  INDEFINITE_POSTING_RESTRICTION, DATED_POSTING_RESTRICTION } from "../../artifacts/api-server/src/lib/telegram-posting-permissions.ts";
 
 const source=fs.readFileSync(new URL("../../artifacts/api-server/src/lib/campaign-rerun-assessment.ts",import.meta.url),"utf8");
-const module=new vm.SourceTextModule(stripTypeScriptTypes(source.replace(/^import .*;\n/m,""),{mode:"transform"}),{
-  context:vm.createContext({UNAVAILABLE_TELEGRAM_DESTINATION_REASON:unavailable,Date}),
+const module=new vm.SourceTextModule(stripTypeScriptTypes(source.replace(/^import .*;\n/gm,""),{mode:"transform"}),{
+  context:vm.createContext({UNAVAILABLE_TELEGRAM_DESTINATION_REASON:unavailable,isLongPostingRestriction,Date}),
 });
 await module.link(()=>{throw Error("Unexpected import");});await module.evaluate();
 const assess=module.namespace.assessCampaignRerun;
@@ -17,6 +19,34 @@ const group=(extra={})=>({id:"a",title:"Fixture",exists:true,canPost:true,permis
   cancelled:0,attempted:0,lastSentAt:null,lastFailedAt:null,...extra});
 const invalid=()=>group({canPost:false,permissionReason:unavailable,failed:1,attempted:1,lastFailedAt:earlier});
 const result=(groups,extra={})=>assess({connected:true,terminal:true,groups,...extra});
+
+test("long restrictions use remaining 30 days inclusively, not old 403 text or an unknown expiry",()=>{
+  const now=Date.now(),checked=new Date(now-1000);
+  const base=group({canPost:false,permissionCheckedAt:checked,permissionReason:DATED_POSTING_RESTRICTION});
+  for(const delta of [-1,0,1]){
+    const r=result([{...base,restrictedUntil:new Date(now+LONG_POSTING_RESTRICTION_MS+delta)}],{now});
+    assert.equal(r.groups[0].category,delta<0?"temporary":"invalid");
+  }
+  assert.equal(result([{...base,restrictedUntil:null}],{now}).groups[0].category,"temporary");
+  assert.equal(result([{...base,permissionReason:"403: CHAT_SEND_PLAIN_FORBIDDEN"}],{now}).groups[0].category,"temporary");
+  assert.equal(result([{...base,permissionReason:INDEFINITE_POSTING_RESTRICTION}],{now}).groups[0].category,"invalid");
+  assert.equal(result([{...base,permissionReason:INDEFINITE_POSTING_RESTRICTION,lastSentAt:new Date(now)}],{now}).groups[0].category,"temporary");
+  assert.equal(result([{...base,canPost:true,permissionReason:INDEFINITE_POSTING_RESTRICTION}],{now}).groups[0].category,"sendable");
+});
+
+test("fresh sendPlain rights recognize finite, indefinite, expired and unknown restrictions without bypassing admins",()=>{
+  const now=Date.now();
+  for(const field of ["sendPlain","sendMessages"]){
+    const snapshot=telegramPostingPermissionSnapshot({bannedRights:{[field]:true,untilDate:Math.floor(now/1000)+32*86400}},now);
+    assert.equal(snapshot.canPost,false);assert.equal(snapshot.permissionReason,DATED_POSTING_RESTRICTION);
+    assert.equal(telegramPostingPermissionSnapshot({bannedRights:{[field]:true,untilDate:0}},now).permissionReason,INDEFINITE_POSTING_RESTRICTION);
+    assert.equal(telegramPostingPermissionSnapshot({bannedRights:{[field]:true,untilDate:1}},now).canPost,true);
+    assert.notEqual(telegramPostingPermissionSnapshot({bannedRights:{[field]:true}},now).permissionReason,INDEFINITE_POSTING_RESTRICTION);
+  }
+  assert.equal(telegramPostingPermissionSnapshot({defaultBannedRights:{sendPlain:true,untilDate:0}},now).canPost,false);
+  assert.equal(telegramPostingPermissionSnapshot({creator:true,defaultBannedRights:{sendPlain:true,untilDate:0}},now).canPost,true);
+  assert.equal(telegramPostingPermissionSnapshot({adminRights:{},defaultBannedRights:{sendPlain:true,untilDate:0}},now).canPost,true);
+});
 
 test("only confirmed and fresh membership absence after an attempted terminal run permits deletion",()=>{
   assert.equal(result([invalid()]).canDelete,true);

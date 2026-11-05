@@ -4,6 +4,7 @@ import { blockedCampaignDestinationIds, assertCampaignDestinationsAllowed } from
 import { sendTelegramMessage, forwardTelegramSavedMessage } from "../../artifacts/api-server/src/lib/telegram";
 import { deletionStep } from "../../artifacts/api-server/src/lib/operation-deletion";
 import { saveOperation, type OperationJob } from "../../artifacts/api-server/src/lib/operations";
+import { INDEFINITE_POSTING_RESTRICTION, DATED_POSTING_RESTRICTION } from "../../artifacts/api-server/src/lib/telegram-posting-permissions";
 
 export async function testCampaignSkippedCleanup(input: {
   ownerId: string; ownerCookie: string; otherOwnerId: string; otherCookie: string;
@@ -32,10 +33,20 @@ export async function testCampaignSkippedCleanup(input: {
     return id;
   }
   const temporary = await seed("temporary", [bad]);
+  await pool.query("UPDATE destinations SET permission_reason=$1,permission_checked_at=now() WHERE id=$2",
+    [INDEFINITE_POSTING_RESTRICTION,bad]);
   const review = await seed("review", [uncertain]);
   await pool.query("INSERT INTO campaign_targets(campaign_id,destination_id,status,attempts) VALUES($1,$2,'requires_review',1)", [review, uncertain]);
   const nowReady = await seed("now-ready", [ready]);
   const missing = await seed("missing", [randomUUID()]);
+  const mixed = await seed("mixed-retain-good", [bad,ready]);
+  const shortGroup=randomUUID(),longGroup=randomUUID();
+  for (const [id,days] of [[shortGroup,29],[longGroup,31]] as const) {
+    await pool.query(`INSERT INTO destinations(id,account_id,telegram_id,title,can_post,permission_reason,permission_checked_at,restricted_until)
+      VALUES($1,$2,$3,'dated-permission-fixture',false,$4,now(),now()+($5::int*interval '1 day'))`,
+    [id,account,`dated-${id}`,DATED_POSTING_RESTRICTION,days]);
+  }
+  const short=await seed("short-keep",[shortGroup]),long=await seed("long-remove",[longGroup]);
   const sibling = await seed("sibling", [bad, ready], account, ownerId, "running");
   const legacy = await seed("legacy-account-binding", [bad], account, ownerId, "running");
   await pool.query("UPDATE campaigns SET telegram_account_id=NULL WHERE id=$1",[legacy]);
@@ -44,7 +55,7 @@ export async function testCampaignSkippedCleanup(input: {
   for (const [id, group] of [[sibling, bad], [sibling, ready], [legacy,bad], [otherAccountCampaign, siblingGroup]]) {
     await pool.query("INSERT INTO campaign_targets(campaign_id,destination_id,status) VALUES($1,$2,'pending')", [id, group]);
   }
-  const jobId = randomUUID(), sourceIds = [temporary, review, nowReady, missing];
+  const jobId = randomUUID(), sourceIds = [temporary, review, nowReady, missing,mixed,short,long];
   const jobKey = `campaign_bulk_job:${ownerId}:${jobId}`;
   await pool.query("INSERT INTO system_settings(key,value) VALUES($1,$2)", [jobKey, JSON.stringify({
     id: jobId, ownerUserId: ownerId, ids: sourceIds, cursor: sourceIds.length, status: "completed",
@@ -62,14 +73,19 @@ export async function testCampaignSkippedCleanup(input: {
   check((await request(path + "/cleanup-preview", otherCookie, { telegramAccountId: account })).status === 404, "E2E_CLEANUP_OTHER_OWNER_PREVIEW");
   check((await request(path + "/cleanup-preview", ownerCookie, { telegramAccountId: foreignAccount })).status === 404, "E2E_CLEANUP_FOREIGN_ACCOUNT");
   const first = await preview();
-  check(first.campaigns.length === 4 && first.campaigns.find((row: any) => row.id === temporary).selectable, "E2E_CLEANUP_CURRENT_CLASSIFICATION");
+  check(first.campaigns.length === 7 && first.campaigns.find((row: any) => row.id === temporary).selectable, "E2E_CLEANUP_CURRENT_CLASSIFICATION");
+  check(!first.campaigns.find((row:any)=>row.id===short).selectable,"E2E_CLEANUP_SHORT_RESTRICTION_RETAINED");
+  check(!first.campaigns.find((row:any)=>row.id===review).selectable,"E2E_CLEANUP_UNCERTAIN_RETAINED");
+  check(first.campaigns.find((row:any)=>row.id===long).selectable,"E2E_CLEANUP_LONG_RESTRICTION_ELIGIBLE");
+  check(first.campaigns.find((row:any)=>row.id===mixed).keptGroupCount===1
+    && first.campaigns.find((row:any)=>row.id===mixed).groups.length===1,"E2E_CLEANUP_MIXED_ONLY_BAD_GROUP");
   check(!first.campaigns.find((row: any) => row.id === nowReady).selectable, "E2E_CLEANUP_NOW_READY_RETAINED");
   check(!first.campaigns.find((row: any) => row.id === missing).selectable, "E2E_CLEANUP_UNKNOWN_IDENTITY_NOT_GUESSED");
   check(first.campaigns.every((row: any) => !("version" in row)), "E2E_CLEANUP_PRIVATE_VERSION");
   check((await blockedCampaignDestinationIds(db, ownerId, account, [bad, uncertain])).length === 0, "E2E_CLEANUP_PREVIEW_NO_BLOCK");
   check((await confirm(first.id, [temporary], ownerCookie, false)).status === 400, "E2E_CLEANUP_EXPLICIT_CONFIRM_REQUIRED");
   check((await confirm(first.id, [temporary], otherCookie)).status === 404, "E2E_CLEANUP_OTHER_OWNER_CONFIRM");
-  for (const ids of [[], [foreignCampaign], [sibling], [nowReady], [missing]]) {
+  for (const ids of [[], [foreignCampaign], [sibling], [nowReady], [missing],[short],[review]]) {
     check((await confirm(first.id, ids)).status === 400, "E2E_CLEANUP_SELECTION_FENCE");
   }
   await pool.query("UPDATE campaigns SET updated_at=now()+interval '1 second' WHERE id=$1", [temporary]);
@@ -79,15 +95,18 @@ export async function testCampaignSkippedCleanup(input: {
     [`campaign_cleanup_preview:${ownerId}:${expired.id}`]);
   check((await confirm(expired.id, [temporary])).status === 409, "E2E_CLEANUP_EXPIRED");
   const final = await preview();
-  const accepted = await confirm(final.id, [temporary, review]);
+  const accepted = await confirm(final.id, [temporary, long,mixed]);
   check(accepted.status === 202, "E2E_CLEANUP_ACCEPTED");
   const operation = await accepted.json() as any;
   check(operation.kind === "delete_campaigns" && operation.id === final.id, "E2E_CLEANUP_DURABLE_ID");
   check(!("payload" in operation) && !("owner" in operation), "E2E_CLEANUP_PRIVATE_OPERATION");
-  const repeated = await confirm(final.id, [review, temporary, temporary]);
+  const repeated = await confirm(final.id, [mixed,long,temporary,temporary]);
   check(repeated.status === 202 && (await repeated.json() as any).id === operation.id, "E2E_CLEANUP_IDEMPOTENT");
   check((await confirm(final.id, [temporary])).status === 409, "E2E_CLEANUP_CONSUMED_SELECTION_IMMUTABLE");
-  check((await blockedCampaignDestinationIds(db, ownerId, account, [bad, uncertain])).length === 2, "E2E_CLEANUP_BLOCK_SELECTED_GROUPS");
+  check((await blockedCampaignDestinationIds(db, ownerId, account, [bad,longGroup])).length === 2, "E2E_CLEANUP_BLOCK_SELECTED_GROUPS");
+  check((await blockedCampaignDestinationIds(db, ownerId, account, [shortGroup,uncertain])).length===0,"E2E_CLEANUP_NO_SHORT_OR_UNCERTAIN_BLOCK");
+  check((await pool.query("SELECT destination_ids FROM campaigns WHERE id=$1",[mixed])).rows[0].destination_ids.join()===ready,
+    "E2E_CLEANUP_MIXED_VALID_GROUP_RETAINED");
   check((await blockedCampaignDestinationIds(db, ownerId, account, [ready])).length === 0, "E2E_CLEANUP_KEEP_UNSELECTED_GROUP");
   check((await blockedCampaignDestinationIds(db, ownerId, siblingAccount, [siblingGroup])).length === 0, "E2E_CLEANUP_SAME_PEER_OTHER_ACCOUNT");
   check((await blockedCampaignDestinationIds(db, otherOwnerId, foreignAccount, [foreignGroup])).length === 0, "E2E_CLEANUP_SAME_PEER_OTHER_OWNER");
@@ -101,7 +120,7 @@ export async function testCampaignSkippedCleanup(input: {
   const stored = (await pool.query("SELECT key,value FROM system_settings WHERE key=$1", [operationKey])).rows[0];
   check(Boolean(stored), "E2E_CLEANUP_STORED_OPERATION");
   const deletion = JSON.parse(stored.value) as OperationJob;
-  check(deletion.payload.snapshotIds.slice().sort().join() === [temporary, review].sort().join(), "E2E_CLEANUP_EXACT_SNAPSHOT");
+  check(deletion.payload.snapshotIds.slice().sort().join() === [temporary,long].sort().join(), "E2E_CLEANUP_EXACT_SNAPSHOT");
   for (let pass = 0; pass < 30; pass++) {
     const done = await db.transaction(async tx => {
       const finished = await deletionStep(tx, deletion);
@@ -112,7 +131,8 @@ export async function testCampaignSkippedCleanup(input: {
     if (done) break;
   }
   check(deletion.state === "completed", "E2E_CLEANUP_DELETE_COMPLETED");
-  check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [[temporary, review]])).rowCount === 0, "E2E_CLEANUP_SELECTED_DELETED");
+  check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [[temporary,long]])).rowCount === 0, "E2E_CLEANUP_SELECTED_DELETED");
+  check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])",[[review,short,mixed]])).rowCount===3,"E2E_CLEANUP_RETAIN_VALID_SHORT_UNCERTAIN");
   check((await pool.query("SELECT id FROM campaigns WHERE id=ANY($1::uuid[])", [[nowReady, missing, sibling, legacy, otherAccountCampaign, foreignCampaign]])).rowCount === 6, "E2E_CLEANUP_UNSELECTED_RETAINED");
   const resynced = randomUUID();
   await pool.query("INSERT INTO destinations(id,account_id,telegram_id,title,can_post,topic_id) VALUES($1,$2,$3,'resynced-fixture',true,42)", [resynced, account, badPeer]);
@@ -130,6 +150,23 @@ export async function testCampaignSkippedCleanup(input: {
   await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status,telegram_user_id) VALUES($1,$2,'readded-fixture','connected',$3)", [readded, ownerId, telegramUserId]);
   await pool.query("INSERT INTO destinations(id,account_id,telegram_id,title,can_post) VALUES($1,$2,$3,'readded-fixture',true)", [readdedGroup, readded, badPeer]);
   check((await blockedCampaignDestinationIds(db, ownerId, readded, [readdedGroup])).length === 1, "E2E_CLEANUP_RECONNECT_ACCOUNT_FENCE");
+  const partialOnly=await seed("partial-only-retain",[bad,ready]);
+  const persisted=(await pool.query("SELECT value FROM system_settings WHERE key=$1",[jobKey])).rows[0];
+  const sourceJob=JSON.parse(persisted.value);
+  sourceJob.ids.push(partialOnly);sourceJob.skipped.push({...sourceJob.skipped[0],id:partialOnly});
+  sourceJob.results.push({...sourceJob.results[0],id:partialOnly});
+  await pool.query("UPDATE system_settings SET value=$2 WHERE key=$1",[jobKey,JSON.stringify(sourceJob)]);
+  const partialPreview=await preview();
+  const partialResponse=await confirm(partialPreview.id,[partialOnly]);
+  const partialOperation=await partialResponse.json() as any;
+  check(partialResponse.status===202 && partialOperation.state==="completed" && partialOperation.unit==="groups",
+    "E2E_CLEANUP_PARTIAL_ONLY_ALREADY_COMPLETED");
+  check((await pool.query("SELECT destination_ids FROM campaigns WHERE id=$1",[partialOnly])).rows[0].destination_ids.join()===ready,
+    "E2E_CLEANUP_PARTIAL_ONLY_PRESERVES_CAMPAIGN");
+  const emptyDelete=(await pool.query("SELECT value FROM system_settings WHERE key=$1",
+    [`telecamp_operation:${ownerId}:${partialOperation.id}`])).rows[0];
+  check(JSON.parse(emptyDelete.value).payload.snapshotIds.length===0,"E2E_CLEANUP_EMPTY_DELETE_SCOPE_NEVER_BROADENS");
+  await pool.query("DELETE FROM system_settings WHERE key=$1",[`telecamp_operation:${ownerId}:${partialOperation.id}`]);
   await pool.query("DELETE FROM campaigns WHERE id=ANY($1::uuid[])", [campaigns]);
   await pool.query("DELETE FROM telegram_accounts WHERE id=ANY($1::uuid[])", [[account, siblingAccount, foreignAccount, readded]]);
   await pool.query("DELETE FROM system_settings WHERE key=ANY($1::text[]) OR (key LIKE $2 AND value::jsonb->>'previewId'=$3)",
