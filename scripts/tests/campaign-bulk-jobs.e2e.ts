@@ -24,8 +24,9 @@ export async function testCampaignBulkJobs(input: {
   const header={"Idempotency-Key":randomUUID()};
   const start=new Date(Date.now()+86400000).toISOString();
   const body={action:"resume",telegramAccountId:account,scope:"completed",intervalSeconds:600,scheduledAt:start};
-  check((await request("/campaigns/bulk-control",ownerCookie,{...body,telegramAccountId:undefined})).status===400,
-    "E2E_BULK_ACCOUNT_REQUIRED");
+  check((await request("/campaigns/bulk-control",ownerCookie,{...body,telegramAccountId:undefined,
+    search:`empty-all-accounts-${randomUUID()}`})).status===202,
+    "E2E_BULK_ALL_ACCOUNTS_ACCEPTED");
   const before=Date.now();
   const accepted=await request("/campaigns/bulk-control",ownerCookie,body,"POST",header);
   const initial=await accepted.json() as any;

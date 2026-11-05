@@ -2234,9 +2234,6 @@ router.post("/campaigns/bulk-control", async (req, res): Promise<void> => {
   }
 
   const scope = parsed.data.scope ?? "paused";
-  if (!parsed.data.telegramAccountId) {
-    return void sendError(res,400,"Chọn tài khoản Telegram");
-  }
   // Legacy auto-delete inputs are accepted but never execute deletion. Cleanup
   // now requires a fresh preview and an explicitly selected confirmation.
   const intervalSeconds = parsed.data.intervalSeconds;
