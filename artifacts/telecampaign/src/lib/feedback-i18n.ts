@@ -1,13 +1,13 @@
 /** English source strings and Vietnamese translations for the feedback feature. */
 export const feedbackTranslations: Record<string, string> = {
   "Feedback & discussion": "Góp ý & thảo luận",
-  "Help improve TeleCamp. Support chat remains available separately.": "Cùng hoàn thiện Telecampaign. Chat hỗ trợ vẫn hoạt động riêng.",
+  "Help improve Telecampaign. Support chat remains available separately.": "Cùng hoàn thiện Telecampaign. Chat hỗ trợ vẫn hoạt động riêng.",
   "Report a bug": "Báo lỗi",
   "Suggest a feature": "Đề xuất tính năng",
   "You will receive a website notification when your suggestion is completed. Attachments are also sent to the admin's private Telegram bot.": "Bạn sẽ nhận thông báo trên web khi đề xuất hoàn thành. Ảnh đính kèm cũng được gửi vào bot Telegram riêng của admin.",
   "Interface feedback": "Góp ý giao diện",
   "Describe the issue and the steps to reproduce it.": "Mô tả lỗi và các bước để gặp lại lỗi.",
-  "What would you like TeleCamp to add?": "Bạn muốn Telecampaign bổ sung điều gì?",
+  "What would you like Telecampaign to add?": "Bạn muốn Telecampaign bổ sung điều gì?",
   "What is hard to use or could be presented more clearly?": "Điểm nào khó dùng hoặc cần trình bày rõ hơn?",
   "Join the discussion group": "Tham gia nhóm thảo luận",
   "Share ideas and experience with the community.": "Trao đổi kinh nghiệm và ý tưởng cùng cộng đồng.",
