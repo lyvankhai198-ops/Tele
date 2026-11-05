@@ -91,11 +91,9 @@ const copy = {
     saveStepDescription: "The account appears in the list with its saved limit and login status.",
     addTitle: "Add Telegram account",
     addDescription: "Enter the Telegram account details below.",
-    premiumNoticeTitle: "Before adding an account",
-    premiumNoticeDescription: "Please read this recommendation before continuing.",
-    premiumNotice: "Using a Telegram Premium account is recommended to reduce the risk of Telegram restrictions. Regular Telegram accounts can still be used, but Premium tends to offer better stability and long-term reliability.",
-    premiumConfirm: "Understood, continue",
-    premiumCancel: "Cancel",
+    connectionNoticeTitle: "Before adding an account",
+    connectionConfirm: "Understood, continue",
+    connectionCancel: "Cancel",
     methodApi: "Method 1: Sign in with API ID / API Hash",
     methodQr: "Method 2: Sign in with Telegram QR code",
     apiNote: "Get your api_id and api_hash from",
@@ -185,11 +183,9 @@ const copy = {
     saveStepDescription: "Tài khoản sẽ xuất hiện trong danh sách với limit và trạng thái đăng nhập.",
     addTitle: "Thêm tài khoản Telegram",
     addDescription: "Nhập thông tin tài khoản Telegram bên dưới.",
-    premiumNoticeTitle: "Lưu ý trước khi thêm tài khoản",
-    premiumNoticeDescription: "Vui lòng đọc khuyến nghị dưới đây trước khi tiếp tục.",
-    premiumNotice: "Khuyến nghị sử dụng tài khoản Telegram Premium để giảm nguy cơ bị Telegram hạn chế. Tài khoản Telegram thường vẫn có thể sử dụng, tuy nhiên độ ổn định và lâu dài Premium vẫn tốt hơn.",
-    premiumConfirm: "Đã hiểu, tiếp tục",
-    premiumCancel: "Hủy",
+    connectionNoticeTitle: "Lưu ý trước khi thêm tài khoản",
+    connectionConfirm: "Đã hiểu, tiếp tục",
+    connectionCancel: "Hủy",
     methodApi: "Phương thức 1: Đăng nhập bằng API ID / API Hash",
     methodQr: "Phương thức 2: Đăng nhập bằng mã QR Telegram",
     apiNote: "Lấy api_id và api_hash tại",
@@ -302,11 +298,11 @@ function AccountsDialog({
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <button aria-label="Close dialog overlay" className="absolute inset-0 bg-[#0f172a]/40 backdrop-blur-sm" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} data-testid={testId} className={`relative flex max-h-[calc(100dvh-2rem)] w-full ${size === "small" ? "max-w-sm" : "max-w-lg"} flex-col overflow-hidden rounded-3xl border border-[#e2e8f0] bg-white shadow-2xl`}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description?descriptionId:undefined} tabIndex={-1} data-testid={testId} className={`relative flex max-h-[calc(100dvh-2rem)] w-full ${size === "small" ? "max-w-sm" : "max-w-lg"} flex-col overflow-hidden rounded-3xl border border-[#e2e8f0] bg-white shadow-2xl`}>
         <div className="flex items-start justify-between border-b border-[#eef2f6] px-5 py-5 sm:px-7">
           <div className="pr-4">
             <h2 id={titleId} className="text-[19px] font-extrabold tracking-tight text-[#0f172a]">{title}</h2>
-            <p id={descriptionId} className="mt-2 text-[14px] font-medium leading-relaxed text-[#64748b]">{description}</p>
+            {description&&<p id={descriptionId} className="mt-2 text-[14px] font-medium leading-relaxed text-[#64748b]">{description}</p>}
           </div>
           <button onClick={onClose} aria-label="Close dialog" className="shrink-0 rounded-xl p-2 text-[#64748b] transition-colors hover:bg-[#f1f5f9] hover:text-[#0f172a]" data-testid={`${testId}-close`}>
             <X className="h-5 w-5" />
@@ -369,7 +365,8 @@ export default function Accounts() {
   const cancelQrLogin = useCancelTelegramQrLogin();
   const systemDefaults = useGetSystemDefaults();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showPremiumNotice, setShowPremiumNotice] = useState(false);
+  const [showConnectionNotice,setShowConnectionNotice]=useState(false);
+  const [connectionNoticeAccepted,setConnectionNoticeAccepted]=useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [openStep, setOpenStep] = useState(0);
   const [apiId, setApiId] = useState("");
@@ -396,10 +393,12 @@ export default function Accounts() {
     setDailyLimit(defaultDailyLimit);
   };
   const openAddModal = () => {
-    setShowPremiumNotice(true);
+    setConnectionNoticeAccepted(false);
+    setShowConnectionNotice(true);
   };
   const confirmAddAccount = () => {
-    setShowPremiumNotice(false);
+    setConnectionNoticeAccepted(true);
+    setShowConnectionNotice(false);
     setDailyLimit(defaultDailyLimit);
     setAddMethod("choose");
     setShowAddModal(true);
@@ -777,37 +776,32 @@ export default function Accounts() {
         </AccountsDialog>
       )}
 
-      {showPremiumNotice && (
+      {showConnectionNotice && (
         <AccountsDialog
           size="small"
-          title={text.premiumNoticeTitle}
-          description={text.premiumNoticeDescription}
-          onClose={() => setShowPremiumNotice(false)}
-          testId="telegram-accounts-premium-notice"
+          title={text.connectionNoticeTitle}
+          description=""
+          onClose={() => setShowConnectionNotice(false)}
+          testId="telegram-accounts-connection-notice"
         >
           <div className="space-y-5">
-            <div role="note" className="flex items-start gap-3 rounded-2xl border border-[#bde4f9] bg-[#f0f9ff] p-4">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-[#1c93d4] shadow-sm">
-                <HelpCircle className="h-5 w-5" />
-              </span>
-              <p className="text-[14px] font-medium leading-relaxed text-[#334155]">{text.premiumNotice}</p>
-            </div>
+            <ConnectionPrivacyNotice language={language} />
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setShowPremiumNotice(false)}
+                onClick={() => setShowConnectionNotice(false)}
                 className="inline-flex h-11 items-center justify-center rounded-xl bg-[#f1f5f9] px-5 text-[14px] font-bold text-[#475569] transition-colors hover:bg-[#e2e8f0]"
-                data-testid="telegram-accounts-premium-cancel"
+                data-testid="telegram-accounts-connection-cancel"
               >
-                {text.premiumCancel}
+                {text.connectionCancel}
               </button>
               <button
                 type="button"
                 onClick={confirmAddAccount}
                 className="inline-flex h-11 items-center justify-center rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4]"
-                data-testid="telegram-accounts-premium-confirm"
+                data-testid="telegram-accounts-connection-confirm"
               >
-                {text.premiumConfirm}
+                {text.connectionConfirm}
               </button>
             </div>
           </div>
@@ -816,7 +810,6 @@ export default function Accounts() {
 
       {showAddModal && (
         <AccountsDialog title={text.addTitle} description={text.addDescription} onClose={closeAddModal} testId="telegram-accounts-add-dialog">
-          <ConnectionPrivacyNotice language={language} />
           {addMethod === "choose" ? (
             <div className="space-y-4">
               <button type="button" onClick={() => setAddMethod("api")} className="flex w-full items-start gap-4 rounded-2xl border border-[#e2e8f0] bg-white p-5 text-left shadow-sm transition-all hover:border-[#7dd3fc] hover:bg-[#f8fcff] hover:shadow-md" data-testid="telegram-accounts-method-api">
@@ -872,7 +865,7 @@ export default function Accounts() {
           onClose={closeLoginDialog}
           testId="telegram-accounts-login-dialog"
         >
-          <ConnectionPrivacyNotice language={language} />
+          {!connectionNoticeAccepted&&<ConnectionPrivacyNotice language={language} />}
           {loginFlow.step === "code" ? (
             <form className="space-y-5" onSubmit={submitVerificationCode}>
               <p className="rounded-xl bg-[#f0f9ff] px-4 py-3 text-[13px] font-semibold text-[#0369a1]">

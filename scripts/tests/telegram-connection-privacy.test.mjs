@@ -35,9 +35,12 @@ for (const language of ["vi", "en"]) {
   });
 }
 
-test("notice appears before both account-method selection and every login step", () => {
+test("connection disclosure replaces the recommendation before method selection without repeating after acceptance", () => {
   assert.equal((source.match(/<ConnectionPrivacyNotice language=\{language\} \/>/g) ?? []).length, 2);
-  assert.match(source, /testId="telegram-accounts-add-dialog">\s*<ConnectionPrivacyNotice language=\{language\} \/>\s*\{addMethod/);
-  assert.match(source, /testId="telegram-accounts-login-dialog"\s*>\s*<ConnectionPrivacyNotice language=\{language\} \/>\s*\{loginFlow\.step/);
+  assert.match(source, /testId="telegram-accounts-connection-notice"[\s\S]*?<ConnectionPrivacyNotice language=\{language\} \/>/);
+  assert.match(source, /testId="telegram-accounts-add-dialog">\s*\{addMethod/);
+  assert.match(source, /testId="telegram-accounts-login-dialog"\s*>\s*\{!connectionNoticeAccepted&&<ConnectionPrivacyNotice language=\{language\} \/>\}/);
+  assert.match(source, /const confirmAddAccount = \(\) => \{\s*setConnectionNoticeAccepted\(true\);/);
+  assert.doesNotMatch(source, /premiumNotice|showPremiumNotice|Telegram Premium account is recommended|Khuyến nghị sử dụng tài khoản Telegram Premium/);
   assert.doesNotMatch(notice.getText(ast), /onClick|onSubmit|fetch\(|localStorage|sessionStorage|useEffect/);
 });
