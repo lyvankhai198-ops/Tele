@@ -1,4 +1,4 @@
-name: TeleCamp operation diagnosis (read only)
+name: TeleCamp admin join status (read only)
 on:
   workflow_dispatch:
 permissions:
@@ -32,32 +32,61 @@ jobs:
           source /etc/telecampaign/api.env
           set +a
           node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
+          import { createRequire } from "node:module";
+          const require = createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
+          const { Client } = require("pg");
+          const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000 });
+          try {
             await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
+            await client.query("BEGIN READ ONLY");
+            await client.query("SET LOCAL statement_timeout='10s'");
+            const settings = (await client.query("SELECT value FROM system_settings WHERE key='admin_system_settings'")).rows[0];
+            const config = settings ? JSON.parse(settings.value) : {};
+            console.log("JOIN_SETTINGS=" + JSON.stringify({
+              autoJoin: config.groupLibraryAutoJoinEnabled ?? true,
+              autoCampaign: config.postJoinCampaign?.enabled ?? false,
+              campaignMode: config.postJoinCampaign?.mode ?? null,
+            }));
+            const library = (await client.query(`SELECT count(*)::int AS total,
+              count(*) FILTER (WHERE username IS NOT NULL AND username<>'')::int AS with_username
+              FROM group_library_entries`)).rows[0];
+            console.log("JOIN_LIBRARY=" + JSON.stringify(library));
+            const accounts = (await client.query(`SELECT a.id,a.name,a.status,a.last_sync_at
+              FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text
+              WHERE u.role='admin' AND a.deleted_at IS NULL ORDER BY a.created_at`)).rows;
+            for (const account of accounts) {
+              const jobs = (await client.query(`SELECT j.status,count(*)::int AS count,
+                max(j.next_attempt_at) FILTER (WHERE j.status='waiting') AS resume_at,
+                count(*) FILTER (WHERE j.auto_campaign_id IS NOT NULL)::int AS linked_campaigns
+                FROM admin_group_join_jobs j JOIN group_library_entries g ON g.id=j.group_library_entry_id
+                WHERE j.telegram_account_id=$1 GROUP BY j.status ORDER BY j.status`, [account.id])).rows;
+              const membership = (await client.query(`SELECT count(*)::int AS known_library_groups,
+                count(*) FILTER (WHERE d.can_post)::int AS can_post
+                FROM group_library_entries g JOIN destinations d ON d.telegram_id=g.telegram_id
+                WHERE d.account_id=$1 AND d.topic_id IS NULL`, [account.id])).rows[0];
+              const errors = (await client.query(`SELECT
+                CASE WHEN last_error ILIKE '%FLOOD%' OR last_error ILIKE '%yêu cầu chờ%' THEN 'telegram_wait'
+                WHEN last_error ILIKE '%username%' OR last_error ILIKE '%link mời%' THEN 'missing_or_invalid_link'
+                WHEN last_error ILIKE '%CHANNELS_TOO_MUCH%' THEN 'account_group_limit'
+                WHEN last_error ILIKE '%USER_CHANNELS_TOO_MUCH%' THEN 'account_group_limit'
+                WHEN last_error ILIKE '%INVITE_REQUEST_SENT%' THEN 'approval_required'
+                WHEN last_error ILIKE '%AUTH_KEY%' OR last_error ILIKE '%SESSION%' THEN 'session_error'
+                WHEN last_error IS NULL THEN 'no_reason' ELSE 'other_telegram_error' END AS reason,
+                count(*)::int AS count
+                FROM admin_group_join_jobs WHERE telegram_account_id=$1 AND status IN ('failed','skipped','waiting')
+                GROUP BY 1 ORDER BY count(*) DESC`, [account.id])).rows;
+              console.log("JOIN_ACCOUNT=" + JSON.stringify({
+                name: account.name, status: account.status, lastSyncAt: account.last_sync_at,
+                jobs, membership, errors,
+              }));
             }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
+            console.log("JOIN_CAPTURED_AT=" + new Date().toISOString());
+            await client.query("ROLLBACK");
+          } catch (error) {
+            console.log("JOIN_ERROR=" + (/^[0-9A-Z]{5}$/.test(error.code ?? "") ? error.code : "safe_failure"));
+            process.exitCode = 1;
+          } finally {
+            await client.end();
+          }
           NODE
           REMOTE
