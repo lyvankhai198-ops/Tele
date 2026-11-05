@@ -4,11 +4,12 @@ import type { CampaignBulkJobProgress } from "@workspace/api-client-react";
 type Language = import("@/lib/locales").InterfaceLanguage;
 export const rerunReason = (reason:string, language:Language) => {
   const labels:Record<string,[string,string]> = {
+    retry_requested:["Chạy lại tất cả chiến dịch khớp bộ lọc, không đồng bộ toàn bộ nhóm.","Rerun all matching campaigns without syncing every group."],
     uncertain_delivery:["Có lượt gửi chưa xác minh; không tự gửi lại để tránh trùng.","A delivery is unverified; automatic rerun is blocked to prevent duplicates."],
     missing_destination:["Thiếu dữ liệu nhóm; cần kiểm tra, không tự xoá.","Destination data is missing; check manually. It will not be deleted automatically."],
     no_destination:["Chưa có đích gửi hợp lệ để đánh giá.","There are no destinations to assess."],
     account_disconnected:["Tài khoản cần kết nối hoặc xác minh lại.","The Telegram account needs reconnection or verification."],
-    posting_restricted:["Nhóm đang bị hạn chế gửi; không tự xoá.","Posting is restricted; this is not a reason for automatic deletion."],
+    posting_restricted:["Nhóm không có quyền đăng hoặc bị hạn chế sẽ bị loại và chặn trên tài khoản này. Chiến dịch không còn nhóm dùng được sẽ bị xoá.","Groups without posting rights or with restrictions are excluded and blocked on this account. Campaigns with no usable groups are deleted."],
     last_delivery_failed:["Lần gửi gần nhất lỗi; tạm loại, giữ dữ liệu.","The latest delivery failed; temporarily excluded, with data retained."],
     membership_needs_refresh:["Cần đồng bộ nhóm lại để xác nhận trạng thái mới nhất.","Sync groups again to confirm the latest membership status."],
     membership_unavailable:["Đồng bộ nhóm đã xác nhận tài khoản không còn đích gửi này.","Group synchronization confirmed this destination is no longer available to this account."],
@@ -42,22 +43,18 @@ const categories = {
   en:{sendable:"Ready",temporary:"Temporarily excluded",review:"Needs verification",invalid:"No valid destinations"},
 };
 
-export function CampaignRerunOptions(props:{
-  language:Language;onlySendable:boolean;autoDeleteInvalid:boolean;
-  onOnlySendable:(value:boolean)=>void;onAutoDelete:(value:boolean)=>void;
-}) {
+export function CampaignRerunOptions(props:{language:Language}) {
   const vi=props.language==="vi";
-  return <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3" data-testid="campaign-rerun-options">
-    <label className="flex items-start gap-2 text-sm font-semibold text-slate-800">
-      <input type="checkbox" checked={props.onlySendable} onChange={e=>props.onOnlySendable(e.target.checked)} className="mt-1" />
-      <span>{vi?"Chỉ chạy các nhóm còn sẵn sàng":"Only rerun destinations that are ready"}
-        <small className="mt-1 block font-normal text-slate-500">{vi
-          ?"Tạm loại lỗi tạm thời. Lượt chưa xác minh luôn bị chặn để tránh gửi trùng."
-          :"Temporarily exclude transient failures. Unverified deliveries are always blocked to prevent duplicates."}</small></span>
-    </label>
+  return <div className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3" data-testid="campaign-rerun-options">
+    <p className="text-sm font-semibold text-indigo-950">{vi
+      ?"Chạy lại tất cả chiến dịch khớp bộ lọc, không đồng bộ toàn bộ nhóm."
+      :"Rerun all matching campaigns without syncing every group."}</p>
     <p className="text-xs leading-relaxed text-slate-600">{vi
-      ?"Sau khi phân loại, xem trước các chiến dịch bị bỏ qua theo tài khoản và chọn mục cần xoá. Chưa xác nhận thì không xoá hay chặn nhóm."
-      :"After classification, preview skipped campaigns by account and select items to delete. Nothing is deleted or blocked until you confirm."}</p>
+      ?"Lỗi cũ và lượt chưa xác minh không chặn chạy lại; có thể gửi trùng."
+      :"Past errors and unverified deliveries do not block reruns; duplicate messages are possible."}</p>
+    <p role="note" className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs leading-relaxed text-amber-950">{vi
+      ?"Nhóm không có quyền đăng hoặc bị hạn chế sẽ bị loại và chặn trên tài khoản này. Chiến dịch không còn nhóm dùng được sẽ bị xoá."
+      :"Groups without posting rights or with restrictions are excluded and blocked on this account. Campaigns with no usable groups are deleted."}</p>
   </div>;
 }
 
@@ -73,9 +70,9 @@ export function CampaignRerunResults({job,language}:{job:CampaignBulkJobProgress
         ?"Đánh giá trước khi tạo lịch — không phải số tin đã gửi:"
         :"Assessment before scheduling — these are not sent-message counts:"}</p>
       <div className="grid grid-cols-2 gap-2 text-xs">
-        {(["sendable","temporary","review","invalid"] as const).map(category=><div key={category}
-          className="rounded-lg border border-slate-200 bg-white p-2">{c[category]}:
-          <b className="ml-1">{results.filter(r=>r.assessment?.category===category).length}</b></div>)}
+        {(["created","resumed","skipped","deleted"] as const).map(outcome=><div key={outcome}
+          className="rounded-lg border border-slate-200 bg-white p-2">{outcomes[outcome]}:
+          <b className="ml-1">{results.filter(r=>r.outcome===outcome).length}</b></div>)}
       </div>
       <p className="text-xs font-semibold text-rose-700">{vi?"Đã xoá chiến dịch":"Deleted campaigns"}: {job.deletedCount ?? 0}</p>
       <details className="rounded-lg border border-slate-200 bg-white p-3 text-sm">

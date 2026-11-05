@@ -49,7 +49,7 @@ export async function testCampaignRerunSafety(input:{
   const foreign=await seed("foreign",[],"completed",otherOwnerId,foreignAccount);
   const foreignBefore=(await pool.query("SELECT row_to_json(c) value FROM campaigns c WHERE id=$1",[foreign])).rows[0].value;
   const at=new Date(Date.now()+3600000).toISOString();
-  const body={action:"resume",telegramAccountId:account,scope:"completed",intervalSeconds:60,scheduledAt:at};
+  const body={action:"resume",telegramAccountId:account,scope:"completed",intervalSeconds:60,scheduledAt:at,onlySendable:true};
   const token=randomUUID();
   const accepted=await request("/campaigns/bulk-control",ownerCookie,body,"POST",{"Idempotency-Key":token});
   const initial=(await accepted.json() as any).job;
@@ -122,10 +122,40 @@ export async function testCampaignRerunSafety(input:{
     "E2E_RERUN_OTHER_OWNER_UNCHANGED");
 
   await testCampaignSkippedCleanup(input);
+  const retryAccount=randomUUID(),retryGood=randomUUID(),retryBad=randomUUID();
+  await pool.query("INSERT INTO telegram_accounts(id,owner_user_id,name,status,session_encrypted) VALUES($1,$2,'retry-all-fixture','connected','test-only-no-real-session')",[retryAccount,ownerId]);
+  for(const destination of [retryGood,retryBad])await pool.query("INSERT INTO destinations(id,account_id,telegram_id,title,can_post) VALUES($1,$2,$3,'retry-all-fixture',true)",
+    [destination,retryAccount,destination]);
+  const fastTemporary=await seed("fast-temporary",[retryGood],"completed",ownerId,retryAccount);
+  await target(fastTemporary,retryGood,"failed");
+  await pool.query("UPDATE campaign_targets SET last_error='network timeout' WHERE campaign_id=$1",[fastTemporary]);
+  const fastUncertain=await seed("fast-uncertain",[retryGood],"completed",ownerId,retryAccount);
+  await target(fastUncertain,retryGood,"requires_review");
+  const fastDenied=await seed("fast-denied",[retryBad],"completed",ownerId,retryAccount);
+  await target(fastDenied,retryBad,"failed");
+  await pool.query("UPDATE campaign_targets SET last_error='403: CHAT_SEND_PLAIN_FORBIDDEN' WHERE campaign_id=$1",[fastDenied]);
+  const fastResponse=await request("/campaigns/bulk-control",ownerCookie,{...body,telegramAccountId:retryAccount,
+    onlySendable:false,autoDeleteInvalid:true,confirmAutoDelete:true},"POST",{"Idempotency-Key":randomUUID()});
+  const fastInitial=(await fastResponse.json() as any).job;
+  check(fastResponse.status===202&&fastInitial.phase==="campaigns"&&!fastInitial.onlySendable&&fastInitial.autoDeleteInvalid,
+    "E2E_RERUN_ALL_NO_ACCOUNT_SYNC");
+  await processCampaignBulkJobs(20);
+  const fastDone=await load(fastInitial.id);
+  check(fastDone.updatedCount===2&&fastDone.deletedCount===1&&fastDone.skippedCount===0,"E2E_RERUN_ALL_RETRIES_AND_PRUNES");
+  check(!(await pool.query("SELECT id FROM campaigns WHERE id=$1",[fastDenied])).rowCount,"E2E_RERUN_ALL_DENIED_SOURCE_DELETED");
+  const stalled=await seed("fast-stalled",[retryGood],"paused",ownerId,retryAccount);
+  const stalledResponse=await request("/campaigns/bulk-control",ownerCookie,{...body,telegramAccountId:retryAccount,scope:"paused",
+    onlySendable:false,autoDeleteInvalid:true,confirmAutoDelete:true},"POST",{"Idempotency-Key":randomUUID()});
+  const stalledJob=(await stalledResponse.json() as any).job;
+  await processCampaignBulkJobs(20);
+  check((await load(stalledJob.id)).updatedCount===1
+    &&(await pool.query("SELECT id FROM campaigns WHERE cloned_from_campaign_id=$1",[stalled])).rowCount===1,
+    "E2E_RERUN_ALL_REBUILDS_EXHAUSTED_PAUSED_RUN");
   // Restore this isolated owner so the existing bulk-suite cardinality checks
   // remain independent of these new fixtures.
   await pool.query("DELETE FROM campaigns WHERE name LIKE 'rerun-safety-fixture-%'");
-  await pool.query("DELETE FROM telegram_accounts WHERE id=ANY($1::uuid[])",[[account,foreignAccount]]);
+  await pool.query("DELETE FROM telegram_accounts WHERE id=ANY($1::uuid[])",[[account,foreignAccount,retryAccount]]);
+  await pool.query("DELETE FROM system_settings WHERE key LIKE $1",[`campaign_destination_block:${ownerId}:account:${retryAccount}:%`]);
   await pool.query("DELETE FROM system_settings WHERE key LIKE $1 OR key LIKE $2 OR key LIKE $3",[
     `campaign_bulk_job:${ownerId}:%`,`campaign_rerun_policy:${ownerId}:%`,`campaign_rerun_review:${ownerId}:%`]);
   console.log("E2E_RERUN_SAFETY_PASSED");

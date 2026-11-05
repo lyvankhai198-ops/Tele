@@ -109,7 +109,7 @@ export async function createCampaignBulkJob(input: CampaignListScope & {
         permissionAccountId:firstVerificationAccount!.id,
         permissionAccountIds:verificationAccounts.slice(1).map(account=>account.id)} : {}),
       error: null, createdAt: new Date().toISOString(),
-      onlySendable:input.onlySendable ?? true,autoDeleteInvalid:false,
+      onlySendable:input.onlySendable ?? true,autoDeleteInvalid:input.autoDeleteInvalid??false,
       deletedCount:0,results:[],
     };
     await tx.insert(systemSettingsTable).values({key: keyFor(input.ownerUserId, id), value: JSON.stringify(job)});
@@ -227,7 +227,7 @@ export async function processCampaignBulkJobs(maxSteps = 10) {
           } else if (handled.kind === "deleted") {
             job.deletedCount=(job.deletedCount ?? 0)+1;
             job.results.push({id:sourceId,name:handled.campaign.name,outcome:"deleted",
-              reason:"membership_unavailable",assessment:handled.assessment});
+              reason:handled.assessment.reason,assessment:handled.assessment});
             await tx.insert(activityLogsTable).values({ownerUserId:job.ownerUserId,event:"campaign.rerun_invalid_deleted",
               level:"info",message:`Removed invalid campaign "${handled.campaign.name}" after confirmed membership loss`,
               metadata:{jobId:job.id,sourceCampaignId:sourceId}});

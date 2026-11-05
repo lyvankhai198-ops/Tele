@@ -9,7 +9,8 @@ import { isLongPostingRestriction, telegramPostingPermissionSnapshot, LONG_POSTI
 
 const source=fs.readFileSync(new URL("../../artifacts/api-server/src/lib/campaign-rerun-assessment.ts",import.meta.url),"utf8");
 const module=new vm.SourceTextModule(stripTypeScriptTypes(source.replace(/^import .*;\n/gm,""),{mode:"transform"}),{
-  context:vm.createContext({UNAVAILABLE_TELEGRAM_DESTINATION_REASON:unavailable,isLongPostingRestriction,Date}),
+  context:vm.createContext({UNAVAILABLE_TELEGRAM_DESTINATION_REASON:unavailable,isLongPostingRestriction,
+    INDEFINITE_POSTING_RESTRICTION,DATED_POSTING_RESTRICTION,Date}),
 });
 await module.link(()=>{throw Error("Unexpected import");});await module.evaluate();
 const assess=module.namespace.assessCampaignRerun;
@@ -98,19 +99,26 @@ const component=new vm.SourceTextModule(rendered,{context});
 await component.link(name=>name==="react"?react:runtime);await component.evaluate();
 const flatten=node=>node==null?[]:Array.isArray(node)?node.flatMap(flatten):typeof node==="object"
   ?[node,...flatten(node.props?.children)]:[String(node)];
-test("VI and EN retain readiness control but require a separate deletion preview even for legacy flags",()=>{
+test("explicit reruns retry temporary errors, disconnected accounts and uncertain history",()=>{
+  for(const evidence of [group({failed:1,lastFailedAt:later,lastError:"network timeout"}),group({uncertain:1}),group({sending:1}),group({canPost:false,permissionCheckedAt:null})]){
+    const retry=result([evidence],{retryAll:true,connected:false});
+    assert.equal(retry.category,"sendable");
+    assert.equal(retry.canDelete,false);
+  }
+  const denied=result([group({failed:1,lastFailedAt:later,lastError:"403: CHAT_SEND_PLAIN_FORBIDDEN"})],{retryAll:true});
+  assert.equal(denied.category,"invalid");assert.equal(denied.canDelete,true);
+  const shortRestriction=result([group({canPost:false,permissionReason:DATED_POSTING_RESTRICTION,
+    permissionCheckedAt:new Date(Date.now()-1000),restrictedUntil:new Date(Date.now()+3600000)})],{retryAll:true});
+  assert.equal(shortRestriction.category,"invalid");
+  assert.equal(result([group({lastSentAt:new Date(),lastFailedAt:earlier,lastError:"CHAT_WRITE_FORBIDDEN"})],{retryAll:true}).category,"sendable");
+});
+test("VI and EN explain reruns, possible duplicates and deletion without a readiness checkbox",()=>{
   for(const language of ["vi","en"]){
-    let safe=true,del=false;
-    const props={language,onlySendable:true,autoDeleteInvalid:false,onOnlySendable:v=>safe=v,onAutoDelete:v=>del=v};
-    let nodes=flatten(component.namespace.CampaignRerunOptions(props));
-    assert.equal(nodes.filter(n=>n?.props?.role==="alert").length,0);
-    const inputs=nodes.filter(n=>n?.type==="input");assert.equal(inputs.length,1);
-    inputs[0].props.onChange({target:{checked:false}});
-    assert.equal(safe,false);assert.equal(del,false);
-    nodes=flatten(component.namespace.CampaignRerunOptions({...props,autoDeleteInvalid:true}));
-    assert.equal(nodes.filter(n=>n?.props?.role==="alert").length,0);
-    assert.equal(nodes.filter(n=>n?.type==="input").length,1);
-    assert.ok(nodes.join(" ").includes(language==="vi"?"Chưa xác nhận thì không xoá":"Nothing is deleted or blocked until you confirm"));
+    const nodes=flatten(component.namespace.CampaignRerunOptions({language}));
+    assert.equal(nodes.filter(n=>n?.type==="input").length,0);
+    assert.ok(nodes.join(" ").includes(language==="vi"?"không đồng bộ toàn bộ nhóm":"without syncing every group"));
+    assert.ok(nodes.join(" ").includes(language==="vi"?"có thể gửi trùng":"duplicate messages are possible"));
+    assert.ok(nodes.join(" ").includes(language==="vi"?"sẽ bị xoá":"are deleted"));
   }
 });
 test("result copy distinguishes scheduling from actual delivery and supports both languages",()=>{

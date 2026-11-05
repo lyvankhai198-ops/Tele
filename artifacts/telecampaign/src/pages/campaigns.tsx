@@ -44,7 +44,6 @@ import { CampaignListFeedback } from "@/components/campaign-list-feedback";
 import { claimCampaignCompletion, wasCampaignCompletionHandled } from "@/lib/campaign-completion-receipt";
 import { useCompleteCampaigns } from "@/lib/use-complete-campaigns";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
-import { CampaignSkippedCleanup } from "@/components/campaign-skipped-cleanup";
 import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
@@ -546,8 +545,6 @@ export default function Campaigns() {
   const [bulkScheduleDate, setBulkScheduleDate] = useState(() => localDateInputValue());
   const [bulkScheduleTime, setBulkScheduleTime] = useState(() => localTimeInputValue());
   const [bulkJob, setBulkJob] = useState<CampaignBulkJobProgress | null>(null);
-  const [onlySendable,setOnlySendable]=useState(true);
-  const [autoDeleteInvalid,setAutoDeleteInvalid]=useState(false);
   const [bulkRetrying, setBulkRetrying] = useState(false);
   const bulkRequestId = useMemo(() => crypto.randomUUID(), [
     bulkResumeOpen, bulkResumeAccountId, bulkResumeSearch, bulkResumeScope, bulkIntervalMinutes, bulkScheduleDate, bulkScheduleTime,
@@ -559,8 +556,6 @@ export default function Campaigns() {
   function rememberBulkJob(job: CampaignBulkJobProgress) {
     setBulkJob(job);
     setBulkResumeAccountId(job.telegramAccountId??"");
-    setOnlySendable(job.onlySendable ?? false);
-    setAutoDeleteInvalid(job.autoDeleteInvalid ?? false);
     try { localStorage.setItem(bulkStorageKey, job.id); } catch { /* storage is optional */ }
   }
   useEffect(() => {
@@ -743,8 +738,6 @@ export default function Campaigns() {
     setBulkJob(null);
     setBulkResumeAccountId(accountFilter);
     setBulkResumeSearch(search);
-    setOnlySendable(true);
-    setAutoDeleteInvalid(false);
     try { localStorage.removeItem(bulkStorageKey); } catch { /* optional storage */ }
     if (!bulkScopeOptions.length) {
       setToast(c.bulkNoEligible);
@@ -784,7 +777,7 @@ export default function Campaigns() {
           scope: bulkResumeScope,
           intervalSeconds: intervalMinutes * 60,
           scheduledAt: scheduledAt.toISOString(),
-          onlySendable,autoDeleteInvalid:false,confirmAutoDelete:false,
+          onlySendable:false,autoDeleteInvalid:true,confirmAutoDelete:true,
         },
       });
       if (result.job) {
@@ -1163,9 +1156,6 @@ export default function Campaigns() {
               </div>
             )}
             {bulkJob && <CampaignRerunResults job={bulkJob} language={language} />}
-            {bulkJob?.status==="completed" && (bulkJob.skippedCount>0 || bulkJob.results?.some(row=>row.assessment?.groups.some(group=>group.category==="invalid"))) && <CampaignSkippedCleanup
-              key={bulkJob.id} jobId={bulkJob.id} accounts={(accounts.data??[]).filter(account=>!bulkResumeAccountId || account.id===bulkResumeAccountId)} initialAccountId={bulkResumeAccountId}
-              language={language} onAccepted={()=>setBulkResumeOpen(false)} />}
             <fieldset disabled={Boolean(bulkJob) || bulkControl.isPending} className="space-y-4 disabled:opacity-60">
               {!bulkJob && <p className="text-sm font-extrabold text-[#334155]">{language==="vi"?"Bộ lọc chiến dịch":"Campaign filters"}</p>}
               {!bulkJob && <input type="search" value={bulkResumeSearch} onChange={event=>setBulkResumeSearch(event.target.value)}
@@ -1185,8 +1175,7 @@ export default function Campaigns() {
                   ? (language==="vi"?"Tác vụ này giữ nguyên phạm vi đã chọn khi bắt đầu. Đổi bộ lọc ngoài trang không thay đổi tác vụ đang xem.":"This operation keeps its original selection. Changing page filters does not change this operation.")
                   : `${language==="vi"?"Tài khoản":"Account"}: ${(accounts.data??[]).find(account=>account.id===bulkResumeAccountId)?.name??c.bulkTemplateAllAccounts}${bulkResumeSearch.trim()?` · ${language==="vi"?"Tên chứa":"Name contains"}: ${bulkResumeSearch.trim()}`:""}`}
               </p>
-            <CampaignRerunOptions language={language} onlySendable={onlySendable}
-              autoDeleteInvalid={autoDeleteInvalid} onOnlySendable={setOnlySendable} onAutoDelete={setAutoDeleteInvalid} />
+            <CampaignRerunOptions language={language} />
             <label className="block">
               <span className="mb-2 block text-[13px] font-extrabold text-[#334155]">{c.bulkScopeLabel}</span>
               <select
