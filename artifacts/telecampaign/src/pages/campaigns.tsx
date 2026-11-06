@@ -5,12 +5,9 @@ import { useQueryClient,useMutation } from "@tanstack/react-query";
 import {useOperations} from "@/lib/operations";
 import type {BackgroundOperation,BackgroundOperationInput} from "@workspace/api-client-react";
 import {
-  Copy,
-  CircleStop,
   Clock3,
   Eye,
   LoaderCircle,
-  CirclePause,
   Pencil,
   Play,
   Plus,
@@ -41,11 +38,11 @@ import { CampaignDeletionProgress } from "@/components/campaign-deletion-progres
 import { useTemplateJob } from "@/lib/use-template-job";
 import { CampaignTemplateProgress } from "@/components/campaign-template-progress";
 import { CampaignTemplateSelector } from "@/components/campaign-template-selector";
-import { CampaignListFeedback } from "@/components/campaign-list-feedback";
+import { CampaignsWorkspaceView } from "@/components/campaigns/CampaignsWorkspaceView";
 import { claimCampaignCompletion, wasCampaignCompletionHandled } from "@/lib/campaign-completion-receipt";
 import { useCompleteCampaigns } from "@/lib/use-complete-campaigns";
 import { CampaignRerunOptions, CampaignRerunResults } from "@/components/campaign-rerun-options";
-import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
+import { AppLayout, Modal, PrimaryButton, Toast } from "@/components/layout/AppLayout";
 import { useAuth } from "@/lib/auth";
 import { localizedDeliveryErrorMessage, localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 import { useLocation, useSearch } from "wouter";
@@ -927,203 +924,39 @@ export default function Campaigns() {
 
   return (
     <AppLayout activePage="campaigns" title={c.pageTitle} hideUpgrade headerAction={
-      <button onClick={openNew} className="grid h-10 w-11 place-items-center rounded-xl bg-[#1d3bb8] text-white shadow-sm transition hover:bg-[#19329c]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-5 w-5" /></button>
+      <button onClick={openNew} className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#14756e] px-3 text-[12px] font-extrabold text-white shadow-sm transition hover:bg-[#0e625b]" aria-label={c.addAriaLabel} data-testid="campaigns-add"><Plus className="h-[18px] w-[18px]" /><span className="hidden min-[390px]:inline">{c.addAriaLabel}</span></button>
     }>
-      <div className="mx-auto max-w-[900px]">
-        <div className="mb-3 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-filter-toolbar">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="text-[13px] font-extrabold text-[#334155]">{language==="vi"?"Bộ lọc chiến dịch":"Campaign filters"}</span>
-            {(accountFilter||search||status!=="all")&&<button type="button"
-              onClick={()=>{setAccountFilter("");setSearch("");setStatus("all");}}
-              className="rounded-lg px-2 py-1 text-[12px] font-bold text-[#1d3bb8] hover:bg-[#eff6ff]"
-              data-testid="campaigns-clear-filters">{language==="vi"?"Đặt lại":"Reset"}</button>}
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,2fr)]">
-          <div className="relative col-span-2 min-w-0 sm:col-span-1">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#94a3b8]" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={c.searchPlaceholder}
-              aria-label={c.searchPlaceholder}
-              maxLength={160}
-              className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white pl-10 pr-4 text-[14px] font-semibold outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10"
-              data-testid="campaigns-search"
-            />
-          </div>
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value as typeof status)}
-            aria-label={language==="vi"?"Trạng thái chiến dịch":"Campaign status"}
-            className="h-11 min-w-0 w-full rounded-xl border border-[#dbe2ea] bg-[#f8fafc] px-2.5 text-[13px] font-semibold text-[#334155] outline-none focus:border-[#1a2b88]"
-            data-testid="campaigns-status"
-          >
-            <option value="all">{c.statusAll}</option>
-            <option value="queued">{c.statusQueued}</option>
-            <option value="running">{c.statusRunning}</option>
-            <option value="paused">{c.statusPaused}</option>
-            <option value="completed">{c.statusCompleted}</option>
-          </select>
-          <select value={accountFilter} onChange={event=>setAccountFilter(event.target.value)}
-            aria-label={language==="vi"?"Tài khoản Telegram":"Telegram account"}
-            className="h-11 min-w-0 w-full rounded-xl border border-[#dbe2ea] bg-[#f8fafc] px-2.5 text-[13px] font-semibold text-[#334155] outline-none focus:border-[#1a2b88]"
-            data-testid="campaigns-account-filter">
-            <option value="">{language==="vi"?"Tất cả tài khoản":"All accounts"}</option>
-            {(accounts.data??[]).map(account=><option key={account.id} value={account.id}>{account.name}{account.phone?` · ${account.phone}`:""}</option>)}
-          </select>
-          </div>
-          <div className="mt-3 flex items-start justify-between gap-2 border-t border-[#f1f5f9] pt-2.5 text-[12px]">
-            <span className="min-w-0 break-words font-semibold text-[#64748b]">{accountFilterLabel}</span>
-            {campaigns.data!==undefined&&<span className="shrink-0 rounded-md bg-[#eef2ff] px-2 py-0.5 font-extrabold text-[#3730a3]"
-              data-testid="campaigns-filter-count">{listedCampaigns.length} / {campaigns.data.length}</span>}
-          </div>
-        </div>
-        <div className="mb-4 rounded-2xl border border-[#e2e8f0] bg-white p-3.5 shadow-sm" data-testid="campaigns-action-toolbar">
-            <p className="mb-2.5 text-[12px] font-bold text-[#475569]">{language==="vi"?"Chọn bộ lọc tương ứng để thao tác":"Choose the corresponding filters before taking action"}</p>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <button
-              type="button"
-              onClick={() => void pauseAllCampaigns()}
-              disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#dbe2ea] bg-[#f8fafc] px-2 text-[12px] font-extrabold text-[#475569] transition hover:bg-[#f1f5f9] disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="campaigns-pause-all"
-            >
-              {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleStop className="h-4 w-4" />}
-              {language==="vi"?"Dừng chiến dịch":"Pause campaigns"}
-            </button>
-            <button
-              type="button"
-              onClick={openBulkResume}
-              disabled={(campaignDataBlocked&&!bulkJob) || bulkControl.isPending || bulkTemplate.isPending}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#1d3bb8] px-2 py-2 text-[12px] font-extrabold text-white shadow-sm transition hover:bg-[#19329c] disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="campaigns-resume-all"
-            >
-              {bulkControl.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {bulkJob?(language==="vi"?"Tiến độ chạy lại":"Rerun progress"):(language==="vi"?"Chạy lại chiến dịch":"Rerun campaigns")}
-            </button>
-            {!isSupportMode && <button
-              type="button"
-              onClick={openBulkTemplate}
-              disabled={(!templateProgress.job&&!templateProgress.uncertain&&campaignDataBlocked) || bulkControl.isPending || (templateProgress.waiting && !templateProgress.job && !templateProgress.uncertain)}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe2ea] bg-white px-2 py-2 text-[12px] font-extrabold text-[#475569] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="campaigns-bulk-template"
-            >
-              {bulkTemplate.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-              {templateProgress.job || templateProgress.uncertain
-                ? (language==="vi"?"Tiến độ đổi mẫu":"Template progress") : (language==="vi"?"Đổi mẫu tin hàng loạt":"Bulk templates")}
-            </button>}
-            <button
-              type="button"
-              onClick={() => void removeFilteredCampaigns()}
-              disabled={campaignDataBlocked || bulkControl.isPending || bulkTemplate.isPending || bulkDelete.isPending}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-2 py-2 text-[12px] font-extrabold text-[#be123c] transition hover:bg-[#ffe4e6] disabled:cursor-not-allowed disabled:opacity-50"
-              data-testid="campaigns-delete-filtered"
-            >
-              {bulkDelete.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              {language==="vi"?"Xoá chiến dịch":"Delete campaigns"}
-            </button>
-            </div>
-            {!isSupportMode && <p className="mt-2.5 text-[11px] leading-relaxed text-[#64748b]">{language==="vi"?"Dừng, chạy lại và xoá áp dụng tài khoản, trạng thái và tên đã lọc. Đổi mẫu có phạm vi riêng để bạn kiểm tra trước.":"Pause, rerun and delete use the account, status and name filters. Template changes have a separate scope to review."}</p>}
-          </div>
-
-        <Panel className="overflow-hidden">
-          <CampaignListFeedback language={language} hasData={campaigns.data!==undefined}
-            fetching={campaigns.isFetching} failed={campaigns.isError} empty={!listedCampaigns.length}
-            loaded={campaigns.loadProgress.loaded} total={campaigns.loadProgress.total} updatedAt={campaigns.dataUpdatedAt} onRetry={()=>void campaigns.refetch()}>
-          {listedCampaigns.length
-              ? <div className="divide-y divide-[#eef2f6]">{listedCampaigns.map((campaign) => {
-                  const account = (accounts.data ?? []).find((item) => item.id === campaign.telegramAccountId);
-                  const complete = campaign.targetCount ? Math.round((campaign.completedCount / campaign.targetCount) * 100) : 0;
-                  const autoResumes = resumesAfterDailyQuota(campaign);
-                   const safetyNote = temporaryRestrictionCampaignNote(campaign, language, c);
-                   const isLatestCompleted = campaign.id === latestCompletedCampaignId;
-                   const isHighlighted = campaign.id === highlightedCampaignId;
-                   return (
-                     <article key={campaign.id} className={`p-4 sm:p-5 ${isHighlighted ? "bg-[#fff7f7] ring-2 ring-inset ring-[#fca5a5]" : isLatestCompleted ? "bg-[#f8fbff]" : ""}`} data-testid={`campaign-row-${campaign.id}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                           <button onClick={() => setDetails(campaign)} className={`block max-w-full truncate text-left text-[15px] hover:underline ${isHighlighted ? "font-black text-[#b91c1c]" : isLatestCompleted ? "font-black text-[#1839b5]" : "font-extrabold text-[#1839b5]"}`}>{campaign.name}</button>
-                          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] font-semibold text-[#64748b]">
-                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${isActive(campaign.status) ? "bg-[#eff6ff] text-[#0f172a]" : campaign.status === "paused" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#f1f5f9] text-[#64748b]"}`}>{statusLabel(campaign.status, c)}</span>
-                            <span>{campaign.completedCount}/{campaign.targetCount}</span>
-                             <span className="rounded-full bg-[#eef6ff] px-2 py-1 text-[#1d4ed8]">{c.dailyQuotaLabel}: {campaignDailyQuotaLabel(campaign, c)}</span>
-                            <span>OK {campaign.sentCount} · {c.errorsLabel} {campaign.failedCount}</span>
-                          </div>
-                        </div>
-                        <span className="shrink-0 pt-1 text-[12px] font-extrabold text-[#64748b]">{complete}%</span>
-                      </div>
-                      <div className="mt-3 space-y-0.5 text-[12px] font-medium text-[#64748b]">
-                        <p>{account?.phone ?? account?.name ?? c.accountFallback}</p>
-                        <p>{account?.name ?? "—"}</p>
-                        <p>{c.scheduledLabel} {formatSchedule(campaign.scheduledAt, language)}</p>
-                        <p>{campaign.timingMode === "round" ? c.detailDelayRound : (language === "vi" ? "Delay lịch cũ:" : "Legacy send delay:")} {campaign.roundDelayMinSeconds}–{campaign.roundDelayMaxSeconds}s</p>
-                        {campaign.timingMode === "round" && campaign.destinationIds.length > 1 && (campaign.groupIntervalSeconds ?? 0) > 0 && <p>{language === "vi" ? "Khoảng cách nhóm:" : "Group spacing:"} {(campaign.groupIntervalSeconds ?? 0) / 60} {language === "vi" ? "phút" : "min"}</p>}
-                         {isHighlighted && (
-                           <p className="mt-2 rounded-lg border border-[#fecaca] bg-[#fff1f2] px-3 py-2 font-extrabold leading-relaxed text-[#b91c1c]">
-                             Hãy kiểm tra chi tiết lỗi, xem nhóm đang chạy trong chiến dịch có quyền đăng không, sau đó chỉnh sửa để chạy lại chiến dịch.
-                           </p>
-                         )}
-                         {safetyNote && <p className="rounded-lg bg-[#fffbeb] px-2.5 py-2 font-extrabold text-[#92400e]">{safetyNote}</p>}
-                      </div>
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        <button onClick={() => setDetails(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] text-[14px] font-extrabold text-[#0f172a] hover:bg-[#f8fafc]"><Eye className="h-[17px] w-[17px]" />{c.detailsBtn}</button>
-                        {isActive(campaign.status)
-                          ? <button onClick={() => void changeCampaignStatus(campaign, "paused")} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#f04444] text-[14px] font-extrabold text-white hover:bg-[#dc2626]"><CirclePause className="h-[17px] w-[17px]" />{c.pauseBtn}</button>
-                          : campaign.status === "draft"
-                             ? <div className="grid grid-cols-2 gap-2">
-                               <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
-                               <button onClick={() => requestQueue(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>
-                             </div>
-                            : campaign.status === "paused"
-                              ? <div className="grid grid-cols-2 gap-2">
-                                <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
-                                 {autoResumes
-                                   ? <span className="inline-flex h-10 items-center justify-center rounded-xl bg-[#eff6ff] px-3 text-center text-[12px] font-extrabold text-[#1d4ed8]">{c.automaticResume}</span>
-                                   : <button onClick={() => requestQueue(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#1d3bb8] text-[14px] font-extrabold text-white hover:bg-[#19329c]"><Play className="h-[17px] w-[17px]" />{c.resumeBtn}</button>}
-                              </div>
-                             : campaign.status === "completed" || campaign.status === "completed_with_errors"
-                               ? <button onClick={() => openEdit(campaign)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] text-[14px] font-extrabold text-[#334155] hover:bg-[#f8fafc]"><Pencil className="h-[16px] w-[16px]" />{c.editBtn}</button>
-                            : <span className="h-10" />}
-                      </div>
-                          <div className="mt-2 flex items-center justify-end gap-2">
-                            {!isSupportMode && <button onClick={() => openClone(campaign)} disabled={cloneCampaign.isPending} className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] text-[14px] font-extrabold text-[#1d4ed8] hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-60" data-testid={`campaign-clone-${campaign.id}`}>
-                              {cloneCampaign.isPending && cloneSourceCampaign?.id === campaign.id ? <LoaderCircle className="h-[17px] w-[17px] animate-spin" /> : <Copy className="h-[17px] w-[17px]" />}
-                              {c.cloneBtn}
-                            </button>}
-                            <button
-                              type="button"
-                              onClick={() => isActive(campaign.status) ? setToast(c.deleteActiveHint) : setCampaignToDelete(campaign)}
-                              disabled={deleteOne.isPending}
-                              title={isActive(campaign.status) ? c.deleteActiveHint : c.deleteTitle}
-                              aria-label={`${c.deleteTitle}: ${campaign.name}`}
-                              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#fecaca] bg-[#fff1f2] text-[#b91c1c] hover:bg-[#ffe4e6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50"
-                              data-testid={`campaign-delete-${campaign.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                       {campaign.cloneMode === "admin" && campaign.status === "draft" && (
-                        <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
-                          {c.clonedDraft}
-                        </p>
-                      )}
-                       {campaign.cloneMode === "user" && campaign.status === "draft" && (
-                         <p className="mt-3 rounded-lg bg-[#eff6ff] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#1e40af]">
-                           {c.userClonedDraft}
-                         </p>
-                       )}
-                    </article>
-                  );
-                })}</div>
-              : <EmptyState
-                  icon={Plus}
-                  title={search || status !== "all" || accountFilter ? c.emptyFilterTitle : c.emptyTitle}
-                  detail={search || status !== "all" || accountFilter ? c.emptyFilterDetail : c.emptyDetail}
-                   action={!search && !accountFilter && status === "all" ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{c.createCampaignBtn}</PrimaryButton> : undefined}
-                />}
-          </CampaignListFeedback>
-        </Panel>
-      </div>
+      <CampaignsWorkspaceView
+        labels={c} rows={listedCampaigns} accounts={accounts.data ?? []}
+        total={campaigns.data?.length} hasData={campaigns.data !== undefined}
+        fetching={campaigns.isFetching} failed={campaigns.isError}
+        loaded={campaigns.loadProgress.loaded} loadTotal={campaigns.loadProgress.total}
+        updatedAt={campaigns.dataUpdatedAt}
+        search={search} status={status} accountFilter={accountFilter} accountFilterLabel={accountFilterLabel}
+        supportMode={isSupportMode} dataBlocked={campaignDataBlocked}
+        bulkPending={bulkControl.isPending} bulkTemplatePending={bulkTemplate.isPending}
+        bulkDeletePending={bulkDelete.isPending} hasBulkJob={Boolean(bulkJob)}
+        hasTemplateJob={Boolean(templateProgress.job)} templateUncertain={templateProgress.uncertain}
+        templateWaiting={templateProgress.waiting} clonePending={cloneCampaign.isPending}
+        cloneSourceId={cloneSourceCampaign?.id} deletePending={deleteOne.isPending}
+        latestCompletedId={latestCompletedCampaignId} highlightedId={highlightedCampaignId}
+        present={campaign => ({
+          status: campaign.status === "completed_with_errors" ? c.statusCompletedErrors : statusLabel(campaign.status, c),
+          complete: campaign.targetCount ? Math.round((campaign.completedCount / campaign.targetCount) * 100) : 0,
+          active: isActive(campaign.status), autoResumes: resumesAfterDailyQuota(campaign),
+          safetyNote: temporaryRestrictionCampaignNote(campaign, language, c),
+          schedule: formatSchedule(campaign.scheduledAt, language), dailyQuota: campaignDailyQuotaLabel(campaign, c),
+        })}
+        onSearch={setSearch} onStatus={setStatus} onAccount={setAccountFilter}
+        onReset={() => {setAccountFilter("");setSearch("");setStatus("all");}}
+        onRefresh={() => void campaigns.refetch()} onCreate={openNew}
+        onPauseAll={() => void pauseAllCampaigns()} onRerun={openBulkResume}
+        onTemplate={openBulkTemplate} onDeleteFiltered={() => void removeFilteredCampaigns()}
+        onDetails={setDetails} onEdit={openEdit}
+        onPause={campaign => void changeCampaignStatus(campaign, "paused")}
+        onQueue={requestQueue} onClone={openClone}
+        onDelete={campaign => isActive(campaign.status) ? setToast(c.deleteActiveHint) : setCampaignToDelete(campaign)}
+      />
 
       {showForm && (
         <CampaignFormModal

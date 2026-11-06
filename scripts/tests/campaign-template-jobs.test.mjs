@@ -82,7 +82,10 @@ test("a definite rejected input is not treated as an unknown accepted operation"
   assert.equal(h.storage.size,0);
 });
 test("progress can be reopened during processing and closed without cancelling the server task",()=>{
-  assert.match(page,/onClick=\{openBulkTemplate\}[\s\S]*?disabled=\{\(!templateProgress\.job&&!templateProgress\.uncertain&&campaignDataBlocked\)/);
+  const workspace=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaigns/CampaignsWorkspaceView.tsx",import.meta.url),"utf8");
+  assert.match(page,/onTemplate=\{openBulkTemplate\}/);
+  assert.match(page,/hasTemplateJob=\{Boolean\(templateProgress\.job\)\} templateUncertain=\{templateProgress\.uncertain\}/);
+  assert.match(workspace,/onClick=\{p\.onTemplate\}[\s\S]*?disabled=\{\(!p\.hasTemplateJob && !p\.templateUncertain && p\.dataBlocked\)/);
   assert.match(page,/onClose=\{\(\) => setBulkTemplateOpen\(false\)\}/);
   assert.match(page,/CampaignTemplateProgress/);
   assert.match(hook,/getLatestCampaignTemplateJob/);
