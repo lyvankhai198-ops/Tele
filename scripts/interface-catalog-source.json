@@ -1634,6 +1634,7 @@
     "Send /chatid to the support bot to discover the chat ID.",
     "Send countdown:",
     "Send exactly {{0}} on {{1}} to the wallet below, then submit the TxHash for verification.",
+    "Send limit, not messages sent",
     "Send now",
     "Send now or choose a start date and time. This is the planned start, not a separate send time for every group.",
     "Send one reminder after expiry",
