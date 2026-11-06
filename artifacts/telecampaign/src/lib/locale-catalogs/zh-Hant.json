@@ -1,4 +1,7 @@
 {
+  "All": "全部",
+  "Text": "文字",
+  "templates": "個範本",
   "Send limit, not messages sent": "傳送上限，並非已傳送訊息數",
   "+50 more groups are hidden": "+50 個群組已隱藏",
   ". Buy a new key before it runs out to avoid interruption.": "。請在金鑰過期前購買新金鑰，以免中斷服務。",

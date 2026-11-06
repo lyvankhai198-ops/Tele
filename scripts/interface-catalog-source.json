@@ -1,6 +1,6 @@
 {
   "sourceCommit": "327aa41deaf3b7f1c3c3138e4b5f7e79d3eb7fa7",
-  "files": 149,
+  "files": 150,
   "sources": [
     "+50 more groups are hidden",
     ". Buy a new key before it runs out to avoid interruption.",
@@ -121,6 +121,7 @@
     "After expiry",
     "After joining a group, press “",
     "After transferring, please enter the Transaction Hash (TxID) to confirm.",
+    "All",
     "All Plans",
     "All Telegram accounts",
     "All accounts",
@@ -1818,6 +1819,7 @@
     "Temporarily restricted until {{0}}.",
     "Temporary password",
     "Temporary problem; retain the campaign and exclude it from this rerun.",
+    "Text",
     "Thai",
     "The CAPTCHA code expired. Please enter the new code.",
     "The CAPTCHA code is incorrect. Please enter the new code.",
@@ -2239,6 +2241,7 @@
     "server environment",
     "subscriptions",
     "success",
+    "templates",
     "text/plain",
     "to connect an account.",
     "today",

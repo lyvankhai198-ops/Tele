@@ -1,12 +1,10 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  Eye,
   FileText,
+  Forward,
   LoaderCircle,
-  Pencil,
   Plus,
   RefreshCw,
-  Search,
   Trash2,
 } from "lucide-react";
 import type { MessageTemplate, MessageTemplateInput } from "@workspace/api-client-react";
@@ -19,7 +17,9 @@ import {
   useListTelegramSavedMessages,
   useUpdateMessageTemplate,
 } from "@workspace/api-client-react";
-import { AppLayout, EmptyState, Modal, Panel, PrimaryButton, Toast } from "@/components/layout/AppLayout";
+import { AppLayout, Modal, Toast } from "@/components/layout/AppLayout";
+import { TemplatesLibraryView, type TemplateFilter } from "@/components/templates/TemplatesLibraryView";
+import "@/components/templates/templates-library.css";
 import { localizedErrorMessage, useLanguage } from "@/lib/i18n";
 
 type TemplateMode = "text" | "forward";
@@ -34,7 +34,7 @@ type FormState = {
 const emptyForm = (): FormState => ({ name: "", mode: "forward", content: "", sourceAccountId: "", sourceMessageId: "" });
 
 export default function Templates() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const vi = language === "vi";
 
   const copy = vi ? {
@@ -137,6 +137,7 @@ export default function Templates() {
   const updateTemplate = useUpdateMessageTemplate();
   const deleteTemplate = useDeleteMessageTemplate();
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TemplateFilter>("all");
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editing, setEditing] = useState<MessageTemplate | null>(null);
   const [preview, setPreview] = useState<MessageTemplate | null>(null);
@@ -144,6 +145,12 @@ export default function Templates() {
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MessageTemplate | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const saveLocked = useRef(false);
+  const deleteLocked = useRef(false);
   const savedMessages = useListTelegramSavedMessages(form.sourceAccountId || "", {
     query: { enabled: showForm && form.mode === "forward" && Boolean(form.sourceAccountId) } as any,
   });
@@ -163,9 +170,10 @@ export default function Templates() {
   const rows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (templates.data ?? []).filter((template) =>
-      !query || template.name.toLowerCase().includes(query) || template.content.toLowerCase().includes(query),
+      (typeFilter === "all" || template.mode === typeFilter)
+        && (!query || template.name.toLowerCase().includes(query) || template.content.toLowerCase().includes(query)),
     );
-  }, [templates.data, search]);
+  }, [templates.data, search, typeFilter]);
 
   function openNew() {
     setEditing(null);
@@ -189,6 +197,9 @@ export default function Templates() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (saveLocked.current) return;
+    saveLocked.current = true;
+    setSubmitting(true);
     setFormError(null);
     const data: MessageTemplateInput = {
       name: form.name,
@@ -201,25 +212,37 @@ export default function Templates() {
       if (editing) await updateTemplate.mutateAsync({ templateId: editing.id, data });
       else await createTemplate.mutateAsync({ data });
       await templates.refetch();
+      setSearch("");
+      setTypeFilter("all");
       setShowForm(false);
       setToast(editing ? copy.toastUpdated : copy.toastAdded);
     } catch (error) {
       setFormError(errorText(error));
+    } finally {
+      saveLocked.current = false;
+      setSubmitting(false);
     }
   }
 
   async function remove(template: MessageTemplate) {
-    if (!window.confirm(copy.confirmDelete(template.name))) return;
+    if (deleteLocked.current) return;
+    deleteLocked.current = true;
+    setDeleting(true);
+    setDeleteError(null);
     try {
       await deleteTemplate.mutateAsync({ templateId: template.id });
       await templates.refetch();
+      setDeleteTarget(null);
       setToast(copy.toastDeleted);
     } catch (error) {
-      setToast(errorText(error));
+      setDeleteError(errorText(error));
+    } finally {
+      deleteLocked.current = false;
+      setDeleting(false);
     }
   }
 
-  const isSaving = createTemplate.isPending || updateTemplate.isPending;
+  const isSaving = submitting || createTemplate.isPending || updateTemplate.isPending;
 
   return (
     <AppLayout
@@ -227,86 +250,42 @@ export default function Templates() {
       title={copy.title}
       hideUpgrade
       headerAction={
-        <button onClick={openNew} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1a2b88] px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#152473]" data-testid="templates-add">
+        <button onClick={openNew} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#075e68] px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#064b53]" data-testid="templates-add">
           <Plus className="h-4 w-4" />{copy.add}
         </button>
       }
     >
-      <div className="mx-auto max-w-[900px]">
-        <div className="mb-5 flex items-end justify-between gap-4 sm:mb-7">
-          <div>
-            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#64748b]">{copy.eyebrow}</p>
-            <h2 className="text-[25px] font-extrabold tracking-tight text-[#0f172a]">{copy.title}</h2>
-            <p className="mt-1.5 text-[14px] font-medium text-[#64748b]">{copy.subtitle}</p>
-          </div>
-        </div>
-
-        <Panel className="overflow-hidden">
-          <div className="border-b border-[#eef2f6] p-4 sm:p-5">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#94a3b8]" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.searchPlaceholder} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white pl-10 pr-4 text-[14px] font-semibold outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="templates-search" />
-            </div>
-          </div>
-
-          {templates.isLoading ? (
-            <div className="grid min-h-64 place-items-center"><LoaderCircle className="h-6 w-6 animate-spin text-[#64748b]" /></div>
-          ) : rows.length ? (
-            <div className="divide-y divide-[#eef2f6]">
-              <div className="grid grid-cols-[minmax(0,1fr)_88px_132px] gap-3 bg-[#fbfcfe] px-4 py-3 text-[12px] font-bold text-[#64748b] sm:px-5">
-                <span>{copy.colName}</span><span>{copy.colParseMode}</span><span className="text-right">{copy.colActions}</span>
-              </div>
-              {rows.map((template) => (
-                <div key={template.id} className="grid grid-cols-[minmax(0,1fr)_88px_132px] items-center gap-3 px-4 py-4 sm:px-5" data-testid={`template-row-${template.id}`}>
-                  <div className="min-w-0">
-                    <p className="truncate text-[14px] font-extrabold text-[#0f172a]">{template.name}</p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-[#94a3b8] sm:hidden">{template.mode === "forward" ? copy.forwardLabel : template.content}</p>
-                  </div>
-                  <span className="inline-flex w-fit rounded-full bg-[#f1f5f9] px-2.5 py-1 text-[10px] font-extrabold text-[#334155]">{template.mode === "forward" ? "FORWARD" : "PLAIN"}</span>
-                  <div className="flex justify-end gap-1.5">
-                    <button
-                      onClick={() => {
-                        setPreview(template);
-                        setPreviewSource(template.mode === "forward" && template.sourceAccountId && template.sourceMessageId
-                          ? { accountId: template.sourceAccountId, messageId: template.sourceMessageId }
-                          : null);
-                      }}
-                      className="grid h-10 w-10 place-items-center rounded-xl border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]"
-                      aria-label={copy.ariaView(template.name)}
-                    >
-                      <Eye className="h-[18px] w-[18px]" />
-                    </button>
-                    <button onClick={() => openEdit(template)} className="grid h-10 w-10 place-items-center rounded-xl border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]" aria-label={copy.ariaEdit(template.name)}><Pencil className="h-[17px] w-[17px]" /></button>
-                    <button onClick={() => void remove(template)} disabled={deleteTemplate.isPending} className="grid h-10 w-10 place-items-center rounded-xl bg-[#ef4444] text-white hover:bg-[#dc2626] disabled:opacity-50" aria-label={copy.ariaDelete(template.name)}><Trash2 className="h-[17px] w-[17px]" /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={FileText}
-              title={search ? copy.emptySearchTitle : copy.emptyTitle}
-              detail={search ? copy.emptySearchDetail : copy.emptyDetail}
-              action={!search ? <PrimaryButton onClick={openNew}><Plus className="h-4 w-4" />{copy.add}</PrimaryButton> : undefined}
-            />
-          )}
-        </Panel>
-      </div>
+      <div className="tc-professional tc-templates-live">
+      <TemplatesLibraryView allTemplates={templates.data ?? []} rows={rows}
+        query={search} onQuery={setSearch} filter={typeFilter} onFilter={setTypeFilter}
+        loading={templates.isLoading} error={templates.isError} deleting={deleting || deleteTemplate.isPending}
+        onRetry={() => { void templates.refetch(); }} onEdit={openEdit} onCreate={openNew}
+        onDelete={template => { setDeleteError(null); setDeleteTarget(template); }}
+        onPreview={template => {
+          setPreview(template);
+          setPreviewSource(template.mode === "forward" && template.sourceAccountId && template.sourceMessageId
+            ? { accountId: template.sourceAccountId, messageId: template.sourceMessageId } : null);
+        }} labels={copy} />
 
       {showForm && (
-        <Modal title={editing ? copy.modalEdit : copy.modalAdd} onClose={() => setShowForm(false)}>
-          <form onSubmit={(event) => void submit(event)} className="space-y-5">
+        <Modal title={editing ? copy.modalEdit : copy.modalAdd} onClose={() => { if (!saveLocked.current) setShowForm(false); }}>
+          <form onSubmit={(event) => void submit(event)} className="space-y-5 tcp-live-form">
+            <fieldset disabled={isSaving} className="min-w-0 space-y-5">
             <label className="block">
               <span className="mb-2 block text-[13px] font-bold text-[#334155]">{copy.fieldName}</span>
               <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="h-11 w-full rounded-xl border border-[#dbe2ea] px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="template-name" />
             </label>
-            <label className="block">
-              <span className="mb-2 block text-[13px] font-bold text-[#334155]">{copy.fieldMode}</span>
-              <select value={form.mode} onChange={(event) => setForm({ ...form, mode: event.target.value as TemplateMode, sourceMessageId: "" })} className="h-11 w-full rounded-xl border border-[#dbe2ea] bg-white px-3.5 text-[14px] font-semibold outline-none focus:border-[#1a2b88]" data-testid="template-mode">
-                <option value="forward">{copy.modeForward}</option>
-                <option value="text">{copy.modeText}</option>
-              </select>
-            </label>
+            <fieldset className="tcp-mode-field" data-testid="template-mode">
+              <legend>{copy.fieldMode}</legend>
+              <button type="button" className={`tcp-mode-choice ${form.mode === "text" ? "selected" : ""}`}
+                aria-pressed={form.mode === "text"} onClick={() => setForm({ ...form, mode: "text", sourceMessageId: "" })}>
+                <FileText size={18} /><span><b>{t("Text")}</b></span>
+              </button>
+              <button type="button" className={`tcp-mode-choice ${form.mode === "forward" ? "selected" : ""}`}
+                aria-pressed={form.mode === "forward"} onClick={() => setForm({ ...form, mode: "forward", sourceMessageId: "" })}>
+                <Forward size={18} /><span><b>{t("Saved Messages")}</b></span>
+              </button>
+            </fieldset>
             {form.mode === "text" ? (
               <label className="block">
                 <span className="mb-2 block text-[13px] font-bold text-[#334155]">{copy.fieldContent}</span>
@@ -347,7 +326,11 @@ export default function Templates() {
               </>
             )}
             {formError && <p className="rounded-xl bg-[#fff1f2] px-3.5 py-3 text-[13px] font-semibold text-[#be123c]">{formError}</p>}
-            <PrimaryButton type="submit" disabled={isSaving} onClick={() => undefined}>{isSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}{copy.save}</PrimaryButton>
+            <div className="tcp-form-actions">
+              <button type="button" className="tcp-cancel" disabled={isSaving} onClick={() => setShowForm(false)}>{t("Cancel")}</button>
+              <button type="submit" className="tcp-save" disabled={isSaving}>{isSaving && <LoaderCircle className="h-4 w-4 animate-spin" />}{copy.save}</button>
+            </div>
+            </fieldset>
           </form>
         </Modal>
       )}
@@ -361,7 +344,7 @@ export default function Templates() {
             setPreviewSource(null);
           }}
         >
-          <p className="whitespace-pre-wrap rounded-2xl bg-[#f8fafc] p-4 text-[14px] font-medium leading-relaxed text-[#334155]">
+          <p className="tcp-live-preview whitespace-pre-wrap rounded-2xl p-4 text-[14px] font-medium leading-relaxed">
             {preview.mode !== "forward"
               ? preview.content || copy.previewText
               : !previewSource
@@ -372,6 +355,21 @@ export default function Templates() {
           </p>
         </Modal>
       )}
+      {deleteTarget && (
+        <Modal title={t("Confirm deletion")} onClose={() => { if (!deleteLocked.current) setDeleteTarget(null); }}>
+          <div className="tcp-live-delete">
+            <span className="tcp-delete-mark"><Trash2 size={20} /></span>
+            <p className="my-4 break-words text-[14px] leading-relaxed">{copy.confirmDelete(deleteTarget.name)}</p>
+            {deleteError && <p role="alert" className="tcp-form-error">{deleteError}</p>}
+            <div className="tcp-form-actions">
+              <button type="button" className="tcp-cancel" disabled={deleting} onClick={() => setDeleteTarget(null)}>{t("Cancel")}</button>
+              <button type="button" className="tcp-delete-confirm" disabled={deleting}
+                onClick={() => void remove(deleteTarget)}>{deleting && <LoaderCircle className="h-4 w-4 animate-spin" />}{t("Delete")}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      </div>
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </AppLayout>
   );
