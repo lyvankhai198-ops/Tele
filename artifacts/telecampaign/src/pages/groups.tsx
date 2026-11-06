@@ -1,20 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowDownToLine,
-  ChevronDown,
-  Filter,
-  Info,
-  MessageCircle,
-  RefreshCw,
-  Search,
-  Send,
-  SlidersHorizontal,
-  Users,
-  X,
-} from "lucide-react";
+import { Info, X } from "lucide-react";
 import { type Destination, getListDestinationsQueryKey, getListTelegramAccountsQueryKey, useListDestinations, useListTelegramAccounts, useSyncTelegramDestinations } from "@workspace/api-client-react";
-import { AppLayout, Modal, Panel, Toast } from "@/components/layout/AppLayout";
+import { AppLayout, Modal, Toast } from "@/components/layout/AppLayout";
+import { GroupsCompactView } from "@/components/groups/GroupsCompactView";
 import { useLanguage } from "@/lib/i18n";
 
 const statusOptions = {
@@ -43,6 +32,8 @@ export default function Groups() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState<Destination | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const syncLocked = useRef(false);
 
   const copy = vi ? {
     title: "Nhóm",
@@ -151,9 +142,7 @@ export default function Groups() {
     if (destination.kind === "forum") return copy.kindForum;
     return destination.kind === "channel" ? copy.kindChannel : copy.kindGroup;
   };
-  const connectedAccounts = (accounts.data ?? []).filter((account) => account.status === "connected").length;
-  const enabledCount = rows.filter((item) => item.canPost).length;
-  const disabledCount = rows.length - enabledCount;
+  const scopedRows = rows.filter(item => accountFilter === "all" || item.accountId === accountFilter);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -174,11 +163,16 @@ export default function Groups() {
   }, [accountFilter, rows, query, statusFilter, accounts.data]);
 
   const syncAll = () => {
-    const connected = (accounts.data ?? []).filter((account) => account.status === "connected");
+    if (syncLocked.current) return;
+    // Snapshot the chosen scope once; never fall back to syncing other accounts.
+    const connected = (accounts.data ?? []).filter((account) => account.status === "connected"
+      && (accountFilter === "all" || account.id === accountFilter));
     if (!connected.length) {
       setToast(copy.noAccountToast);
       return;
     }
+    syncLocked.current = true;
+    setSyncing(true);
     void Promise.allSettled(connected.map((account) => sync.mutateAsync({ accountId: account.id })))
       .then(async results => {
         await Promise.all([
@@ -192,7 +186,11 @@ export default function Groups() {
           : vi ? "Đã cập nhật các tài khoản đồng bộ thành công. Một số tài khoản chưa đồng bộ được, vui lòng thử lại."
             : "Successfully synced accounts have been updated. Some accounts could not sync; please retry.");
       })
-      .catch(() => setToast(copy.syncError));
+      .catch(() => setToast(copy.syncError))
+      .finally(() => {
+        syncLocked.current = false;
+        setSyncing(false);
+      });
   };
 
   const exportGroups = () => {
@@ -220,122 +218,24 @@ export default function Groups() {
     setToast(copy.exportDone);
   };
 
-  const accountOptions = accounts.data ?? [];
-  const statCards = [
-    { label: copy.total, value: rows.length, icon: Users, tone: "blue" },
-    { label: copy.enabled, value: enabledCount, icon: Send, tone: "green" },
-    { label: copy.disabled, value: disabledCount, icon: SlidersHorizontal, tone: "orange" },
-  ] as const;
-
   return (
     <AppLayout
       activePage="groups"
       title={copy.title}
       hideUpgrade
-      headerAction={
-        <button onClick={syncAll} disabled={sync.isPending} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1a2b88] px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-[#152473] disabled:cursor-not-allowed disabled:opacity-60" data-testid="groups-add">
-          <span className="text-[18px] leading-none">+</span>{copy.add}
-        </button>
-      }
     >
-      <div className="mx-auto max-w-[1060px]">
-        <div className="mb-5 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#64748b]">{copy.eyebrow}</p>
-            <h2 className="text-[25px] font-extrabold tracking-tight text-[#0f172a]">{copy.title}</h2>
-            <p className="mt-1.5 text-[14px] font-medium text-[#64748b]">{copy.subtitle}</p>
-          </div>
-          <div className="flex items-center gap-2 text-[12px] font-bold text-[#64748b]">
-            <span className="h-2 w-2 rounded-full bg-[#10b981]" />
-            {connectedAccounts} {copy.connected}
-          </div>
-        </div>
-
-        <div className="mb-5 grid grid-cols-3 gap-2.5 sm:mb-6 sm:gap-4">
-          {statCards.map(({ label, value, icon: Icon, tone }) => (
-            <Panel key={label} className="p-3.5 sm:p-5">
-              <div className="flex items-start justify-between gap-2">
-                <span className="text-[10px] font-extrabold uppercase leading-tight tracking-[0.08em] text-[#64748b] sm:text-[11px]">{label}</span>
-                <span className={`hidden h-9 w-9 place-items-center rounded-xl sm:grid ${tone === "green" ? "bg-[#ecfdf5] text-[#059669]" : tone === "orange" ? "bg-[#fff7ed] text-[#ea580c]" : "bg-[#eff6ff] text-[#2563eb]"}`}><Icon className="h-4 w-4" /></span>
-              </div>
-              <strong className="mt-2 block text-[25px] font-extrabold tracking-tight text-[#0f172a] sm:mt-4 sm:text-[30px]">{value}</strong>
-            </Panel>
-          ))}
-        </div>
-
-        <Panel className="overflow-hidden">
-          <div className="border-b border-[#eef2f6] p-4 sm:p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h3 className="text-[15px] font-extrabold text-[#0f172a]">{copy.toolsTitle}</h3>
-                <p className="mt-1 text-[12px] font-medium text-[#94a3b8]">{copy.toolsSubtitle}</p>
-              </div>
-              <Info className="h-4 w-4 text-[#94a3b8]" />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={syncAll} disabled={sync.isPending} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 text-[13px] font-bold text-[#1e293b] transition hover:border-[#94a3b8] hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-60" data-testid="groups-sync">
-                <RefreshCw className={`h-4 w-4 text-[#334155] ${sync.isPending ? "animate-spin" : ""}`} />{sync.isPending ? copy.syncing : copy.sync}
-              </button>
-              <button onClick={exportGroups} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-3.5 text-[13px] font-bold text-[#1e293b] transition hover:border-[#94a3b8] hover:bg-[#f8fafc]" data-testid="groups-export">
-                <ArrowDownToLine className="h-4 w-4 text-[#334155]" />{copy.export}
-              </button>
-            </div>
-          </div>
-
-          <div className="border-b border-[#eef2f6] bg-[#fbfcfe] p-4 sm:p-5">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#94a3b8]" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} className="h-12 w-full rounded-2xl border border-[#dbe2ea] bg-white pl-11 pr-4 text-[14px] font-semibold text-[#0f172a] outline-none placeholder:text-[#94a3b8] focus:border-[#1a2b88] focus:ring-4 focus:ring-[#1a2b88]/10" data-testid="groups-search" />
-            </div>
-            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-              <label className="relative block">
-                <Filter className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#94a3b8]" />
-                <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[#dbe2ea] bg-white pl-10 pr-9 text-[13px] font-bold text-[#334155] outline-none focus:border-[#1a2b88]">
-                  <option value="all">{copy.allAccounts}</option>
-                  {accountOptions.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
-              </label>
-              <label className="relative block">
-                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[#dbe2ea] bg-white px-4 pr-9 text-[13px] font-bold text-[#334155] outline-none focus:border-[#1a2b88]">
-                  {statusOptions[language === "vi" ? "vi" : "en"].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748b]" />
-              </label>
-            </div>
-          </div>
-
-          <div className="space-y-3 p-3.5 sm:p-5">
-            {destinations.isLoading ? (
-              <div className="grid min-h-48 place-items-center text-[13px] font-bold text-[#64748b]"><RefreshCw className="mb-3 h-6 w-6 animate-spin text-[#94a3b8]" />{copy.loading}</div>
-            ) : visible.length ? visible.map((item) => (
-              <button key={item.id} onClick={() => setSelected(item)} className="group w-full rounded-2xl border border-[#e5eaf0] bg-white p-4 text-left shadow-[0_2px_8px_rgba(15,23,42,0.03)] transition hover:border-[#b8c4db] hover:shadow-[0_8px_20px_rgba(15,23,42,0.07)] sm:p-5" data-testid={`group-card-${item.id}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${item.kind === "channel" ? "bg-[#eef2ff] text-[#4f46e5]" : item.kind === "topic" ? "bg-[#fff7ed] text-[#c2410c]" : "bg-[#eff6ff] text-[#2563eb]"}`}><MessageCircle className="h-[18px] w-[18px]" /></span>
-                    <div className="min-w-0">
-                      <h4 className="truncate text-[15px] font-extrabold text-[#0f172a] group-hover:text-[#1a2b88]">{destinationLabel(item)}</h4>
-                      <p className="mt-1 truncate text-[12px] font-medium text-[#64748b]">{item.kind === "topic" ? `${copy.parentGroup}: ${item.parentTitle}` : `${item.memberCount?.toLocaleString()} ${copy.members}`}</p>
-                    </div>
-                  </div>
-                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${item.canPost ? "bg-[#eaf8f1] text-[#059669]" : "bg-[#fff1f2] text-[#e11d48]"}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{item.canPost ? copy.on : copy.off}</span>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-[#f1f4f7] pt-4 sm:grid-cols-4">
-                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.managedBy}</p><p className="mt-1 truncate text-[12px] font-bold text-[#334155]" title={item.accountId}>{accountName(item.accountId)}</p></div>
-                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{item.kind === "topic" ? copy.topicId : copy.chatId}</p><p className="mt-1 truncate font-mono text-[12px] font-bold text-[#334155]">{item.kind === "topic" ? item.topicId : item.telegramId}</p></div>
-                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.username}</p><p className="mt-1 truncate text-[12px] font-bold text-[#334155]">{item.username ? `@${item.username}` : copy.noUsername}</p></div>
-                  <div className="min-w-0"><p className="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#94a3b8]">{copy.lastSent}</p><p className="mt-1 text-[12px] font-bold text-[#334155]">—</p></div>
-                </div>
-              </button>
-            )) : (
-              <div className="grid min-h-48 place-items-center px-5 text-center">
-                <div><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#f1f5f9] text-[#94a3b8]"><Search className="h-5 w-5" /></span><h3 className="mt-4 text-[15px] font-extrabold text-[#334155]">{copy.empty}</h3><p className="mt-1.5 text-[13px] font-medium text-[#94a3b8]">{copy.emptyHint}</p></div>
-              </div>
-            )}
-          </div>
-          <div className="border-t border-[#eef2f6] px-4 py-3.5 text-[11px] font-bold text-[#94a3b8] sm:px-5">{copy.showing} {visible.length} {copy.of} {rows.length} {copy.groups}</div>
-        </Panel>
-      </div>
+      <GroupsCompactView
+        accounts={accounts.data ?? []} accountsLoading={accounts.isLoading}
+        accountFilter={accountFilter} onAccountFilter={setAccountFilter}
+        statusFilter={statusFilter} onStatusFilter={setStatusFilter}
+        statusOptions={statusOptions[language === "vi" ? "vi" : "en"]}
+        query={query} onQuery={setQuery} scopedRows={scopedRows} visible={visible}
+        loading={destinations.isLoading} loadError={destinations.isError}
+        onRetry={() => { void destinations.refetch(); void accounts.refetch(); }}
+        syncing={syncing} onSync={syncAll} onExport={exportGroups}
+        onSelect={setSelected} labels={copy} accountName={accountName}
+        destinationLabel={destinationLabel} destinationKind={destinationKind}
+      />
 
       {selected && <Modal title={destinationLabel(selected)} description={`${destinationKind(selected)} · ${selected.username ? `@${selected.username}` : selected.telegramId}`} onClose={() => setSelected(null)}>
         <div className="space-y-4">
@@ -344,6 +244,13 @@ export default function Groups() {
             <div className="rounded-2xl border border-[#e5eaf0] bg-[#f8fafc] p-4"><p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#94a3b8]">{copy.permission}</p><p className={`mt-2 text-[14px] font-extrabold ${selected.canPost ? "text-[#059669]" : "text-[#e11d48]"}`}>{selected.canPost ? copy.allowed : copy.restricted}</p></div>
           </div>
           <div className="flex items-start gap-3 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] p-4"><Info className="mt-0.5 h-4 w-4 shrink-0 text-[#2563eb]" /><p className="text-[13px] font-medium leading-relaxed text-[#475569]">{selected.permissionReason ?? copy.noPermissionReason}</p></div>
+          <dl className="grid grid-cols-2 gap-4 rounded-2xl border border-[#e5eaf0] p-4 text-[12px]">
+            <div className="min-w-0"><dt className="text-[#64748b]">{copy.managedBy}</dt><dd className="mt-1 break-words font-bold">{accountName(selected.accountId)}</dd></div>
+            <div className="min-w-0"><dt className="text-[#64748b]">{copy.chatId}</dt><dd dir="ltr" className="mt-1 break-all font-mono">{selected.telegramId}</dd></div>
+            <div className="min-w-0"><dt className="text-[#64748b]">{copy.username}</dt><dd className="mt-1 break-all font-bold">{selected.username ? `@${selected.username}` : copy.noUsername}</dd></div>
+            {selected.kind === "topic" && <div><dt className="text-[#64748b]">{copy.topicId}</dt><dd className="mt-1 font-mono">{selected.topicId ?? "—"}</dd></div>}
+            {(selected.parentTitle || selected.kind === "forum") && <div className="col-span-2"><dt className="text-[#64748b]">{copy.parentGroup}</dt><dd className="mt-1 break-words font-bold">{selected.parentTitle ?? selected.title}</dd></div>}
+          </dl>
           <div className="flex justify-end"><button onClick={() => setSelected(null)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#f1f5f9] px-4 text-[13px] font-extrabold text-[#475569] hover:bg-[#e2e8f0]"><X className="h-4 w-4" />{copy.close}</button></div>
         </div>
       </Modal>}
