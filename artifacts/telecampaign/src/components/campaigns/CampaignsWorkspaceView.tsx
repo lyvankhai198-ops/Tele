@@ -67,13 +67,13 @@ export function CampaignsWorkspaceView(p: Props) {
                 <input value={p.search} onChange={event => p.onSearch(event.target.value)} placeholder={c.searchPlaceholder} maxLength={160} data-testid="campaigns-search" />
               </label>
               <label className="tcw-select-field"><span className="sr-only">{t("Campaign status")}</span>
-                <select value={p.status} onChange={event => p.onStatus(event.target.value as CampaignFilterStatus)} data-testid="campaigns-status">
+                <select value={p.status} aria-label={t("Campaign status")} onChange={event => p.onStatus(event.target.value as CampaignFilterStatus)} data-testid="campaigns-status">
                   <option value="all">{c.statusAll}</option><option value="queued">{c.statusQueued}</option>
                   <option value="running">{c.statusRunning}</option><option value="paused">{c.statusPaused}</option><option value="completed">{c.statusCompleted}</option>
                 </select><ChevronDown size={15} aria-hidden="true" />
               </label>
               <label className="tcw-select-field"><span className="sr-only">{t("Telegram account")}</span>
-                <select value={p.accountFilter} onChange={event => p.onAccount(event.target.value)} data-testid="campaigns-account-filter">
+                <select value={p.accountFilter} aria-label={t("Telegram account")} onChange={event => p.onAccount(event.target.value)} data-testid="campaigns-account-filter">
                   <option value="">{t("All accounts")}</option>
                   {p.accounts.map(account => <option key={account.id} value={account.id}>{account.name}{account.phone ? ` · ${account.phone}` : ""}</option>)}
                 </select><ChevronDown size={15} aria-hidden="true" />

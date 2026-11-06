@@ -6,6 +6,7 @@ import ts from "typescript";
 
 const source=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaign-list-feedback.tsx",import.meta.url),"utf8");
 const page=fs.readFileSync(new URL("../../artifacts/telecampaign/src/pages/campaigns.tsx",import.meta.url),"utf8");
+const workspace=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaigns/CampaignsWorkspaceView.tsx",import.meta.url),"utf8");
 function node(type,props){return typeof type==="function"?type(props):{type,props:props??{}};}
 const context={exports:{},require(name){assert.equal(name,"react/jsx-runtime");return{jsx:node,jsxs:node,Fragment:"fragment"};}};
 vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{
@@ -63,7 +64,10 @@ test("page gates every bulk entry/submit on a complete, current dataset and uses
   for(const name of ["pauseAllCampaigns","submitBulkResume","submitBulkTemplate","removeFilteredCampaigns"]){
     assert.match(page,new RegExp(`async function ${name}\\(\\) \\{\\s+if\\(campaignDataBlocked\\)return;`));
   }
-  assert.match(page,/loaded=\{campaigns\.loadProgress\.loaded\} total=\{campaigns\.loadProgress\.total\}/);
-  assert.match(page,/disabled=\{\(campaignDataBlocked&&!bulkJob\)/);
+  assert.match(page,/loaded=\{campaigns\.loadProgress\.loaded\} loadTotal=\{campaigns\.loadProgress\.total\}/);
+  assert.match(workspace,/loaded=\{p\.loaded\} total=\{p\.loadTotal\}/);
+  assert.match(page,/dataBlocked=\{campaignDataBlocked\}/);
+  assert.match(page,/hasBulkJob=\{Boolean\(bulkJob\)\}/);
+  assert.match(workspace,/disabled=\{\(p\.dataBlocked && !p\.hasBulkJob\)/);
   assert.doesNotMatch(source,/<progress|animate-pulse|setTimeout|%/);
 });

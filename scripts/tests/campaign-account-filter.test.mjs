@@ -18,6 +18,18 @@ function visit(node){
   }
   ts.forEachChild(node,visit);
 }visit(ast);
+// The approved redesign extracts presentation, not the controller or its scope.
+const workspace=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaigns/CampaignsWorkspaceView.tsx",import.meta.url),"utf8");
+const workspaceCss=fs.readFileSync(new URL("../../artifacts/telecampaign/src/components/campaigns/campaigns-workspace.css",import.meta.url),"utf8");
+const workspaceAst=ts.createSourceFile("CampaignsWorkspaceView.tsx",workspace,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+function visitWorkspace(node){
+  if(ts.isJsxElement(node)){
+    const id=node.openingElement.attributes.properties.find(p=>p.name?.text==="data-testid")?.initializer?.text;
+    if(["campaigns-filter-toolbar","campaigns-action-toolbar"].includes(id))parts[id]=node.getText(workspaceAst);
+  }
+  ts.forEachChild(node,visitWorkspace);
+}visitWorkspace(workspaceAst);
+const catalogs=Object.fromEntries(["vi","en"].map(language=>[language,JSON.parse(fs.readFileSync(new URL(`../../artifacts/telecampaign/src/lib/locale-catalogs/${language}.json`,import.meta.url),"utf8"))]));
 function run(source,context){return vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.React,jsxFactory:"h",module:ts.ModuleKind.None,target:ts.ScriptTarget.ES2022}}).outputText,context);}
 function setup({account="a",status="all",search="",language="vi",blocked=false,isAdmin=true,isSupportMode=false}={}){
   const rows=[
@@ -42,10 +54,21 @@ function setup({account="a",status="all",search="",language="vi",blocked=false,i
     window:{confirm:()=>true},localStorage:{setItem(){}},setToast:v=>{state.toast=v;},setDetails(){},rememberBulkJob:v=>{state.job=v;},
     setAccountFilter:v=>{state.account=v;},setSearch:v=>{state.search=v;},setStatus:v=>{state.status=v;},
     openBulkResume(){},openBulkTemplate(){state.templateOpen=true;},localizedErrorMessage:()=>"",campaignDeleteError:()=>"",
-    Search:"Search",CircleStop:"Stop",Play:"Play",Pencil:"Pencil",Trash2:"Trash",LoaderCircle:"Loader",
+    Search:"Search",Filter:"Filter",ChevronDown:"ChevronDown",CircleStop:"Stop",Play:"Play",Pencil:"Pencil",Trash2:"Trash",LoaderCircle:"Loader",
+    t:value=>catalogs[language][value]??value,number:value=>String(value),
     h:(type,props,...children)=>({type,props:props??{},children:children.flat(Infinity).filter(v=>v!==false&&v!=null)}),
   };
   for(const key of ["listedCampaigns","bulkScopeOptions","bulkFilter","accountFilterLabel","bulkDelete"])run(parts[key]+`;globalThis.${key}=${key};`,context);
+  context.p={
+    rows:context.listedCampaigns,total:rows.length,accounts:context.accounts.data,accountFilter:account,
+    search,status,accountFilterLabel:context.accountFilterLabel,supportMode:isSupportMode,dataBlocked:blocked,
+    bulkPending:false,bulkTemplatePending:false,bulkDeletePending:false,hasBulkJob:false,
+    hasTemplateJob:false,templateUncertain:false,templateWaiting:false,
+    onAccount:context.setAccountFilter,onSearch:context.setSearch,onStatus:context.setStatus,
+    onReset(){context.setAccountFilter("");context.setSearch("");context.setStatus("all");},
+    onPauseAll:()=>context.pauseAllCampaigns(),onRerun:context.openBulkResume,
+    onTemplate:context.openBulkTemplate,onDeleteFiltered:()=>context.removeFilteredCampaigns(),
+  };
   for(const key of ["pauseAllCampaigns","removeFilteredCampaigns","submitBulkResume"])run(parts[key],context);
   return{context,sent,state,rows};
 }
@@ -67,8 +90,8 @@ test("actual template hook is enabled for customers, disabled for support and si
 for(const language of ["vi","en"])test(`${language}: customer toolbar has four working actions and the requested labels`,()=>{
   const {context,state}=setup({language,isAdmin:false}),actions=run("("+parts["campaigns-action-toolbar"]+")",context);
   for(const label of language==="vi"
-    ?["Chọn bộ lọc tương ứng để thao tác","Dừng chiến dịch","Chạy lại chiến dịch","Xoá chiến dịch","Đổi mẫu tin hàng loạt"]
-    :["Choose the corresponding filters before taking action","Pause campaigns","Rerun campaigns","Delete campaigns","Bulk templates"])
+    ?["Thao tác hàng loạt","Dừng chiến dịch","Chạy lại chiến dịch","Xoá chiến dịch","Đổi mẫu tin hàng loạt"]
+    :["Bulk actions","Pause campaigns","Rerun campaigns","Delete campaigns","Bulk templates"])
     assert.ok(text(actions).includes(label),label);
   const button=find(actions,n=>n.props["data-testid"]==="campaigns-bulk-template");
   assert.equal(button.props.disabled,false);button.props.onClick();assert.equal(state.templateOpen,true);
@@ -81,8 +104,9 @@ for(const language of ["vi","en"])test(`${language}: real toolbar changes accoun
   find(filters,n=>n.props["data-testid"]==="campaigns-clear-filters").props.onClick();
   assert.equal(state.account,"");assert.equal(state.search,"");assert.equal(state.status,"all");
   const actions=run("("+parts["campaigns-action-toolbar"]+")",context);
-  assert.ok(find(actions,n=>n.props.className?.includes("grid-cols-2")));
-  assert.ok(find(actions,n=>n.props["data-testid"]==="campaigns-delete-filtered").props.className.includes("fff1f2"));
+  assert.ok(find(actions,n=>n.props.className?.includes("tcw-action-grid")));
+  assert.match(workspaceCss,/\.tcw-action-grid\s*\{[^}]*grid-template-columns:\s*1fr 1fr/);
+  assert.ok(find(actions,n=>n.props["data-testid"]==="campaigns-delete-filtered").props.className.includes("tcw-action-delete"));
 });
 test("actual pause/delete/rerun callers send the account, status and search instead of global requests",async()=>{
   for(const [handler,status]of [["pauseAllCampaigns","running"],["removeFilteredCampaigns","completed"],["submitBulkResume","completed"]]){
