@@ -32,6 +32,19 @@ function compile(source) {
   return { output, catalog, unresolved };
 }
 
+test("collects every conditional return of copy callbacks with aligned Vietnamese placeholders", () => {
+  const { catalog, unresolved } = compile(`
+    const copy = {
+      en: { slots: n => n === null ? "Unlimited" : n < 0 ? "Not available" : \`\${n} account\${n === 1 ? "" : "s"}\` },
+      vi: { slots: n => n === null ? "Không giới hạn" : n < 0 ? "Chưa có" : \`\${n} tài khoản\` }
+    };
+  `);
+  assert.ok(catalog.some(item => item.source === "Unlimited" && item.vi === "Không giới hạn"));
+  assert.ok(catalog.some(item => item.source === "Not available" && item.vi === "Chưa có"));
+  assert.ok(catalog.some(item => item.source === "{{0}} account{{1}}" && item.vi === "{{0}} tài khoản"));
+  assert.deepEqual(unresolved, []);
+});
+
 test("localizes presentation text while preserving customer values, IDs, payload values and CSS", () => {
   const { output, catalog } = compile(`function Page({ campaign, language }) {
     const payload = { status: "completed", accountId: campaign.accountId };

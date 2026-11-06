@@ -2259,6 +2259,8 @@
     "weekly workspace summary",
     "{{0}} Telegram account{{1}} synchronized.",
     "{{0}} USDT",
+    "{{0}} account",
+    "{{0}} accounts",
     "{{0}} active · {{1}} completed · {{2}} need attention",
     "{{0}} automatic campaign{{1}} will be updated.",
     "{{0}} days",

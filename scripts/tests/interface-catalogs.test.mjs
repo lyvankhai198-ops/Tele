@@ -57,6 +57,32 @@ const locales = load("locales");
 const runtime = load("interface-runtime");
 const placeholders = (value) => [...value.matchAll(/\{\{[^{}]+\}\}/gu)].map((match) => match[0]).sort();
 
+test("real account copy renders finite and unlimited plan limits in every supported language", async () => {
+  const page = fs.readFileSync(path.join(root, "artifacts/telecampaign/src/pages/account.tsx"), "utf8");
+  const ast = ts.createSourceFile("account.tsx", page, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let initializer;
+  function find(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(ast) === "copy") initializer = node.initializer;
+    ts.forEachChild(node, find);
+  }
+  find(ast);
+  assert.ok(initializer);
+  const exports = {};
+  vm.runInNewContext(ts.transpileModule(`const copy = ${initializer.getText(ast)}; exports.copy = copy;`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText, { exports });
+  for (const file of Object.keys(glob)) {
+    const language = path.basename(file, ".json");
+    await runtime.loadInterfaceCatalog(language);
+    const copy = runtime.interfaceCopy(exports.copy, language);
+    for (const limit of [null, 1, 2, 5, 10]) {
+      assert.ok(copy.accountSlots(limit), `${language}: account limit ${limit}`);
+    }
+    assert.ok(copy.daysLabel(3), `${language}: remaining days`);
+    assert.ok(copy.remainingOf("120"), `${language}: remaining resources`);
+  }
+});
+
 test("admin active-groups page title is registered for the shared layout translator", async () => {
   const page = fs.readFileSync(path.join(root, "artifacts/telecampaign/src/pages/admin-active-groups.tsx"), "utf8");
   const title = page.match(/const text = \{\s*title: "([^"]+)"/u)?.[1];

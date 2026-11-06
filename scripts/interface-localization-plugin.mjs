@@ -150,9 +150,18 @@ export default function interfaceLocalizationPlugin({ types: t }) {
                 const enFields = fields(objectValue(english)), viFields = fields(objectValue(vietnamese));
                 for (const [key, value] of enFields) collectPair(value, viFields.get(key));
                 if (t.isArrowFunctionExpression(english)) {
-                  const body = template(english.body);
-                  const viBody = t.isArrowFunctionExpression(vietnamese) ? template(vietnamese.body) : null;
-                  if (body && human(body.source)) register(state, body.source, alignedVietnamese(body, viBody));
+                  const collectReturnedCopy = (node, viNode) => {
+                    if (t.isConditionalExpression(node)) {
+                      const paired = t.isConditionalExpression(viNode)
+                        && t.isNodesEquivalent(node.test, viNode.test);
+                      collectReturnedCopy(node.consequent, paired ? viNode.consequent : undefined);
+                      collectReturnedCopy(node.alternate, paired ? viNode.alternate : undefined);
+                      return;
+                    }
+                    const body = template(node), viBody = template(viNode);
+                    if (body && human(body.source)) register(state, body.source, alignedVietnamese(body, viBody));
+                  };
+                  collectReturnedCopy(english.body, t.isArrowFunctionExpression(vietnamese) ? vietnamese.body : undefined);
                 }
               }
             };
