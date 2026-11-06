@@ -35,7 +35,7 @@ const copy = {
     daysLabel: (n: number) => `${n} day${n === 1 ? "" : "s"}`,
     noExpiry: "No expiry",
     telegramSlots: "Telegram",
-    accountSlots: (n: number | null) => n === null ? "Unlimited" : `${n} account${n === 1 ? "" : "s"}`,
+    accountSlots: (n: number | null) => n === null ? "Unlimited" : n === 1 ? `${n} account` : `${n} accounts`,
     usageTitle: "Resource usage",
     usageDetail: "Current progress and limits for this workspace.",
     upgrade: "Upgrade plan",
