@@ -33,6 +33,7 @@ import QRCode from "qrcode";
 import { AppLayout, Input, Toast } from "@/components/layout/AppLayout";
 import { localizedErrorMessage, useLanguage, type Language } from "@/lib/i18n";
 import {useOperations} from "@/lib/operations";
+import "./accounts.css";
 
 const copy = {
   en: {
@@ -351,7 +352,7 @@ type LoginFlow = {
 };
 
 export default function Accounts() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const text = copy[language === "vi" ? "vi" : "en"];
   const queryClient = useQueryClient();
   const accounts = useListTelegramAccounts();
@@ -687,30 +688,45 @@ export default function Accounts() {
 
   return (
     <AppLayout activePage="accounts" title={text.title}>
-      <div className="mx-auto max-w-[1000px]">
-        <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="tc-telegram-pro tcp-accounts">
+        <div className="tcp-heading">
           <div>
-            <h1 className="text-[24px] font-extrabold tracking-tight text-[#0f172a]">{text.title}</h1>
-            <p className="mt-1.5 text-[14px] font-medium text-[#64748b]">{text.description}</p>
+            <p className="tcp-kicker">{t("Telegram connection")}</p>
+            <h1>{text.title}</h1>
+            <p className="tcp-description">{text.description}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setOpenStep(0); setShowHelpModal(true); }} className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#cbd5e1] bg-white text-[#475569] shadow-sm transition-all hover:border-[#94a3b8] hover:bg-[#f8fafc] hover:text-[#0f172a] active:scale-95" aria-label={text.help} title={text.help} data-testid="telegram-accounts-help">
-              <HelpCircle className="h-5 w-5" />
+          <div className="tcp-heading-actions">
+            <button onClick={() => { setOpenStep(0); setShowHelpModal(true); }} className="tcp-help-button" aria-label={text.help} title={text.help} data-testid="telegram-accounts-help">
+              <HelpCircle size={17} /><span>{text.help}</span>
             </button>
-            <button onClick={openAddModal} className="flex h-11 items-center gap-2.5 rounded-xl bg-[#2aabee] px-5 text-[14px] font-bold text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)] transition-all hover:bg-[#1c93d4] active:scale-95" data-testid="telegram-accounts-add">
-              <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />
+            <button onClick={openAddModal} className="tcp-add-button" data-testid="telegram-accounts-add">
+              <Plus size={18} strokeWidth={2.5} />
               <span>{text.add}</span>
             </button>
           </div>
         </div>
 
+        {!accounts.isLoading && !accounts.isError && accounts.data && (
+          <section className="tcp-summary" aria-label={t("Telegram Accounts (Connected / Total)")}>
+            <div className="tcp-summary-label"><span className="tcp-summary-icon"><Smartphone size={16} /></span>{text.title}</div>
+            <div className="tcp-summary-count">{accounts.data.length}<span> {t("accounts")}</span></div>
+            <div className="tcp-summary-note">
+              <span className="tcp-live-dot" />{accounts.data.filter(account => account.status === "connected").length} {t("Connected")}
+              <span className="tcp-summary-sep">·</span>
+              {accounts.data.filter(account => account.status === "saved").length} {text.savedStatus}
+            </div>
+          </section>
+        )}
+
+        <div className="tcp-list-section">
+        <div className="tcp-section-head"><div><h2>{t("Accounts")}</h2><p>{text.description}</p></div></div>
         {accounts.isLoading ? (
-          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#cbd5e1] bg-[#f8fafc]/50">
+          <div className="tcp-state" role="status">
             <LoaderCircle className="h-8 w-8 animate-spin text-[#94a3b8]" />
             <span className="mt-4 text-[14px] font-bold text-[#64748b]">{text.loading}</span>
           </div>
         ) : accounts.isError ? (
-          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#fda4af] bg-[#fff7f8] p-8 text-center">
+          <div className="tcp-state tcp-state-error" role="alert">
             <RefreshCw className="h-7 w-7 text-[#e11d48]" />
             <h3 className="mt-5 text-[16px] font-extrabold text-[#0f172a]">{text.loadFailed}</h3>
             <p className="mt-2 max-w-sm text-[14px] font-medium leading-relaxed text-[#64748b]">{text.loadFailedDescription}</p>
@@ -719,54 +735,60 @@ export default function Accounts() {
             </button>
           </div>
         ) : (accounts.data?.length ?? 0) === 0 ? (
-          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#cbd5e1] bg-[#f8fafc]/50 p-8 text-center">
+          <div className="tcp-state">
             <span className="mb-5 grid h-16 w-16 place-items-center rounded-full bg-[#e2e8f0] text-[#64748b] shadow-inner"><Send className="ml-1 h-7 w-7" /></span>
             <h3 className="text-[16px] font-extrabold text-[#0f172a]">{text.emptyTitle}</h3>
             <p className="mt-2 max-w-sm text-[14px] font-medium leading-relaxed text-[#64748b]">{text.emptyDescription}</p>
-            <button onClick={openAddModal} className="mt-6 flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-[14px] font-bold text-[#2aabee] shadow-sm ring-1 ring-inset ring-[#cbd5e1] transition-all hover:bg-[#f8fafc]" data-testid="telegram-accounts-empty-add">
+            <button onClick={openAddModal} className="tcp-add-button mt-6" data-testid="telegram-accounts-empty-add">
               <Plus className="h-4 w-4" />{text.addFirst}
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {accounts.data?.map((account) => {
+          <div className="tcp-account-list">
+            {accounts.data?.map((account, index) => {
               const isLoggedIn = account.status === "connected";
               const isSaved = account.status === "saved";
               const isError = account.status === "error";
               return (
-                <article key={account.id} data-testid={`telegram-account-${account.id}`} className="flex flex-col gap-5 rounded-2xl border border-[#eef2f6] bg-white p-5 shadow-sm transition-all hover:border-[#bde4f9] hover:shadow-md sm:flex-row sm:items-center">
-                  <div className="flex min-w-0 items-center gap-4 sm:w-[285px]">
-                    <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#2aabee] to-[#1c93d4] text-white shadow-[0_4px_12px_rgba(42,171,238,0.25)]"><Send className="ml-0.5 h-5 w-5" /></span>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-[15px] font-extrabold text-[#0f172a]">{account.name}</h3>
-                      <p className="mt-1 truncate text-[13px] font-medium text-[#64748b]">{account.username ? `@${account.username}` : text.noUsername}</p>
+                <article key={account.id} data-testid={`telegram-account-${account.id}`} className="tcp-account" style={{ animationDelay: `${Math.min(index, 8) * 65}ms` }}>
+                  <div className="tcp-account-top">
+                    <div className="tcp-account-identity">
+                      <span className={`tcp-avatar ${isLoggedIn ? "is-connected" : "is-saved"}`}><Send size={19} fill="currentColor" /></span>
+                      <div className="tcp-account-name">
+                        <h3 title={account.name}>{account.name}</h3>
+                        <p dir="auto">{account.username ? `@${account.username}` : text.noUsername}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex flex-1 flex-wrap items-center gap-x-8 gap-y-4 border-t border-[#eef2f6] pt-4 sm:border-0 sm:px-2 sm:pt-0">
-                    <div className="flex flex-col gap-1.5"><span className="text-[10px] font-extrabold uppercase tracking-wider text-[#94a3b8]">{text.phone}</span><span className="text-[13px] font-semibold text-[#1e293b]">{account.phone ?? "—"}</span></div>
-                    <div className="flex flex-col gap-1.5"><span className="text-[10px] font-extrabold uppercase tracking-wider text-[#94a3b8]">{text.telegramId}</span><span className="text-[13px] font-semibold text-[#1e293b]">{account.telegramUserId ?? "—"}</span></div>
-                    <div className="flex flex-col gap-1.5"><span className="text-[10px] font-extrabold uppercase tracking-wider text-[#94a3b8]">{text.dailyLimit}</span><span className="text-[13px] font-semibold text-[#1e293b]">{account.daily_limit}</span></div>
-                  </div>
-                  <div className="flex shrink-0 items-center justify-between gap-2 border-t border-[#eef2f6] pt-4 sm:border-0 sm:pt-0">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${isLoggedIn ? "bg-[#eaf6fd] text-[#1c93d4]" : isError ? "bg-[#fef2f2] text-[#dc2626]" : "bg-[#fffbeb] text-[#d97706]"}`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${isLoggedIn ? "bg-[#2aabee]" : isError ? "bg-[#ef4444]" : "bg-[#f59e0b]"}`} />
-                      {isLoggedIn ? text.loggedIn : isSaved ? text.savedStatus : isError ? text.connectionError : account.status === "authorizing" ? text.authorizing : text.notConnected}
+                    <span className={`tcp-status ${isLoggedIn ? "status-connected" : isError ? "status-error" : "status-saved"}`}>
+                      <span className="tcp-status-dot" />
+                      {isLoggedIn ? t("Connected") : isSaved ? text.savedStatus : isError ? text.connectionError : account.status === "authorizing" ? text.authorizing : text.notConnected}
                     </span>
-                    {account.status === "connected" && <button onClick={() => handleSync(account.id)} disabled={syncingId===account.id||operations.data?.some(job=>job.accountId===account.id&&(job.state==="queued"||job.state==="running"))} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#f8fafc] px-3 text-[13px] font-bold text-[#475569] ring-1 ring-inset ring-[#e2e8f0] transition-all hover:bg-[#e2e8f0] disabled:cursor-not-allowed disabled:opacity-50" aria-label={text.syncDestinations}>
-                      <RefreshCw className={`h-3.5 w-3.5 ${syncingId === account.id ? "animate-spin text-[#2aabee]" : ""}`} /><span className="hidden sm:inline">{text.sync}</span>
+                  </div>
+                  <div className="tcp-account-details">
+                    <div className="tcp-detail"><span>{text.phone}</span><strong dir="ltr">{account.phone ?? "—"}</strong></div>
+                    <div className="tcp-detail"><span>{text.telegramId}</span><strong dir="ltr" className="tcp-mono">{account.telegramUserId ?? "—"}</strong></div>
+                    <div className="tcp-detail"><span title={text.limitSetupDescription}>{text.dailyLimit}</span><strong>{account.daily_limit}</strong></div>
+                  </div>
+                  <div className="tcp-account-footer">
+                    <p><ShieldCheck size={14} />{t("Send limit, not messages sent")}</p>
+                    <div className="tcp-account-actions">
+                    {account.status === "connected" && <button onClick={() => handleSync(account.id)} disabled={syncingId===account.id||operations.data?.some(job=>job.accountId===account.id&&(job.state==="queued"||job.state==="running"))} className="tcp-action tcp-sync" aria-label={text.syncDestinations}>
+                      <RefreshCw className={`h-3.5 w-3.5 ${syncingId === account.id || operations.data?.some(job=>job.accountId===account.id&&(job.state==="queued"||job.state==="running")) ? "animate-spin" : ""}`} /><span>{text.sync}</span>
                     </button>}
-                      {account.status !== "connected" && <button onClick={() => account.phone ? startAccountLogin(account.id) : startQrAccountLogin(account.id)} disabled={startLogin.isPending || startQrLogin.isPending} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#eaf6fd] px-3 text-[13px] font-bold text-[#1c93d4] ring-1 ring-inset ring-[#bde4f9] transition-all hover:bg-[#dff2fc] disabled:cursor-not-allowed disabled:opacity-50" data-testid={`telegram-account-verify-${account.id}`}>
+                      {account.status !== "connected" && <button onClick={() => account.phone ? startAccountLogin(account.id) : startQrAccountLogin(account.id)} disabled={startLogin.isPending || startQrLogin.isPending} className="tcp-action tcp-verify" data-testid={`telegram-account-verify-${account.id}`}>
                         {startLogin.isPending || startQrLogin.isPending ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : account.phone ? <Smartphone className="h-3.5 w-3.5" /> : <QrCode className="h-3.5 w-3.5" />}<span>{text.verify}</span>
                      </button>}
-                    <button onClick={() => removeAccount(account.id)} disabled={deletingId === account.id} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#fff7f8] px-3 text-[13px] font-bold text-[#e11d48] ring-1 ring-inset ring-[#fecdd3] transition-all hover:bg-[#ffe4e6] disabled:cursor-not-allowed disabled:opacity-50" aria-label={text.deleteAccount} data-testid={`telegram-account-delete-${account.id}`}>
+                    <button onClick={() => removeAccount(account.id)} disabled={deletingId === account.id} className="tcp-delete" aria-label={text.deleteAccount} data-testid={`telegram-account-delete-${account.id}`}>
                       {deletingId === account.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}<span>{text.delete}</span>
                     </button>
+                    </div>
                   </div>
                 </article>
               );
             })}
           </div>
         )}
+        </div>
       </div>
 
       {showHelpModal && (

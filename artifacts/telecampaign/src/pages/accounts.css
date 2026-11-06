@@ -1,0 +1,99 @@
+/* Approved Telegram account presentation; scoped to this page only.
+   AppLayout and all account connection/operation dialogs remain unchanged. */
+.tcp-accounts {
+  --tcp-ink: #17333b;
+  --tcp-muted: #677f83;
+  --tcp-line: #dce8e5;
+  --tcp-teal: #147c77;
+  max-width: 1000px;
+  margin-inline: auto;
+  padding: 22px clamp(14px, 2vw, 24px) 28px;
+  border-radius: 22px;
+  color: var(--tcp-ink);
+  background: radial-gradient(ellipse at 8% 3%, rgba(42,171,238,.10), transparent 29rem), #f3f8f5;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+.tcp-accounts .tcp-heading { display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:0 0 26px; }
+.tcp-accounts .tcp-kicker { margin:0 0 7px;color:#5b8983;font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase; }
+.tcp-accounts h1 { margin:0;color:#19383e;font-size:clamp(27px,4vw,36px);line-height:1.15;letter-spacing:-1.35px;font-weight:800; }
+.tcp-accounts .tcp-description { margin:9px 0 0;color:#6c8283;font-size:13px;line-height:1.6; }
+.tcp-accounts .tcp-heading-actions { display:flex;align-items:center;gap:9px;flex-shrink:0; }
+.tcp-accounts .tcp-add-button,.tcp-accounts .tcp-help-button { min-height:44px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:inherit;font-size:12px;font-weight:750;cursor:pointer;transition:background .18s,transform .18s,box-shadow .18s; }
+.tcp-accounts .tcp-heading-actions button:active,.tcp-accounts .tcp-action:active,.tcp-accounts .tcp-delete:active { transform:scale(.97); }
+.tcp-accounts .tcp-help-button { padding:10px 15px;background:#fbfdfb;color:#526d70;border:1px solid #d7e4e0; }
+.tcp-accounts .tcp-help-button:hover { background:#eaf3f0; }
+.tcp-accounts .tcp-add-button { padding:10px 17px;border:1px solid #188f89;background:#16827d;color:#fff;box-shadow:0 5px 12px rgba(19,117,113,.14); }
+.tcp-accounts .tcp-add-button:hover { background:#106f6c;box-shadow:0 7px 16px rgba(19,117,113,.2); }
+.tcp-accounts .tcp-summary { display:grid;grid-template-columns:1fr auto;align-items:center;position:relative;overflow:hidden;min-height:83px;padding:17px 22px;border:1px solid #d6e7e3;border-radius:16px;background:linear-gradient(105deg,#e9f5f1,#f5f9f5 75%); }
+.tcp-accounts .tcp-summary:after { content:"";position:absolute;right:-18px;top:-74px;width:190px;height:190px;border:1px solid rgba(42,171,238,.15);border-radius:50%;box-shadow:0 0 0 18px rgba(42,171,238,.035),0 0 0 38px rgba(42,171,238,.025);pointer-events:none; }
+.tcp-accounts .tcp-summary-label { display:flex;align-items:center;gap:9px;color:#587974;font-size:9px;letter-spacing:.11em;font-weight:800; }
+.tcp-accounts .tcp-summary-icon { display:grid;place-items:center;flex-shrink:0;width:29px;height:29px;border-radius:9px;background:#d7eeea;color:#16817b; }
+.tcp-accounts .tcp-summary-count { grid-column:2;grid-row:1 / span 2;font-size:25px;font-weight:800;letter-spacing:-.8px;color:#21464a;z-index:1; }
+.tcp-accounts .tcp-summary-count span { font-size:11px;letter-spacing:0;font-weight:600;color:#69817e; }
+.tcp-accounts .tcp-summary-note { display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:7px 0 0 38px;color:#65807b;font-size:11px;font-weight:600; }
+.tcp-accounts .tcp-live-dot,.tcp-accounts .tcp-status-dot { width:7px;height:7px;border-radius:50%;background:#28a18d;flex-shrink:0; }
+.tcp-accounts .tcp-summary-sep { color:#a7b8b3; }
+.tcp-accounts .tcp-list-section { padding-top:29px; }
+.tcp-accounts .tcp-section-head { margin-bottom:13px; }
+.tcp-accounts .tcp-section-head h2 { margin:0;color:#234148;font-size:16px;letter-spacing:-.35px;font-weight:800; }
+.tcp-accounts .tcp-section-head p { margin:5px 0 0;color:#849597;font-size:11px; }
+.tcp-accounts .tcp-account-list { display:grid;gap:11px; }
+.tcp-accounts .tcp-account { min-width:0;padding:16px 19px 13px;background:#fbfdfb;border:1px solid var(--tcp-line);border-radius:15px;box-shadow:0 2px 7px rgba(36,72,68,.025);animation:tcp-accounts-enter .42s both cubic-bezier(.2,.7,.2,1);transition:border-color .2s,box-shadow .2s; }
+.tcp-accounts .tcp-account:hover { border-color:#bfd8d2;box-shadow:0 7px 22px rgba(36,72,68,.065); }
+.tcp-accounts .tcp-account-top { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.tcp-accounts .tcp-account-identity { display:flex;align-items:center;gap:12px;min-width:0; }
+.tcp-accounts .tcp-avatar { width:42px;height:42px;display:grid;place-items:center;flex:0 0 auto;border-radius:14px;color:#fff; }
+.tcp-accounts .tcp-avatar.is-connected { background:linear-gradient(145deg,#36b9ec,#208fc3); }
+.tcp-accounts .tcp-avatar.is-saved { background:#d9e8e3;color:#347a73; }
+.tcp-accounts .tcp-account-name { min-width:0; }
+.tcp-accounts .tcp-account-name h3 { margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#203d43;font-size:14px;font-weight:800;letter-spacing:-.22px; }
+.tcp-accounts .tcp-account-name p { margin:4px 0 0;color:#829294;font-size:11px;overflow-wrap:anywhere; }
+.tcp-accounts .tcp-status { display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border-radius:99px;font-size:9px;font-weight:800;flex-shrink:0;max-width:46%; }
+.tcp-accounts .status-connected { color:#187769;background:#e6f4ee; }
+.tcp-accounts .status-saved { color:#8a7042;background:#f5f0e4; }
+.tcp-accounts .status-saved .tcp-status-dot { background:#d1a54d; }
+.tcp-accounts .status-error { color:#b13e43;background:#fff0f0; }
+.tcp-accounts .status-error .tcp-status-dot { background:#dc5159; }
+.tcp-accounts .tcp-account-details { display:grid;grid-template-columns:1.2fr 1.1fr .8fr;gap:12px;margin:14px 0 0;padding:12px 0 11px;border-top:1px solid #edf2ef;border-bottom:1px solid #edf2ef; }
+.tcp-accounts .tcp-detail { display:grid;gap:5px;min-width:0; }
+.tcp-accounts .tcp-detail span { color:#91a09f;font-size:9px;font-weight:750;letter-spacing:.045em;overflow-wrap:anywhere; }
+.tcp-accounts .tcp-detail strong { color:#36545a;font-size:11px;font-weight:700;overflow-wrap:anywhere; }
+.tcp-accounts .tcp-mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.2px; }
+.tcp-accounts .tcp-account-footer { display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px; }
+.tcp-accounts .tcp-account-footer > p { display:flex;align-items:center;gap:6px;margin:0;color:#899a97;font-size:9px;line-height:1.4; }
+.tcp-accounts .tcp-account-footer > p svg { flex:0 0 auto;color:#79a49a; }
+.tcp-accounts .tcp-account-actions { display:flex;align-items:center;gap:7px;flex-shrink:0; }
+.tcp-accounts .tcp-action,.tcp-accounts .tcp-delete { min-height:40px;padding:0 10px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;transition:background .18s,transform .18s; }
+.tcp-accounts .tcp-sync { border:1px solid #dce7e2;background:#f8fbf8;color:#637e7b; }
+.tcp-accounts .tcp-sync:hover { background:#e8f3ed; }
+.tcp-accounts .tcp-verify { border:1px solid #cce6e8;background:#edf8f8;color:#39838c; }
+.tcp-accounts .tcp-verify:hover { background:#dff3f3; }
+.tcp-accounts .tcp-delete { border:1px solid #eadedb;background:#fdf8f6;color:#a77e75; }
+.tcp-accounts .tcp-delete:hover { background:#fcebe8;color:#a84f49; }
+.tcp-accounts button:disabled { cursor:not-allowed;opacity:.5; }
+.tcp-accounts button:focus-visible { outline:3px solid #2aabee;outline-offset:3px; }
+.tcp-accounts .tcp-state { display:flex;min-height:240px;align-items:center;justify-content:center;flex-direction:column;padding:28px 18px;text-align:center;border:1px dashed #bfd3cd;border-radius:15px;background:rgba(251,253,251,.75); }
+.tcp-accounts .tcp-state-error { border-color:#e6b5b9;background:#fff8f8; }
+@keyframes tcp-accounts-enter { from { opacity:0;transform:translateY(10px); } to { opacity:1;transform:translateY(0); } }
+@media (min-width:1000px) { .tcp-accounts .tcp-account-list { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:720px) {
+  .tcp-accounts .tcp-heading { flex-direction:column;align-items:stretch;gap:18px; }
+  .tcp-accounts .tcp-heading-actions { display:grid;grid-template-columns:1fr 1.28fr; }
+  .tcp-accounts .tcp-heading-actions button { min-width:0;padding-inline:9px; }
+  .tcp-accounts .tcp-account-footer { flex-direction:column;align-items:stretch;gap:8px; }
+  .tcp-accounts .tcp-account-actions { justify-content:flex-end; }
+  .tcp-accounts .tcp-summary { padding:15px 13px;gap:4px; }
+  .tcp-accounts .tcp-summary-note { margin-inline-start:0; }
+}
+@media (max-width:360px) {
+  .tcp-accounts .tcp-account { padding:14px 12px; }
+  .tcp-accounts .tcp-account-top { gap:7px; }
+  .tcp-accounts .tcp-account-identity { gap:8px; }
+  .tcp-accounts .tcp-avatar { width:36px;height:36px; }
+  .tcp-accounts .tcp-summary { grid-template-columns:1fr; }
+  .tcp-accounts .tcp-summary-count { grid-column:1;grid-row:auto; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .tcp-accounts .tcp-account { animation:none; }
+  .tcp-accounts button,.tcp-accounts .tcp-account { transition:none; }
+}
