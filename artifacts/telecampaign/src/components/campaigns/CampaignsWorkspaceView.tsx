@@ -61,7 +61,7 @@ export function CampaignsWorkspaceView(p: Props) {
                 <span className="tcw-scope-tag" data-testid="campaigns-filter-count">{p.total === undefined ? "—" : `${number(p.rows.length)} / ${number(p.total)}`}</span>
               </div>
             </div>
-            <div className="tcw-filter-grid">
+            <div className="tcw-filter-fields">
               <label className="tcw-search-field">
                 <span className="sr-only">{c.searchPlaceholder}</span><Search size={17} aria-hidden="true" />
                 <input value={p.search} onChange={event => p.onSearch(event.target.value)} placeholder={c.searchPlaceholder} maxLength={160} data-testid="campaigns-search" />
@@ -81,8 +81,9 @@ export function CampaignsWorkspaceView(p: Props) {
             </div>
           </section>
 
-          <section className="tcw-actions-panel" data-testid="campaigns-action-toolbar">
+          <section className="tcw-actions-panel" data-testid="campaigns-action-toolbar" aria-describedby="campaign-bulk-scope">
             <div className="tcw-actions-heading"><h2>{t("Bulk actions")}</h2><span className="tcw-scope-tag" title={p.accountFilterLabel}><Filter size={13} aria-hidden="true" /><span>{p.accountFilterLabel}</span></span></div>
+            <p id="campaign-bulk-scope" className="sr-only">{t("Pause, rerun and delete use the account, status and name filters. Template changes have a separate scope to review.")}</p>
             <div className="tcw-action-grid">
               <button type="button" onClick={p.onPauseAll} disabled={p.dataBlocked || p.bulkPending || p.bulkTemplatePending}
                 className="tcw-action-button tcw-action-stop" data-testid="campaigns-pause-all">
@@ -90,12 +91,12 @@ export function CampaignsWorkspaceView(p: Props) {
               </button>
               <button type="button" onClick={p.onRerun} disabled={(p.dataBlocked && !p.hasBulkJob) || p.bulkPending || p.bulkTemplatePending}
                 className="tcw-action-button tcw-action-run" data-testid="campaigns-resume-all">
-                {p.bulkPending ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}<span>{t(p.hasBulkJob ? "Rerun progress" : "Rerun campaigns")}</span>
+                {p.bulkPending ? <LoaderCircle size={16} className="animate-spin" /> : <Play size={16} />}<span>{p.hasBulkJob ? t("Rerun progress") : t("Rerun campaigns")}</span>
               </button>
               {!p.supportMode && <button type="button" onClick={p.onTemplate}
                 disabled={(!p.hasTemplateJob && !p.templateUncertain && p.dataBlocked) || p.bulkPending || (p.templateWaiting && !p.hasTemplateJob && !p.templateUncertain)}
                 className="tcw-action-button" data-testid="campaigns-bulk-template">
-                {p.bulkTemplatePending ? <LoaderCircle size={15} className="animate-spin" /> : <Pencil size={15} />}<span>{t(p.hasTemplateJob || p.templateUncertain ? "Template progress" : "Bulk templates")}</span>
+                {p.bulkTemplatePending ? <LoaderCircle size={15} className="animate-spin" /> : <Pencil size={15} />}<span>{p.hasTemplateJob || p.templateUncertain ? t("Template progress") : t("Bulk templates")}</span>
               </button>}
               <button type="button" onClick={p.onDeleteFiltered} disabled={p.dataBlocked || p.bulkPending || p.bulkTemplatePending || p.bulkDeletePending}
                 className="tcw-action-button tcw-action-delete" data-testid="campaigns-delete-filtered">
