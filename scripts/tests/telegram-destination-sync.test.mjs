@@ -133,6 +133,7 @@ for(const failures of [0,1,2]) {
     const state={invalidations:[],toast:null,selected:{id:"gone"}};
     const run=vm.runInNewContext(actualSyncAll+";\nsyncAll;",{
       accounts:{data:[{id:"first",status:"connected"},{id:"second",status:"connected"}]},
+      accountFilter:"all",syncLocked:{current:false},setSyncing:()=>{},
       sync:{mutateAsync:async({accountId})=>{
         if(failures===2 || failures===1&&accountId==="second")throw Error("fixture failure");
         return {count:1};
@@ -152,5 +153,32 @@ for(const failures of [0,1,2]) {
     assert.equal(state.selected,null);
     if(failures===1)assert.match(state.toast,/Một số tài khoản/);
     else assert.equal(state.toast,failures===0?"done":"failed");
+  });
+}
+
+for (const [scope,expected] of [
+  ["all",["first","second"]],
+  ["first",["first"]],
+  ["saved",[]],
+]) {
+  test(`group sync preserves the selected ${scope} account scope and blocks duplicate clicks`,async()=>{
+    const state={called:[],busy:false,toast:null};
+    const lock={current:false};
+    const run=vm.runInNewContext(actualSyncAll+";\nsyncAll;",{
+      accounts:{data:[{id:"first",status:"connected"},{id:"second",status:"connected"},{id:"saved",status:"saved"}]},
+      accountFilter:scope,syncLocked:lock,setSyncing:value=>{state.busy=value;},
+      sync:{mutateAsync:async({accountId})=>{state.called.push(accountId);return {count:1};}},
+      queryClient:{invalidateQueries:async()=>{},getQueryData:()=>[]},
+      getListDestinationsQueryKey:()=>["destinations"],getListTelegramAccountsQueryKey:()=>["accounts"],
+      setSelected:()=>{},setToast:value=>{state.toast=value;},
+      copy:{syncDone:"done",syncError:"failed",noAccountToast:"none"},vi:true,
+    });
+    run();
+    run();
+    await new Promise(setImmediate);
+    assert.deepEqual(state.called,expected);
+    assert.equal(lock.current,false);
+    assert.equal(state.busy,false);
+    assert.equal(state.toast,expected.length?"done":"none");
   });
 }
