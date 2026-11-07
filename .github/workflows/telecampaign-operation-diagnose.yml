@@ -1,4 +1,4 @@
-name: TeleCamp operation diagnosis (read only)
+name: VPS CPU RAM and disk snapshot (read only)
 on:
   workflow_dispatch:
 permissions:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install SSH helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Read project CPU, RAM and disk counters
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
         shell: bash
@@ -24,40 +24,94 @@ jobs:
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = vps-cd243267
-          cd /opt/telecampaign
-          set -a
-          source /etc/telecampaign/api.env
-          set +a
-          node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
-          NODE
-          REMOTE
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'sudo -n python3 -' <<'PY'
+          """Bounded read-only counters; never emit logs, credentials or customer data."""
+          import collections
+          import datetime
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import time
+          
+          ROOT = pathlib.Path("/opt/telecampaign")
+          assert pathlib.Path("/etc/hostname").read_text().strip() == "vps-cd243267"
+          
+          
+          def emit(kind, value):
+              print("MEMORY_" + kind + "=" + json.dumps(value), flush=True)
+          
+          
+          def sample():
+              memory = {}
+              for line in pathlib.Path("/proc/meminfo").read_text().splitlines():
+                  key, value = line.split(":", 1)
+                  if key in ("MemTotal", "MemAvailable", "SwapTotal", "SwapFree"):
+                      memory[key] = int(value.strip().split()[0]) * 1024
+              processes = []
+              uptime = float(pathlib.Path("/proc/uptime").read_text().split()[0])
+              for path in pathlib.Path("/proc").iterdir():
+                  if not path.name.isdigit():
+                      continue
+                  try:
+                      cwd = pathlib.Path(os.readlink(path / "cwd"))
+                      if cwd != ROOT and ROOT not in cwd.parents:
+                          continue
+                      raw = (path / "stat").read_text()
+                      fields = raw[raw.rfind(")") + 2:].split()
+                      processes.append({
+                          "pid": int(path.name),
+                          "age_seconds": round(uptime - int(fields[19]) / os.sysconf("SC_CLK_TCK")),
+                          "rss_bytes": int(fields[21]) * os.sysconf("SC_PAGE_SIZE"),
+                          "threads": int(fields[17]),
+                          "fds": len(list((path / "fd").iterdir())),
+                      })
+                  except (OSError, ValueError):
+                      continue
+              emit("SAMPLE", {"utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                              "memory": memory, "processes": processes})
+          
+          
+          for relative in (
+              "artifacts/api-server/src/lib/telegram.ts",
+              "artifacts/api-server/src/routes/telecampaign.ts",
+              "pnpm-lock.yaml",
+          ):
+              content = (ROOT / relative).read_bytes()
+              emit("SOURCE", {"path": relative, "sha256": hashlib.sha256(content).hexdigest()})
+          sample()
+          time.sleep(5)
+          sample()
+          for home in (pathlib.Path("/home/ubuntu"), pathlib.Path("/root")):
+              for path in (home / ".pm2/logs").glob("telecampaign-api*.log"):
+                  with path.open("rb") as handle:
+                      handle.seek(0, 2)
+                      size = handle.tell()
+                      handle.seek(max(0, size - 512_000))
+                      text = handle.read().decode("utf-8", errors="replace")
+                  emit("LOG_COUNTS", {
+                      "stream": "error" if "error" in path.name else "output",
+                      "tail_bytes": min(size, 512_000),
+                      "timeout": text.count("TIMEOUT"),
+                      "reconnect": text.lower().count("reconnect"),
+                      "heap_exhaustion": text.count("heap out of memory"),
+                      "pool_timeout": text.count("timeout exceeded when trying to connect"),
+                  })
+          try:
+              query = """BEGIN READ ONLY; SET LOCAL statement_timeout='3s';
+              SELECT json_build_object('state',state,'wait_type',wait_event_type,
+                'wait',wait_event,'count',count(*),
+                'max_query_age_seconds',max(extract(epoch from now()-query_start)))
+              FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND backend_type='client backend'
+              GROUP BY state,wait_event_type,wait_event; COMMIT;"""
+              result = subprocess.run(
+                  ["sudo", "-n", "-u", "postgres", "psql", "-X", "-A", "-t", "-c", query],
+                  capture_output=True, text=True, timeout=8)
+              for line in result.stdout.splitlines():
+                  if line.startswith("{"):
+                      emit("DB_WAITS", json.loads(line))
+          except (OSError, subprocess.TimeoutExpired):
+              emit("DB_STATUS", "unavailable")
+          
+          PY
