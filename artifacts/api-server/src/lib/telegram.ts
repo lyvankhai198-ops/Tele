@@ -211,7 +211,12 @@ export async function startTelegramQrLogin(
   callbacks: TelegramQrLoginCallbacks,
 ): Promise<TelegramQrLoginHandle> {
   const client = createTelegramClient("", credentials, proxy);
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (error) {
+    await destroyQuietly(client);
+    throw error;
+  }
 
   let firstQrResolved = false;
   let resolveFirstQr!: (qrCode: TelegramQrCode) => void;
@@ -734,7 +739,7 @@ export async function syncAccountDestinations(accountId: string,onProgress?:(cou
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -792,7 +797,7 @@ export async function listTelegramSavedMessages(accountId: string) {
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -814,7 +819,7 @@ export async function getTelegramSavedMessage(accountId: string, sourceMessageId
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -838,7 +843,7 @@ export async function sendTelegramMessage(accountId: string, destinationId: stri
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -879,7 +884,7 @@ export async function sendDirectTelegramMessage(
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -973,7 +978,7 @@ export async function forwardTelegramSavedMessage(accountId: string, destination
     }
     throw error;
   } finally {
-    await client.disconnect();
+    await disconnectQuietly(client);
   }
 }
 
@@ -982,19 +987,18 @@ export async function getCurrentUser(client: TelegramClient): Promise<TelegramLo
 }
 
 export async function disconnectQuietly(client: TelegramClient) {
-  try {
-    await client.disconnect();
-  } catch {
-    // Disconnect is best effort and must not mask the original auth error.
-  }
+  // Account clients are single-use, not pooled. GramJS disconnect() leaves its
+  // update loop alive; destroy() also stops that loop and releases handlers.
+  // This never logs out/revokes the persisted Telegram authorization.
+  await destroyQuietly(client);
 }
 
 async function destroyQuietly(client: TelegramClient) {
   try {
     await client.destroy();
   } catch {
-    // Login clients are single-use. Destruction is best effort and must not
-    // mask a Telegram authentication response.
+    // Cleanup must not turn an accepted delivery into a retry or hide the
+    // original authentication/network error.
   }
 }
 
