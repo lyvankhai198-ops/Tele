@@ -43,7 +43,7 @@ function fixture(rows,dialogs,options={}) {
       }
       options.afterDialogs?.(state);
     },
-    async disconnect(){state.disconnected=true;},
+    async destroy(){state.disconnected=true;},
   };
   const fn=vm.runInNewContext(actual+";\nsyncAccountDestinations;",{
     db,destinationsTable:columns,telegramAccountsTable:accountTable,
@@ -52,6 +52,7 @@ function fixture(rows,dialogs,options={}) {
     lte:(key,value)=>row=>row[key]<=value,
     destinationIdsToMarkUnavailableAfterSync,isLeftTelegramEntity,UNAVAILABLE_TELEGRAM_DESTINATION_REASON:missing,
     getAccountClient:async()=>({client,account:{id:"one",ownerUserId:"owner-one"}}),
+    disconnectQuietly:async client=>client.destroy(),
     telegramId:entity=>String(entity.id),displayTitle:entity=>entity.title??"Fixture",
     telegramPostingPermissionSnapshot,canPostToEntity:entity=>entity.canPost!==false,postingRestrictionUntil:()=>null,
     listForumTopics:async()=>{if(options.topicError)throw Error("fixture topic failure");return options.topics??[];},

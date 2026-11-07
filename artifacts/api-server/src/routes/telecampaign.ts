@@ -133,6 +133,7 @@ import {
   confirmTelegramPhoneCode,
   confirmTelegramTwoFactorPassword,
   credentialsForAccount,
+  disconnectQuietly,
   encryptSecret,
   getAccountClient,
   getTelegramProxyConfig,
@@ -1462,7 +1463,7 @@ router.post("/proxies/:proxyId/test", async (req, res): Promise<void> => {
       verification = "telegram";
       try {
         const { client } = await getAccountClient(attachedAccount.id, ownerUserId);
-        await client.disconnect();
+        await disconnectQuietly(client);
         ok = true;
         message = "Telegram MTProto connected through the attached proxy.";
       } catch (error) {
