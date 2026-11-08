@@ -1,4 +1,4 @@
-name: TeleCamp operation diagnosis (read only)
+name: VPS CPU RAM and disk snapshot (read only)
 on:
   workflow_dispatch:
 permissions:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install SSH helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Read project CPU, RAM and disk counters
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
         shell: bash
@@ -32,32 +32,101 @@ jobs:
           source /etc/telecampaign/api.env
           set +a
           node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
+          // Explicit one-shot recovery of pre-tracking bot cards. Defaults to read-only.
+          // Uses only the configured admin's own stored, admin-owned Telegram session.
+          // Never dumps messages, identifiers, credentials, orders or sessions to stdout.
+          import { createRequire } from "node:module";
+          import { pathToFileURL } from "node:url";
+          const { createPurchaseReviewMessages, reviewMessageOrderId } = await import("data:text/javascript;base64,ZXhwb3J0IGNvbnN0IFJFVklFV19NRVNTQUdFX1BSRUZJWCA9ICJwdXJjaGFzZV9yZXZpZXdfbWVzc2FnZToiOwpjb25zdCBVVUlEID0gL15bYS1mMC05XXs4fS0oPzpbYS1mMC05XXs0fS0pezN9W2EtZjAtOV17MTJ9JC9pOwpjb25zdCBGSU5BTCA9IG5ldyBTZXQoWwogICAgInBhaWQiLAogICAgImNhbmNlbGxlZCIsCiAgICAicmVqZWN0ZWQiLAogICAgInJldm9rZWQiCl0pOwpleHBvcnQgZnVuY3Rpb24gcmV2aWV3TWVzc2FnZU9yZGVySWQodGV4dCkgewogICAgaWYgKCEvXig/OvCfp74gxJDGoE4gQ0jhu5wgWMOBQyBNSU5IIFRIQU5IIFRPw4FOfPCfkrMgS0jDgUNIIELDgU8gxJDDgyBUSEFOSCBUT8OBTiDigJQgQ0jGr0EgWMOBQyBNSU5IKVxuLy50ZXN0KHRleHQpKSByZXR1cm4gbnVsbDsKICAgIGNvbnN0IG1hdGNoID0gdGV4dC5tYXRjaCgvXklEIMSRxqFuOiAoW2EtZjAtOS1dezM2fSkkL2ltKTsKICAgIHJldHVybiBtYXRjaCAmJiBVVUlELnRlc3QobWF0Y2hbMV0pID8gbWF0Y2hbMV0udG9Mb3dlckNhc2UoKSA6IG51bGw7Cn0KZXhwb3J0IGZ1bmN0aW9uIGNyZWF0ZVB1cmNoYXNlUmV2aWV3TWVzc2FnZXMoZGVwcykgewogICAgY29uc3Qgbm93ID0gZGVwcy5ub3cgPz8gRGF0ZS5ub3c7CiAgICBsZXQgcnVubmluZyA9IGZhbHNlOwogICAgYXN5bmMgZnVuY3Rpb24gcmVtZW1iZXIob3JkZXJJZCwgY2hhdElkLCBtZXNzYWdlSWQpIHsKICAgICAgICBpZiAoIVVVSUQudGVzdChvcmRlcklkKSB8fCAhL14tP1xkKyQvLnRlc3QoY2hhdElkKSB8fCAhTnVtYmVyLmlzU2FmZUludGVnZXIobWVzc2FnZUlkKSB8fCBtZXNzYWdlSWQgPCAxKSB7CiAgICAgICAgICAgIHRocm93IG5ldyBFcnJvcigiSU5WQUxJRF9QVVJDSEFTRV9NRVNTQUdFX1JFRkVSRU5DRSIpOwogICAgICAgIH0KICAgICAgICBjb25zdCBrZXkgPSBgJHtSRVZJRVdfTUVTU0FHRV9QUkVGSVh9JHtvcmRlcklkLnRvTG93ZXJDYXNlKCl9OiR7Y2hhdElkfToke21lc3NhZ2VJZH1gOwogICAgICAgIGF3YWl0IGRlcHMucXVlcnkoIklOU0VSVCBJTlRPIHN5c3RlbV9zZXR0aW5ncyhrZXksdmFsdWUpIFZBTFVFUygkMSwkMikgT04gQ09ORkxJQ1Qoa2V5KSBETyBOT1RISU5HIiwgWwogICAgICAgICAgICBrZXksCiAgICAgICAgICAgIEpTT04uc3RyaW5naWZ5KHsKICAgICAgICAgICAgICAgIG9yZGVySWQ6IG9yZGVySWQudG9Mb3dlckNhc2UoKSwKICAgICAgICAgICAgICAgIGNoYXRJZCwKICAgICAgICAgICAgICAgIG1lc3NhZ2VJZCwKICAgICAgICAgICAgICAgIGF0dGVtcHRzOiAwLAogICAgICAgICAgICAgICAgbmV4dEF0dGVtcHRBdDogMAogICAgICAgICAgICB9KQogICAgICAgIF0pOwogICAgfQogICAgYXN5bmMgZnVuY3Rpb24gaXNSZXZpZXdhYmxlKG9yZGVySWQpIHsKICAgICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBkZXBzLnF1ZXJ5KCJTRUxFQ1Qgc3RhdHVzIEZST00gcHVyY2hhc2Vfb3JkZXJzIFdIRVJFIGlkPSQxIiwgWwogICAgICAgICAgICBvcmRlcklkCiAgICAgICAgXSk7CiAgICAgICAgcmV0dXJuIFsKICAgICAgICAgICAgInBlbmRpbmciLAogICAgICAgICAgICAiZXhwaXJlZCIsCiAgICAgICAgICAgICJyZWNlaXZlZCIKICAgICAgICBdLmluY2x1ZGVzKHJlc3VsdC5yb3dzWzBdPy5zdGF0dXMpOwogICAgfQogICAgYXN5bmMgZnVuY3Rpb24gcmVjb25jaWxlKGNoYXRJZCkgewogICAgICAgIGNvbnN0IHN0YXRzID0gewogICAgICAgICAgICBkZWxldGVkOiAwLAogICAgICAgICAgICByZXNvbHZlZDogMCwKICAgICAgICAgICAgYWJzZW50OiAwLAogICAgICAgICAgICByZXRyeTogMAogICAgICAgIH07CiAgICAgICAgaWYgKHJ1bm5pbmcpIHJldHVybiBzdGF0czsKICAgICAgICBydW5uaW5nID0gdHJ1ZTsKICAgICAgICBjb25zdCBkZWFkbGluZSA9IG5vdygpICsgMTBfMDAwOwogICAgICAgIHRyeSB7CiAgICAgICAgICAgIGNvbnN0IHJlc3VsdCA9IGF3YWl0IGRlcHMucXVlcnkoYFNFTEVDVCBzLmtleSxzLnZhbHVlLHAuc3RhdHVzLHAucmVmZXJlbmNlIEZST00gc3lzdGVtX3NldHRpbmdzIHMKICAgICAgICAgSk9JTiBwdXJjaGFzZV9vcmRlcnMgcCBPTiBwLmlkOjp0ZXh0PXNwbGl0X3BhcnQocy5rZXksJzonLDIpCiAgICAgICAgIFdIRVJFIHMua2V5IExJS0UgJDEgQU5EIHAuc3RhdHVzIElOICgncGFpZCcsJ2NhbmNlbGxlZCcsJ3JlamVjdGVkJywncmV2b2tlZCcpCiAgICAgICAgICAgQU5EIHMudmFsdWU6Ompzb25iLT4+J2NoYXRJZCc9JDIKICAgICAgICAgICBBTkQgcy52YWx1ZTo6anNvbmItPj4nb3V0Y29tZScgSVMgTlVMTAogICAgICAgICAgIEFORCBDT0FMRVNDRSgocy52YWx1ZTo6anNvbmItPj4nbmV4dEF0dGVtcHRBdCcpOjpiaWdpbnQsMCk8PSQzCiAgICAgICAgIE9SREVSIEJZIHMudXBkYXRlZF9hdCxzLmtleSBMSU1JVCAxMGAsIFsKICAgICAgICAgICAgICAgIFJFVklFV19NRVNTQUdFX1BSRUZJWCArICIlIiwKICAgICAgICAgICAgICAgIGNoYXRJZCwKICAgICAgICAgICAgICAgIG5vdygpCiAgICAgICAgICAgIF0pOwogICAgICAgICAgICBmb3IgKGNvbnN0IHJvdyBvZiByZXN1bHQucm93cyl7CiAgICAgICAgICAgICAgICBpZiAobm93KCkgPj0gZGVhZGxpbmUpIGJyZWFrOwogICAgICAgICAgICAgICAgY29uc3QgcmVmID0gSlNPTi5wYXJzZShyb3cudmFsdWUpOwogICAgICAgICAgICAgICAgaWYgKCFGSU5BTC5oYXMocm93LnN0YXR1cykgfHwgcmVmLmNoYXRJZCAhPT0gY2hhdElkIHx8ICFVVUlELnRlc3QocmVmLm9yZGVySWQpIHx8ICFOdW1iZXIuaXNTYWZlSW50ZWdlcihyZWYubWVzc2FnZUlkKSB8fCByZWYubWVzc2FnZUlkIDwgMSB8fCByb3cua2V5ICE9PSBgJHtSRVZJRVdfTUVTU0FHRV9QUkVGSVh9JHtyZWYub3JkZXJJZH06JHtjaGF0SWR9OiR7cmVmLm1lc3NhZ2VJZH1gKSBjb250aW51ZTsKICAgICAgICAgICAgICAgIGNvbnN0IHBheWxvYWQgPSB7CiAgICAgICAgICAgICAgICAgICAgY2hhdF9pZDogY2hhdElkLAogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2VfaWQ6IHJlZi5tZXNzYWdlSWQKICAgICAgICAgICAgICAgIH07CiAgICAgICAgICAgICAgICBsZXQgb3V0Y29tZTsKICAgICAgICAgICAgICAgIHRyeSB7CiAgICAgICAgICAgICAgICAgICAgY29uc3QgcmVtb3ZlZCA9IGF3YWl0IGRlcHMuY2FsbCgiZGVsZXRlTWVzc2FnZSIsIHBheWxvYWQpOwogICAgICAgICAgICAgICAgICAgIGlmIChyZW1vdmVkICE9PSB0cnVlKSB0aHJvdyBuZXcgRXJyb3IoIkRFTEVURV9OT1RfQ09ORklSTUVEIik7CiAgICAgICAgICAgICAgICAgICAgb3V0Y29tZSA9ICJkZWxldGVkIjsKICAgICAgICAgICAgICAgIH0gY2F0Y2ggKGVycm9yKSB7CiAgICAgICAgICAgICAgICAgICAgY29uc3QgcmVhc29uID0gZXJyb3IgaW5zdGFuY2VvZiBFcnJvciA/IGVycm9yLm1lc3NhZ2UgOiAiIjsKICAgICAgICAgICAgICAgICAgICBpZiAoL21lc3NhZ2UgdG8gZGVsZXRlIG5vdCBmb3VuZC9pLnRlc3QocmVhc29uKSkgb3V0Y29tZSA9ICJhYnNlbnQiOwogICAgICAgICAgICAgICAgICAgIGVsc2UgaWYgKC9tZXNzYWdlICg/OmNhbic/dHxjYW5ub3QpIGJlIGRlbGV0ZWR8bWVzc2FnZV9kZWxldGVfZm9yYmlkZGVufG1lc3NhZ2UgaXMgdG9vIG9sZC9pLnRlc3QocmVhc29uKSkgewogICAgICAgICAgICAgICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgY29uc3QgbGFiZWwgPSByb3cuc3RhdHVzID09PSAicGFpZCIgPyAixJDDoyB4w6FjIG1pbmggdGhhbmggdG/DoW4iIDogcm93LnN0YXR1cyA9PT0gImNhbmNlbGxlZCIgPyAixJDGoW4gxJHDoyBodeG7tyIgOiByb3cuc3RhdHVzID09PSAicmV2b2tlZCIgPyAixJDGoW4gxJHDoyB0aHUgaOG7k2kiIDogIsSQxqFuIMSRw6MgdOG7qyBjaOG7kWkiOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgY29uc3QgZWRpdGVkID0gYXdhaXQgZGVwcy5jYWxsKCJlZGl0TWVzc2FnZVRleHQiLCB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLi4ucGF5bG9hZCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB0ZXh0OiBgJHtsYWJlbH1cbsSQxqFuOiAke1N0cmluZyhyb3cucmVmZXJlbmNlKS5zbGljZSgwLCAxNDApfWAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcmVwbHlfbWFya3VwOiB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlubGluZV9rZXlib2FyZDogW10KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGlmICghZWRpdGVkKSB0aHJvdyBuZXcgRXJyb3IoIkVESVRfTk9UX0NPTkZJUk1FRCIpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgb3V0Y29tZSA9ICJyZXNvbHZlZCI7CiAgICAgICAgICAgICAgICAgICAgICAgIH0gY2F0Y2ggKGVkaXRFcnJvcikgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgaWYgKGVkaXRFcnJvciBpbnN0YW5jZW9mIEVycm9yICYmIC9tZXNzYWdlIGlzIG5vdCBtb2RpZmllZC9pLnRlc3QoZWRpdEVycm9yLm1lc3NhZ2UpKSBvdXRjb21lID0gInJlc29sdmVkIjsKICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgIGlmIChvdXRjb21lKSB7CiAgICAgICAgICAgICAgICAgICAgYXdhaXQgZGVwcy5xdWVyeSgiVVBEQVRFIHN5c3RlbV9zZXR0aW5ncyBTRVQgdmFsdWU9JDIsdXBkYXRlZF9hdD1ub3coKSBXSEVSRSBrZXk9JDEiLCBbCiAgICAgICAgICAgICAgICAgICAgICAgIHJvdy5rZXksCiAgICAgICAgICAgICAgICAgICAgICAgIEpTT04uc3RyaW5naWZ5KHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIC4uLnJlZiwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIG91dGNvbWUsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICByZXNvbHZlZEF0OiBub3coKQogICAgICAgICAgICAgICAgICAgICAgICB9KQogICAgICAgICAgICAgICAgICAgIF0pOwogICAgICAgICAgICAgICAgICAgIHN0YXRzW291dGNvbWVdICs9IDE7CiAgICAgICAgICAgICAgICB9IGVsc2UgewogICAgICAgICAgICAgICAgICAgIGNvbnN0IGF0dGVtcHRzID0gTWF0aC5taW4oTnVtYmVyKHJlZi5hdHRlbXB0cyB8fCAwKSArIDEsIDIwKTsKICAgICAgICAgICAgICAgICAgICBhd2FpdCBkZXBzLnF1ZXJ5KCJVUERBVEUgc3lzdGVtX3NldHRpbmdzIFNFVCB2YWx1ZT0kMix1cGRhdGVkX2F0PW5vdygpIFdIRVJFIGtleT0kMSIsIFsKICAgICAgICAgICAgICAgICAgICAgICAgcm93LmtleSwKICAgICAgICAgICAgICAgICAgICAgICAgSlNPTi5zdHJpbmdpZnkoewogICAgICAgICAgICAgICAgICAgICAgICAgICAgLi4ucmVmLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgYXR0ZW1wdHMsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBuZXh0QXR0ZW1wdEF0OiBub3coKSArIE1hdGgubWluKDYgKiA2MCAqIDYwXzAwMCwgMzBfMDAwICogMiAqKiBNYXRoLm1pbihhdHRlbXB0cyAtIDEsIDEwKSkKICAgICAgICAgICAgICAgICAgICAgICAgfSkKICAgICAgICAgICAgICAgICAgICBdKTsKICAgICAgICAgICAgICAgICAgICBzdGF0cy5yZXRyeSArPSAxOwogICAgICAgICAgICAgICAgfQogICAgICAgICAgICB9CiAgICAgICAgfSBjYXRjaCAgewogICAgICAgICAgICBkZXBzLndhcm4oKTsKICAgICAgICB9IGZpbmFsbHl7CiAgICAgICAgICAgIHJ1bm5pbmcgPSBmYWxzZTsKICAgICAgICB9CiAgICAgICAgcmV0dXJuIHN0YXRzOwogICAgfQogICAgcmV0dXJuIHsKICAgICAgICByZW1lbWJlciwKICAgICAgICBpc1Jldmlld2FibGUsCiAgICAgICAgcmVjb25jaWxlCiAgICB9Owp9Cg==");
+          const root = process.cwd();
+          if (root !== "/opt/telecampaign") throw new Error("UNEXPECTED_APPLICATION");
+          const { decryptSecret } = await import(pathToFileURL(root + "/artifacts/api-server/src/lib/crypto.ts").href);
+          const requireDb = createRequire(pathToFileURL(root + "/lib/db/package.json"));
+          const requireApi = createRequire(pathToFileURL(root + "/artifacts/api-server/package.json"));
+          const { Client } = requireDb("pg");
+          const { TelegramClient } = requireApi("telegram");
+          const { StringSession } = requireApi("telegram/sessions/index.js");
+          const apply = process.argv.includes("--apply");
+          const db = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 8000 });
+          const result = { apply, scanned: 0, matched: 0, reviewable: 0, final: 0,
+            deleted: 0, resolved: 0, absent: 0, retry: 0, historyLimit: 3000, limitReached: false, warning: null };
+          let client;
+          try {
+            await db.connect();
+            await db.query("SET statement_timeout='5s'");
+            if (!apply) await db.query("SET default_transaction_read_only=on");
+            const row = await db.query("SELECT value FROM system_settings WHERE key=$1", ["admin_system_settings"]);
+            const chatId = String(JSON.parse(row.rows[0]?.value ?? "{}").supportChat?.adminTelegramChatId ?? "");
+            const token = process.env.TELECAMPAIGN_SUPPORT_BOT_TOKEN ?? process.env.TELECAMPAIGN_KGPT_BOT_TOKEN;
+            if (!/^\d+$/.test(chatId) || !token) throw new Error("ADMIN_BOT_NOT_CONFIGURED");
+            const accounts = await db.query(
+              `SELECT a.session_encrypted,a.api_id,a.api_hash_encrypted,a.proxy_id
+               FROM telegram_accounts a JOIN app_users u ON u.id::text=a.owner_user_id
+               WHERE a.telegram_user_id=$1 AND a.deleted_at IS NULL AND a.status='connected'
+                 AND a.session_encrypted IS NOT NULL AND u.role='admin' LIMIT 1`, [chatId]);
+            const account = accounts.rows[0];
+            if (!account) throw new Error("NO_AUTHORIZED_HISTORY_SESSION");
+            // Never bypass an account's configured proxy to recover history.
+            if (account.proxy_id) throw new Error("HISTORY_REQUIRES_CONFIGURED_PROXY");
+            async function botCall(method, payload) {
+              const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload), signal: AbortSignal.timeout(5000),
+              });
+              const body = await response.json();
+              if (!response.ok || !body.ok) throw new Error(body.description ?? "BOT_REQUEST_FAILED");
+              return body.result;
             }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
+            const me = await botCall("getMe", {});
+            if (!me?.is_bot || !me.username) throw new Error("BOT_IDENTITY_UNCONFIRMED");
+            client = new TelegramClient(new StringSession(decryptSecret(account.session_encrypted)),
+              Number(account.api_id), decryptSecret(account.api_hash_encrypted), { connectionRetries: 1, useWSS: false });
+            client.setLogLevel("none");
+            await client.connect();
+            const self = await client.getMe();
+            if (String(self.id) !== chatId) throw new Error("ADMIN_SESSION_IDENTITY_MISMATCH");
+            const peer = await client.getEntity(me.username);
+            if (String(peer.id) !== String(me.id)) throw new Error("BOT_PEER_IDENTITY_MISMATCH");
+            const store = createPurchaseReviewMessages({ query: (q, values) => db.query(q, values), call: botCall,
+              warn: () => { result.warning = "RECONCILIATION_DEFERRED"; } });
+            const started = Date.now();
+            for await (const message of client.iterMessages(peer, { limit: result.historyLimit })) {
+              result.scanned++;
+              if (Date.now() - started > 90000) { result.limitReached = true; break; }
+              if (String(message.senderId) !== String(me.id)) continue;
+              const orderId = reviewMessageOrderId(message.message ?? "");
+              if (!orderId) continue;
+              const order = (await db.query("SELECT status,reference FROM purchase_orders WHERE id=$1", [orderId])).rows[0];
+              const reference = message.message.match(/^Đơn: (.+)$/m)?.[1]?.trim();
+              if (!order || reference !== order.reference) continue;
+              const actions = (message.replyMarkup?.rows ?? []).flatMap(r => r.buttons ?? [])
+                .map(button => button.data ? Buffer.from(button.data).toString("utf8") : "");
+              if (!actions.includes(`purchase:paid:${orderId}`) || !actions.includes(`purchase:rejected:${orderId}`)) continue;
+              result.matched++;
+              if (["pending", "expired", "received"].includes(order.status)) result.reviewable++;
+              else if (["paid", "cancelled", "rejected", "revoked"].includes(order.status)) result.final++;
+              else continue;
+              if (apply) await store.remember(orderId, chatId, message.id);
+            }
+            result.limitReached ||= result.scanned >= result.historyLimit;
+            if (apply) {
+              for (let batch = 0; batch < 300; batch++) {
+                const stats = await store.reconcile(chatId);
+                for (const name of ["deleted", "resolved", "absent", "retry"]) result[name] += stats[name];
+                if (!Object.values(stats).some(Number) || Date.now() - started > 150000) break;
+              }
+            }
+          } catch (error) {
+            const safeCodes = ["ADMIN_BOT_NOT_CONFIGURED", "NO_AUTHORIZED_HISTORY_SESSION",
+              "HISTORY_REQUIRES_CONFIGURED_PROXY", "BOT_IDENTITY_UNCONFIRMED", "ADMIN_SESSION_IDENTITY_MISMATCH",
+              "BOT_PEER_IDENTITY_MISMATCH"];
+            result.warning = safeCodes.includes(error.message) ? error.message : "HISTORY_RECOVERY_FAILED";
+            process.exitCode = 1;
+          } finally {
+            if (client) await client.destroy().catch(() => {});
+            await db.end();
+            console.log("ORDER_REVIEW_HISTORY_RESULT=" + JSON.stringify(result));
+          }
+          
           NODE
           REMOTE
