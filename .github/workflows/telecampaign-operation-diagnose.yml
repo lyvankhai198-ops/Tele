@@ -50,7 +50,7 @@ jobs:
           const db = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 8000 });
           const result = { apply, scanned: 0, matched: 0, reviewable: 0, final: 0,
             deleted: 0, resolved: 0, absent: 0, retry: 0, historyLimit: 3000, limitReached: false, warning: null };
-          let client;
+          let client, stage = "database";
           try {
             await db.connect();
             await db.query("SET statement_timeout='5s'");
@@ -77,19 +77,25 @@ jobs:
               if (!response.ok || !body.ok) throw new Error(body.description ?? "BOT_REQUEST_FAILED");
               return body.result;
             }
+            stage = "bot_identity";
             const me = await botCall("getMe", {});
             if (!me?.is_bot || !me.username) throw new Error("BOT_IDENTITY_UNCONFIRMED");
+            stage = "telegram_client";
             client = new TelegramClient(new StringSession(decryptSecret(account.session_encrypted)),
               Number(account.api_id), decryptSecret(account.api_hash_encrypted), { connectionRetries: 1, useWSS: false });
             client.setLogLevel("none");
+            stage = "telegram_connect";
             await client.connect();
+            stage = "admin_identity";
             const self = await client.getMe();
             if (String(self.id) !== chatId) throw new Error("ADMIN_SESSION_IDENTITY_MISMATCH");
+            stage = "bot_peer";
             const peer = await client.getEntity(me.username);
             if (String(peer.id) !== String(me.id)) throw new Error("BOT_PEER_IDENTITY_MISMATCH");
             const store = createPurchaseReviewMessages({ query: (q, values) => db.query(q, values), call: botCall,
               warn: () => { result.warning = "RECONCILIATION_DEFERRED"; } });
             const started = Date.now();
+            stage = "history";
             for await (const message of client.iterMessages(peer, { limit: result.historyLimit })) {
               result.scanned++;
               if (Date.now() - started > 90000) { result.limitReached = true; break; }
@@ -109,6 +115,7 @@ jobs:
               if (apply) await store.remember(orderId, chatId, message.id);
             }
             result.limitReached ||= result.scanned >= result.historyLimit;
+            stage = "reconcile";
             if (apply) {
               for (let batch = 0; batch < 300; batch++) {
                 const stats = await store.reconcile(chatId);
@@ -121,6 +128,9 @@ jobs:
               "HISTORY_REQUIRES_CONFIGURED_PROXY", "BOT_IDENTITY_UNCONFIRMED", "ADMIN_SESSION_IDENTITY_MISMATCH",
               "BOT_PEER_IDENTITY_MISMATCH"];
             result.warning = safeCodes.includes(error.message) ? error.message : "HISTORY_RECOVERY_FAILED";
+            result.stage = stage;
+            result.errorKind = ["TypeError", "SyntaxError", "Error"].includes(error.name) ? error.name : "OTHER";
+            if (/^[A-Z_0-9]{1,64}$/.test(error.errorMessage ?? "")) result.telegramError = error.errorMessage;
             process.exitCode = 1;
           } finally {
             if (client) await client.destroy().catch(() => {});
