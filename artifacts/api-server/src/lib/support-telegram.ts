@@ -35,6 +35,7 @@ import {
 import { supportMediaStorage } from "./supportMediaStorage";
 import { reviewOrder, verifiedOrderNotification } from "./telecampaign-orders";
 import { purchaseReviewNotification } from "./purchase-review-notification";
+import { createPurchaseReviewMessages, reviewMessageOrderId } from "./purchase-review-messages";
 import { updateFeedbackStatus, validFeedbackId, FEEDBACK_STATUSES, feedbackImage, type FeedbackRecord } from "./feedback";
 import { logger } from "./logger";
 import { isAuthorizedAdminMessage, isPrivateAdminChatType } from "./telegram-admin-access";
@@ -75,20 +76,37 @@ const pendingUsernameRecoveryChats = new Map<string, number>();
 const pendingPasswordRecoveryChats = new Map<string, number>();
 const TELEGRAM_RECOVERY_WINDOW_MS = 15 * 60_000;
 
-async function telegramCall<T>(method: string, payload: Record<string, unknown>): Promise<T | null> {
+async function telegramCall<T>(method: string, payload: Record<string, unknown>, timeoutMs = 25_000): Promise<T | null> {
   const token = botToken();
   if (!token) return null;
   const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const result = await response.json() as { ok?: boolean; result?: T; description?: string };
   if (!response.ok || !result.ok) {
     throw new Error(`Telegram ${method} failed: ${result.description ?? response.statusText}`);
   }
   return result.result ?? null;
+}
+
+const purchaseReviewMessages = createPurchaseReviewMessages({
+  query: (text, values) => pool.query(text, values),
+  call: (method, payload) => telegramCall(method, payload, 5_000),
+  warn: () => logger.warn("Purchase review message cleanup deferred; payment state unchanged"),
+});
+export async function reconcilePurchaseReviewMessages(): Promise<void> {
+  try {
+    const settings = await getSystemSettings();
+    const chatId = settings.supportChat.adminTelegramChatId;
+    if (botToken() && settings.supportChat.telegramBridgeEnabled && chatId) {
+      await purchaseReviewMessages.reconcile(String(chatId));
+    }
+  } catch {
+    logger.warn("Could not reconcile purchase review messages; payment state unchanged");
+  }
 }
 
 function escapeTelegramHtml(value: string): string {
@@ -163,7 +181,8 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
   if (!settings.supportChat.telegramBridgeEnabled || !settings.supportChat.adminTelegramChatId) return;
   const chat = await telegramCall<{ type?: string }>("getChat", { chat_id: settings.supportChat.adminTelegramChatId });
   if (chat?.type !== "private") return;
-  await telegramCall("sendMessage", {
+  if (orderId && !(await purchaseReviewMessages.isReviewable(orderId))) return;
+  const sent = await telegramCall<TelegramMessage>("sendMessage", {
     chat_id: settings.supportChat.adminTelegramChatId,
     text,
     reply_markup: orderId ? {
@@ -173,6 +192,17 @@ export async function notifyPurchaseOrder(text: string, orderId?: string): Promi
       ]],
     } : undefined,
   });
+  if (orderId && sent) {
+    try {
+      await purchaseReviewMessages.remember(orderId, String(sent.chat.id), sent.message_id);
+    } catch {
+      // Do not leave a new untracked, actionable review card on storage failure.
+      await telegramCall("deleteMessage", { chat_id: sent.chat.id, message_id: sent.message_id }).catch(() => {});
+      throw new Error("PURCHASE_MESSAGE_REFERENCE_NOT_SAVED");
+    }
+    // Close the send/settlement race: the order may finish while Telegram sends.
+    await purchaseReviewMessages.reconcile(String(sent.chat.id));
+  }
   } catch (error) {
     logger.warn("Purchase order Telegram notification failed");
   }
@@ -657,6 +687,9 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
     return;
   }
   try {
+    // A legacy callback supplies a trustworthy reference to the original card.
+    await purchaseReviewMessages.remember(parts[2], String(message!.chat.id), message!.message_id)
+      .catch(() => logger.warn("Could not retain purchase callback message reference"));
     const decision = parts[1] as "paid" | "rejected";
     const order = await reviewOrder(parts[2], String(query.from!.id), decision, {
       manualVerification: decision === "paid",
@@ -665,17 +698,21 @@ async function handlePurchaseCallback(query: NonNullable<TelegramUpdate["callbac
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id,
       text: order?.status === "paid" ? "Đã xác minh và kích hoạt/gia hạn" :
         order?.status === "received" ? "Đã nhận tiền, đang chờ xử lý cấp key" :
-        order?.status === "rejected" ? "Đã từ chối" : "Đơn không còn chờ xử lý", show_alert: true });
-    if (order) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
+        order?.status === "rejected" ? "Đã từ chối" : "Đơn không còn chờ xử lý", show_alert: true })
+      .catch(() => logger.warn("Purchase review callback response unavailable; payment state unchanged"));
+    if (order?.status === "received") await telegramCall("editMessageReplyMarkup", {
+      chat_id: message!.chat.id, message_id: message!.message_id, reply_markup: { inline_keyboard: [] },
+    }).catch(() => logger.warn("Purchase review buttons could not be cleared; payment state unchanged"));
     if (order?.status === "paid") {
       await notifyPurchaseOrder(verifiedOrderNotification(order));
     }
+    await purchaseReviewMessages.reconcile(String(message!.chat.id));
   } catch (error) {
     const processed = error instanceof Error && error.message === "ORDER_NOT_REVIEWABLE";
     await telegramCall("answerCallbackQuery", { callback_query_id: query.id,
-      text: processed ? "Đơn đã được xử lý trước đó; không kích hoạt/gia hạn lần nữa." : "Không thể xử lý đơn. Kiểm tra lại trên web.", show_alert: true });
-    if (processed) await telegramCall("editMessageReplyMarkup", { chat_id: message!.chat.id,
-      message_id: message!.message_id, reply_markup: { inline_keyboard: [] } });
+      text: processed ? "Đơn đã được xử lý trước đó; không kích hoạt/gia hạn lần nữa." : "Không thể xử lý đơn. Kiểm tra lại trên web.", show_alert: true })
+      .catch(() => logger.warn("Purchase callback response unavailable"));
+    if (processed) await purchaseReviewMessages.reconcile(String(message!.chat.id));
     logger.warn("Purchase callback review failed or order already processed");
   }
 }
@@ -1002,6 +1039,22 @@ export async function notifySupportConversationClosed(input: {
 
 async function handleTelegramMessage(message: TelegramMessage): Promise<void> {
   const text = message.text?.trim() ?? "";
+  // Replying to a pre-tracking review card safely identifies its exact message.
+  const original = message.reply_to_message as TelegramMessage | undefined;
+  if (original?.text && original.from?.id && message.chat.type === "private") {
+    const settings = await getSystemSettings();
+    const chatId = settings.supportChat.adminTelegramChatId;
+    if (chatId && String(message.chat.id) === String(chatId) &&
+        String(message.from?.id) === String(chatId)) {
+      const orderId = reviewMessageOrderId(original.text);
+      const me = orderId ? await telegramCall<{ id: number }>("getMe", {}) : null;
+      if (orderId && me && String(original.from.id) === String(me.id)) {
+        await purchaseReviewMessages.remember(orderId, String(chatId), original.message_id)
+          .catch(() => logger.warn("Could not retain legacy purchase review message reference"));
+        await purchaseReviewMessages.reconcile(String(chatId));
+      }
+    }
+  }
   if (usernameRecoveryStart(text) && message.chat.type === "private") {
     await handleUsernameRecoveryStart(message);
     return;
@@ -1187,6 +1240,8 @@ export function startSupportTelegramBridge(): void {
   registerWorker("telegram");
   setInterval(() => void pollTelegram(), 1_000);
   setInterval(() => void runAdminOperationalJobs(), 60_000).unref();
+  setInterval(() => void reconcilePurchaseReviewMessages(), 15_000).unref();
+  void reconcilePurchaseReviewMessages();
   void pollTelegram();
 }
 
