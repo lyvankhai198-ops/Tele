@@ -1,4 +1,4 @@
-name: TeleCamp operation diagnosis (read only)
+name: VPS CPU RAM and disk snapshot (read only)
 on:
   workflow_dispatch:
 permissions:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install SSH helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Read project CPU, RAM and disk counters
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
         shell: bash
@@ -32,32 +32,39 @@ jobs:
           source /etc/telecampaign/api.env
           set +a
           node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
+          // Read-only aggregate audit. No user IDs, chat IDs, payment details or secrets emitted.
+          import { createRequire } from "node:module";
+          import { createHash } from "node:crypto";
+          import { readFile } from "node:fs/promises";
+          const require = createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
+          const { Client } = require("pg");
+          const client = new Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 8000 });
+          try {
             await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
+            await client.query("BEGIN READ ONLY");
+            await client.query("SET LOCAL statement_timeout='5s'");
+            const settings = await client.query("SELECT value FROM system_settings WHERE key=$1", ["admin_system_settings"]);
+            const chatId = JSON.parse(settings.rows[0]?.value ?? "{}").supportChat?.adminTelegramChatId;
+            const orders = await client.query("SELECT status,count(*)::int AS count FROM purchase_orders GROUP BY status");
+            const refs = await client.query("SELECT count(*)::int AS count FROM system_settings WHERE key LIKE $1", ["purchase_review_message:%"]);
+            const account = chatId ? await client.query(
+              `SELECT count(*)::int AS count FROM telegram_accounts a JOIN app_users u ON u.id::text=a.owner_user_id
+               WHERE a.telegram_user_id=$1 AND a.deleted_at IS NULL AND a.status='connected'
+                 AND a.session_encrypted IS NOT NULL AND u.role='admin'`, [String(chatId)],
+            ) : { rows: [{ count: 0 }] };
+            const source = await readFile("/opt/telecampaign/artifacts/api-server/src/lib/support-telegram.ts");
+            console.log("ORDER_MESSAGE_AUDIT=" + JSON.stringify({
+              utc: new Date().toISOString(), orders: orders.rows,
+              trackedMessages: refs.rows[0].count, eligibleAdminHistoryAccounts: account.rows[0].count,
+              supportSourceSha256: createHash("sha256").update(source).digest("hex"),
+            }));
+            await client.query("ROLLBACK");
+          } catch (error) {
+            console.log("ORDER_MESSAGE_AUDIT_FAILED=" + (/^[0-9A-Z]{5}$/.test(error.code ?? "") ? error.code : "UNAVAILABLE"));
+            process.exitCode = 1;
+          } finally {
+            await client.end();
+          }
+          
           NODE
           REMOTE
