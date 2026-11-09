@@ -1,6 +1,11 @@
-name: TeleCamp operation diagnosis (read only)
+name: TeleCamp focused campaign worker diagnosis (read only)
 on:
   workflow_dispatch:
+    inputs:
+      target_username:
+        description: Account username to scope the bounded production audit
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -9,55 +14,371 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
-      - name: Install SSH helper
+      - name: Install SSH password helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Sample current lease and worker evidence twice
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          TARGET_USERNAME: ${{ inputs.target_username }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
+          [[ "$TARGET_USERNAME" =~ ^[A-Za-z0-9_]{1,32}$ ]]
           known="$(mktemp)"
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = vps-cd243267
-          cd /opt/telecampaign
-          set -a
-          source /etc/telecampaign/api.env
-          set +a
-          node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
+          target_b64="$(printf %s "$TARGET_USERNAME" | base64 -w0)"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 "sudo -n env TARGET_USERNAME_B64=$target_b64 python3 -" <<'PY'
+          import base64
+          import datetime
+          import json
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import time
+          
+          ROOT = pathlib.Path("/opt/telecampaign")
+          assert pathlib.Path("/etc/hostname").read_text().strip() == "vps-cd243267", "UNEXPECTED_HOST"
+          username = base64.b64decode(os.environ["TARGET_USERNAME_B64"]).decode()
+          if not re.fullmatch(r"[A-Za-z0-9_]{1,32}", username):
+              raise SystemExit("AUDIT_BLOCKED=invalid_username_parameter")
+          
+          SQL = r"""BEGIN READ ONLY; SET LOCAL statement_timeout='5s';
+          WITH
+          clock AS (
+            SELECT now() AS now_utc,
+              (date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+                AT TIME ZONE 'Asia/Ho_Chi_Minh') AS today_start
+          ),
+          u AS (
+            SELECT id::text AS owner_id FROM app_users
+            WHERE username_normalized=lower(btrim(:'target_user'))
+          ),
+          accounts AS (
+            SELECT row_number() OVER (ORDER BY a.id)::int AS slot,a.id,a.status,a.daily_limit,
+              a.cooldown_until,a.delivery_lease_until,a.delivery_lease_token IS NOT NULL AS token_present,
+              a.updated_at,a.last_sync_at,a.deleted_at
+            FROM telegram_accounts a JOIN u ON u.owner_id=a.owner_user_id
+          ),
+          campaigns AS (
+            SELECT c.id,c.status,c.scheduled_at,c.updated_at,c.telegram_account_id,c.timing_mode
+            FROM campaigns c JOIN u ON c.owner_user_id=u.owner_id
+          ),
+          target_rows AS (
+            SELECT t.campaign_id,t.status,t.attempts,t.last_error,t.updated_at,t.sent_at,
+              t.next_attempt_at,t.quota_reserved_at,t.delivery_order,t.wait_before_seconds,
+              d.account_id,c.status AS campaign_status,c.scheduled_at AS campaign_scheduled_at,
+              c.timing_mode,COALESCE(a.deleted_at IS NULL,false) AS account_present,
+              a.delivery_lease_until AS account_lease_until
+            FROM campaign_targets t JOIN campaigns c ON c.id=t.campaign_id
+            LEFT JOIN destinations d ON d.id=t.destination_id
+            LEFT JOIN accounts a ON a.id=d.account_id
+          ),
+          target_flags AS (
+            SELECT t.*,
+              (t.status='pending' AND (t.next_attempt_at IS NULL OR t.next_attempt_at<=clock.now_utc)) AS target_due,
+              (t.campaign_scheduled_at IS NULL OR t.campaign_scheduled_at<=clock.now_utc) AS campaign_due,
+              (t.timing_mode<>'round' OR (
+                t.delivery_order IS NOT NULL AND t.wait_before_seconds IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM campaign_targets earlier
+                  WHERE earlier.campaign_id=t.campaign_id
+                    AND earlier.delivery_order<t.delivery_order
+                    AND earlier.status IN ('pending','sending'))
+                AND NOT EXISTS (SELECT 1 FROM campaign_targets previous
+                  WHERE previous.campaign_id=t.campaign_id
+                    AND previous.delivery_order=t.delivery_order-1
+                    AND coalesce(previous.sent_at,previous.updated_at)
+                      + t.wait_before_seconds*interval '1 second'>clock.now_utc)
+              )) AS timing_ready,
+              EXISTS (SELECT 1 FROM campaign_targets earlier WHERE earlier.campaign_id=t.campaign_id
+                AND earlier.delivery_order<t.delivery_order
+                AND earlier.status IN ('pending','sending')) AS earlier_target_blocks,
+              EXISTS (SELECT 1 FROM campaign_targets previous WHERE previous.campaign_id=t.campaign_id
+                AND previous.delivery_order=t.delivery_order-1
+                AND coalesce(previous.sent_at,previous.updated_at)
+                  + t.wait_before_seconds*interval '1 second'>clock.now_utc) AS round_gap_blocks,
+              (t.campaign_status IN ('queued','running') AND t.account_present
+                AND t.status='pending'
+                AND (t.next_attempt_at IS NULL OR t.next_attempt_at<=clock.now_utc)
+                AND (t.campaign_scheduled_at IS NULL OR t.campaign_scheduled_at<=clock.now_utc)
+                AND (t.timing_mode<>'round' OR (
+                  t.delivery_order IS NOT NULL AND t.wait_before_seconds IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM campaign_targets earlier
+                    WHERE earlier.campaign_id=t.campaign_id
+                      AND earlier.delivery_order<t.delivery_order
+                      AND earlier.status IN ('pending','sending'))
+                  AND NOT EXISTS (SELECT 1 FROM campaign_targets previous
+                    WHERE previous.campaign_id=t.campaign_id
+                      AND previous.delivery_order=t.delivery_order-1
+                      AND coalesce(previous.sent_at,previous.updated_at)
+                        + t.wait_before_seconds*interval '1 second'>clock.now_utc)
+                ))) AS worker_eligible
+              ,(t.campaign_status IN ('queued','running') AND t.account_present
+                AND (t.account_lease_until IS NULL OR t.account_lease_until<=clock.now_utc)
+                AND t.status='pending'
+                AND (t.next_attempt_at IS NULL OR t.next_attempt_at<=clock.now_utc)
+                AND (t.campaign_scheduled_at IS NULL OR t.campaign_scheduled_at<=clock.now_utc)
+                AND (t.timing_mode<>'round' OR (
+                  t.delivery_order IS NOT NULL AND t.wait_before_seconds IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM campaign_targets earlier
+                    WHERE earlier.campaign_id=t.campaign_id
+                      AND earlier.delivery_order<t.delivery_order
+                      AND earlier.status IN ('pending','sending'))
+                  AND NOT EXISTS (SELECT 1 FROM campaign_targets previous
+                    WHERE previous.campaign_id=t.campaign_id
+                      AND previous.delivery_order=t.delivery_order-1
+                      AND coalesce(previous.sent_at,previous.updated_at)
+                        + t.wait_before_seconds*interval '1 second'>clock.now_utc)
+                ))) AS claimable_now
+            FROM target_rows t CROSS JOIN clock
+          ),
+          blockers AS (
+            SELECT CASE
+              WHEN campaign_status NOT IN ('queued','running') THEN 'campaign_not_active'
+              WHEN NOT target_due THEN 'target_not_due'
+              WHEN NOT campaign_due THEN 'campaign_schedule_future'
+              WHEN NOT account_present THEN 'account_missing_or_deleted'
+              WHEN timing_mode='round' AND (delivery_order IS NULL OR wait_before_seconds IS NULL) THEN 'round_metadata_missing'
+              WHEN timing_mode='round' AND earlier_target_blocks THEN 'earlier_pending_or_sending'
+              WHEN timing_mode='round' AND round_gap_blocks THEN 'round_gap_not_elapsed'
+              WHEN NOT claimable_now THEN 'account_lease_active'
+              ELSE 'eligible'
+            END AS blocker,count(*)::int AS n
+            FROM target_flags WHERE status='pending' GROUP BY 1
+          ),
+          earliest AS (
+            SELECT jsonb_agg(jsonb_build_object(
+              'account_slot',a.slot,'campaign_status',t.campaign_status,'timing_mode',t.timing_mode,
+              'next_attempt_at',t.next_attempt_at,'campaign_scheduled_at',t.campaign_scheduled_at,
+              'delivery_order',t.delivery_order,'wait_before_seconds',t.wait_before_seconds,
+              'target_due',t.target_due,'campaign_due',t.campaign_due,
+              'timing_ready',t.timing_ready,'worker_eligible',t.worker_eligible,
+              'claimable_now',t.claimable_now,
+              'blocker',b.blocker,'last_error_present',t.last_error IS NOT NULL
+            ) ORDER BY t.next_attempt_at NULLS LAST) AS rows
+            FROM (SELECT * FROM target_flags WHERE status='pending'
+                  ORDER BY next_attempt_at NULLS LAST LIMIT 8) t
+            LEFT JOIN accounts a ON a.id=t.account_id
+            LEFT JOIN LATERAL (SELECT CASE
+              WHEN t.campaign_status NOT IN ('queued','running') THEN 'campaign_not_active'
+              WHEN NOT t.target_due THEN 'target_not_due'
+              WHEN NOT t.campaign_due THEN 'campaign_schedule_future'
+              WHEN NOT t.account_present THEN 'account_missing_or_deleted'
+              WHEN t.timing_mode='round' AND (t.delivery_order IS NULL OR t.wait_before_seconds IS NULL) THEN 'round_metadata_missing'
+              WHEN t.timing_mode='round' AND t.earlier_target_blocks THEN 'earlier_pending_or_sending'
+              WHEN t.timing_mode='round' AND t.round_gap_blocks THEN 'round_gap_not_elapsed'
+              WHEN NOT t.claimable_now THEN 'account_lease_active'
+              ELSE 'eligible' END AS blocker) b ON true
+          )
+          SELECT jsonb_build_object(
+            'sampled_at_utc',clock.now_utc,
+            'pg_active_queries',(SELECT jsonb_agg(jsonb_build_object(
+              'operation',operation,'state',state,'wait_type',wait_event_type,'wait',wait_event,
+              'count',n,'oldest_age_seconds',age_seconds
+            )) FROM (
+              SELECT CASE WHEN query ~* 'update[[:space:]]+\"?telegram_accounts' THEN 'telegram_accounts_update'
+                WHEN query ~* 'update[[:space:]]+\"?campaign_targets' THEN 'campaign_targets_update'
+                WHEN query ~* 'campaign_targets' THEN 'campaign_targets_read'
+                WHEN query ~* 'campaigns' THEN 'campaigns_read'
+                ELSE 'other' END operation,state,wait_event_type,wait_event,count(*)::int n,
+                max(extract(epoch FROM (clock.now_utc-query_start)))::int age_seconds
+              FROM pg_stat_activity CROSS JOIN clock
+              WHERE pid<>pg_backend_pid() AND backend_type='client backend' AND state='active'
+              GROUP BY 1,state,wait_event_type,wait_event
+            ) q),
+            'accounts',(SELECT jsonb_agg(jsonb_build_object(
+              'slot',a.slot,'status',a.status,'daily_limit',a.daily_limit,'deleted',a.deleted_at IS NOT NULL,
+              'cooldown_active',COALESCE(a.cooldown_until>clock.now_utc,false),
+              'token_present',a.token_present,'lease_active',COALESCE(a.delivery_lease_until>clock.now_utc,false),
+              'lease_until',a.delivery_lease_until,'account_updated_at',a.updated_at,'last_sync_at',a.last_sync_at,
+              'campaigns_by_status',(SELECT COALESCE(jsonb_object_agg(st,n),'{}'::jsonb)
+                FROM (SELECT c.status st,count(*)::int n FROM campaigns c
+                  WHERE c.telegram_account_id=a.id GROUP BY c.status) cs),
+              'target_statuses',(SELECT COALESCE(jsonb_object_agg(st,n),'{}'::jsonb)
+                FROM (SELECT t.status st,count(*)::int n FROM target_rows t
+                  WHERE t.account_id=a.id GROUP BY t.status) ts),
+              'pending_all',count(*) FILTER (WHERE f.status='pending'),
+              'pending_due_all_campaign_statuses',count(*) FILTER (WHERE f.status='pending' AND f.target_due),
+              'pending_due_active_campaigns',count(*) FILTER (WHERE f.status='pending' AND f.target_due
+                AND f.campaign_status IN ('queued','running') AND f.campaign_due),
+              'worker_eligible_without_lease',count(*) FILTER (WHERE f.worker_eligible),
+              'claimable_now',count(*) FILTER (WHERE f.claimable_now),
+              'sending',count(*) FILTER (WHERE f.status='sending'),
+              'earliest_eligible_at',min(f.next_attempt_at) FILTER (WHERE f.worker_eligible)
+            )) FROM accounts a CROSS JOIN clock LEFT JOIN target_flags f ON f.account_id=a.id
+              GROUP BY a.slot,a.id,a.status,a.daily_limit,a.deleted_at,a.cooldown_until,
+                a.token_present,a.delivery_lease_until,a.updated_at,a.last_sync_at),
+            'pending_blockers',COALESCE((SELECT jsonb_object_agg(blocker,n) FROM blockers),'{}'::jsonb),
+            'earliest_pending',COALESCE((SELECT rows FROM earliest),'[]'::jsonb),
+            'target_totals',(SELECT jsonb_build_object(
+              'all_statuses',COALESCE((SELECT jsonb_object_agg(status,n) FROM
+                (SELECT status,count(*)::int n FROM target_rows GROUP BY status) s),'{}'::jsonb),
+              'worker_eligible_without_lease',count(*) FILTER (WHERE worker_eligible),
+              'claimable_now',count(*) FILTER (WHERE claimable_now),
+              'sent_today',count(*) FILTER (WHERE status='sent' AND sent_at>=clock.today_start),
+              'failed_or_review_today',count(*) FILTER (WHERE status IN ('failed','requires_review')
+                AND updated_at>=clock.today_start)
+            ) FROM target_flags CROSS JOIN clock),
+            'campaign_count',(SELECT count(*)::int FROM campaigns),
+            'campaigns_by_status',(SELECT COALESCE(jsonb_object_agg(status,n),'{}'::jsonb)
+              FROM (SELECT status,count(*)::int n FROM campaigns GROUP BY status) s),
+            'subscription',(SELECT jsonb_build_object('plan',s.plan,'active',s.expires_at>clock.now_utc,
+              'daily_quota_exempt',s.daily_quota_exempt,'expires_at',s.expires_at)
+              FROM subscriptions s JOIN u ON s.owner_user_id=u.owner_id CROSS JOIN clock),
+            'user_found',(SELECT count(*)::int FROM u)
+          )::text
+          FROM clock;
+          COMMIT;"""
+          
+          def db_sample():
+              args=["sudo","-n","-u","postgres","psql","-X","-A","-t","-q",
+                    "-v","ON_ERROR_STOP=1","-v","target_user="+username,
+                    "-d","telecampaign","-f","-"]
+              p=subprocess.run(args,input=SQL,capture_output=True,text=True,timeout=8)
+              if p.returncode:
+                  category="timeout" if "timeout" in p.stderr.lower() else "query_error"
+                  return {"error":category}
+              return json.loads(p.stdout.strip().splitlines()[-1])
+          
+          def pm2_state():
+              try:
+                  p=subprocess.run(["sudo","-n","-u","ubuntu","-H","bash","-lc","pm2 jlist"],
+                    capture_output=True,text=True,timeout=5)
+                  if p.returncode:return {"status":"unavailable"}
+                  apps=[]
+                  for row in json.loads(p.stdout):
+                      if row.get("name")!="telecampaign-api":continue
+                      e=row.get("pm2_env",{})
+                      nested=e.get("env",{}) if isinstance(e.get("env"),dict) else {}
+                      apps.append({
+                        "status":e.get("status"),"restart_count":e.get("restart_time"),
+                        "uptime_seconds":max(0,int(time.time()*1000-e["pm_uptime"])//1000)
+                          if isinstance(e.get("pm_uptime"),(int,float)) else None,
+                        "process_started_at_utc":datetime.datetime.fromtimestamp(
+                          e["pm_uptime"]/1000,datetime.timezone.utc).isoformat()
+                          if isinstance(e.get("pm_uptime"),(int,float)) else None,
+                        "campaign_worker_disabled":e.get("TELECAMPAIGN_DISABLE_WORKER",
+                          nested.get("TELECAMPAIGN_DISABLE_WORKER","false"))=="true",
+                      })
+                  return {"status":"read","apps":apps}
+              except (OSError,subprocess.SubprocessError,ValueError,TypeError):
+                  return {"status":"unavailable"}
+          
+          def safe_log_summary():
+              # Fixed-source message allowlist; never print raw log text or error messages.
+              allowed_messages={
+                "Campaign worker started","Campaign worker failed","Campaign account queue failed",
+                "Post-send processing failed; refusing an automatic retry",
+                "Delivery activity log failed after a successful send","Campaign finalization failed",
+                "Telegram account operation timed out; closing single-use client",
+                "Telegram forum topic sync failed",
               }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
-          NODE
-          REMOTE
+              source_functions={
+                "tick","processNextCampaignTarget","processCampaignAccountQueue",
+                "sendTelegramMessage","forwardTelegramSavedMessage","disconnectQuietly",
+                "destroyQuietly","getAccountClient","resolveDestinationEntity",
+                "pauseForDailyQuota","recordActivity","finalizeCampaignIfTerminal",
+              }
+              classes={}
+              categories={}
+              functions={}
+              latest={}
+              fixed_messages={}
+              recent_errors=[]
+              cutoff=datetime.datetime(2026,11,9,1,4,29,tzinfo=datetime.timezone.utc).timestamp()
+              files_scanned=0
+              for home in (pathlib.Path("/home/ubuntu"),pathlib.Path("/root")):
+                  for path in (home/".pm2/logs").glob("telecampaign-api*.log"):
+                      try:
+                          with path.open("rb") as f:
+                              f.seek(0,2); size=f.tell(); f.seek(max(0,size-256_000))
+                              lines=f.read().decode("utf-8",errors="replace").splitlines()[-2000:]
+                      except OSError:
+                          continue
+                      files_scanned+=1
+                      for line in lines:
+                          try:
+                              entry=json.loads(line)
+                              stamp=entry.get("time") or entry.get("timestamp")
+                              if isinstance(stamp,(int,float)): ts=stamp/1000 if stamp>10**12 else stamp
+                              elif isinstance(stamp,str): ts=datetime.datetime.fromisoformat(stamp.replace("Z","+00:00")).timestamp()
+                              else: ts=0
+                              if ts and ts<cutoff: continue
+                              msg=str(entry.get("msg") or "")
+                              if msg in allowed_messages:
+                                  fixed_messages[msg]=fixed_messages.get(msg,0)+1
+                              err=entry.get("err") or entry.get("error") or {}
+                              if not isinstance(err,dict): err={}
+                              level=entry.get("level")
+                              if isinstance(level,(int,float)) and level<50: continue
+                              if isinstance(level,str) and level.lower() not in ("error","fatal","critical"): continue
+                              if not err: continue
+                              name=str(err.get("type") or err.get("name") or "")
+                              message=str(err.get("message") or "")
+                              stack=str(err.get("stack") or "")
+                          except (ValueError,TypeError):
+                              continue
+                          if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,48}",name):name="UnknownError"
+                          classes[name]=classes.get(name,0)+1
+                          low=(message+" "+msg+" "+str(err.get("code") or "")).lower()
+                          category=("telegram_wait" if "flood" in low or "wait" in low
+                            else "network_timeout" if "timeout" in low
+                            else "network_socket" if "socket" in low or "econn" in low
+                            else "authorization" if "auth" in low or "session" in low
+                            else "database_pool" if "pool" in low
+                            else "database" if "database" in low or "postgres" in low
+                            else "quota" if "quota" in low
+                            else "cleanup_destroy" if "destroy" in low or "disconnect" in low
+                            else "other")
+                          categories[category]=categories.get(category,0)+1
+                          funcs=[fn for fn in re.findall(r"\bat\s+([A-Za-z_$][\w$]{0,60})\s",stack)
+                            if fn in source_functions][:5]
+                          for fn in funcs:functions[fn]=functions.get(fn,0)+1
+                          if ts>latest.get(name,0):latest[name]=ts
+                          if len(recent_errors)<10:
+                              code=str(err.get("code") or "")
+                              recent_errors.append({
+                                "at_utc":datetime.datetime.fromtimestamp(ts,datetime.timezone.utc).isoformat() if ts else None,
+                                "logger_message":msg if msg in allowed_messages else "other_error",
+                                "error_class":name,"category":category,
+                                "error_code":code if re.fullmatch(r"[A-Z][A-Z0-9_]{1,31}",code) else None,
+                                "source_functions":funcs,
+                              })
+              return {"files_scanned":files_scanned,"fixed_logger_messages_since_release":fixed_messages,
+                "tail_exception_classes":classes,"safe_categories":categories,
+                "stack_function_counts":functions,
+                "sanitized_recent_errors":recent_errors,
+                "latest_exception_utc":{k:datetime.datetime.fromtimestamp(v,datetime.timezone.utc).isoformat()
+                  for k,v in latest.items() if v}}
+          
+          first=db_sample()
+          time.sleep(5)
+          second=db_sample()
+          pm2=pm2_state()
+          started=next((x.get("process_started_at_utc") for x in pm2.get("apps",[])
+            if x.get("process_started_at_utc")),None)
+          if started and isinstance(second,dict):
+              start_time=datetime.datetime.fromisoformat(started.replace("Z","+00:00"))
+              for account in second.get("accounts",[]) or []:
+                  updated=account.get("account_updated_at")
+                  account["updated_before_process_start"]=bool(updated and
+                    datetime.datetime.fromisoformat(updated.replace("Z","+00:00"))<start_time)
+                  account["orphan_recovery_predicate"]=bool(account["updated_before_process_start"]
+                    and account.get("sending",0)==0)
+          try:
+              production_head=subprocess.run(["git","-C",str(ROOT),"rev-parse","HEAD"],
+                capture_output=True,text=True,timeout=2,check=True).stdout.strip()
+          except (OSError,subprocess.SubprocessError):
+              production_head=None
+          print("FOCUSED_WORKER_AUDIT="+json.dumps({
+            "sample1":first,"sample2":second,"pm2":pm2,
+            "bounded_log_summary_24h":safe_log_summary(),
+            "production_git_head":production_head,
+            "worker_heartbeat":"not queried; authenticated admin route only"
+          },separators=(",",":"),default=str),flush=True)
+          PY
