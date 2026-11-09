@@ -1,6 +1,11 @@
-name: TeleCamp operation diagnosis (read only)
+name: Telecampaign bounded orphan lease recovery
 on:
   workflow_dispatch:
+    inputs:
+      target_username:
+        description: Account username to scope the bounded production audit
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -9,55 +14,107 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
-      - name: Install SSH helper
+      - name: Install SSH password helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Release pre-restart orphan lease and observe planned deliveries
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          TARGET_USERNAME: ${{ inputs.target_username }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
+          [[ "$TARGET_USERNAME" =~ ^[A-Za-z0-9_]{1,32}$ ]]
           known="$(mktemp)"
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = vps-cd243267
-          cd /opt/telecampaign
-          set -a
-          source /etc/telecampaign/api.env
-          set +a
-          node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
-          NODE
-          REMOTE
+          target_b64="$(printf %s "$TARGET_USERNAME" | base64 -w0)"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 "sudo -n env TARGET_USERNAME_B64=$target_b64 python3 -" <<'PY'
+          """Release only pre-restart orphan leases; never reset targets or campaigns."""
+          import base64
+          import datetime
+          import json
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import time
+          
+          ROOT = pathlib.Path("/opt/telecampaign")
+          assert pathlib.Path("/etc/hostname").read_text().strip() == "vps-cd243267"
+          username = base64.b64decode(os.environ["TARGET_USERNAME_B64"]).decode()
+          assert re.fullmatch(r"[A-Za-z0-9_]{1,32}", username)
+          expected = "1e0733b8297c1c2c1b9a5d591669f2e4271bfd8c"
+          head = subprocess.check_output(
+              ["git", "-c", "safe.directory=/opt/telecampaign", "-C", str(ROOT), "rev-parse", "HEAD"],
+              text=True, timeout=5).strip()
+          assert head == expected, "UNEXPECTED_RELEASE"
+          raw = subprocess.check_output(
+              ["sudo", "-n", "-u", "ubuntu", "-H", "bash", "-lc", "pm2 jlist"],
+              text=True, timeout=8)
+          apps = [row for row in json.loads(raw) if row.get("name") == "telecampaign-api"]
+          assert len(apps) == 1
+          app = apps[0]
+          assert app["pm2_env"]["status"] == "online"
+          started_ms = app["pm2_env"]["pm_uptime"]
+          assert 0 < time.time() * 1000 - started_ms < 30 * 60_000, "RESTART_NOT_RECENT"
+          assert pathlib.Path(os.readlink(f"/proc/{app['pid']}/cwd")) == ROOT
+          started = datetime.datetime.fromtimestamp(started_ms / 1000, datetime.timezone.utc).isoformat()
+          
+          
+          def query(sql):
+              result = subprocess.run(
+                  ["sudo", "-n", "-u", "postgres", "psql", "-X", "-A", "-t", "-q",
+                   "-v", "ON_ERROR_STOP=1", "-v", "target_user=" + username,
+                   "-v", "started_at=" + started, "-d", "telecampaign", "-f", "-"],
+                  input=sql, capture_output=True, text=True, timeout=12)
+              if result.returncode:
+                  raise RuntimeError("RECOVERY_QUERY_FAILED")
+              return json.loads(result.stdout.strip().splitlines()[-1])
+          
+          
+          result = query("""
+          BEGIN; SET LOCAL statement_timeout='8s'; SET LOCAL lock_timeout='1s';
+          WITH cleared AS (
+            UPDATE telegram_accounts a SET delivery_lease_until=NULL, delivery_lease_token=NULL, updated_at=now()
+            WHERE a.owner_user_id=(SELECT id::text FROM app_users WHERE username_normalized=lower(btrim(:'target_user')))
+              AND a.deleted_at IS NULL AND a.delivery_lease_token IS NOT NULL
+              AND a.updated_at < :'started_at'::timestamptz
+              AND NOT EXISTS (
+                SELECT 1 FROM campaign_targets t JOIN destinations d ON d.id=t.destination_id
+                WHERE d.account_id=a.id AND t.status='sending'
+              )
+            RETURNING 1
+          )
+          SELECT json_build_object('orphan_leases_released',count(*),'campaigns_reset',0,'targets_reset',0)
+          FROM cleared;
+          COMMIT;
+          """)
+          print("RECOVERY_RESULT=" + json.dumps(result), flush=True)
+          SQL = """
+          BEGIN READ ONLY; SET LOCAL statement_timeout='8s';
+          WITH u AS (SELECT id::text owner FROM app_users WHERE username_normalized=lower(btrim(:'target_user'))),
+          t AS (
+            SELECT t.* FROM campaign_targets t JOIN campaigns c ON c.id=t.campaign_id
+            JOIN u ON u.owner=c.owner_user_id
+          )
+          SELECT json_build_object('sampled_at',now(),'process_started_at',:'started_at'::timestamptz,
+            'sent_since_restart',count(*) FILTER(WHERE status='sent' AND sent_at>=:'started_at'::timestamptz),
+            'sending_now',count(*) FILTER(WHERE status='sending'),
+            'failed_since_restart',count(*) FILTER(WHERE status='failed' AND updated_at>=:'started_at'::timestamptz),
+            'review_since_restart',count(*) FILTER(WHERE status='requires_review' AND updated_at>=:'started_at'::timestamptz),
+            'latest_sent_at',max(sent_at),
+            'sent_today',count(*) FILTER(WHERE status='sent' AND sent_at >=
+              date_trunc('day',now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh'))
+          FROM t;
+          COMMIT;
+          """
+          for i in range(4):
+              if i:
+                  time.sleep(25)
+              print("RECOVERY_OBSERVATION=" + json.dumps(query(SQL)), flush=True)
+          
+          PY
