@@ -14,6 +14,7 @@ import { recordActivity } from "./activity";
 import { resolvePublicProxyAddress } from "./proxy-test";
 import { TelegramProxyError, TelegramProxySocket, type TelegramProxyConfig } from "./telegram-proxy-socket";
 import { logger } from "./logger";
+import { boundedTelegramCleanup, guardTelegramClient } from "./telegram-rpc-deadline";
 import { telegramPostingPermissionSnapshot } from "./telegram-posting-permissions";
 import {
   TelegramPostingPermissionError,
@@ -464,7 +465,10 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     throw new Error("Telegram account has not completed authorization");
   }
   const proxy = await getTelegramProxyConfig(account);
-  const client = createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy);
+  const client = guardTelegramClient(
+    createTelegramClient(decryptSecret(account.sessionEncrypted), credentialsForAccount(account), proxy),
+    { onTimeout: phase => logger.warn({ phase }, "Telegram account operation timed out; closing single-use client") },
+  );
   try {
     await client.connect();
     const currentUser = await getCurrentUser(client);
@@ -994,12 +998,13 @@ export async function disconnectQuietly(client: TelegramClient) {
 }
 
 async function destroyQuietly(client: TelegramClient) {
-  try {
-    await client.destroy();
-  } catch {
-    // Cleanup must not turn an accepted delivery into a retry or hide the
-    // original authentication/network error.
-  }
+  // A stuck socket shutdown must not hold an account's delivery lease forever,
+  // nor turn an accepted delivery into a failure or automatic resend.
+  await boundedTelegramCleanup(
+    () => client.destroy(),
+    5_000,
+    () => logger.warn("Telegram client cleanup did not complete; original operation result preserved"),
+  );
 }
 
 export { Api, encryptSecret };
