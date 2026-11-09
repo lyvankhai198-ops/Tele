@@ -1,6 +1,11 @@
-name: TeleCamp operation diagnosis (read only)
+name: Telecampaign one read-only Telegram identity check
 on:
   workflow_dispatch:
+    inputs:
+      target_username:
+        description: Account username to scope the bounded production audit
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -9,55 +14,106 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
-      - name: Install SSH helper
+      - name: Install SSH password helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Sample current lease and worker evidence twice
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          TARGET_USERNAME: ${{ inputs.target_username }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
+          [[ "$TARGET_USERNAME" =~ ^[A-Za-z0-9_]{1,32}$ ]]
           known="$(mktemp)"
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = vps-cd243267
-          cd /opt/telecampaign
-          set -a
-          source /etc/telecampaign/api.env
-          set +a
-          node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
-          NODE
-          REMOTE
+          target_b64="$(printf %s "$TARGET_USERNAME" | base64 -w0)"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 "sudo -n env TARGET_USERNAME_B64=$target_b64 python3 -" <<'PY'
+          """One read-only Telegram identity check, no campaign messages are sent."""
+          import base64
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import tempfile
+          
+          assert pathlib.Path("/etc/hostname").read_text().strip() == "vps-cd243267"
+          username = base64.b64decode(os.environ["TARGET_USERNAME_B64"]).decode()
+          assert re.fullmatch(r"[A-Za-z0-9_]{1,32}", username)
+          root = pathlib.Path("/opt/telecampaign")
+          entry = r"""
+          import {TelegramClient} from "telegram";
+          import {pool} from "/opt/telecampaign/lib/db/src/index.ts";
+          import {getAccountClient,disconnectQuietly} from "/opt/telecampaign/artifacts/api-server/src/lib/telegram.ts";
+          console.log=console.warn=console.error=()=>{};
+          const emit=(kind,value)=>process.stdout.write("TELEGRAM_READ_"+kind+"="+JSON.stringify(value)+"\n");
+          const invoke=TelegramClient.prototype.invoke;
+          TelegramClient.prototype.invoke=async function(request,...args) {
+            const kind=String(request?.className??"unknown");
+            if(/^[A-Za-z0-9_.]{1,80}$/.test(kind))emit("RPC",{kind});
+            return invoke.call(this,request,...args);
+          };
+          const connected=TelegramClient.prototype.connect;
+          TelegramClient.prototype.connect=async function(...args) {
+            this.setLogLevel("none");
+            const result=await connected.apply(this,args);
+            emit("CONNECTED",{ok:true});
+            return result;
+          };
+          let client;
+          const timer=setTimeout(()=>{emit("RESULT",{ok:false,error:"READ_CHECK_DEADLINE"});process.exit(2);},150000);
+          try {
+            const r=await pool.query(`SELECT a.id FROM telegram_accounts a JOIN app_users u ON a.owner_user_id=u.id::text
+              WHERE u.username_normalized=lower(btrim($1)) AND a.deleted_at IS NULL
+              AND EXISTS (SELECT 1 FROM destinations d JOIN campaign_targets t ON t.destination_id=d.id
+                JOIN campaigns c ON c.id=t.campaign_id WHERE d.account_id=a.id
+                AND c.status IN ('queued','running') AND t.status='pending'
+                AND (t.next_attempt_at<=now() OR t.next_attempt_at IS NULL))
+              ORDER BY a.id LIMIT 1`,[process.env.AUDIT_TARGET_USERNAME]);
+            if(!r.rows[0])throw new Error("NO_DUE_ACCOUNT");
+            ({client}=await getAccountClient(r.rows[0].id));
+            emit("RESULT",{ok:true,identity_verified:true});
+          }catch(error) {
+            const code=String(error?.errorMessage??error?.code??error?.message??"UNKNOWN");
+            emit("RESULT",{ok:false,error:/^[A-Z][A-Z0-9_]{0,80}$/.test(code)?code:"NON_ENUM_ERROR"});
+          }finally {
+            if(client)await disconnectQuietly(client);
+            clearTimeout(timer);
+            await pool.end();
+            process.exit(0);
+          }
+          """
+          source = None
+          bundle = root / "artifacts/api-server/dist/read-only-identity-check.mjs"
+          try:
+              with tempfile.NamedTemporaryFile(mode="w", suffix=".ts", delete=False) as f:
+                  f.write(entry)
+                  source = f.name
+              pathlib.Path(source).chmod(0o644)
+              build = subprocess.run(
+                  ["sudo", "-n", "-u", "ubuntu", "-H", "bash", "-lc",
+                   f"cd /opt/telecampaign && pnpm --filter @workspace/api-server exec esbuild {source} "
+                   f"--bundle --platform=node --format=esm --packages=external --outfile={bundle}"],
+                  capture_output=True, text=True, timeout=25)
+              if build.returncode:
+                  print("TELEGRAM_READ_ERROR=compile_failed", flush=True)
+              else:
+                  env = dict(os.environ, AUDIT_TARGET_USERNAME=username)
+                  run = subprocess.run(
+                      ["bash", "-c", f"set -a; source /etc/telecampaign/api.env; set +a; node {bundle}"],
+                      env=env, capture_output=True, text=True, timeout=165)
+                  for line in run.stdout.splitlines():
+                      if line.startswith("TELEGRAM_READ_"):
+                          print(line, flush=True)
+          except subprocess.TimeoutExpired:
+              print("TELEGRAM_READ_ERROR=bounded_process_timeout", flush=True)
+          finally:
+              if source:
+                  pathlib.Path(source).unlink(missing_ok=True)
+              bundle.unlink(missing_ok=True)
+          
+          PY
