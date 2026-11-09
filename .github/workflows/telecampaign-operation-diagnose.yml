@@ -63,7 +63,7 @@ jobs:
             SELECT row_number() OVER (ORDER BY a.id)::int AS account_slot,
               a.id, a.status, a.daily_limit, a.cooldown_until, a.delivery_lease_until,
               (a.delivery_lease_token IS NOT NULL) AS has_lease_token, a.updated_at, a.last_sync_at
-            FROM telegram_accounts a JOIN u ON a.owner_id=a.owner_user_id
+            FROM telegram_accounts a JOIN u ON u.owner_id=a.owner_user_id
             WHERE a.deleted_at IS NULL
           ),
           campaigns AS (
@@ -205,6 +205,10 @@ jobs:
                               if ts and ts<cutoff: continue
                               err=entry.get("err") or entry.get("error") or {}
                               if not isinstance(err,dict): err={}
+                              level=entry.get("level")
+                              if isinstance(level,(int,float)) and level<50: continue
+                              if isinstance(level,str) and level.lower() not in ("error","fatal","critical"): continue
+                              if level is None and not err: continue
                               name=str(err.get("type") or err.get("name") or "")
                               msg=str(err.get("message") or entry.get("msg") or "")
                               stack=str(err.get("stack") or "")
