@@ -1,6 +1,11 @@
-name: TeleCamp operation diagnosis (read only)
+name: TeleCamp focused campaign worker diagnosis (read only)
 on:
   workflow_dispatch:
+    inputs:
+      target_username:
+        description: Account username to scope the bounded production audit
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -9,55 +14,233 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
-      - name: Install SSH helper
+      - name: Install SSH password helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Inspect operation progress and final removal counts
+      - name: Sample current lease and worker evidence twice
         env:
           SSHPASS: ${{ secrets.TELECAMPAIGN_SSH_PASSWORD }}
+          TARGET_USERNAME: ${{ inputs.target_username }}
         shell: bash
         run: |
           set -euo pipefail
           umask 077
+          [[ "$TARGET_USERNAME" =~ ^[A-Za-z0-9_]{1,32}$ ]]
           known="$(mktemp)"
           trap 'rm -f "$known"' EXIT
           ssh-keyscan -T 10 -t ed25519 15.235.142.30 > "$known" 2>/dev/null
           test "$(ssh-keygen -lf "$known" -E sha256 | awk '{print $2}')" = "SHA256:uMPDdpYzaBv+JdI9CSedvoRegH/XJVyucdN8mt7hZtM"
-          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          test "$(hostname)" = vps-cd243267
-          cd /opt/telecampaign
-          set -a
-          source /etc/telecampaign/api.env
-          set +a
-          node --input-type=module <<'NODE'
-          import {createRequire} from "node:module";
-          const require=createRequire(new URL("file:///opt/telecampaign/lib/db/package.json"));
-          const {Client}=require("pg"),client=new Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:10000});
-          try{
-            await client.connect();
-            await client.query("SET default_transaction_read_only=on");
-            await client.query("SET statement_timeout='5s'");
-            for(let pass=0;pass<12;pass++){
-              const rows=(await client.query("SELECT value FROM system_settings WHERE key LIKE 'telecamp_operation:%'")).rows;
-              const jobs=rows.map(r=>JSON.parse(r.value)).filter(j=>j.kind==="delete_account").sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-              console.log("operation_phases="+JSON.stringify(jobs.slice(0,5).map(j=>({state:j.state,phase:j.phase,processed:j.processed,
-                campaignCount:j.payload?.ids?.length??null,logCampaignsScanned:j.payload?.logOffset??0,autoRetry:j.error==="OPERATION_AUTO_RETRY"}))));
-              if(!jobs.some(j=>j.state!=="completed")){
-                const j=jobs[0];
-                if(j){
-                  const account=await client.query("SELECT count(*) FROM telegram_accounts WHERE owner_user_id=$1 AND id=$2::uuid",[j.owner,j.accountId]);
-                  const campaigns=await client.query("SELECT count(*) FROM campaigns WHERE owner_user_id=$1 AND id=ANY($2::uuid[])",[j.owner,j.payload.ids??[]]);
-                  const groups=await client.query("SELECT count(*) FROM destinations WHERE account_id=$1::uuid",[j.accountId]);
-                  console.log("deletion_result="+JSON.stringify({completed:true,accountRows:Number(account.rows[0].count),campaignRows:Number(campaigns.rows[0].count),groupRows:Number(groups.rows[0].count)}));
-                }
-                break;
-              }
-              if(pass===11)console.log("deletion_watch=still_running");
-              else await new Promise(resolve=>setTimeout(resolve,15000));
-            }
-          }catch(e){console.log("diagnostic_sqlstate="+(/^[0-9A-Z]{5}$/.test(e.code??"")?e.code:"UNKNOWN"));process.exitCode=1;}
-          finally{await client.end();}
-          NODE
-          REMOTE
+          target_b64="$(printf %s "$TARGET_USERNAME" | base64 -w0)"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$known" -o ConnectTimeout=15 ubuntu@15.235.142.30 "sudo -n env TARGET_USERNAME_B64=$target_b64 python3 -" <<'PY'
+          import base64
+          import datetime
+          import json
+          import os
+          import pathlib
+          import re
+          import subprocess
+          import time
+          
+          ROOT = pathlib.Path("/opt/telecampaign")
+          assert pathlib.Path("/etc/hostname").read_text().strip() == "vps-cd243267", "UNEXPECTED_HOST"
+          username = base64.b64decode(os.environ["TARGET_USERNAME_B64"]).decode()
+          if not re.fullmatch(r"[A-Za-z0-9_]{1,32}", username):
+              raise SystemExit("AUDIT_BLOCKED=invalid_username_parameter")
+          
+          SQL = r"""BEGIN READ ONLY; SET LOCAL statement_timeout='5s';
+          WITH
+          clock AS (
+            SELECT now() AS now_utc,
+              (date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+                AT TIME ZONE 'Asia/Ho_Chi_Minh') AS today_start
+          ),
+          u AS (
+            SELECT id::text AS owner_id FROM app_users
+            WHERE username_normalized=lower(btrim(:'target_user'))
+          ),
+          accounts AS (
+            SELECT row_number() OVER (ORDER BY a.id)::int AS account_slot,
+              a.id, a.status, a.daily_limit, a.cooldown_until, a.delivery_lease_until,
+              (a.delivery_lease_token IS NOT NULL) AS has_lease_token, a.updated_at, a.last_sync_at
+            FROM telegram_accounts a JOIN u ON a.owner_id=a.owner_user_id
+            WHERE a.deleted_at IS NULL
+          ),
+          campaigns AS (
+            SELECT c.id,c.status,c.scheduled_at,c.updated_at,c.telegram_account_id
+            FROM campaigns c JOIN u ON c.owner_user_id=u.owner_id
+          ),
+          targets AS (
+            SELECT t.status,t.attempts,t.last_error,t.updated_at,t.sent_at,t.next_attempt_at,
+              t.quota_reserved_at,d.account_id
+            FROM campaign_targets t JOIN campaigns c ON c.id=t.campaign_id
+            LEFT JOIN destinations d ON d.id=t.destination_id
+          ),
+          reason_counts AS (
+            SELECT CASE WHEN last_error ~ '^[A-Z][A-Z0-9_]{0,60}$' THEN last_error
+                        ELSE 'NON_ENUM' END reason,count(*)::int n
+            FROM targets WHERE status IN ('failed','requires_review') AND last_error IS NOT NULL
+            GROUP BY 1
+          )
+          SELECT jsonb_build_object(
+            'sampled_at_utc',clock.now_utc,
+            'db_sessions',(SELECT jsonb_agg(jsonb_build_object(
+              'state',state,'wait_type',wait_event_type,'wait',wait_event,'count',n,
+              'oldest_age_seconds',oldest_age
+            )) FROM (
+              SELECT state,wait_event_type,wait_event,count(*)::int n,
+                max(extract(epoch FROM (clock.now_utc-query_start)))::int oldest_age
+              FROM pg_stat_activity CROSS JOIN clock
+              WHERE pid<>pg_backend_pid() AND backend_type='client backend'
+              GROUP BY state,wait_event_type,wait_event
+            ) s),
+            'accounts',(SELECT jsonb_agg(jsonb_build_object(
+              'slot',a.account_slot,'status',a.status,'daily_limit',a.daily_limit,
+              'cooldown_active',a.cooldown_until>clock.now_utc,
+              'cooldown_until',a.cooldown_until,
+              'lease_token_present',a.has_lease_token,
+              'lease_active',a.delivery_lease_until>clock.now_utc,
+              'lease_until',a.delivery_lease_until,
+              'lease_seconds_remaining',CASE WHEN a.delivery_lease_until>clock.now_utc
+                THEN extract(epoch FROM (a.delivery_lease_until-clock.now_utc))::int ELSE 0 END,
+              'account_updated_at',a.updated_at,'last_sync_at',a.last_sync_at,
+              'campaigns_by_status',(SELECT COALESCE(jsonb_object_agg(st,n),'{}'::jsonb)
+                FROM (SELECT c.status st,count(*)::int n FROM campaigns c
+                  WHERE c.telegram_account_id=a.id GROUP BY c.status) cs),
+              'targets_by_status',(SELECT COALESCE(jsonb_object_agg(st,n),'{}'::jsonb)
+                FROM (SELECT t.status st,count(*)::int n FROM targets t
+                  WHERE t.account_id=a.id GROUP BY t.status) ts),
+              'sending',(SELECT jsonb_build_object(
+                'count',count(*)::int,'oldest_updated_at',min(t.updated_at),
+                'newest_updated_at',max(t.updated_at),'max_attempts',max(t.attempts),
+                'quota_reserved_count',count(*) FILTER (WHERE t.quota_reserved_at IS NOT NULL),
+                'error_codes',COALESCE((SELECT jsonb_object_agg(reason,n) FROM (
+                  SELECT CASE WHEN x.last_error ~ '^[A-Z][A-Z0-9_]{0,60}$' THEN x.last_error
+                              ELSE 'NON_ENUM' END reason,count(*)::int n
+                  FROM targets x WHERE x.account_id=a.id
+                    AND x.status IN ('failed','requires_review') AND x.last_error IS NOT NULL
+                  GROUP BY 1) er),'{}'::jsonb)
+              ) FROM targets t WHERE t.account_id=a.id AND t.status='sending'),
+              'pending_due_or_unscheduled',(SELECT count(*)::int FROM targets t,clock
+                WHERE t.account_id=a.id AND t.status='pending'
+                  AND (t.next_attempt_at IS NULL OR t.next_attempt_at<=clock.now_utc)),
+              'pending_future',(SELECT count(*)::int FROM targets t,clock
+                WHERE t.account_id=a.id AND t.status='pending' AND t.next_attempt_at>clock.now_utc)
+            )) FROM accounts a CROSS JOIN clock),
+            'all_target_statuses',(SELECT COALESCE(jsonb_object_agg(status,n),'{}'::jsonb)
+              FROM (SELECT status,count(*)::int n FROM targets GROUP BY status) q),
+            'due_and_future',(SELECT jsonb_build_object(
+              'pending_due_or_unscheduled',count(*) FILTER (WHERE status='pending'
+                AND (next_attempt_at IS NULL OR next_attempt_at<=clock.now_utc)),
+              'pending_future',count(*) FILTER (WHERE status='pending'
+                AND next_attempt_at>clock.now_utc),
+              'sending',count(*) FILTER (WHERE status='sending'),
+              'oldest_sending_updated_at',min(updated_at) FILTER (WHERE status='sending'),
+              'last_send_at',max(sent_at) FILTER (WHERE status='sent'),
+              'sent_today',count(*) FILTER (WHERE status='sent' AND sent_at>=clock.today_start),
+              'failed_or_review_today',count(*) FILTER (WHERE status IN ('failed','requires_review')
+                AND updated_at>=clock.today_start)
+            ) FROM targets CROSS JOIN clock),
+            'failure_reason_codes',COALESCE((SELECT jsonb_object_agg(reason,n) FROM reason_counts),'{}'::jsonb),
+            'campaign_count',(SELECT count(*)::int FROM campaigns),
+            'active_campaigns',(SELECT count(*)::int FROM campaigns WHERE status IN ('queued','running')),
+            'user_found',(SELECT count(*)::int FROM u)
+          )::text
+          FROM clock;
+          COMMIT;"""
+          
+          def db_sample():
+              args=["sudo","-n","-u","postgres","psql","-X","-A","-t","-q",
+                    "-v","ON_ERROR_STOP=1","-v","target_user="+username,
+                    "-d","telecampaign","-f","-"]
+              p=subprocess.run(args,input=SQL,capture_output=True,text=True,timeout=8)
+              if p.returncode:
+                  category="timeout" if "timeout" in p.stderr.lower() else "query_error"
+                  return {"error":category}
+              return json.loads(p.stdout.strip().splitlines()[-1])
+          
+          def pm2_state():
+              try:
+                  p=subprocess.run(["sudo","-n","-u","ubuntu","-H","bash","-lc","pm2 jlist"],
+                    capture_output=True,text=True,timeout=5)
+                  if p.returncode:return {"status":"unavailable"}
+                  apps=[]
+                  for row in json.loads(p.stdout):
+                      if row.get("name")!="telecampaign-api":continue
+                      e=row.get("pm2_env",{})
+                      nested=e.get("env",{}) if isinstance(e.get("env"),dict) else {}
+                      apps.append({
+                        "status":e.get("status"),"restart_count":e.get("restart_time"),
+                        "uptime_seconds":max(0,int(time.time()*1000-e["pm_uptime"])//1000)
+                          if isinstance(e.get("pm_uptime"),(int,float)) else None,
+                        "campaign_worker_disabled":e.get("TELECAMPAIGN_DISABLE_WORKER",
+                          nested.get("TELECAMPAIGN_DISABLE_WORKER","false"))=="true",
+                      })
+                  return {"status":"read","apps":apps}
+              except (OSError,subprocess.SubprocessError,ValueError,TypeError):
+                  return {"status":"unavailable"}
+          
+          def safe_log_summary():
+              # Bounded tail only; never print raw log text, message bodies, IDs, or credentials.
+              classes={}
+              categories={}
+              functions={}
+              latest={}
+              cutoff=time.time()-24*60*60
+              for home in (pathlib.Path("/home/ubuntu"),pathlib.Path("/root")):
+                  for path in (home/".pm2/logs").glob("telecampaign-api*.log"):
+                      try:
+                          with path.open("rb") as f:
+                              f.seek(0,2); size=f.tell(); f.seek(max(0,size-256_000))
+                              lines=f.read().decode("utf-8",errors="replace").splitlines()[-2000:]
+                      except OSError:
+                          continue
+                      for line in lines:
+                          try:
+                              entry=json.loads(line)
+                              stamp=entry.get("time") or entry.get("timestamp")
+                              if isinstance(stamp,(int,float)): ts=stamp/1000 if stamp>10**12 else stamp
+                              elif isinstance(stamp,str): ts=datetime.datetime.fromisoformat(stamp.replace("Z","+00:00")).timestamp()
+                              else: ts=0
+                              if ts and ts<cutoff: continue
+                              err=entry.get("err") or entry.get("error") or {}
+                              if not isinstance(err,dict): err={}
+                              name=str(err.get("type") or err.get("name") or "")
+                              msg=str(err.get("message") or entry.get("msg") or "")
+                              stack=str(err.get("stack") or "")
+                          except (ValueError,TypeError):
+                              continue
+                          if not name:
+                              match=re.search(r"\b([A-Z][A-Za-z0-9]*(?:Error|Exception))\b",msg)
+                              name=match.group(1) if match else ""
+                          if not name and not msg: continue
+                          if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]{0,48}",name):name="UnknownError"
+                          classes[name]=classes.get(name,0)+1
+                          low=(msg+" "+str(err.get("code") or "")).lower()
+                          category=("telegram_wait" if "flood" in low or "wait" in low
+                            else "network_timeout" if "timeout" in low
+                            else "network_socket" if "socket" in low or "econn" in low
+                            else "authorization" if "auth" in low or "session" in low
+                            else "database_pool" if "pool" in low
+                            else "database" if "database" in low or "postgres" in low
+                            else "quota" if "quota" in low
+                            else "cleanup_destroy" if "destroy" in low or "disconnect" in low
+                            else "other")
+                          categories[category]=categories.get(category,0)+1
+                          for fn in re.findall(r"\bat\s+([A-Za-z_$][\w$]{0,60})\s",stack)[:3]:
+                              functions[fn]=functions.get(fn,0)+1
+                          if ts>latest.get(name,0):latest[name]=ts
+              return {"tail_exception_classes":classes,"safe_categories":categories,
+                "stack_function_counts":functions,
+                "latest_exception_utc":{k:datetime.datetime.fromtimestamp(v,datetime.timezone.utc).isoformat()
+                  for k,v in latest.items() if v}}
+          
+          first=db_sample()
+          time.sleep(5)
+          second=db_sample()
+          print("FOCUSED_WORKER_AUDIT="+json.dumps({
+            "sample1":first,"sample2":second,"pm2":pm2_state(),
+            "bounded_log_summary_24h":safe_log_summary(),
+            "worker_heartbeat":"not queried; authenticated admin route only"
+          },separators=(",",":"),default=str),flush=True)
+          PY
