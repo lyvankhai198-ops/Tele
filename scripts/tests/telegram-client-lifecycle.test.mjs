@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
+import { boundedTelegramCleanup } from "../../artifacts/api-server/src/lib/telegram-rpc-deadline.ts";
 
 const source = fs.readFileSync(new URL("../../artifacts/api-server/src/lib/telegram.ts", import.meta.url), "utf8");
 const start = source.indexOf("export async function disconnectQuietly(");
@@ -11,6 +12,7 @@ assert.ok(start >= 0 && end > start);
 const cleanup = vm.runInNewContext(
   stripTypeScriptTypes(source.slice(start, end).replace(/^export /, ""), { mode: "transform" }) +
   "\ndisconnectQuietly;",
+  { boundedTelegramCleanup, logger: { warn() {} } },
 );
 
 test("single-use clients stop their update loop, not just their socket", async () => {
@@ -46,7 +48,7 @@ test("cleanup failure cannot replace send success or its original failure", asyn
 
 test("every account-client finalizer uses permanent cleanup", () => {
   assert.doesNotMatch(source, /await client\.disconnect\(/);
-  assert.match(source, /await client\.destroy\(\)/);
+  assert.match(source, /client\.destroy\(\)/);
   const routes = fs.readFileSync(new URL("../../artifacts/api-server/src/routes/telecampaign.ts", import.meta.url), "utf8");
   assert.doesNotMatch(routes, /await client\.disconnect\(/);
   assert.match(routes, /getAccountClient\(attachedAccount\.id, ownerUserId\);\s*await disconnectQuietly\(client\)/);
