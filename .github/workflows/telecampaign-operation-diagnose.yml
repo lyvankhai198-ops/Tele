@@ -235,11 +235,145 @@ jobs:
           FROM clock;
           COMMIT;"""
           
+          SIMPLE_SQL = r"""BEGIN READ ONLY; SET LOCAL statement_timeout='5s';
+          WITH
+          clock AS (SELECT now() AS now_utc,
+            date_trunc('day',now() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+              AT TIME ZONE 'Asia/Ho_Chi_Minh' AS today_start),
+          u AS (SELECT id::text owner_id FROM app_users
+            WHERE username_normalized=lower(btrim(:'target_user'))),
+          a AS (
+            SELECT row_number() OVER (ORDER BY id)::int slot,id,status,daily_limit,cooldown_until,
+              delivery_lease_until,delivery_lease_token IS NOT NULL token_present,updated_at,last_sync_at,deleted_at
+            FROM telegram_accounts JOIN u ON owner_user_id=u.owner_id
+          ),
+          c AS (
+            SELECT id,status,scheduled_at,telegram_account_id,timing_mode
+            FROM campaigns JOIN u ON owner_user_id=u.owner_id
+          ),
+          due_base AS MATERIALIZED (
+            SELECT t.campaign_id,t.status,t.updated_at,t.sent_at,t.next_attempt_at,t.last_error,
+              t.delivery_order,t.wait_before_seconds,d.account_id,c.status campaign_status,
+              c.scheduled_at campaign_scheduled_at,c.timing_mode,a.slot account_slot,
+              a.deleted_at account_deleted_at,a.delivery_lease_until,a.status account_status
+            FROM campaign_targets t JOIN c ON c.id=t.campaign_id
+            LEFT JOIN destinations d ON d.id=t.destination_id
+            LEFT JOIN a ON a.id=d.account_id
+            CROSS JOIN clock
+            WHERE t.status='pending' AND (t.next_attempt_at IS NULL OR t.next_attempt_at<=clock.now_utc)
+          ),
+          gate AS MATERIALIZED (
+            SELECT b.*,
+              (b.campaign_scheduled_at IS NULL OR b.campaign_scheduled_at<=clock.now_utc) schedule_due,
+              (b.account_slot IS NOT NULL AND b.account_deleted_at IS NULL) account_ok,
+              (b.timing_mode<>'round' OR (
+                b.delivery_order IS NOT NULL AND b.wait_before_seconds IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM campaign_targets earlier
+                  WHERE earlier.campaign_id=b.campaign_id AND earlier.delivery_order<b.delivery_order
+                    AND earlier.status IN ('pending','sending'))
+                AND NOT EXISTS (SELECT 1 FROM campaign_targets previous
+                  WHERE previous.campaign_id=b.campaign_id
+                    AND previous.delivery_order=b.delivery_order-1
+                    AND coalesce(previous.sent_at,previous.updated_at)
+                      + b.wait_before_seconds*interval '1 second'>clock.now_utc)
+              )) timing_ready,
+              (b.delivery_lease_until IS NULL OR b.delivery_lease_until<=clock.now_utc) lease_available
+            FROM due_base b CROSS JOIN clock
+          ),
+          classified AS (
+            SELECT g.*,
+              (g.campaign_status IN ('queued','running') AND g.schedule_due AND g.account_ok AND g.timing_ready) worker_eligible,
+              (g.campaign_status IN ('queued','running') AND g.schedule_due AND g.account_ok
+                AND g.timing_ready AND g.lease_available) claimable_now
+            FROM gate g
+          ),
+          blocker_counts AS (
+            SELECT CASE
+              WHEN campaign_status NOT IN ('queued','running') THEN 'campaign_not_active'
+              WHEN NOT schedule_due THEN 'campaign_schedule_future'
+              WHEN NOT account_ok THEN 'account_missing_or_deleted'
+              WHEN timing_mode='round' AND (delivery_order IS NULL OR wait_before_seconds IS NULL) THEN 'round_metadata_missing'
+              WHEN timing_mode='round' AND NOT timing_ready AND EXISTS (
+                SELECT 1 FROM campaign_targets earlier WHERE earlier.campaign_id=classified.campaign_id
+                  AND earlier.delivery_order<classified.delivery_order
+                  AND earlier.status IN ('pending','sending')) THEN 'earlier_pending_or_sending'
+              WHEN timing_mode='round' AND NOT timing_ready THEN 'round_gap_or_metadata'
+              WHEN NOT lease_available THEN 'account_lease_active'
+              ELSE 'eligible'
+            END blocker,count(*)::int n FROM classified GROUP BY 1
+          ),
+          target_status AS (
+            SELECT t.status,count(*)::int n FROM campaign_targets t JOIN c ON c.id=t.campaign_id GROUP BY t.status
+          ),
+          per_account AS (
+            SELECT a.slot,a.id,a.status,a.daily_limit,a.cooldown_until,a.delivery_lease_until,
+              a.token_present,a.updated_at,a.last_sync_at,a.deleted_at,
+              count(g.campaign_id)::int pending_due_all,
+              count(g.campaign_id) FILTER (WHERE g.campaign_status IN ('queued','running') AND g.schedule_due)::int active_due,
+              count(g.campaign_id) FILTER (WHERE g.worker_eligible)::int worker_eligible,
+              count(g.campaign_id) FILTER (WHERE g.claimable_now)::int claimable_now,
+              (SELECT count(*)::int FROM campaign_targets t JOIN c ON c.id=t.campaign_id
+                JOIN destinations d ON d.id=t.destination_id
+                WHERE d.account_id=a.id AND t.status='sending') sending_count
+            FROM a CROSS JOIN clock LEFT JOIN classified g ON g.account_slot=a.slot
+            GROUP BY a.slot,a.id,a.status,a.daily_limit,a.cooldown_until,a.delivery_lease_until,
+              a.token_present,a.updated_at,a.last_sync_at,a.deleted_at
+          ),
+          earliest AS (
+            SELECT jsonb_agg(jsonb_build_object(
+              'account_slot',account_slot,'campaign_status',campaign_status,'timing_mode',timing_mode,
+              'next_attempt_at',next_attempt_at,'campaign_scheduled_at',campaign_scheduled_at,
+              'delivery_order',delivery_order,'wait_before_seconds',wait_before_seconds,
+              'schedule_due',schedule_due,'timing_ready',timing_ready,
+              'worker_eligible',worker_eligible,'claimable_now',claimable_now
+            ) ORDER BY next_attempt_at NULLS LAST) rows
+            FROM (SELECT * FROM classified ORDER BY next_attempt_at NULLS LAST LIMIT 8) e
+          )
+          SELECT jsonb_build_object(
+            'sampled_at_utc',clock.now_utc,
+            'campaign_count',(SELECT count(*)::int FROM c),
+            'campaign_statuses',(SELECT COALESCE(jsonb_object_agg(status,n),'{}'::jsonb)
+              FROM (SELECT status,count(*)::int n FROM c GROUP BY status) s),
+            'target_statuses',(SELECT COALESCE(jsonb_object_agg(status,n),'{}'::jsonb) FROM target_status),
+            'pending_due_all_campaign_statuses',(SELECT jsonb_object_agg(campaign_status,n) FROM
+              (SELECT campaign_status,count(*)::int n FROM due_base GROUP BY campaign_status) d),
+            'pending_due_count', (SELECT count(*)::int FROM due_base),
+            'worker_eligible_count',(SELECT count(*)::int FROM classified WHERE worker_eligible),
+            'claimable_now_count',(SELECT count(*)::int FROM classified WHERE claimable_now),
+            'blockers',COALESCE((SELECT jsonb_object_agg(blocker,n) FROM blocker_counts),'{}'::jsonb),
+            'accounts',(SELECT jsonb_agg(jsonb_build_object(
+              'slot',slot,'status',status,'daily_limit',daily_limit,'cooldown_active',COALESCE(cooldown_until>clock.now_utc,false),
+              'lease_active',COALESCE(delivery_lease_until>clock.now_utc,false),
+              'token_present',token_present,'lease_until',delivery_lease_until,'updated_at',updated_at,
+              'last_sync_at',last_sync_at,'deleted',deleted_at IS NOT NULL,
+              'pending_due_all',pending_due_all,'active_due',active_due,
+              'worker_eligible',worker_eligible,'claimable_now',claimable_now,'sending_count',sending_count
+            ) ORDER BY slot) FROM per_account CROSS JOIN clock),
+            'earliest_pending_due',COALESCE((SELECT rows FROM earliest),'[]'::jsonb),
+            'subscription',(SELECT jsonb_build_object('plan',s.plan,'active',s.expires_at>clock.now_utc,
+              'quota_exempt',s.daily_quota_exempt,'expires_at',s.expires_at)
+              FROM subscriptions s JOIN u ON s.owner_user_id=u.owner_id CROSS JOIN clock),
+            'active_pg_queries',(SELECT jsonb_agg(jsonb_build_object(
+              'operation',operation,'wait_type',wait_event_type,'wait',wait_event,'count',n,'max_age_seconds',age
+            )) FROM (
+              SELECT CASE WHEN query ~* 'update[[:space:]]+\"?telegram_accounts' THEN 'telegram_accounts_update'
+                WHEN query ~* 'update[[:space:]]+\"?campaign_targets' THEN 'campaign_targets_update'
+                WHEN query ~* 'campaign_targets' THEN 'campaign_targets_read'
+                WHEN query ~* 'campaigns' THEN 'campaigns_read' ELSE 'other' END operation,
+                wait_event_type,wait_event,count(*)::int n,
+                max(extract(epoch FROM (clock.now_utc-query_start)))::int age
+              FROM pg_stat_activity CROSS JOIN clock
+              WHERE pid<>pg_backend_pid() AND backend_type='client backend' AND state='active'
+              GROUP BY 1,wait_event_type,wait_event
+            ) q)
+          )::text FROM clock;
+          COMMIT;"""
+          
           def db_sample():
               args=["sudo","-n","-u","postgres","psql","-X","-A","-t","-q",
                     "-v","ON_ERROR_STOP=1","-v","target_user="+username,
                     "-d","telecampaign","-f","-"]
-              p=subprocess.run(args,input=SQL,capture_output=True,text=True,timeout=8)
+              p=subprocess.run(args,input=SIMPLE_SQL,capture_output=True,text=True,timeout=8)
               if p.returncode:
                   category="timeout" if "timeout" in p.stderr.lower() else "query_error"
                   return {"error":category}
@@ -289,6 +423,7 @@ jobs:
               functions={}
               latest={}
               fixed_messages={}
+              timeout_phases={}
               recent_errors=[]
               cutoff=datetime.datetime(2026,11,9,1,4,29,tzinfo=datetime.timezone.utc).timestamp()
               files_scanned=0
@@ -312,6 +447,10 @@ jobs:
                               msg=str(entry.get("msg") or "")
                               if msg in allowed_messages:
                                   fixed_messages[msg]=fixed_messages.get(msg,0)+1
+                                  if msg=="Telegram account operation timed out; closing single-use client":
+                                      phase=entry.get("phase")
+                                      if phase in ("connect","rpc"):
+                                          timeout_phases[phase]=timeout_phases.get(phase,0)+1
                               err=entry.get("err") or entry.get("error") or {}
                               if not isinstance(err,dict): err={}
                               level=entry.get("level")
@@ -350,6 +489,7 @@ jobs:
                                 "source_functions":funcs,
                               })
               return {"files_scanned":files_scanned,"fixed_logger_messages_since_release":fixed_messages,
+                "telegram_timeout_phases":timeout_phases,
                 "tail_exception_classes":classes,"safe_categories":categories,
                 "stack_function_counts":functions,
                 "sanitized_recent_errors":recent_errors,
