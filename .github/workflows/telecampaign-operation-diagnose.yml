@@ -97,7 +97,8 @@ jobs:
               build = subprocess.run(
                   ["sudo", "-n", "-u", "ubuntu", "-H", "bash", "-lc",
                    f"cd /opt/telecampaign && pnpm --filter @workspace/api-server exec esbuild {source} "
-                   f"--bundle --platform=node --format=esm --packages=external --outfile={bundle}"],
+                   f"--bundle --platform=node --format=esm --packages=external "
+                   f"--alias:@workspace/db=/opt/telecampaign/lib/db/src/index.ts --outfile={bundle}"],
                   capture_output=True, text=True, timeout=25)
               if build.returncode:
                   print("TELEGRAM_READ_ERROR=compile_failed", flush=True)
@@ -109,6 +110,9 @@ jobs:
                   for line in run.stdout.splitlines():
                       if line.startswith("TELEGRAM_READ_"):
                           print(line, flush=True)
+                  if run.returncode and "TELEGRAM_READ_RESULT=" not in run.stdout:
+                      codes = re.findall(r"\bERR_[A-Z_]{1,70}\b", run.stderr)
+                      print("TELEGRAM_READ_ERROR=" + (codes[0] if codes else "read_process_failed"), flush=True)
           except subprocess.TimeoutExpired:
               print("TELEGRAM_READ_ERROR=bounded_process_timeout", flush=True)
           finally:
