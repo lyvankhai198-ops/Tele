@@ -116,9 +116,7 @@ export function AppLayout({
     },
   });
   const disconnectedCount = telegramAccounts.data?.filter(account => account.status !== "connected").length ?? 0;
-  const connectionWarning = language === "vi"
-    ? `${disconnectedCount} tài khoản Telegram cần kết nối lại`
-    : `${disconnectedCount} Telegram account(s) need to reconnect`;
+  const connectionWarning = [String(disconnectedCount), t("Telegram Accounts"), t("Needs verification")].join(" · ");
   const connectionBadge = disconnectedCount > 0 ? (
     <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-extrabold leading-none text-white"
       aria-label={connectionWarning} title={connectionWarning} role="status" data-testid="telegram-disconnected-count">
