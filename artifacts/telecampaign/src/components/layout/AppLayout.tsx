@@ -29,7 +29,7 @@ import { useLanguage } from "@/lib/i18n";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useAuth } from "@/lib/auth";
 import { useAdminBack } from "@/components/admin/AdminNavigationProvider";
-import { getListAdminSystemEventsQueryKey, useGetGroupLibraryAccess, useGetSystemDefaults, useListAdminSystemEvents } from "@workspace/api-client-react";
+import { getListAdminSystemEventsQueryKey, useGetGroupLibraryAccess, useGetSystemDefaults, useListAdminSystemEvents, useListTelegramAccounts } from "@workspace/api-client-react";
 import { UserNotificationBell } from "@/components/UserNotificationBell";
 
 export type PageKey =
@@ -104,6 +104,27 @@ export function AppLayout({
   const { user, logout, exitSupport } = useAuth();
   const { canGoBack, goBack } = useAdminBack();
   const isSupportMode = Boolean(user?.support);
+  const telegramAccounts = useListTelegramAccounts({
+    query: {
+      enabled: Boolean(user),
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: "always",
+      refetchOnReconnect: "always",
+      refetchInterval: 15_000,
+      refetchIntervalInBackground: false,
+    },
+  });
+  const disconnectedCount = telegramAccounts.data?.filter(account => account.status !== "connected").length ?? 0;
+  const connectionWarning = language === "vi"
+    ? `${disconnectedCount} tài khoản Telegram cần kết nối lại`
+    : `${disconnectedCount} Telegram account(s) need to reconnect`;
+  const connectionBadge = disconnectedCount > 0 ? (
+    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-extrabold leading-none text-white"
+      aria-label={connectionWarning} title={connectionWarning} role="status" data-testid="telegram-disconnected-count">
+      {disconnectedCount}
+    </span>
+  ) : null;
   const groupLibraryAccess = useGetGroupLibraryAccess();
   const systemDefaults = useGetSystemDefaults();
   const isAdminSection = location === "/admin" || location.startsWith("/admin/")
@@ -214,6 +235,7 @@ export function AppLayout({
             <Icon className={`h-[18px] w-[18px] ${highlighted ? "" : selected ? (nationalDayThemeActive ? "national-day-nav-icon-selected" : "text-[#1a2b88]") : (nationalDayThemeActive ? "national-day-nav-icon" : "text-[#64748b] group-hover:text-[#1a2b88]")}`} strokeWidth={selected ? 2.5 : 2} />
           </span>
           <span className="min-w-0 flex-1 break-words">{t(item.label)}</span>
+          {item.key === "accounts" && connectionBadge}
           {highlighted && <ChevronRight aria-hidden="true" className={`h-4 w-4 shrink-0 ${selected ? "text-indigo-200" : "text-indigo-400"}`} />}
         </button>
       );
@@ -332,11 +354,13 @@ export function AppLayout({
         <header className={`sticky top-0 z-20 border-b border-[#eef2f6] bg-white/95 backdrop-blur-xl ${nationalDayThemeActive ? "national-day-header" : ""}`}>
           <div className="flex min-h-[72px] flex-wrap items-center justify-between gap-x-2 gap-y-1 px-3 py-2 sm:px-6 lg:flex-nowrap lg:px-8">
             <div className="flex min-w-[9rem] flex-1 items-center gap-2 sm:gap-3">
-              <button onClick={() => setMobileOpen(true)} className="shrink-0 rounded-lg p-2 text-[#475569] transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] lg:hidden" aria-label={t('Open menu')}>
+              <button onClick={() => setMobileOpen(true)} className="relative shrink-0 rounded-lg p-2 text-[#475569] transition-colors hover:bg-[#f1f5f9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#197a91] lg:hidden" aria-label={disconnectedCount ? `${t('Open menu')}. ${connectionWarning}` : t('Open menu')}>
                 <Menu className="h-6 w-6" />
+                {disconnectedCount > 0 && <span className="absolute -right-1 -top-1">{connectionBadge}</span>}
               </button>
                 <h1 aria-label={t(title)} title={t(title)} className="hidden min-w-0 break-words text-[19px] font-extrabold tracking-tight text-[#0f172a] sm:block">{t(title)}</h1>
                <h1 aria-label={t(title)} title={t(title)} className={`min-w-0 text-[16px] font-extrabold leading-tight tracking-tight text-[#0f172a] sm:hidden ${isAdminSection ? "max-w-[190px] break-words line-clamp-2" : "max-w-[calc(100vw-7rem)] break-words line-clamp-2"}`}>{t(title)}</h1>
+                {activePage === "accounts" && connectionBadge}
             </div>
             
              <div className="ml-auto flex max-w-full min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 sm:gap-3">

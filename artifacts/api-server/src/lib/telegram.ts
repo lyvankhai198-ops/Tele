@@ -110,7 +110,7 @@ export function isTelegramSessionRevoked(error: unknown): boolean {
   return /SESSION_REVOKED|AUTH_KEY_UNREGISTERED|SESSION_EXPIRED|USER_DEACTIVATED/.test(details);
 }
 
-async function invalidateTelegramSession(accountId: string): Promise<void> {
+async function invalidateTelegramSession(accountId: string, expectedSession?: string): Promise<void> {
   await db.update(telegramAccountsTable).set({
     status: "saved",
     sessionEncrypted: null,
@@ -119,6 +119,7 @@ async function invalidateTelegramSession(accountId: string): Promise<void> {
   }).where(and(
     eq(telegramAccountsTable.id, accountId),
     isNull(telegramAccountsTable.deletedAt),
+    ...(expectedSession ? [eq(telegramAccountsTable.sessionEncrypted, expectedSession)] : []),
   ));
 }
 
@@ -498,7 +499,7 @@ export async function getAccountClient(accountId: string, ownerUserId?: string):
     return { client, account };
   } catch (error) {
     if (isTelegramSessionRevoked(error)) {
-      await invalidateTelegramSession(account.id);
+      await invalidateTelegramSession(account.id, account.sessionEncrypted);
     }
     await disconnectQuietly(client);
     throw error;
