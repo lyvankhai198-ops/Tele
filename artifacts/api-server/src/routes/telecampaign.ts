@@ -143,6 +143,7 @@ import {
   listTelegramSavedMessages,
   normalizeTelegramPhone,
   phoneForAccount,
+  refreshTelegramAccountIdentity,
   startTelegramQrLogin,
   type TelegramQrLoginHandle,
   startTelegramPhoneLogin,
@@ -178,6 +179,7 @@ import { adminNotificationResponse, isNotificationActive } from "../lib/admin-no
 import { NotificationMediaNotFoundError, NotificationMediaStorage } from "../lib/notificationMediaStorage";
 import { canScheduleTelegramDestination } from "../lib/telegram-errors";
 import { logger } from "../lib/logger";
+import { createTelegramSessionChecks } from "../lib/telegram-session-checks";
 import { templateJobsRouter } from "./campaign-template-jobs";
 import { campaignListLoadingRouter } from "./campaign-list-loading";
 import {
@@ -187,6 +189,10 @@ import {
 } from "../lib/user-notifications";
 
 const router: IRouter = Router();
+const checkTelegramSessions = createTelegramSessionChecks(
+  refreshTelegramAccountIdentity,
+  () => logger.debug("Telegram session check did not complete; only confirmed revoked sessions are invalidated"),
+);
 const activityDestinationAccounts = alias(telegramAccountsTable, "activity_destination_accounts");
 const notificationMediaStorage = new NotificationMediaStorage();
 const sendError = (res: any, status: number, error: string) => {
@@ -1564,6 +1570,7 @@ router.delete("/proxies/:proxyId/accounts/:accountId", async (req, res): Promise
 router.get("/telegram/accounts", async (req, res): Promise<void> => {
   const accounts = await db.select().from(telegramAccountsTable)
     .where(and(eq(telegramAccountsTable.ownerUserId, currentUserId(req)), isNull(telegramAccountsTable.deletedAt))).orderBy(desc(telegramAccountsTable.createdAt));
+  checkTelegramSessions(accounts);
   res.json(ListTelegramAccountsResponse.parse(accounts.map(telegramAccountResponse)));
 });
 
